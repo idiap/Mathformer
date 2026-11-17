@@ -1,0 +1,510 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_paper_theory_evolution_model_workflow
+version: 1.0.0
+kind: workflow
+description: Construct and serialize the default static theory-evolution prior once.
+aliases:
+- paper:theory-evolution-model
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type: array
+      items:
+        type: string
+    representation: value
+  Arguments:
+    schema:
+      type: object
+      required:
+      - preset
+      - output
+      - json
+      - halted
+      properties:
+        preset:
+          type: string
+          const: default-mathformer-theory
+        output:
+          type: string
+        json:
+          type: boolean
+        halted:
+          type: boolean
+      additionalProperties: false
+    representation: value
+  Prior:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - model_id
+      - metrics
+      - protected_metrics
+      - delta_notation
+      - initial_state
+      - phases
+      - couplings
+      - acceptance_thresholds
+      - observability_scenarios
+      - noise
+      properties:
+        schema_version:
+          type: integer
+          const: 1
+        model_id:
+          type: string
+          const: default-mathformer-theory
+        description:
+          type: string
+        metrics:
+          type: array
+          items:
+            type: string
+          minItems: 13
+          maxItems: 13
+        protected_metrics:
+          type: array
+          items:
+            type: string
+          minItems: 5
+          maxItems: 5
+        delta_notation:
+          type: object
+        initial_state:
+          type: object
+          additionalProperties:
+            type: number
+          minProperties: 13
+          maxProperties: 13
+        phases:
+          type: array
+          items:
+            type: object
+          minItems: 8
+          maxItems: 8
+        couplings:
+          type: array
+          items:
+            type: object
+          minItems: 6
+          maxItems: 6
+        acceptance_thresholds:
+          type: object
+        observability_scenarios:
+          type: array
+          items:
+            type: object
+          minItems: 3
+          maxItems: 3
+        noise:
+          type: object
+      additionalProperties: false
+    representation: value
+  OutputPath:
+    schema:
+      type: string
+    representation: value
+  Summary:
+    schema:
+      anyOf:
+      - type: object
+        required:
+        - ok
+        - output
+        - model_id
+        - metric_count
+        - phase_count
+        properties:
+          ok:
+            type: boolean
+            const: true
+          output:
+            type: string
+          model_id:
+            type: string
+            const: default-mathformer-theory
+          metric_count:
+            type: integer
+            const: 13
+          phase_count:
+            type: integer
+            const: 8
+        additionalProperties: false
+      - type: 'null'
+    representation: value
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+    representation: value
+  Report:
+    schema:
+      type: string
+    representation: value
+  Context:
+    schema:
+      type: object
+      required:
+      - working_directory
+      properties:
+        working_directory:
+          type: string
+          minLength: 1
+      additionalProperties: false
+    representation: value
+inputs:
+  argv:
+    type: Argv
+  context:
+    type: Context
+outputs:
+  result:
+    type: Summary
+    value:
+      ref: flow.outputs.result
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+operations:
+  parse_arguments:
+    inputs:
+      argv:
+        type: Argv
+    outputs:
+      args:
+        type: Arguments
+      help_report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_theory_model_parse
+        operation: mathformer_theory_model_parse
+  construct_prior:
+    inputs:
+      args:
+        type: Arguments
+    outputs:
+      prior:
+        type: Prior
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_theory_model_construct
+        operation: mathformer_theory_model_construct
+  persist_prior:
+    inputs:
+      args:
+        type: Arguments
+      prior:
+        type: Prior
+      context:
+        type: Context
+    outputs:
+      output:
+        type: OutputPath
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_theory_model_persist
+        operation: mathformer_theory_model_persist
+  report_and_return:
+    inputs:
+      args:
+        type: Arguments
+      prior:
+        type: Prior
+      output:
+        type: OutputPath
+    outputs:
+      result:
+        type: Summary
+      exit_code:
+        type: ExitCode
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_theory_model_report
+        operation: mathformer_theory_model_report
+  help_exit:
+    inputs:
+      help_report:
+        type: Report
+    outputs:
+      result:
+        type: Summary
+      exit_code:
+        type: ExitCode
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_theory_model_help
+        operation: mathformer_theory_model_help
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse_arguments
+    arguments:
+      argv:
+        ref: inputs.argv
+  - id: dispatch
+    kind: switch
+    cases:
+    - when:
+        ref: steps.parse.outputs.args.halted
+      body:
+        kind: sequence
+        steps:
+        - id: help_exit
+          kind: call
+          operation: help_exit
+          arguments:
+            help_report:
+              ref: steps.parse.outputs.help_report
+          description: Transport adapter for argparse's successful early exit; never
+            reconstructs or reprints help.
+        outputs:
+          result:
+            type: Summary
+            value:
+              ref: steps.help_exit.outputs.result
+          exit_code:
+            type: ExitCode
+            value:
+              ref: steps.help_exit.outputs.exit_code
+          report:
+            type: Report
+            value:
+              ref: steps.help_exit.outputs.report
+      id: help
+    default:
+      kind: sequence
+      steps:
+      - id: construct
+        kind: call
+        operation: construct_prior
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+      - id: persist
+        kind: call
+        operation: persist_prior
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+          prior:
+            ref: steps.construct.outputs.prior
+          context:
+            ref: inputs.context
+      - id: finish
+        kind: call
+        operation: report_and_return
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+          prior:
+            ref: steps.construct.outputs.prior
+          output:
+            ref: steps.persist.outputs.output
+      outputs:
+        result:
+          type: Summary
+          value:
+            ref: steps.finish.outputs.result
+        exit_code:
+          type: ExitCode
+          value:
+            ref: steps.finish.outputs.exit_code
+        report:
+          type: Report
+          value:
+            ref: steps.finish.outputs.report
+    outputs:
+      result:
+        type: Summary
+        value:
+          ref: selected.outputs.result
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+      report:
+        type: Report
+        value:
+          ref: selected.outputs.report
+  outputs:
+    result:
+      type: Summary
+      value:
+        ref: steps.dispatch.outputs.result
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.dispatch.outputs.exit_code
+    report:
+      type: Report
+      value:
+        ref: steps.dispatch.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      write:
+      - selected_output_and_parent_directory
+      - artifacts/paper_skills/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - construct_static_prior
+    - write_model_json
+    - report_success
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 4
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Static plausible prior only; completion establishes no fitted evidence
+    or proved theory.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: paper_skills/theory-evolution-modeler/scripts/build_theory_evolution_model.py
+    selector: main; parse_arguments; construct_prior; persist_prior; report_and_return;
+      PRESETS; default_model; vector
+    digest: sha256:b759944a846b5c243636253fd7d72a0c236160e0b49d112efdc416fef4e2ee7e
+  - path: scripts/mathformer.py
+    selector: build_registry/action:paper:theory-evolution-model; preflight; run_action;
+      run_leaf_action; prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mcp_server.py
+    selector: mathformer_run_workflow; mathformer_run_action
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/theory_evolution_model_tools.py
+    selector: register_theory_evolution_model_tools; source
+    digest: sha256:35eac102299f32e3653718b073f0cfc9ce7bb670605671c75e6559994606d162
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: descriptors authored paper:theory-evolution-model contract
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Hub preflight, dry-run, launch and write-audit remain native wrappers outside
+    this main-entrypoint graph.
+  - Prior field schemas are compact projections; exact constants and fixed vector
+    comprehensions remain source-owned.
+  - Lunar enforces the time/call budgets and supplies execution receipts; the standalone
+    native CLI has no added timeout or mandatory v1 receipts.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: paper:theory-evolution-model
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: paper:theory-evolution-model
+      summary: Build the default theory-evolution model JSON.
+      family: paper
+      kind: generation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - paper_skills/theory-evolution-modeler/scripts/build_theory_evolution_model.py
+      - --output
+      - artifacts/paper_skills/theory_evolution_model.json
+      - --json
+      depends_on: []
+      required_paths:
+      - paper_skills/theory-evolution-modeler/scripts/build_theory_evolution_model.py
+      required_tools: []
+      optional_tools: []
+      writes:
+      - artifacts/paper_skills/
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: MCP resolves the hub alias through mathformer_run_action; the hub launches
+      the registered CLI.
+    preflight: Missing required paths or extra arguments return failure before launch;
+      preflight precedes dry-run.
+    dry_run: After successful preflight return the dry_run payload without launching,
+      constructing or writing a model.
+    completion: Capture stdout, stderr and returncode; ok initially means returncode
+      equals zero, then audit writes.
+    failure_policy: Undeclared writes set ok=false and status=undeclared_writes; unexpected
+      launch and audit errors propagate.
+    scientific_payloads: result is the native success summary for either reporting
+      mode, or null for --help. report preserves the exact printed text, including
+      its trailing newline. Neither is a hub transport envelope.
+    qualification: Four source-shared stages and a help-exit transport adapter are
+      advertised MCP tools; Lunar binds their exact names. Service write-root and
+      read-only guards apply to persistence.
+    context_fields:
+    - working_directory
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    modeling: No dependencies; run_action directly selects run_leaf_action and bypasses
+      its dependency loop.
+  mathformer.bounds:
+    construction: One preset call and one write on the successful path; no retries,
+      repair, or evolving theory state.
+    helper_iteration: Each vector call comprehends the fixed 13 METRICS; this stays
+      inside construct_prior.
+    modeled_steps: Phase durations sum to 57 serialized steps; phases and thresholds
+      never control execution or stopping.
+    termination: Report then return 0, or stop on argparse exit or an uncaught construction,
+      filesystem or reporting error.
+    budgets: At most four calls on success, two on help (parse plus terminal response
+      adapter), and one on argument rejection. Lunar enforces 3600 seconds and the
+      call ceiling; native CLI remains unbounded.
+# REUSE-IgnoreEnd

@@ -1,0 +1,112 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from isabelle_physics_derivation_trace_loop import (
+    IsabelleAcceptanceCase,
+    IsabelleDerivationPlan,
+    IsabelleFormalizationPacket,
+    IsabelleGroundingBasis,
+    IsabelleMathematicalReview,
+    IsabellePhysicsCase,
+    IsabellePhysicsDerivationTraceArtifactRealnessGateArtifact,
+    IsabellePhysicsDerivationTraceConsistencyPhysicsIsabelleReportArtifact,
+    IsabellePhysicsDerivationTraceDraftPhysicsIsabelleDerivationArtifact,
+    IsabellePhysicsDerivationTraceExecutePhysicsIsabelleDerivationArtifact,
+    IsabellePhysicsDerivationTraceIntakeSourceUnitInventoryArtifact,
+    IsabellePhysicsDerivationTraceIsabelleGroundingSearchArtifact,
+    IsabellePhysicsDerivationTracePhysicsDimensionsModelArtifact,
+    IsabellePhysicsDerivationTracePhysicsEquationsParseArtifact,
+    IsabellePhysicsDerivationTracePhysicsFramesBuildArtifact,
+    IsabellePhysicsDerivationTracePhysicsGapsDetectArtifact,
+    IsabellePhysicsDerivationTracePhysicsGapsExpandArtifact,
+    IsabellePhysicsDerivationTracePhysicsInformalElicitArtifact,
+    IsabellePhysicsDerivationTracePhysicsInformalExpandArtifact,
+    IsabellePhysicsDerivationTracePhysicsInformalReviewArtifact,
+    IsabellePhysicsDerivationTracePhysicsIsabelleAssumptionsEncodeArtifact,
+    IsabellePhysicsDerivationTracePhysicsIsabelleBackgroundPlanArtifact,
+    IsabellePhysicsDerivationTracePhysicsIsabelleTypeSystemBuildArtifact,
+    IsabellePhysicsDerivationTracePhysicsIsabelleWorkflowPlanArtifact,
+    IsabellePhysicsDerivationTracePhysicsLawsGroundArtifact,
+    IsabellePhysicsDerivationTracePhysicsRegimesModelArtifact,
+    IsabellePhysicsDerivationTracePhysicsSourceExtractArtifact,
+    IsabellePhysicsDerivationTracePhysicsSymbolsBuildArtifact,
+    IsabellePhysicsDerivationTracePhysicsUnitsGroundArtifact,
+    IsabellePhysicsDerivationTracePreformalizationExpandArtifact,
+    IsabellePhysicsDerivationTracePreformalizationExpansionDifficultyArtifact,
+    IsabellePhysicsDerivationTracePreformalizationExpansionSupportArtifact,
+    IsabellePhysicsDerivationTracePreformalizationExpansionWebSupportArtifact,
+    IsabellePhysicsDerivationTracePreformalizationLineTranslationPacketArtifact,
+    IsabellePhysicsDerivationTracePreformalizationResultExistencePrecheckArtifact,
+    IsabellePhysicsDerivationTracePreformalizationReviewBindingsArtifact,
+    IsabellePhysicsDerivationTracePreformalizationReviewCompletenessArtifact,
+    IsabellePhysicsDerivationTracePreformalizationReviewSuiteArtifact,
+    IsabellePhysicsDerivationTraceReviewMathematicalIsabelleFinalHypothesesArtifact,
+    IsabellePhysicsDerivationTraceReviewPhysicsIsabelleFinalHypothesesArtifact,
+    IsabellePhysicsDisposition,
+    IsabellePhysicsReview,
+    IsabelleProcessReview,
+    IsabelleReflectionCase,
+    IsabelleReviewCase,
+    IsabelleSessionReport,
+    IsabelleTheory,
+    IsabelleTheoryBasis,
+    PhysicalModel,
+    PhysicsIsabelleConsistencyAssessment,
+    PhysicsIsabelleDerivationRequest,
+    SourceDerivationModel,
+)
+
+type FormalizesPreformalizationExpansionSupportCertificate:
+    source: IsabellePhysicsDerivationTraceIntakeSourceUnitInventoryArtifact
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationExpansionSupportArtifact]
+
+relation FormalizesPreformalizationExpansionSupport(
+    source: IsabellePhysicsDerivationTraceIntakeSourceUnitInventoryArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationExpansionSupportArtifact],
+) -> FormalizesPreformalizationExpansionSupportCertificate
+
+type FormalizesPreformalizationExpansionWebSupportCertificate:
+    source: IsabellePhysicsDerivationTracePreformalizationExpansionDifficultyArtifact
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationExpansionWebSupportArtifact]
+
+relation FormalizesPreformalizationExpansionWebSupport(
+    source: IsabellePhysicsDerivationTracePreformalizationExpansionDifficultyArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationExpansionWebSupportArtifact],
+) -> FormalizesPreformalizationExpansionWebSupportCertificate
+
+type FormalizesPreformalizationExpandCertificate:
+    source: IsabellePhysicsDerivationTracePreformalizationExpansionWebSupportArtifact
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationExpandArtifact]
+
+relation FormalizesPreformalizationExpand(
+    source: IsabellePhysicsDerivationTracePreformalizationExpansionWebSupportArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationExpandArtifact],
+) -> FormalizesPreformalizationExpandCertificate
+
+type TestsPreformalizationReviewSuiteCertificate:
+    source: IsabellePhysicsDerivationTracePreformalizationExpandArtifact
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationReviewSuiteArtifact]
+
+relation TestsPreformalizationReviewSuite(
+    source: IsabellePhysicsDerivationTracePreformalizationExpandArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationReviewSuiteArtifact],
+) -> TestsPreformalizationReviewSuiteCertificate
+
+type TestsPreformalizationReviewCompletenessCertificate:
+    source: IsabellePhysicsDerivationTracePreformalizationReviewSuiteArtifact
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationReviewCompletenessArtifact]
+
+relation TestsPreformalizationReviewCompleteness(
+    source: IsabellePhysicsDerivationTracePreformalizationReviewSuiteArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationReviewCompletenessArtifact],
+) -> TestsPreformalizationReviewCompletenessCertificate
+
+type TestsPreformalizationReviewBindingsCertificate:
+    source: IsabellePhysicsDerivationTracePreformalizationReviewCompletenessArtifact
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationReviewBindingsArtifact]
+
+relation TestsPreformalizationReviewBindings(
+    source: IsabellePhysicsDerivationTracePreformalizationReviewCompletenessArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationReviewBindingsArtifact],
+) -> TestsPreformalizationReviewBindingsCertificate

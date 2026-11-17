@@ -1,0 +1,1045 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "loop_preformalization_readiness_loop_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "AgentC readiness sequence and default outer-cycle dispatch; expansion and review each run once per invocation.",
+  "aliases": [
+    "preformalization_readiness_loop"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Request": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "informal_statement",
+          "constructor_defaults",
+          "options",
+          "agent_context"
+        ],
+        "properties": {
+          "informal_statement": {
+            "type": "string"
+          },
+          "constructor_defaults": {
+            "const": {
+              "default_first_formalization_cycles": 2,
+              "default_max_score_gated_cycles": 20
+            }
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "output_file": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "report_file": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "history_file": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reasoning_log_file": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "informal_formal_pairs": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              },
+              "file_prefix": {
+                "type": "string"
+              },
+              "normalize_input": {
+                "type": "boolean"
+              },
+              "enable_concept_mapping": {
+                "type": "boolean"
+              },
+              "concept_map_lean_workdir": {
+                "type": "string"
+              },
+              "concept_map_top_k": {
+                "type": "integer"
+              },
+              "concept_map_top_modules": {
+                "type": "integer"
+              },
+              "concept_map_verify_checks": {
+                "type": "boolean"
+              },
+              "concept_map_verify_max_concepts": {
+                "type": "integer"
+              },
+              "concept_map_verify_max_candidates": {
+                "type": "integer"
+              },
+              "enable_mathlib_concept_compatibility_loop": {
+                "type": "boolean"
+              },
+              "mathlib_concept_loop_max_rounds": {
+                "type": "integer"
+              },
+              "mathlib_concept_loop_target_verified_ratio": {
+                "type": "number"
+              },
+              "enable_llm_judges": {
+                "type": "boolean"
+              },
+              "llm_judge_aspects": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              },
+              "dependency_statements": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": [
+                    "string",
+                    "object"
+                  ]
+                }
+              },
+              "dependency_label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "include_dependency_context": {
+                "type": "boolean"
+              },
+              "enforce_mathlib_alignment": {
+                "type": "boolean"
+              },
+              "enable_latex_expansion": {
+                "type": "boolean"
+              },
+              "enable_compatibility_audit": {
+                "type": "boolean"
+              },
+              "compatibility_target_score": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "compatibility_score_field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "compatibility_audit_lake_workdir": {
+                "type": "string"
+              },
+              "compatibility_gate_requires_hard_success": {
+                "type": "boolean"
+              },
+              "enable_lean_consistency_report": {
+                "type": "boolean"
+              },
+              "lean_consistency_run_lean_check": {
+                "type": "boolean"
+              },
+              "lean_consistency_target_mathlib_compatibility": {
+                "type": "integer"
+              },
+              "lean_consistency_target_reference_free_score": {
+                "type": "integer"
+              },
+              "enable_default_multi_cycle": {
+                "type": "boolean"
+              },
+              "default_first_formalization_cycles": {
+                "enum": [
+                  null,
+                  2
+                ]
+              },
+              "seed_formalization": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "record_round_versions": {
+                "type": "boolean"
+              },
+              "version_dir": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "cycle_index": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "cycle_count": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "enable_reasoning_log": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Native public keyword arguments. Recursive mutable objects and closures are retained in the process-local context."
+          },
+          "agent_context": {
+            "type": "object",
+            "required": [
+              "aspect_description"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "aspect_description": {
+                "type": "string"
+              },
+              "max_iterations": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "default_target_compatibility_score": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "latex_expander": {
+                "type": "boolean"
+              },
+              "latex_expansion_completeness_reviewer": {
+                "type": "boolean"
+              },
+              "latex_expansion_binding_reviewer": {
+                "type": "boolean"
+              },
+              "refinement": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "CycleState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "request",
+          "cycle_index",
+          "cycle_cap",
+          "multi_cycle",
+          "previous_final_code",
+          "dependency_cache",
+          "dependency_stack",
+          "reasoning_log",
+          "cycle_summaries",
+          "context_id",
+          "revision"
+        ],
+        "properties": {
+          "request": {
+            "type": "object"
+          },
+          "cycle_index": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "cycle_cap": {
+            "enum": [
+              1,
+              2,
+              20
+            ]
+          },
+          "multi_cycle": {
+            "type": "boolean"
+          },
+          "previous_final_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dependency_cache": {
+            "type": "object"
+          },
+          "dependency_stack": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "reasoning_log": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cycle_summaries": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "last_report": {
+            "type": "object"
+          },
+          "context_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "Invocation": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "state",
+          "normalized_statement",
+          "effective_statement",
+          "expanded_statement",
+          "dependency_reports",
+          "context_id",
+          "revision"
+        ],
+        "properties": {
+          "state": {
+            "type": "object"
+          },
+          "normalized_statement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "effective_statement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expanded_statement": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dependency_reports": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "review_passed": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "initial_code": {
+            "type": "string"
+          },
+          "context_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reviews": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "core_statement_annotations": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_pairs": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "dependency_context": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "alignment_hints": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "description": "Native locals, source annotations, examples, context, alignment and shared state."
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "final_code",
+          "compatibility_target_met",
+          "consistency_target_met",
+          "output_file",
+          "report_file"
+        ],
+        "properties": {
+          "final_code": {
+            "type": "string"
+          },
+          "compatibility_target_met": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "consistency_target_met": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "output_file": {
+            "type": "string"
+          },
+          "report_file": {
+            "type": "string"
+          }
+        },
+        "description": "Extensible projection of SystematicAutoformalizationReport, including history and artifact paths."
+      }
+    }
+  },
+  "inputs": {
+    "request": {
+      "type": "Request"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "CycleState"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_readiness_initialize",
+          "operation": "mathformer_readiness_initialize"
+        }
+      }
+    },
+    "dependencies": {
+      "inputs": {
+        "state": {
+          "type": "CycleState"
+        }
+      },
+      "outputs": {
+        "invocation": {
+          "type": "Invocation"
+        },
+        "expand": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_readiness_dependencies",
+          "operation": "mathformer_readiness_dependencies"
+        }
+      }
+    },
+    "expand": {
+      "inputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "outputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_readiness_expand",
+          "operation": "mathformer_readiness_expand"
+        }
+      }
+    },
+    "retain_statement": {
+      "inputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "outputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_readiness_retain_statement",
+          "operation": "mathformer_readiness_retain_statement"
+        }
+      }
+    },
+    "review": {
+      "inputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "outputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_readiness_review",
+          "operation": "mathformer_readiness_review"
+        }
+      }
+    },
+    "prepare": {
+      "inputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "outputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_readiness_prepare",
+          "operation": "mathformer_readiness_prepare"
+        }
+      }
+    },
+    "draft": {
+      "inputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "outputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_readiness_draft",
+          "operation": "mathformer_readiness_draft"
+        }
+      }
+    },
+    "check_report_save": {
+      "inputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "outputs": {
+        "invocation": {
+          "type": "Invocation"
+        },
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_readiness_check_report_save",
+          "operation": "mathformer_readiness_check_report_save"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "invocation": {
+          "type": "Invocation"
+        },
+        "report": {
+          "type": "Report"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "CycleState"
+        },
+        "stop": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_readiness_advance",
+          "operation": "mathformer_readiness_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "CycleState"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_readiness_finish",
+          "operation": "mathformer_readiness_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "request": {
+            "ref": "inputs.request"
+          }
+        },
+        "description": "Normalize or strip; reject empty statement and nonpositive effective cycles. Apply exact native first-top-level dispatch predicate, including null seed/shared log/stack/cycle indices. Pack shared state; cap is 1 without delegation, otherwise 20 with enabled audit and non-null target, else 2.\n"
+      },
+      {
+        "id": "cycles",
+        "kind": "loop",
+        "state_type": "CycleState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 20,
+        "on_exhausted": "fail",
+        "description": "Default-cap specialization; stop is true at native cap, returning normally. Exhaustion means an adapter invariant violation.",
+        "body": {
+          "kind": "sequence",
+          "description": "Native invocation try/finally removes the active statement on normal return or any propagated error.",
+          "steps": [
+            {
+              "id": "dependencies",
+              "kind": "call",
+              "operation": "dependencies",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                }
+              },
+              "description": "Normalize/validate each invocation. Sequentially resolve supplied dependencies using cached normalized statements or recursive calls sharing cache, active stack and reasoning log. Reject cycles; keep the statement active until invocation exits. No recursion-depth bound. Compute expansion guard from flag and configuration.\n"
+            },
+            {
+              "id": "expansion",
+              "kind": "switch",
+              "cases": [
+                {
+                  "id": "enabled_configured",
+                  "when": {
+                    "ref": "steps.dependencies.outputs.expand"
+                  },
+                  "body": {
+                    "kind": "call",
+                    "operation": "expand",
+                    "arguments": {
+                      "invocation": {
+                        "ref": "steps.dependencies.outputs.invocation"
+                      }
+                    },
+                    "description": "Expand once. Empty output retains original; normalize nonempty output before use. Catch and log expansion exceptions and continue with native current locals.\n"
+                  }
+                }
+              ],
+              "default": {
+                "kind": "call",
+                "operation": "retain_statement",
+                "arguments": {
+                  "invocation": {
+                    "ref": "steps.dependencies.outputs.invocation"
+                  }
+                }
+              },
+              "outputs": {
+                "invocation": {
+                  "type": "Invocation",
+                  "value": {
+                    "ref": "selected.outputs.invocation"
+                  }
+                }
+              }
+            },
+            {
+              "id": "review",
+              "kind": "call",
+              "operation": "review",
+              "arguments": {
+                "invocation": {
+                  "ref": "steps.expansion.outputs.invocation"
+                }
+              },
+              "description": "Skip suite without expansion; otherwise completeness then bindings, skipping missing reviewers. No reviews and no errors yields null; any error or non-True judgment yields false. Record results and continue regardless; no re-expansion or drafting gate.\n"
+            },
+            {
+              "id": "prepare",
+              "kind": "call",
+              "operation": "prepare",
+              "arguments": {
+                "invocation": {
+                  "ref": "steps.review.outputs.invocation"
+                }
+              },
+              "description": "Extract source annotations, prepend dependency examples, optionally map concepts when enabled or alignment enforced, then construct alignment hints and optional dependency context. Keep native concept-loop helper and its configured bounds internal; mapping errors are recorded.\n"
+            },
+            {
+              "id": "draft",
+              "kind": "call",
+              "operation": "draft",
+              "arguments": {
+                "invocation": {
+                  "ref": "steps.prepare.outputs.invocation"
+                }
+              },
+              "description": "Use non-null seed verbatim, otherwise draft from effective statement, examples, context and annotations."
+            },
+            {
+              "id": "check_report_save",
+              "kind": "call",
+              "operation": "check_report_save",
+              "arguments": {
+                "invocation": {
+                  "ref": "steps.draft.outputs.invocation"
+                }
+              },
+              "description": "Hard-check initial code. Invoke native self.run only if correctness != \"True\", max_iterations > 0 and all three refiners/critics are configured; retain its internal algorithm and bounds. Otherwise final hard-check and history annotation. Save versions/output, check saved text, run configured audits/judges/consistency reporting, save history/statistics/report. Preserve native caught-error fallbacks; unhandled errors propagate and active stack is cleared.\n"
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "invocation": {
+                  "ref": "steps.check_report_save.outputs.invocation"
+                },
+                "report": {
+                  "ref": "steps.check_report_save.outputs.report"
+                }
+              },
+              "description": "Pack last report, updated dependency cache/stack/log, previous final code and appended cycle summary. Increment cycle index only when continuing. Stop for single invocation, at cap, or when compatibility_target_met and (consistency disabled or consistency_target_met is True). Review success is not a stopping condition. Otherwise carry final code as next seed.\n"
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "CycleState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "stop": {
+              "type": "Flag",
+              "value": {
+                "ref": "steps.advance.outputs.stop"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.stop"
+        },
+        "outputs": {
+          "state": {
+            "type": "CycleState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.cycles.outputs.state"
+          }
+        },
+        "description": "Return direct report for single invocation. For delegated cycles, promote last artifacts, save manifest, optionally rerun consistency, save statistics/report and return last report even when targets were unmet.\n"
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.finish.outputs.report"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "lean_inputs"
+        ],
+        "write": [
+          "run_artifacts",
+          "lean_diagnostics"
+        ]
+      },
+      "network": [
+        "configured_model_providers"
+      ],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "inspect_declared_contract",
+        "draft_lean_candidate",
+        "compile_check_candidate",
+        "critique_candidate",
+        "refine_candidate",
+        "record_refinement_history",
+        "save_native_reports"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion",
+        "promote_generated_theorem"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 200
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Native candidate, checks and reports only; readiness review does not certify scientific truth, gate drafting, or authorize theorem promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/autoformalization/autoformalization-agentc/scripts/agentc.py",
+        "selector": "IterativeSelfRefinementAgentC.run_systematic_workflow",
+        "digest": "sha256:f905407d76dcf8caaecf50716c9d6f8b0d342c65cda61dafe63254236312767f"
+      },
+      {
+        "path": "skills/autoformalization/autoformalization-agentc/scripts/agentc.py",
+        "selector": "IterativeSelfRefinementAgentC.run_multi_cycle_systematic_workflow; _run_latex_expansion_review_suite",
+        "digest": "sha256:f905407d76dcf8caaecf50716c9d6f8b0d342c65cda61dafe63254236312767f"
+      },
+      {
+        "path": "skills/SKILL_HOOKS.yaml",
+        "selector": "loop_contracts/preformalization_readiness_loop",
+        "digest": "sha256:6a4370a206d71da4550b976e50fd1d4863881b3f920820a3ea7b49e8de39a353"
+      },
+      {
+        "path": "scripts/agentc_readiness_workflow_tools.py",
+        "digest": "sha256:f549699702d3b7f569d00ffa9af75e85af4fedf390fc52b93a3b5f6fb5e25866"
+      },
+      {
+        "path": "scripts/agentc_workflow_tools.py",
+        "digest": "sha256:64b0c2f05fef91d88d0339175d0758f8aac696a84a8dfcfe22d8d17e95537314"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Only default outer caps 2/20 and nondelegated cap 1 are modeled. The native Python entrypoints still accept their full configurable caps.",
+      "Recursive dependencies, concept alignment, refinement and report helper internals remain native opaque subroutines, with no added recursion-depth bound.",
+      "Contexts are ordered process-local capabilities retaining the native generator, mutable cache, dependency stack and log closures. No durable resume; failure closes the context, and idle contexts expire after one hour.",
+      "Paper extraction, web support, line-translation packets and duplicate-result prechecks are declared elsewhere and are not invoked by this method."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "loop",
+      "native_id": "preformalization_readiness_loop",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "preformalization_readiness_loop",
+        "description": "source-unit inventory, expansion support, LaTeX readiness review, and duplicate-result precheck before drafting"
+      }
+    },
+    "mathformer.membership": {
+      "required_hooks_are_not_an_execution_schedule": true,
+      "owner_skills": [
+        "paper-docling-layout-extractor",
+        "paper-main-theory-localizer",
+        "source-formalizable-unit-extractor",
+        "paper-theory-autoformalization-orchestrator",
+        "proof-expansion-support-orchestrator",
+        "proof-expansion-difficulty-estimator",
+        "proof-expansion-web-researcher",
+        "latex-prerequisite-expander",
+        "latex-expansion-review-orchestrator",
+        "latex-expansion-completeness-reviewer",
+        "latex-expansion-binding-reviewer",
+        "autoformalization-workflow-orchestrator",
+        "source-line-translation-packet-builder",
+        "result-existence-precheck-orchestrator"
+      ],
+      "runtime_accounting": {}
+    }
+  }
+}

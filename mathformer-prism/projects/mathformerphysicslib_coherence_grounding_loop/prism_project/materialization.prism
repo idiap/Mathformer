@@ -1,0 +1,353 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathformerphysicslib_coherence_grounding_loop import (
+    ApiOperabilityReview,
+    ApiReviewBasis,
+    CoherenceDecisionCase,
+    CoherenceRepairActions,
+    CoherenceRepairCase,
+    GenerativeCoherenceProbe,
+    GenerativeReviewBasis,
+    IntegrationReview,
+    IntegrationReviewBasis,
+    MathformerPhysicsLibraryCoherenceDisposition,
+    MathformerPhysicsLibrarySnapshot,
+    MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceApiCriticArtifact,
+    MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceCanonicalizeArtifact,
+    MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceGateArtifact,
+    MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceGenerativeCriticArtifact,
+    MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceIntegrationCriticArtifact,
+    MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceInventoryArtifact,
+    MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceMathlibGroundingArtifact,
+    MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceRedefinitionCriticArtifact,
+    MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceRepairPlanArtifact,
+    MathlibReuseAudit,
+    PhysicsGroundingCase,
+    PhysicsLibraryGateReport,
+    PhysicsLibraryInventory,
+    PhysicsOwnershipMap,
+    RedefinitionReview,
+    RedefinitionReviewBasis,
+)
+from material_relations import RecommendsLibraryPhysicsCoherenceRepairPlanCertificate
+from reasoning import AssessPhysicsLibraryCoherence
+from relations import AlignCanonicalConceptsCertificate
+from relations import AlignWithMathlibCertificate
+from relations import ApplyCoherenceGateCertificate
+from relations import ProbeCoherenceClaimsCertificate
+from relations import ReviseFromCoherenceFindingsCertificate
+from relations import TestApiOperabilityCertificate
+from relations import TestLibraryIntegrationCertificate
+from relations import TestRedefinitionRiskCertificate
+from generated.library_physics_coherence_repair_plan_skill import mathformerphysicslib_coherence_repair_planner_skill as library_physics_coherence_repair_plan_skill_binding
+from generated.reasoning_library_inventory_1_skill import mathformerphysicslib_coherence_inventory_builder_skill as library_inventory_reasoning_skill_1
+from generated.reasoning_ownership_map_1_skill import mathformerphysicslib_concept_canonicalizer_skill as ownership_map_reasoning_skill_1
+from generated.reasoning_reuse_audit_1_skill import mathformerphysicslib_mathlib_grounding_auditor_skill as reuse_audit_reasoning_skill_1
+from generated.reasoning_redefinition_review_1_skill import mathformerphysicslib_redefinition_critic_skill as redefinition_review_reasoning_skill_1
+from generated.reasoning_integration_review_1_skill import mathformerphysicslib_integration_critic_skill as integration_review_reasoning_skill_1
+from generated.reasoning_api_review_1_skill import mathformerphysicslib_api_operability_critic_skill as api_review_reasoning_skill_1
+from generated.reasoning_coherence_probe_1_skill import mathformerphysicslib_generative_coherence_critic_skill as coherence_probe_reasoning_skill_1
+from generated.reasoning_repair_actions_1_skill import mathformerphysicslib_coherence_repair_planner_skill as repair_actions_reasoning_skill_1
+from generated.reasoning_gate_report_1_skill import mathformerphysicslib_coherence_gate_skill as gate_report_reasoning_skill_1
+
+def ownership_map_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AlignCanonicalConceptsCertificate[SourceValue, TargetValue]:
+    return AlignCanonicalConceptsCertificate(source = source, target = target)
+
+def reuse_audit_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AlignWithMathlibCertificate[SourceValue, TargetValue]:
+    return AlignWithMathlibCertificate(source = source, target = target)
+
+def redefinition_review_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestRedefinitionRiskCertificate[SourceValue, TargetValue]:
+    return TestRedefinitionRiskCertificate(source = source, target = target)
+
+def integration_review_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestLibraryIntegrationCertificate[SourceValue, TargetValue]:
+    return TestLibraryIntegrationCertificate(source = source, target = target)
+
+def api_review_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestApiOperabilityCertificate[SourceValue, TargetValue]:
+    return TestApiOperabilityCertificate(source = source, target = target)
+
+def coherence_probe_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ProbeCoherenceClaimsCertificate[SourceValue, TargetValue]:
+    return ProbeCoherenceClaimsCertificate(source = source, target = target)
+
+def repair_actions_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ReviseFromCoherenceFindingsCertificate[SourceValue, TargetValue]:
+    return ReviseFromCoherenceFindingsCertificate(source = source, target = target)
+
+def gate_report_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ApplyCoherenceGateCertificate[SourceValue, TargetValue]:
+    return ApplyCoherenceGateCertificate(source = source, target = target)
+
+# Generative interpretation InventoryPhysicsLibrary uses skill context selected from material steps: library_physics_coherence_inventory.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerphysicslib-coherence-inventory-builder.
+agent library_inventory_reasoning_agent(
+    task: MathformerPhysicsLibrarySnapshot,
+) -> Result[Generated[PhysicsLibraryInventory], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[MathformerPhysicsLibrarySnapshot] = [library_inventory_reasoning_skill_1]
+
+# Generative interpretation CanonicalizePhysicsConcepts uses skill context selected from material steps: library_physics_coherence_canonicalize.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerphysicslib-concept-canonicalizer.
+agent ownership_map_reasoning_agent(
+    task: PhysicsLibraryInventory,
+) -> Result[Generated[PhysicsOwnershipMap], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PhysicsLibraryInventory] = [ownership_map_reasoning_skill_1]
+
+# Generative interpretation GroundPhysicsInMathlib uses skill context selected from material steps: library_physics_coherence_mathlib_grounding.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerphysicslib-mathlib-grounding-auditor.
+agent reuse_audit_reasoning_agent(
+    task: PhysicsGroundingCase,
+) -> Result[Generated[MathlibReuseAudit], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PhysicsGroundingCase] = [reuse_audit_reasoning_skill_1]
+
+# Generative interpretation AssessRedefinitionRisk uses skill context selected from material steps: library_physics_coherence_redefinition_critic.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerphysicslib-redefinition-critic.
+agent redefinition_review_reasoning_agent(
+    task: RedefinitionReviewBasis,
+) -> Result[Generated[RedefinitionReview], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[RedefinitionReviewBasis] = [redefinition_review_reasoning_skill_1]
+
+# Generative interpretation AssessLibraryIntegration uses skill context selected from material steps: library_physics_coherence_integration_critic.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerphysicslib-integration-critic.
+agent integration_review_reasoning_agent(
+    task: IntegrationReviewBasis,
+) -> Result[Generated[IntegrationReview], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IntegrationReviewBasis] = [integration_review_reasoning_skill_1]
+
+# Generative interpretation AssessPhysicsApi uses skill context selected from material steps: library_physics_coherence_api_critic.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerphysicslib-api-operability-critic.
+agent api_review_reasoning_agent(
+    task: ApiReviewBasis,
+) -> Result[Generated[ApiOperabilityReview], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ApiReviewBasis] = [api_review_reasoning_skill_1]
+
+# Generative interpretation ProbeLibraryCoherence uses skill context selected from material steps: library_physics_coherence_generative_critic.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerphysicslib-generative-coherence-critic.
+agent coherence_probe_reasoning_agent(
+    task: GenerativeReviewBasis,
+) -> Result[Generated[GenerativeCoherenceProbe], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[GenerativeReviewBasis] = [coherence_probe_reasoning_skill_1]
+
+# Generative interpretation PlanCoherenceRepairs uses skill context selected from material steps: library_physics_coherence_repair_plan.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerphysicslib-coherence-repair-planner.
+agent repair_actions_reasoning_agent(
+    task: CoherenceRepairCase,
+) -> Result[Generated[CoherenceRepairActions], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[CoherenceRepairCase] = [repair_actions_reasoning_skill_1]
+
+# Generative interpretation GatePhysicsLibrary uses skill context selected from material steps: library_physics_coherence_gate, library_physics_coherence_loop.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerphysicslib-coherence-gate.
+agent gate_report_reasoning_agent(
+    task: CoherenceDecisionCase,
+) -> Result[Generated[PhysicsLibraryGateReport], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[CoherenceDecisionCase] = [gate_report_reasoning_skill_1]
+
+converted_reasoning = AssessPhysicsLibraryCoherence(
+    library_inventory = library_inventory_reasoning_agent,
+    ownership_map = ownership_map_reasoning_agent,
+    ownership_map_by = ownership_map_reasoning_relation_builder,
+    reuse_audit = reuse_audit_reasoning_agent,
+    reuse_audit_by = reuse_audit_reasoning_relation_builder,
+    redefinition_review = redefinition_review_reasoning_agent,
+    redefinition_review_by = redefinition_review_reasoning_relation_builder,
+    integration_review = integration_review_reasoning_agent,
+    integration_review_by = integration_review_reasoning_relation_builder,
+    api_review = api_review_reasoning_agent,
+    api_review_by = api_review_reasoning_relation_builder,
+    coherence_probe = coherence_probe_reasoning_agent,
+    coherence_probe_by = coherence_probe_reasoning_relation_builder,
+    repair_actions = repair_actions_reasoning_agent,
+    repair_actions_by = repair_actions_reasoning_relation_builder,
+    gate_report = gate_report_reasoning_agent,
+    gate_report_by = gate_report_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `mathformerphysicslib-coherence-inventory-builder`; this does not execute the linked native resource.
+def library_physics_coherence_inventory_material_binding(source: MathformerPhysicsLibrarySnapshot) -> Computed[MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceInventoryArtifact]:
+    artifact = MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceInventoryArtifact(
+        subject = "typed material binding for library_physics_coherence_inventory",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation library_physics_coherence_inventory",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_physics_coherence_inventory")
+
+# Material binding descriptor for `mathformerphysicslib-concept-canonicalizer`; this does not execute the linked native resource.
+def library_physics_coherence_canonicalize_material_binding(source: MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceInventoryArtifact) -> Computed[MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceCanonicalizeArtifact]:
+    artifact = MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceCanonicalizeArtifact(
+        subject = "typed material binding for library_physics_coherence_canonicalize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation library_physics_coherence_canonicalize",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_physics_coherence_canonicalize")
+
+# Material binding descriptor for `mathformerphysicslib-mathlib-grounding-auditor`; this does not execute the linked native resource.
+def library_physics_coherence_mathlib_grounding_material_binding(source: MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceCanonicalizeArtifact) -> Computed[MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceMathlibGroundingArtifact]:
+    artifact = MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceMathlibGroundingArtifact(
+        subject = "typed material binding for library_physics_coherence_mathlib_grounding",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_physics_coherence_mathlib_grounding")
+
+# Material binding descriptor for `mathformerphysicslib-redefinition-critic`; this does not execute the linked native resource.
+def library_physics_coherence_redefinition_critic_material_binding(source: MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceMathlibGroundingArtifact) -> Computed[MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceRedefinitionCriticArtifact]:
+    artifact = MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceRedefinitionCriticArtifact(
+        subject = "typed material binding for library_physics_coherence_redefinition_critic",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation library_physics_coherence_redefinition_critic",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_physics_coherence_redefinition_critic")
+
+# Material binding descriptor for `mathformerphysicslib-integration-critic`; this does not execute the linked native resource.
+def library_physics_coherence_integration_critic_material_binding(source: MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceRedefinitionCriticArtifact) -> Computed[MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceIntegrationCriticArtifact]:
+    artifact = MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceIntegrationCriticArtifact(
+        subject = "typed material binding for library_physics_coherence_integration_critic",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation library_physics_coherence_integration_critic",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_physics_coherence_integration_critic")
+
+# Material binding descriptor for `mathformerphysicslib-api-operability-critic`; this does not execute the linked native resource.
+def library_physics_coherence_api_critic_material_binding(source: MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceIntegrationCriticArtifact) -> Computed[MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceApiCriticArtifact]:
+    artifact = MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceApiCriticArtifact(
+        subject = "typed material binding for library_physics_coherence_api_critic",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation library_physics_coherence_api_critic",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_physics_coherence_api_critic")
+
+# Material binding descriptor for `mathformerphysicslib-generative-coherence-critic`; this does not execute the linked native resource.
+def library_physics_coherence_generative_critic_material_binding(source: MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceApiCriticArtifact) -> Computed[MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceGenerativeCriticArtifact]:
+    artifact = MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceGenerativeCriticArtifact(
+        subject = "typed material binding for library_physics_coherence_generative_critic",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation library_physics_coherence_generative_critic",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_physics_coherence_generative_critic")
+
+# Epistemic occurrence owned by `mathformerphysicslib-coherence-repair-planner`; output assurance remains Generated.
+agent library_physics_coherence_repair_plan_agent(
+    task: MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceGenerativeCriticArtifact,
+) -> Result[Generated[MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceRepairPlanArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceGenerativeCriticArtifact] = [library_physics_coherence_repair_plan_skill_binding]
+
+def library_physics_coherence_repair_plan_relation_builder(
+    source: MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceGenerativeCriticArtifact,
+    target: Generated[MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceRepairPlanArtifact],
+) -> RecommendsLibraryPhysicsCoherenceRepairPlanCertificate:
+    return RecommendsLibraryPhysicsCoherenceRepairPlanCertificate(source = source, target = target)
+
+# Material binding descriptor for `mathformerphysicslib-coherence-gate`; this does not execute the linked native resource.
+def library_physics_coherence_gate_material_binding(source: MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceRepairPlanArtifact) -> Computed[MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceGateArtifact]:
+    artifact = MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceGateArtifact(
+        subject = "typed material binding for library_physics_coherence_gate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        considered_dispositions = ["pass", "warn", "fail", "blocked"],
+        selected_disposition = "not_tested",
+        rationale = "native execution is outside this structural PRISM fixture",
+    )
+    return compute(artifact, procedure = "linked material binding: library_physics_coherence_gate")
+
+# Material binding descriptor for `mathformerphysicslib-coherence-gate`; this does not execute the linked native resource.
+def library_physics_coherence_loop_material_binding(source: MathformerphysicslibCoherenceGroundingLibraryPhysicsCoherenceGateArtifact) -> Computed[MathformerPhysicsLibraryCoherenceDisposition]:
+    artifact = MathformerPhysicsLibraryCoherenceDisposition(
+        subject = "typed material binding for library_physics_coherence_loop",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation library_physics_coherence_loop",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_physics_coherence_loop")
+
+# MathformerPhysicsLib coherence and grounding loop over canonical ownership, Mathlib-first grounding, redefinition spread, integration/discoverability, API operability, guarded generative interpretation, monotonic repair planning, and final report gates.
+workflow MathformerphysicslibCoherenceGroundingLoop(
+    workflow_source: MathformerPhysicsLibrarySnapshot,
+) -> Computed[MathformerPhysicsLibraryCoherenceDisposition]
+    fails ModelFailure
+    ! {AI.Generate, Context.Disclose}:
+    sequence:
+        [library_physics_coherence_inventory: library_physics_coherence_inventory_material_binding(workflow_source)]
+        [library_physics_coherence_canonicalize: library_physics_coherence_canonicalize_material_binding(library_physics_coherence_inventory.value)]
+        [library_physics_coherence_mathlib_grounding: library_physics_coherence_mathlib_grounding_material_binding(library_physics_coherence_canonicalize.value)]
+        [library_physics_coherence_redefinition_critic: library_physics_coherence_redefinition_critic_material_binding(library_physics_coherence_mathlib_grounding.value)]
+        [library_physics_coherence_integration_critic: library_physics_coherence_integration_critic_material_binding(library_physics_coherence_redefinition_critic.value)]
+        [library_physics_coherence_api_critic: library_physics_coherence_api_critic_material_binding(library_physics_coherence_integration_critic.value)]
+        [library_physics_coherence_generative_critic: library_physics_coherence_generative_critic_material_binding(library_physics_coherence_api_critic.value)]
+        [library_physics_coherence_repair_plan: library_physics_coherence_repair_plan_agent(library_physics_coherence_generative_critic.value)]
+        [library_physics_coherence_gate: library_physics_coherence_gate_material_binding(library_physics_coherence_repair_plan.value)]
+        [library_physics_coherence_loop: library_physics_coherence_loop_material_binding(library_physics_coherence_gate.value)]
+    return library_physics_coherence_loop

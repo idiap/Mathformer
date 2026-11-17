@@ -1,0 +1,114 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Selected original entrypoints, verbatim from source-original.py.
+def run_leaf_action(
+    item: WorkflowAction, context: RunContext, extra_args: Sequence[str]
+) -> Dict[str, Any]:
+    """Run one non-composed action.
+
+    Motivation:
+        Centralize subprocess behavior so every workflow has the same dry-run,
+        preflight, report, and output semantics.
+
+    Intent:
+        Execute only the argv declared by the registry, plus explicitly allowed
+        extra args, without invoking a shell.
+
+    Inputs:
+        A leaf `WorkflowAction`, runtime context, and optional pass-through args.
+
+    Outputs:
+        A result dictionary containing command, exit code, output, and status.
+    """
+
+    boundary = prepare_leaf_boundary(item, context, extra_args)
+    payload = boundary["payload"]
+    if not boundary["execute"]:
+        return payload
+    command = payload["argv"]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=item.timeout_seconds,
+        )
+        payload.update(
+            {
+                "status": "completed",
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "ok": result.returncode == 0,
+            }
+        )
+    except subprocess.TimeoutExpired as exc:
+        payload.update(
+            {
+                "status": "timeout",
+                "returncode": None,
+                "stdout": exc.stdout or "",
+                "stderr": exc.stderr or "",
+                "ok": False,
+                "timeout_seconds": item.timeout_seconds,
+            }
+        )
+    return finish_leaf_boundary(item, boundary, payload)
+
+def run_action(
+    action_id: str,
+    registry: Mapping[str, WorkflowAction],
+    context: RunContext,
+    *,
+    extra_args: Sequence[str] = (),
+    seen: Optional[Set[str]] = None,
+) -> Dict[str, Any]:
+    """Run a registered action or composed workflow sequence.
+
+    Motivation:
+        Let higher-level quality gates reuse smaller controlled actions without
+        duplicating command lists.
+
+    Intent:
+        Resolve the action id, prevent dependency cycles, run dependencies in
+        order, and stop on failure unless keep-going is requested.
+
+    Inputs:
+        The action id, registry, execution context, optional extra args, and
+        recursion guard.
+
+    Outputs:
+        A result dictionary for the action or sequence.
+    """
+
+    admission = admit_action(action_id, registry, extra_args, seen)
+    if not admission["accepted"]:
+        return reject_action(action_id, admission)
+    item = registry[action_id]
+    if item.depends_on:
+        state = initialize_dependencies(admission)
+        for _child_id in item.depends_on:
+            child = visit_dependency(item, registry, context, state)
+            state, done = advance_dependencies(item, state, child, context)
+            if done:
+                break
+        children = state["children"]
+        dependencies_ok = state["dependencies_ok"]
+        if item.command and (dependencies_ok or context.keep_going):
+            leaf = run_leaf_action(item, context, extra_args)
+            return {
+                "action": action_to_dict(item),
+                "status": (
+                    "completed_with_dependencies"
+                    if leaf.get("ok", False) and dependencies_ok
+                    else "failed_with_dependencies"
+                ),
+                "ok": dependencies_ok and leaf.get("ok", False),
+                "children": children,
+                "leaf": leaf,
+            }
+        return finish_dependencies(item, state)
+
+    return run_leaf_action(item, context, extra_args)

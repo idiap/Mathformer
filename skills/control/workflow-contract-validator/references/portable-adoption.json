@@ -1,0 +1,485 @@
+{
+  "schema_version": 1,
+  "canonical_roots": [
+    "skills/*/*/SKILL.md",
+    "proj_skills/*/SKILL.md"
+  ],
+  "taxonomy_sources": {
+    "skill_types": "skills/SKILL_TYPES.yaml",
+    "reasoning_types": "skills/REASONING_TYPES.yaml",
+    "output_types": "skills/OUTPUT_TYPES.yaml"
+  },
+  "surfaces": [
+    {
+      "id": "mathformer-workflow-router",
+      "kind": "skill",
+      "owner": "skills/control/mathformer-workflow-router",
+      "scope": "project_support",
+      "operations": [
+        {
+          "id": "router:resolve",
+          "aliases": [
+            "mathformer-workflow-router:resolve"
+          ],
+          "binding": {
+            "kind": "python_function",
+            "path": "scripts/mathformer.py",
+            "symbol": "resolve_intent"
+          },
+          "typing": {
+            "execution_posture": "deterministic",
+            "specification_styles": [
+              "query_based"
+            ],
+            "composition_role": "branching_router",
+            "effect_profiles": [
+              "read_only"
+            ],
+            "authority_profile": "proposal_producer",
+            "output_type": "plan_directive",
+            "reasoning_method": "epistemic_governance",
+            "invocation_mechanism": "python_function",
+            "generation_boundary": "none",
+            "output_authority": "Route candidates only; execution requires the existing hub boundary.",
+            "sources": {
+              "execution_axes": "skills/SKILL_TYPES.yaml",
+              "output_type": "skills/OUTPUT_TYPES.yaml",
+              "reasoning_method": "skills/REASONING_TYPES.yaml#skill_bindings.mathformer-workflow-router"
+            },
+            "mapping_basis": "Declared primary epistemic_governance in the existing skill binding; operation role/effects/output authority refined from the bound implementation. Classification is not execution evidence."
+          },
+          "inputs": {
+            "type": "python_arguments",
+            "description": "request: str; registry: Mapping[str, WorkflowAction]; optional limit: int=5 and family: str|None=None"
+          },
+          "outputs": {
+            "type": "List[IntentMatch]",
+            "description": "Score-ordered matching routes; empty list when no route matches.",
+            "authority": "Route candidates only; execution requires the existing hub boundary.",
+            "writes": []
+          },
+          "availability": {
+            "requires": [
+              "Python 3"
+            ]
+          },
+          "evidence_limits": [
+            "Classification describes the declared operation; it does not establish an invocation occurred.",
+            "Evidence is scoped to exact inputs and recorded environment; no scientific validity follows from deterministic execution."
+          ],
+          "role": "reader"
+        }
+      ]
+    },
+    {
+      "id": "workflow-contract-validator",
+      "kind": "skill",
+      "owner": "skills/control/workflow-contract-validator",
+      "scope": "project_support",
+      "operations": [
+        {
+          "id": "control:workflow-contract",
+          "aliases": [
+            "workflow-contract-validator:validate"
+          ],
+          "binding": {
+            "kind": "hub_action",
+            "path": "skills/control/workflow-contract-validator/scripts/validate_skill_hooks.py",
+            "action_id": "control:workflow-contract",
+            "symbol": "main"
+          },
+          "typing": {
+            "execution_posture": "deterministic",
+            "specification_styles": [
+              "constraint_based"
+            ],
+            "composition_role": "atomic_operator",
+            "effect_profiles": [
+              "read_only"
+            ],
+            "authority_profile": "assessment_producer",
+            "output_type": "scoped_assessment",
+            "reasoning_method": "epistemic_governance",
+            "invocation_mechanism": "hub_action",
+            "generation_boundary": "none",
+            "output_authority": "Hook, owner, routing and runtime consistency assessment; no theorem evidence.",
+            "sources": {
+              "execution_axes": "skills/SKILL_TYPES.yaml",
+              "output_type": "skills/OUTPUT_TYPES.yaml",
+              "reasoning_method": "skills/REASONING_TYPES.yaml#skill_bindings.workflow-contract-validator"
+            },
+            "mapping_basis": "Declared primary epistemic_governance in the existing skill binding; operation role/effects/output authority refined from the bound implementation. Classification is not execution evidence."
+          },
+          "inputs": {
+            "type": "cli_arguments",
+            "description": "Existing hub action runs --strict --json using skills/SKILL_HOOKS.yaml and canonical skills; direct script also accepts --repo-root, --hooks-file, --skills-dir and optional reasoning log."
+          },
+          "outputs": {
+            "type": "json_stdout_and_exit_code",
+            "description": "Legacy report includes ok, summary and findings. Strict invalid/missing contracts return 3; valid contracts return 0.",
+            "authority": "Hook, owner, routing and runtime consistency assessment; no theorem evidence.",
+            "writes": []
+          },
+          "availability": {
+            "requires": [
+              "Python 3"
+            ]
+          },
+          "evidence_limits": [
+            "Classification describes the declared operation; it does not establish an invocation occurred.",
+            "Evidence is scoped to exact inputs and recorded environment; no scientific validity follows from deterministic execution."
+          ],
+          "role": "reasoner"
+        }
+      ]
+    },
+    {
+      "id": "reasoning-log-schema-guardian",
+      "kind": "skill",
+      "owner": "skills/control/reasoning-log-schema-guardian",
+      "scope": "project_support",
+      "operations": [
+        {
+          "id": "control:reasoning-log-summary",
+          "aliases": [
+            "reasoning-log-schema-guardian:summarize"
+          ],
+          "binding": {
+            "kind": "hub_action",
+            "path": "skills/control/reasoning-log-schema-guardian/scripts/summarize_reasoning_log.py",
+            "action_id": "control:reasoning-log-summary",
+            "symbol": "main"
+          },
+          "typing": {
+            "execution_posture": "deterministic",
+            "specification_styles": [
+              "transformational"
+            ],
+            "composition_role": "atomic_operator",
+            "effect_profiles": [
+              "read_only"
+            ],
+            "authority_profile": "memory_or_explanation_producer",
+            "output_type": "explanation",
+            "reasoning_method": "epistemic_governance",
+            "invocation_mechanism": "hub_action",
+            "generation_boundary": "none",
+            "output_authority": "Projection of recorded events; does not execute or prove recorded claims.",
+            "sources": {
+              "execution_axes": "skills/SKILL_TYPES.yaml",
+              "output_type": "skills/OUTPUT_TYPES.yaml",
+              "reasoning_method": "skills/REASONING_TYPES.yaml#skill_bindings.reasoning-log-schema-guardian"
+            },
+            "mapping_basis": "Declared primary epistemic_governance in the existing skill binding; operation role/effects/output authority refined from the bound implementation. Classification is not execution evidence."
+          },
+          "inputs": {
+            "type": "cli_arguments",
+            "description": "Pass --log-file PATH after hub --; optional --hooks-file. Reads historical JSONL."
+          },
+          "outputs": {
+            "type": "json_stdout",
+            "description": "Existing schema_version=1 reasoning_log_consumer_summary with ordered timeline, validation and quality.",
+            "authority": "Projection of recorded events; does not execute or prove recorded claims.",
+            "writes": []
+          },
+          "availability": {
+            "requires": [
+              "Python 3"
+            ]
+          },
+          "evidence_limits": [
+            "Classification describes the declared operation; it does not establish an invocation occurred.",
+            "Evidence is scoped to exact inputs and recorded environment; no scientific validity follows from deterministic execution."
+          ],
+          "role": "reader"
+        },
+        {
+          "id": "control:reasoning-log-html",
+          "aliases": [
+            "reasoning-log-schema-guardian:render-html"
+          ],
+          "binding": {
+            "kind": "hub_action",
+            "path": "skills/control/reasoning-log-schema-guardian/scripts/render_reasoning_log_html.py",
+            "action_id": "control:reasoning-log-html",
+            "symbol": "main"
+          },
+          "typing": {
+            "execution_posture": "deterministic",
+            "specification_styles": [
+              "transformational"
+            ],
+            "composition_role": "atomic_operator",
+            "effect_profiles": [
+              "writes_durable_artifacts"
+            ],
+            "authority_profile": "memory_or_explanation_producer",
+            "output_type": "explanation",
+            "reasoning_method": "epistemic_governance",
+            "invocation_mechanism": "hub_action",
+            "generation_boundary": "none",
+            "output_authority": "Human rendering only; no new workflow or model execution.",
+            "sources": {
+              "execution_axes": "skills/SKILL_TYPES.yaml",
+              "output_type": "skills/OUTPUT_TYPES.yaml",
+              "reasoning_method": "skills/REASONING_TYPES.yaml#skill_bindings.reasoning-log-schema-guardian"
+            },
+            "mapping_basis": "Declared primary epistemic_governance in the existing skill binding; operation role/effects/output authority refined from the bound implementation. Classification is not execution evidence."
+          },
+          "inputs": {
+            "type": "cli_arguments",
+            "description": "Pass --log-file PATH and --output-file PATH after hub --."
+          },
+          "outputs": {
+            "type": "html_file_and_exit_code",
+            "description": "Self-contained dashboard at the caller-selected output path; input log stays unchanged.",
+            "authority": "Human rendering only; no new workflow or model execution.",
+            "writes": [
+              "caller-selected HTML output"
+            ]
+          },
+          "availability": {
+            "requires": [
+              "Python 3"
+            ]
+          },
+          "evidence_limits": [
+            "Classification describes the declared operation; it does not establish an invocation occurred.",
+            "Evidence is scoped to exact inputs and recorded environment; no scientific validity follows from deterministic execution."
+          ],
+          "role": "writer"
+        },
+        {
+          "id": "reasoning-log:validate",
+          "aliases": [
+            "reasoning-log-schema-guardian:validate"
+          ],
+          "binding": {
+            "kind": "python_function",
+            "path": "skills/control/reasoning-log-schema-guardian/scripts/validate_reasoning_log.py",
+            "symbol": "validate_reasoning_log"
+          },
+          "typing": {
+            "execution_posture": "deterministic",
+            "specification_styles": [
+              "constraint_based"
+            ],
+            "composition_role": "atomic_operator",
+            "effect_profiles": [
+              "read_only"
+            ],
+            "authority_profile": "assessment_producer",
+            "output_type": "scoped_assessment",
+            "reasoning_method": "epistemic_governance",
+            "invocation_mechanism": "python_function",
+            "generation_boundary": "none",
+            "output_authority": "JSONL and declared hook schema evidence only.",
+            "sources": {
+              "execution_axes": "skills/SKILL_TYPES.yaml",
+              "output_type": "skills/OUTPUT_TYPES.yaml",
+              "reasoning_method": "skills/REASONING_TYPES.yaml#skill_bindings.reasoning-log-schema-guardian"
+            },
+            "mapping_basis": "Declared primary epistemic_governance in the existing skill binding; operation role/effects/output authority refined from the bound implementation. Classification is not execution evidence."
+          },
+          "inputs": {
+            "type": "python_arguments",
+            "description": "log_file: Path; hooks_file: Path|None; strict=False; require_instrumentation=False; require_skill_application=False"
+          },
+          "outputs": {
+            "type": "dict",
+            "description": "Validation report preserving findings and schema diagnostics.",
+            "authority": "JSONL and declared hook schema evidence only.",
+            "writes": []
+          },
+          "availability": {
+            "requires": [
+              "Python 3"
+            ]
+          },
+          "evidence_limits": [
+            "Classification describes the declared operation; it does not establish an invocation occurred.",
+            "Evidence is scoped to exact inputs and recorded environment; no scientific validity follows from deterministic execution."
+          ],
+          "role": "reasoner"
+        },
+        {
+          "id": "reasoning-log:append",
+          "aliases": [
+            "reasoning-log-schema-guardian:append"
+          ],
+          "binding": {
+            "kind": "python_function",
+            "path": "skills/control/reasoning-log-schema-guardian/scripts/reasoning_log.py",
+            "symbol": "append_reasoning_log_entry"
+          },
+          "typing": {
+            "execution_posture": "deterministic",
+            "specification_styles": [
+              "transformational"
+            ],
+            "composition_role": "atomic_operator",
+            "effect_profiles": [
+              "writes_durable_artifacts"
+            ],
+            "authority_profile": "memory_or_explanation_producer",
+            "output_type": "provenance_trace",
+            "reasoning_method": "epistemic_governance",
+            "invocation_mechanism": "python_function",
+            "generation_boundary": "none",
+            "output_authority": "Provenance record of caller-supplied public evidence; no independent correctness guarantee.",
+            "sources": {
+              "execution_axes": "skills/SKILL_TYPES.yaml",
+              "output_type": "skills/OUTPUT_TYPES.yaml",
+              "reasoning_method": "skills/REASONING_TYPES.yaml#skill_bindings.reasoning-log-schema-guardian"
+            },
+            "mapping_basis": "Declared primary epistemic_governance in the existing skill binding; operation role/effects/output authority refined from the bound implementation. Classification is not execution evidence."
+          },
+          "inputs": {
+            "type": "python_arguments",
+            "description": "output_file: str|PathLike; keyword step: str and payload: dict; optional statement, file_prefix and dependency_label. Payload includes skill; public evidence only."
+          },
+          "outputs": {
+            "type": "Path",
+            "description": "Appends one instrumented event using the existing canonical JSONL helper; returns output Path.",
+            "authority": "Provenance record of caller-supplied public evidence; no independent correctness guarantee.",
+            "writes": [
+              "caller-selected JSONL output"
+            ]
+          },
+          "availability": {
+            "requires": [
+              "Python 3"
+            ]
+          },
+          "evidence_limits": [
+            "Classification describes the declared operation; it does not establish an invocation occurred.",
+            "Evidence is scoped to exact inputs and recorded environment; no scientific validity follows from deterministic execution."
+          ],
+          "role": "writer"
+        }
+      ]
+    },
+    {
+      "id": "artifact_acceptance_loop",
+      "kind": "workflow",
+      "owner": "mathformer-prism/projects/artifact_acceptance_loop/prism_project",
+      "scope": "project_workflow",
+      "operations": [
+        {
+          "id": "artifact_acceptance_loop:public",
+          "aliases": [
+            "prism:artifact-acceptance-public"
+          ],
+          "binding": {
+            "kind": "prism_entrypoint",
+            "path": "mathformer-prism/projects/artifact_acceptance_loop/prism_project/main.prism",
+            "symbol": "main"
+          },
+          "typing": {
+            "execution_posture": "generative",
+            "specification_styles": [
+              "compositional"
+            ],
+            "composition_role": "sequential_orchestrator",
+            "effect_profiles": [
+              "external_side_effects"
+            ],
+            "authority_profile": "proposal_producer",
+            "output_type": "candidate_artifact",
+            "reasoning_method": "epistemic_governance",
+            "invocation_mechanism": "prism_entrypoint",
+            "generation_boundary": "AI.Generate at public solve ReviewLeanArtifact; Context.Disclose explicit effect",
+            "output_authority": "Generated disposition proposal; fixture placeholders and fake handler provide no Lean/backend proof.",
+            "sources": {
+              "execution_axes": "skills/SKILL_TYPES.yaml",
+              "output_type": "skills/OUTPUT_TYPES.yaml",
+              "reasoning_method": "skills/REASONING_TYPES.yaml#epistemic_governance"
+            },
+            "mapping_basis": "Operation-level assessment/governance mapping from the authored PRISM type and materialization contracts; no canonical skill binding is invented."
+          },
+          "inputs": {
+            "type": "prism_arguments",
+            "description": "ModelGenerate and ContextDisclose capabilities; authored fixture LeanArtifactAcceptanceRequest is constructed in main."
+          },
+          "outputs": {
+            "type": "Result[Generated[ArtifactDisposition], ModelFailure]",
+            "description": "Public ReviewLeanArtifact reasoning flow result.",
+            "authority": "Generated disposition proposal; fixture placeholders and fake handler provide no Lean/backend proof.",
+            "writes": [
+              "PRISM runtime trace/output according to existing runtime"
+            ]
+          },
+          "availability": {
+            "requires": [
+              "Existing PRISM executable and configured handler capabilities"
+            ]
+          },
+          "evidence_limits": [
+            "Classification describes the declared operation; it does not establish an invocation occurred.",
+            "Evidence is scoped to exact inputs and recorded environment; no scientific validity follows from deterministic execution.",
+            "Native provider and actual backend verification require separate execution evidence.",
+            "Not arbitrary Python dispatch; an explicit fixture adapter may use the existing PRISM runtime. Native execution remains a separate evidence class."
+          ],
+          "role": "reasoner"
+        },
+        {
+          "id": "artifact_acceptance_loop:material",
+          "aliases": [
+            "prism:artifact-acceptance-material"
+          ],
+          "binding": {
+            "kind": "prism_entrypoint",
+            "path": "mathformer-prism/projects/artifact_acceptance_loop/prism_project/material_main.prism",
+            "symbol": "main"
+          },
+          "typing": {
+            "execution_posture": "deterministic",
+            "specification_styles": [
+              "compositional"
+            ],
+            "composition_role": "sequential_orchestrator",
+            "effect_profiles": [
+              "writes_ephemeral_artifacts"
+            ],
+            "authority_profile": "decision_authority",
+            "output_type": "decision_record",
+            "reasoning_method": "epistemic_governance",
+            "invocation_mechanism": "prism_entrypoint",
+            "generation_boundary": "none in the current structural material fixture: bindings construct fixed typed records and compute(...); linked native resources are not executed",
+            "output_authority": "Structural material fixture only: gate_disposition is not_executed_by_structural_fixture and evidence_references are empty; no linked native implementation or proof checker executes.",
+            "sources": {
+              "execution_axes": "skills/SKILL_TYPES.yaml",
+              "output_type": "skills/OUTPUT_TYPES.yaml",
+              "reasoning_method": "skills/REASONING_TYPES.yaml#epistemic_governance"
+            },
+            "mapping_basis": "Operation-level assessment/governance mapping from the authored PRISM type and materialization contracts; no canonical skill binding is invented. materialization.prism:229-465 constructs fixed material records; deterministic describes that fixture implementation, not Computed as a general guarantee."
+          },
+          "inputs": {
+            "type": "prism_arguments",
+            "description": "No arguments; authored fixture LeanArtifactAcceptanceRequest is constructed in main."
+          },
+          "outputs": {
+            "type": "Computed[LeanArtifactAcceptanceDecision]",
+            "description": "Material ArtifactAcceptanceLoop orchestration result.",
+            "authority": "Structural material fixture only: gate_disposition is not_executed_by_structural_fixture and evidence_references are empty; no linked native implementation or proof checker executes.",
+            "writes": [
+              "PRISM runtime trace/output according to existing runtime"
+            ]
+          },
+          "availability": {
+            "requires": [
+              "Existing PRISM executable and configured handler capabilities"
+            ]
+          },
+          "evidence_limits": [
+            "Classification describes the declared operation; it does not establish an invocation occurred.",
+            "Evidence is scoped to exact inputs and recorded environment; no scientific validity follows from deterministic execution.",
+            "Native provider and actual backend verification require separate execution evidence.",
+            "Not arbitrary Python dispatch; an explicit fixture adapter may use the existing PRISM runtime. Native execution remains a separate evidence class."
+          ],
+          "role": "reasoner"
+        }
+      ]
+    }
+  ]
+}

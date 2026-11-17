@@ -1,0 +1,760 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lean_goal_sample_recursive_0009_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "One source-only physics/Lean pass through main(argv); recursion recommendations are reported, never followed.",
+  "aliases": [
+    "physics-lean:goal-sample-recursive-0009"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Arguments": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "representation": "value"
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      },
+      "representation": "value"
+    },
+    "PassState": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "original",
+          "case_id",
+          "source_text",
+          "source_text_path",
+          "lean_file",
+          "artifact_dir",
+          "outputs",
+          "stage_reports",
+          "repair_plan_paths",
+          "iteration",
+          "max_iterations",
+          "json_output",
+          "pending",
+          "python"
+        ],
+        "properties": {
+          "original": {
+            "type": "object",
+            "description": "Loaded source record; withheld formal_answer is not used."
+          },
+          "case_id": {
+            "type": "string",
+            "pattern": "^formalphysics_"
+          },
+          "source_text": {
+            "type": "string"
+          },
+          "source_text_path": {
+            "type": "string"
+          },
+          "lean_file": {
+            "type": "string"
+          },
+          "artifact_dir": {
+            "type": "string"
+          },
+          "outputs": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "stage_reports": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            }
+          },
+          "repair_plan_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "iteration": {
+            "type": "integer",
+            "default": 1
+          },
+          "max_iterations": {
+            "type": "integer",
+            "default": 8
+          },
+          "json_output": {
+            "type": "boolean"
+          },
+          "pending": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Projection of the remaining native finite for-loop entries."
+          },
+          "lean_compile_ok": {
+            "type": "boolean"
+          },
+          "lean_log": {
+            "type": "string"
+          },
+          "execution_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "python": {
+            "type": "string"
+          },
+          "silent_success": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "RunResult": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "returncode",
+          "report_path",
+          "source_record_path",
+          "payload"
+        ],
+        "properties": {
+          "returncode": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "report_path": {
+            "type": "string"
+          },
+          "source_record_path": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "ok",
+              "stage_summary",
+              "final_acceptance",
+              "stage_reports"
+            ],
+            "properties": {
+              "ok": {
+                "type": "boolean"
+              },
+              "stage_summary": {
+                "type": "object"
+              },
+              "final_acceptance": {
+                "type": "object"
+              },
+              "stage_reports": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Context": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "repository_root",
+          "allow_mutating"
+        ],
+        "properties": {
+          "repository_root": {
+            "type": "string"
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Arguments"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "RunResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "prepare_source": {
+      "inputs": {
+        "argv": {
+          "type": "Arguments"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "PassState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_recursive_goal_prepare_source",
+          "operation": "mathformer_recursive_goal_prepare_source"
+        }
+      }
+    },
+    "visit_physics_stage": {
+      "inputs": {
+        "state": {
+          "type": "PassState"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "PassState"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_recursive_goal_visit_physics_stage",
+          "operation": "mathformer_recursive_goal_visit_physics_stage"
+        }
+      }
+    },
+    "plan_critique_ground": {
+      "inputs": {
+        "state": {
+          "type": "PassState"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "PassState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_recursive_goal_plan_critique_ground",
+          "operation": "mathformer_recursive_goal_plan_critique_ground"
+        }
+      }
+    },
+    "visit_repair_plan": {
+      "inputs": {
+        "state": {
+          "type": "PassState"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "PassState"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_recursive_goal_visit_repair_plan",
+          "operation": "mathformer_recursive_goal_visit_repair_plan"
+        }
+      }
+    },
+    "finish_plans": {
+      "inputs": {
+        "state": {
+          "type": "PassState"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "PassState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_recursive_goal_finish_plans",
+          "operation": "mathformer_recursive_goal_finish_plans"
+        }
+      }
+    },
+    "compile_interpret": {
+      "inputs": {
+        "state": {
+          "type": "PassState"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "PassState"
+        },
+        "silent_success": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_recursive_goal_compile_interpret",
+          "operation": "mathformer_recursive_goal_compile_interpret"
+        }
+      }
+    },
+    "normalize_silent": {
+      "inputs": {
+        "state": {
+          "type": "PassState"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "PassState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_recursive_goal_normalize_silent",
+          "operation": "mathformer_recursive_goal_normalize_silent"
+        }
+      }
+    },
+    "validate_report": {
+      "inputs": {
+        "state": {
+          "type": "PassState"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "RunResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_recursive_goal_validate_report",
+          "operation": "mathformer_recursive_goal_validate_report"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare_source",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "physics",
+        "kind": "loop",
+        "state_type": "PassState",
+        "initial": {
+          "ref": "steps.prepare.outputs.state"
+        },
+        "body": {
+          "kind": "call",
+          "operation": "visit_physics_stage",
+          "arguments": {
+            "state": {
+              "ref": "loop.state"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 7,
+        "on_exhausted": "fail",
+        "description": "Native seven-entry traversal; done is true on its final entry, so the bound returns normally.",
+        "outputs": {
+          "state": {
+            "type": "PassState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "planning",
+        "kind": "call",
+        "operation": "plan_critique_ground",
+        "arguments": {
+          "state": {
+            "ref": "steps.physics.outputs.state"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "repair_plans",
+        "kind": "loop",
+        "state_type": "PassState",
+        "initial": {
+          "ref": "steps.planning.outputs.state"
+        },
+        "body": {
+          "kind": "call",
+          "operation": "visit_repair_plan",
+          "arguments": {
+            "state": {
+              "ref": "loop.state"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 4,
+        "on_exhausted": "fail",
+        "description": "Native four-entry traversal accumulates reports and paths; done is true at the bound. No refinement loop.",
+        "outputs": {
+          "state": {
+            "type": "PassState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "reviews",
+        "kind": "call",
+        "operation": "finish_plans",
+        "arguments": {
+          "state": {
+            "ref": "steps.repair_plans.outputs.state"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "compile",
+        "kind": "call",
+        "operation": "compile_interpret",
+        "arguments": {
+          "state": {
+            "ref": "steps.reviews.outputs.state"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "diagnostics",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "silent_success",
+            "when": {
+              "ref": "steps.compile.outputs.silent_success"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "normalize",
+                  "kind": "call",
+                  "operation": "normalize_silent",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.compile.outputs.state"
+                    },
+                    "context": {
+                      "ref": "inputs.context"
+                    }
+                  }
+                },
+                {
+                  "id": "finish_normalized",
+                  "kind": "call",
+                  "operation": "validate_report",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.normalize.outputs.state"
+                    },
+                    "context": {
+                      "ref": "inputs.context"
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "result": {
+                  "type": "RunResult",
+                  "value": {
+                    "ref": "steps.finish_normalized.outputs.result"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "validate_report",
+          "arguments": {
+            "state": {
+              "ref": "steps.compile.outputs.state"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "RunResult",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "RunResult",
+        "value": {
+          "ref": "steps.diagnostics.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/physics_lean/recursive_goal_runs/formalphysics_0009/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 900,
+      "max_operation_calls": 17
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked description only; compilation and workflow completion establish no scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/physics-lean/physics-lean-goal-sample-autoformalizer/scripts/run_recursive_goal_case.py",
+        "selector": "main(argv)",
+        "digest": "sha256:f3f364258e522747d421c72fc4f15b9335334ff06b36736146278a718ed30f99"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:physics-lean:goal-sample-recursive-0009; run_action; run_leaf_action; prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "skills/physics-lean/physics-lean-recursive-repair-loop-controller/scripts/control_recursive_repair_loop.py",
+        "selector": "build_control_plan",
+        "digest": "sha256:b2fb4a4973181f6fd8cc9a920aa0d947c216ee80db9f7384f06e290e30bc68ab"
+      },
+      {
+        "path": "scripts/recursive_goal_tools.py",
+        "digest": "sha256:c86eceb95455a2c41122042d249f515fa00d5c3c527bbe20f98d928bc145c11e"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "The graph expands main(argv). The enclosing CLI hub retains its own dry-run, subprocess timeout, capture and write audit. MCP steps enforce native preflight, mutation authorization and declared output containment through the service write policy; they do not invoke the enclosing hub subprocess.",
+      "Report payloads retain native backend schemas as object values. Completion confers no scientific truth, promotion or proof beyond the recorded compiler evidence."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lean:goal-sample-recursive-0009",
+      "owner_skill": "skills/physics-lean/physics-lean-goal-sample-autoformalizer/SKILL.md",
+      "contract": {
+        "id": "physics-lean:goal-sample-recursive-0009",
+        "family": "physics_lean",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "skills/physics-lean/physics-lean-goal-sample-autoformalizer/scripts/run_recursive_goal_case.py",
+          "--source-record",
+          "artifacts/physics_lean/new_qm_source_only/formalphysics_0009/source_record.json",
+          "--json"
+        ],
+        "depends_on": [],
+        "allows_extra_args": true,
+        "timeout_seconds": 900,
+        "writes": [
+          "artifacts/physics_lean/recursive_goal_runs/formalphysics_0009/"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Shared source functions back both main(argv) and typed MCP tools. MCP preparation applies hub preflight and every step applies mutation authorization, declared write containment and service mount checks. The CLI hub continues to own dry-run, enclosing subprocess capture/timeout and snapshot write auditing; those are outside the expanded main graph.",
+      "argv": "Runner argv, with a separate repository_root and allow_mutating context. Native declared writes restrict MCP outputs to the registered formalphysics_0009 directory; input and existing Lean paths remain native runner arguments.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "failure_policy": "Stage nonzero exits and timeouts are data, not graph failures; retain failure in reports and continue. Stage ok requires exit zero and expected output existence. Default run_stage timeout 240 seconds, mathlib grounding 360; direct compilation has no local timeout. Unhandled exceptions abort main; the hub captures its subprocess failure.",
+      "limits": "900 seconds is the enclosing hub subprocess timeout. 17 calls is the expanded graph maximum; both finite loops finish normally at their exact list bounds. No bound specializes iteration/max_iterations."
+    },
+    "mathformer.recursion": {
+      "control": "Controller first completes complete/not_required maps without outstanding nodes; otherwise blocks nonexhaustive maps, repeated signatures, or iteration >= max_iterations, then completes if no nodes remain, else recommends recurse. A blocked map overrides any decision. This caller supplies no previous maps, so repeated-signature history is empty.",
+      "acceptance": "Controller must report complete. Critical stages drift_monitor, pathology_repair, repair_expansion_map, recursive_control, final_hypothesis_review, consistency_report, case_thoroughness block on status fail/blocked/needs_expansion/blocked_on_library_or_labels, decision blocked, or payload_ok false. Compilation failure also blocks. All REQUIRED_COMPLETENESS_STAGES must have recorded ok true; completeness/thoroughness calls still run after earlier failure.",
+      "stopping": "Exactly one pass, with no recursion execution, repair application, iteration increment, retry or checkpoint resume."
+    }
+  }
+}

@@ -1,0 +1,356 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_validate_physics_lean_derivation_completeness_workflow
+version: 1.0.0
+kind: workflow
+description: Selected single-action derivation-completeness route, projected from
+  run_intent_match.
+aliases:
+- validate.physics.lean.derivation_completeness
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  RouteState:
+    schema:
+      type: object
+      required:
+      - ok
+      - children
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+      additionalProperties: false
+  ActionId:
+    schema:
+      type: string
+      const: physics-lean:derivation-completeness
+  Done:
+    schema:
+      type: boolean
+  MatchMetadata:
+    schema:
+      type: object
+      properties:
+        score:
+          type: number
+        matched_terms:
+          type: array
+          items:
+            type: string
+      required:
+      - score
+      - matched_terms
+      additionalProperties: false
+  Registry:
+    schema:
+      type: object
+      additionalProperties:
+        type: object
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: MatchMetadata
+    required: true
+  registry:
+    type: Registry
+    required: true
+  repository_root:
+    type: RepositoryRoot
+    required: true
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_derivation_completeness_route_initialize
+        operation: mathformer_derivation_completeness_route_initialize
+  select:
+    inputs:
+      state:
+        type: RouteState
+    outputs:
+      action:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_derivation_completeness_route_select
+        operation: mathformer_derivation_completeness_route_select
+  execute:
+    inputs:
+      action:
+        type: ActionId
+      context:
+        type: RunContext
+      registry:
+        type: Registry
+        required: true
+      repository_root:
+        type: RepositoryRoot
+        required: true
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_derivation_completeness_route_execute
+        operation: mathformer_derivation_completeness_route_execute
+  advance:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+    outputs:
+      state:
+        type: RouteState
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_derivation_completeness_route_advance
+        operation: mathformer_derivation_completeness_route_advance
+  finish:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: MatchMetadata
+        required: true
+      registry:
+        type: Registry
+        required: true
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_derivation_completeness_route_finish
+        operation: mathformer_derivation_completeness_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: Native route has exactly one action. advance returns done=true after
+      its child even on failure, so the bound returns normally; exhaustion is unreachable
+      for conforming operations.
+    state_type: RouteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select
+        arguments:
+          state:
+            ref: loop.state
+      - id: execute
+        kind: call
+        operation: execute
+        arguments:
+          action:
+            ref: steps.select.outputs.action
+          context:
+            ref: inputs.context
+          registry:
+            ref: inputs.registry
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.execute.outputs.child
+          context:
+            ref: inputs.context
+      outputs:
+        state:
+          type: RouteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Done
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RouteState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/physics_lean/derivation_completeness/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Hub success is process and write-audit success, not completeness
+    or proof.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: initialize_intent_state; select_intent_action; advance_intent_state;
+      finish_intent_state; run_action; run_leaf_action; build_intent_routes
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/physics-lean/physics-lean-derivation-completeness-checker/scripts/check_derivation_completeness.py
+    selector: main; build_report; emit_report
+    digest: sha256:e0583725510d24378fc99eb74caeba2827be462e7365c415c6e740355f3be01f
+  - path: scripts/derivation_completeness_route_tools.py
+    selector: register_derivation_completeness_route_tools
+    digest: sha256:e5bc522d894a79a824892300e36e1b85b4aadd5daacd7c62b076c98e147cc249
+  - path: scripts/mcp_server.py
+    selector: register_derivation_completeness_route_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: derivation_completeness_route_descriptor
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Leaf internals remain owned by execute; checker reports are captured in stdout
+    and declared JSON, never promoted to hub ok.
+  - The native subprocess has no timeout; Lunar enforces the enclosing 3600-second
+    descriptor budget.
+  - Lunar owns required execution receipts and artifact digests; native optional logging
+    remains unchanged.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: validate.physics.lean.derivation_completeness
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: validate.physics.lean.derivation_completeness
+      title: Check Lean physics derivation completeness
+      action_ids:
+      - physics-lean:derivation-completeness
+  mathformer.native_boundary:
+    execution: CLI ask and scripts/mcp_server.py::mathformer_run_workflow use run_intent_match;
+      YAML is a generated interface projection.
+    selection: Fixed native match and registry; NL scoring and ambiguity resolution
+      precede this contract.
+    failure_policy: Failed child payloads are data, appended before normal route completion;
+      unexpected Python exceptions terminate execution.
+    scientific_payloads: Registered defaults analyze formalphysics_0014 with source
+      record and recursive plan, writing derivation_completeness/formalphysics_0014.json.
+      main chooses self_test or requires lean-file arguments, then emit_report. build_report
+      loads inputs once and traverses all finite files, carrying files, source_record,
+      frontier_count, index and artifacts, without repair, retries or early stop for
+      incomplete files. Per-file analysis checks target-restating assumptions/witnesses,
+      builds case-specific, required-term/workflow-evidence or concept obligations,
+      and produces repair-frontier suggestions and advisory probes. High severity
+      yields blocked_target_restating_assumption; otherwise open frontiers or blocked
+      obligations yield derivation_partial; otherwise complete_autoformalization.
+      Aggregation chooses the worst file status. emit_report optionally writes JSON
+      then prints; incomplete reports exit nonzero only with expect-complete, which
+      the registered default omits. Hub ok may coexist with report ok=false.
+# REUSE-IgnoreEnd

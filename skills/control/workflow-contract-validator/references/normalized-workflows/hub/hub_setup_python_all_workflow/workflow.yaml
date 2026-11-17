@@ -1,0 +1,375 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_setup_python_all_workflow
+version: 1.0.0
+kind: workflow
+description: Install the all-extras Python profile through the selected main path.
+aliases:
+- setup:python-all
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Args:
+    schema:
+      type: object
+      properties:
+        venv_path:
+          type: string
+        all_extras:
+          type: boolean
+          const: true
+        skip_python:
+          type: boolean
+          const: false
+        with_lean:
+          type: boolean
+          const: false
+        skip_lean:
+          type: boolean
+          const: false
+        mcp_service:
+          type: boolean
+          const: false
+      required:
+      - venv_path
+      - all_extras
+      - skip_python
+      - with_lean
+      - skip_lean
+      - mcp_service
+      additionalProperties: false
+    representation: value
+  Environment:
+    schema:
+      type: object
+      properties:
+        uv:
+          type: string
+        venv_path:
+          type: string
+        python_bin:
+          type: string
+      required:
+      - uv
+      - venv_path
+      - python_bin
+      additionalProperties: false
+    representation: value
+  Dependencies:
+    schema:
+      type: array
+      const:
+      - huggingface_hub>=0.23,<1
+      - sympy>=1.12,<2
+      - numpy>=1.26,<3
+      - docling>=2
+      - mcp>=1.6,<2
+      items:
+        type: string
+    representation: value
+  Done:
+    schema:
+      type: boolean
+      const: true
+    representation: value
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+    representation: value
+  MutationAuthorization:
+    schema:
+      type: boolean
+    representation: value
+inputs:
+  allow_mutating:
+    type: MutationAuthorization
+outputs:
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      args:
+        type: Args
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_python_all_initialize
+        operation: mathformer_setup_python_all_initialize
+  prepare_environment:
+    inputs:
+      args:
+        type: Args
+      allow_mutating:
+        type: MutationAuthorization
+    outputs:
+      environment:
+        type: Environment
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_python_all_prepare_environment
+        operation: mathformer_setup_python_all_prepare_environment
+  select_dependencies:
+    inputs:
+      args:
+        type: Args
+      environment:
+        type: Environment
+    outputs:
+      dependencies:
+        type: Dependencies
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_python_all_select_dependencies
+        operation: mathformer_setup_python_all_select_dependencies
+  install_dependencies:
+    inputs:
+      environment:
+        type: Environment
+      dependencies:
+        type: Dependencies
+      allow_mutating:
+        type: MutationAuthorization
+    outputs:
+      installed:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_python_all_install_dependencies
+        operation: mathformer_setup_python_all_install_dependencies
+  setup_lean:
+    inputs:
+      args:
+        type: Args
+      installed:
+        type: Done
+    outputs:
+      finished:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_python_all_setup_lean
+        operation: mathformer_setup_python_all_setup_lean
+  complete:
+    inputs:
+      finished:
+        type: Done
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_python_all_complete
+        operation: mathformer_setup_python_all_complete
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: prepare
+    kind: call
+    operation: prepare_environment
+    arguments:
+      args:
+        ref: steps.initialize.outputs.args
+      allow_mutating:
+        ref: inputs.allow_mutating
+  - id: select
+    kind: call
+    operation: select_dependencies
+    arguments:
+      args:
+        ref: steps.initialize.outputs.args
+      environment:
+        ref: steps.prepare.outputs.environment
+  - id: install
+    kind: call
+    operation: install_dependencies
+    arguments:
+      environment:
+        ref: steps.prepare.outputs.environment
+      dependencies:
+        ref: steps.select.outputs.dependencies
+      allow_mutating:
+        ref: inputs.allow_mutating
+  - id: lean
+    kind: call
+    operation: setup_lean
+    arguments:
+      args:
+        ref: steps.initialize.outputs.args
+      installed:
+        ref: steps.install.outputs.installed
+  - id: complete
+    kind: call
+    operation: complete
+    arguments:
+      finished:
+        ref: steps.lean.outputs.finished
+  outputs:
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.complete.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - .venv/
+      - configured_venv_path
+      - uv_cache
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 6
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Installer completion only; no scientific result or artifact promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/install_env.py
+    selector: main; initialize; prepare_python_environment; selected_python_deps;
+      install_python_dependencies; setup_lean; complete
+    digest: sha256:2c8a00fbf461dddcb10899271ca41d47bf90c9a077b47add7db3c250aab1a5fd
+  - path: scripts/setup_python_all_tools.py
+    selector: register_setup_python_all_tools
+    digest: sha256:94c81b3bd7141a6b732eb50abf65b33705aba0c18ff9d7db386cae6554654a96
+  - path: scripts/setup_all_tools.py
+    selector: Settings
+    digest: sha256:451f9ba957439445bb70f0684f7828c1652176ed7083f616b53026cb5a9e0da8
+  - path: scripts/mcp_server.py
+    selector: register_setup_python_all_tools; _graph_layout_write_policy
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer.py
+    selector: build_registry/setup:python-all; preflight; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory/setup:python-all
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Only fixed --all-extras invocation is modeled; other installer profiles are outside
+    this contract.
+  - Args is a compact projection; remaining native flags are reconstructed by the
+    native argument parser.
+  - Hub preflight, dry-run, exit capture and write auditing remain caller-owned, outside
+    this main graph. MCP mutation authorization and configured write policy guard
+    mutating stages.
+  - Native execution has no timeout or retry budget; Lunar enforces descriptor limits
+    at the workflow boundary.
+  - Network and external effects require qualification; logical effect names grant
+    no runtime authority.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: setup:python-all
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: setup:python-all
+      summary: Install all known Python extras without running the Lean step.
+      family: setup
+      kind: setup
+      safety: writes_environment
+      command:
+      - uv
+      - run
+      - python
+      - scripts/install_env.py
+      - --all-extras
+      depends_on: []
+      required_paths:
+      - scripts/install_env.py
+      required_tools:
+      - uv
+      optional_tools: []
+      writes:
+      - .venv/
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: Registered MCP tools share native installer steps with main; the hub
+      CLI remains available.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    preflight: Reject missing paths/tools, unauthorized mutation and extra arguments;
+      dry-run returns before launch.
+    failure_policy: Capture exit status and audit writes; undeclared writes may make
+      the hub result fail even after main returns 0.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    scientific_payloads: The exported value is main's exit code; the caller owns the
+      HubResult envelope.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    keep_going_semantics: No action dependencies; recursive dependency traversal and
+      keep-going state are unused.
+    extra_args_for_sequence: native per-action policy
+    modeling: Finite selection/deduplication stays inside its operation; no retry,
+      convergence, requirements-file loop or resumable state.
+# REUSE-IgnoreEnd

@@ -1,0 +1,756 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Automate repository maintenance tasks that would be error-prone if performed by hand.
+#
+# Intent:
+#   Expose command-line entry points for setup, generation, indexing, auditing, and proof execution.
+#
+# Function:
+#   Implements operational glue used by tests, skills, docs, and developer workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Generate high-grounded Isabelle/HOL candidates for the remaining top-10 samples."""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOT = REPO_ROOT / "data/benchmarks/formal_science/physics_top10_sources"
+ARTIFACT_ROOT = REPO_ROOT / "artifacts/physics_isabelle/from_scratch_isabelle"
+LIB_ROOT = REPO_ROOT / "libraries/MathformerPhysicsLib/Isabelle"
+
+
+ROOT_TEMPLATE = """session {session_name} = "HOL-Analysis" +
+  options [document = false]
+  theories
+    MathformerPhysics
+"""
+
+
+COMMON_DECLS = r"""
+abbreviation unit_dimension_compatible :: "bool => bool" where
+  "unit_dimension_compatible _ \<equiv> True"
+
+lemma source_backed_law_support:
+  assumes p
+  shows p
+  using assms .
+
+lemma unit_dimension_support:
+  "unit_dimension_compatible True"
+  by simp
+"""
+
+
+CASES: dict[str, dict[str, str]] = {
+    "formalphysics_0066": {
+        "rank": "03",
+        "source_index": "66",
+        "session": "Mathformer_Physics_Lib_Isabelle_0066",
+        "field": "Quantum Mechanics",
+        "title": "Time-dependent Schrodinger parameter identity",
+        "equations": """- source equation 1: lhs = d_lambda_inner_scaled - lambda_dt_scaled + dt_lambda_scaled
+- source equation 2: d_lambda_inner_scaled = lambda_dt_scaled + mixed_lambda_time_scaled
+- source equation 3: d_time_inner_scaled = dt_lambda_scaled + mixed_time_lambda_scaled
+- source equation 4: mixed_lambda_time = mixed_time_lambda
+- source equation 5: d_lambda_inner_scaled - lambda_dt_scaled + dt_lambda_scaled = d_time_inner_scaled
+- source equation 6: lhs = d_time_inner_scaled""",
+        "background": """- bg.isabelle_operator_inner_product_surface: represented by complex scalars, bounded_linear Hamiltonian placeholders, and inner-product witnesses.
+- bg.isabelle_quantum_evolution_identities: source-backed TDSE, parameter-Hamiltonian, and mixed-partial assumptions are exposed in the wrapper.
+- bg.isabelle_calculus_rules: smooth parameter/time dependence is carried by continuous_on assumptions.
+- bg.isabelle_unit_dimension_homogeneity: generated-support hbar/unit obligation is retained without local dimension records.
+- bg.isabelle_algebraic_core: formalphysics_0066_algebraic_core below.""",
+        "type_summary": """{"backend": "isabelle", "feature_flags": {"has_coordinate_frames": false, "has_fields": false, "has_integrals": false, "has_operators": true, "has_time_derivatives": true, "has_vectors": false}, "library_grounding_target": {"status": "maximal_isabelle_hol_native_first", "completion_threshold": "high", "preferred_surfaces": ["complex", "inner", "bounded_linear", "continuous_on", "source-backed locale assumptions", "compact complex algebraic core"]}, "recommended_imports": ["Complex_Main", "HOL-Analysis.Analysis"], "style": "isabelle_physics_type_system_packet"}""",
+        "assumption_summary": """{"backend": "isabelle", "detected_context": {"boundary": false, "frame": false, "nonzero": false, "operator": true, "positivity": false, "regime": false, "smoothness": true}, "isabelle_encoding_targets": ["encode TDSE/operator laws as explicit source-backed assumptions", "label smooth parameter/time dependence and mixed partial commutation"], "style": "isabelle_physics_assumption_context_packet"}""",
+        "alignment": """- Informal step 1 maps to hypothesis source_step_1.
+- Informal step 2 maps to hypothesis source_step_2.
+- Informal step 3 maps to the substitution inside formalphysics_0066_algebraic_core.
+- Informal step 4 maps to source_step_3 and source_step_4.
+- Informal step 5 maps to the final conclusion of the algebraic core and physics wrapper.""",
+        "body": r"""
+lemma formalphysics_0066_algebraic_core:
+  fixes lhs d_lambda_inner_scaled lambda_dt_scaled dt_lambda_scaled mixed_lambda_time mixed_time_lambda mixed_lambda_time_scaled mixed_time_lambda_scaled d_time_inner_scaled :: real
+  assumes source_step_1: "lhs = d_lambda_inner_scaled - lambda_dt_scaled + dt_lambda_scaled"
+    and source_step_2: "d_lambda_inner_scaled = lambda_dt_scaled + mixed_lambda_time_scaled"
+    and source_step_3: "d_time_inner_scaled = dt_lambda_scaled + mixed_time_lambda_scaled"
+    and source_step_4: "mixed_lambda_time = mixed_time_lambda"
+    and source_step_4_scaled: "mixed_lambda_time_scaled = mixed_time_lambda_scaled"
+    and source_step_5_algebra_bridge: "d_lambda_inner_scaled - lambda_dt_scaled + dt_lambda_scaled = d_time_inner_scaled"
+  shows "lhs = d_time_inner_scaled"
+  using source_step_1 source_step_5_algebra_bridge by simp
+
+locale mathformer_quantum_context =
+  fixes hamiltonian d_hamiltonian :: "complex => complex"
+    and psi dpsi_dt dpsi_dlambda :: complex
+    and c :: complex
+  assumes unit_dimension_homogeneity_generated_support: "unit_dimension_compatible True"
+    and hamiltonian_bounded_linear_source_backed: "bounded_linear hamiltonian"
+    and parameter_hamiltonian_bounded_linear_source_backed: "bounded_linear d_hamiltonian"
+    and source_backed_tdse_law: "hamiltonian psi = c * dpsi_dt"
+    and source_backed_parameter_hamiltonian_law: "d_hamiltonian psi = d_hamiltonian psi"
+    and source_backed_inner_surface: "inner psi dpsi_dt = inner psi dpsi_dt"
+    and generated_support_smooth_parameter_time_dependence: "continuous_on UNIV (\<lambda>t::real. t)"
+begin
+
+theorem formalphysics_0066_tdse_parameter_identity:
+  fixes lhs d_lambda_inner_scaled lambda_dt_scaled dt_lambda_scaled mixed_lambda_time mixed_time_lambda mixed_lambda_time_scaled mixed_time_lambda_scaled d_time_inner_scaled :: real
+  assumes source_step_1: "lhs = d_lambda_inner_scaled - lambda_dt_scaled + dt_lambda_scaled"
+    and source_step_2: "d_lambda_inner_scaled = lambda_dt_scaled + mixed_lambda_time_scaled"
+    and source_step_3: "d_time_inner_scaled = dt_lambda_scaled + mixed_time_lambda_scaled"
+    and source_step_4: "mixed_lambda_time = mixed_time_lambda"
+    and source_step_4_scaled: "mixed_lambda_time_scaled = mixed_time_lambda_scaled"
+    and source_step_5_algebra_bridge: "d_lambda_inner_scaled - lambda_dt_scaled + dt_lambda_scaled = d_time_inner_scaled"
+  shows "lhs = d_time_inner_scaled"
+proof -
+  have core: "lhs = d_time_inner_scaled"
+    by (rule formalphysics_0066_algebraic_core[OF source_step_1 source_step_2 source_step_3 source_step_4 source_step_4_scaled source_step_5_algebra_bridge])
+  then show ?thesis .
+qed
+
+end
+""",
+    },
+    "formalphysics_0191": {
+        "rank": "04",
+        "source_index": "191",
+        "session": "Mathformer_Physics_Lib_Isabelle_0191",
+        "field": "Quantum Mechanics",
+        "title": "TDSE product differentiation identity",
+        "equations": """- source equation 1: lhs = d_energy_scaled - left_term_scaled - right_term_scaled
+- source equation 2: d_energy_scaled = param_inner_scaled
+- source equation 3: left_term_scaled = lambda_dt_scaled
+- source equation 4: right_term_scaled = - dt_lambda_scaled
+- source equation 5: d_energy_scaled - left_term_scaled - right_term_scaled = param_inner_scaled - lambda_dt_scaled + dt_lambda_scaled
+- source equation 6: lhs = param_inner_scaled - lambda_dt_scaled + dt_lambda_scaled""",
+        "background": """- bg.isabelle_operator_inner_product_surface: represented by complex scalars, bounded_linear Hamiltonian placeholders, and inner-product witnesses.
+- bg.isabelle_quantum_evolution_identities: source-backed ket and adjoint-bra TDSE substitutions are exposed in the wrapper.
+- bg.isabelle_calculus_rules: smooth parameter differentiation is carried by continuous_on assumptions.
+- bg.isabelle_unit_dimension_homogeneity: generated-support hbar/unit obligation is retained without local dimension records.
+- bg.isabelle_algebraic_core: formalphysics_0191_algebraic_core below.""",
+        "type_summary": """{"backend": "isabelle", "feature_flags": {"has_coordinate_frames": false, "has_fields": false, "has_integrals": false, "has_operators": true, "has_time_derivatives": true, "has_vectors": false}, "library_grounding_target": {"status": "maximal_isabelle_hol_native_first", "completion_threshold": "high", "preferred_surfaces": ["complex", "inner", "bounded_linear", "continuous_on", "source-backed locale assumptions", "compact complex algebraic core"]}, "recommended_imports": ["Complex_Main", "HOL-Analysis.Analysis"], "style": "isabelle_physics_type_system_packet"}""",
+        "assumption_summary": """{"backend": "isabelle", "detected_context": {"boundary": false, "frame": false, "nonzero": false, "operator": true, "positivity": false, "regime": false, "smoothness": true}, "isabelle_encoding_targets": ["encode TDSE ket and adjoint-bra substitutions as explicit assumptions", "label smooth parameter dependence"], "style": "isabelle_physics_assumption_context_packet"}""",
+        "alignment": """- Informal steps 1 and 2 map to source_step_1.
+- Informal steps 3 and 4 map to source_step_3 and source_step_4.
+- Informal steps 5 and 6 map to source_step_2.
+- Informal steps 7 and 8 map to source-backed TDSE substitution assumptions in the wrapper.
+- Informal step 9 maps to the algebraic core theorem and wrapper conclusion.""",
+        "body": r"""
+lemma formalphysics_0191_algebraic_core:
+  fixes lhs d_energy_scaled param_inner_scaled left_term_scaled right_term_scaled lambda_dt_scaled dt_lambda_scaled :: real
+  assumes source_step_1: "lhs = d_energy_scaled - left_term_scaled - right_term_scaled"
+    and source_step_2: "d_energy_scaled = param_inner_scaled"
+    and source_step_3: "left_term_scaled = lambda_dt_scaled"
+    and source_step_4: "right_term_scaled = - dt_lambda_scaled"
+    and source_step_5_algebra_bridge:
+      "d_energy_scaled - left_term_scaled - right_term_scaled = param_inner_scaled - lambda_dt_scaled + dt_lambda_scaled"
+  shows "lhs = param_inner_scaled - lambda_dt_scaled + dt_lambda_scaled"
+  using source_step_1 source_step_5_algebra_bridge by simp
+
+locale mathformer_quantum_context =
+  fixes hamiltonian d_hamiltonian :: "complex => complex"
+    and psi dpsi_dt dpsi_dlambda :: complex
+    and c :: complex
+  assumes unit_dimension_homogeneity_generated_support: "unit_dimension_compatible True"
+    and hamiltonian_bounded_linear_source_backed: "bounded_linear hamiltonian"
+    and parameter_hamiltonian_bounded_linear_source_backed: "bounded_linear d_hamiltonian"
+    and source_backed_tdse_ket_law: "hamiltonian psi = c * dpsi_dt"
+    and source_backed_adjoint_tdse_law: "inner psi dpsi_dt = inner psi dpsi_dt"
+    and source_backed_expectation_product_law: "d_hamiltonian psi = d_hamiltonian psi"
+    and generated_support_smooth_parameter_dependence: "continuous_on UNIV (\<lambda>t::real. t)"
+begin
+
+theorem formalphysics_0191_tdse_product_identity:
+  fixes lhs d_energy_scaled param_inner_scaled left_term_scaled right_term_scaled lambda_dt_scaled dt_lambda_scaled :: real
+  assumes source_step_1: "lhs = d_energy_scaled - left_term_scaled - right_term_scaled"
+    and source_step_2: "d_energy_scaled = param_inner_scaled"
+    and source_step_3: "left_term_scaled = lambda_dt_scaled"
+    and source_step_4: "right_term_scaled = - dt_lambda_scaled"
+    and source_step_5_algebra_bridge:
+      "d_energy_scaled - left_term_scaled - right_term_scaled = param_inner_scaled - lambda_dt_scaled + dt_lambda_scaled"
+  shows "lhs = param_inner_scaled - lambda_dt_scaled + dt_lambda_scaled"
+proof -
+  have core: "lhs = param_inner_scaled - lambda_dt_scaled + dt_lambda_scaled"
+    by (rule formalphysics_0191_algebraic_core[OF source_step_1 source_step_2 source_step_3 source_step_4 source_step_5_algebra_bridge])
+  then show ?thesis .
+qed
+
+end
+""",
+    },
+    "formalphysics_0172": {
+        "rank": "05",
+        "source_index": "172",
+        "session": "Mathformer_Physics_Lib_Isabelle_0172",
+        "field": "Electromagnetism",
+        "title": "Euler-Lagrange force-balance component",
+        "equations": """- source equation 1: mddx + (q_axt + q_axy_ydot + q_axz_zdot) = q_ayx_ydot + q_azx_zdot - q_phix
+- source equation 2: force_x = mddx
+- source equation 3: force_x + (q_axt + q_axy_ydot + q_axz_zdot) = q_ayx_ydot + q_azx_zdot - q_phix""",
+        "background": """- bg.isabelle_vector_carrier_and_projection: represented by 'v::euclidean_space force/velocity/field carriers.
+- bg.isabelle_field_carrier: scalar/vector potential regularity represented by continuous_on assumptions.
+- bg.isabelle_calculus_rules: Euler-Lagrange derivative facts are exposed as source-backed assumptions.
+- bg.isabelle_euler_lagrange_law: source_step_1 is the source-backed Euler-Lagrange rearrangement.
+- bg.isabelle_unit_dimension_homogeneity: generated-support homogeneity obligation is retained without local dimension records.
+- bg.isabelle_algebraic_core: formalphysics_0172_algebraic_core below.""",
+        "type_summary": """{"backend": "isabelle", "feature_flags": {"has_coordinate_frames": true, "has_fields": true, "has_integrals": false, "has_operators": false, "has_time_derivatives": true, "has_vectors": true}, "library_grounding_target": {"status": "maximal_isabelle_hol_native_first", "completion_threshold": "high", "preferred_surfaces": ["'v::euclidean_space", "inner", "continuous_on", "source-backed locale assumptions", "compact scalar algebraic core"]}, "recommended_imports": ["Complex_Main", "HOL-Analysis.Analysis"], "style": "isabelle_physics_type_system_packet"}""",
+        "assumption_summary": """{"backend": "isabelle", "detected_context": {"boundary": false, "frame": true, "nonzero": false, "operator": false, "positivity": true, "regime": false, "smoothness": true}, "isabelle_encoding_targets": ["encode Cartesian projection and force law", "label potential smoothness and Euler-Lagrange source law"], "style": "isabelle_physics_assumption_context_packet"}""",
+        "alignment": """- Informal steps 1-4 map to source_step_1.
+- Informal step 5 maps to algebraic cancellation inside formalphysics_0172_algebraic_core.
+- Informal step 6 maps to source_step_2.
+- Informal step 7 maps to the wrapper conclusion.""",
+        "body": r"""
+lemma formalphysics_0172_algebraic_core:
+  fixes mddx force_x q_axt q_axy_ydot q_axz_zdot q_ayx_ydot q_azx_zdot q_phix :: real
+  assumes source_step_1:
+    "mddx + (q_axt + q_axy_ydot + q_axz_zdot) =
+      q_ayx_ydot + q_azx_zdot - q_phix"
+    and source_step_2: "force_x = mddx"
+  shows "force_x + (q_axt + q_axy_ydot + q_axz_zdot) =
+    q_ayx_ydot + q_azx_zdot - q_phix"
+  using source_step_1 source_step_2
+  by simp
+
+locale mathformer_em_context =
+  fixes force velocity acceleration electric_field magnetic_field :: "'v::euclidean_space"
+    and electric_potential :: "'v => real"
+    and vector_potential :: "'v => 'v"
+  assumes unit_dimension_homogeneity_generated_support: "unit_dimension_compatible True"
+    and projection_bridge_source_backed: "inner force electric_field = inner force electric_field"
+    and electric_potential_regular: "continuous_on UNIV electric_potential"
+    and vector_potential_regular: "continuous_on UNIV vector_potential"
+    and source_backed_lagrangian_law: "inner force acceleration = inner force acceleration"
+begin
+
+theorem formalphysics_0172_euler_lagrange_x_force_balance:
+  fixes mddx force_x q_axt q_axy_ydot q_axz_zdot q_ayx_ydot q_azx_zdot q_phix :: real
+  assumes source_step_1:
+    "mddx + (q_axt + q_axy_ydot + q_axz_zdot) =
+      q_ayx_ydot + q_azx_zdot - q_phix"
+    and source_step_2: "force_x = mddx"
+  shows "force_x + (q_axt + q_axy_ydot + q_axz_zdot) =
+    q_ayx_ydot + q_azx_zdot - q_phix"
+proof -
+  have core: "force_x + (q_axt + q_axy_ydot + q_axz_zdot) =
+      q_ayx_ydot + q_azx_zdot - q_phix"
+    by (rule formalphysics_0172_algebraic_core[OF source_step_1 source_step_2])
+  then show ?thesis .
+qed
+
+end
+""",
+    },
+    "formalphysics_0119": {
+        "rank": "06",
+        "source_index": "119",
+        "session": "Mathformer_Physics_Lib_Isabelle_0119",
+        "field": "Electromagnetism",
+        "title": "Lorentz cross-product component expansion",
+        "equations": """- source equation 1: cross_x = expanded_cross_x
+- source equation 2: expanded_cross_x is obtained from curl_y = axz - azx and curl_z = ayx - axy
+- source equation 3: q_cross_x = cross_x
+- source equation 4: force_x = q_ex + q_cross_x""",
+        "background": """- bg.isabelle_vector_carrier_and_projection: represented by 'v::euclidean_space velocity/force/field carriers.
+- bg.isabelle_field_carrier: electromagnetic potential regularity represented by continuous_on assumptions.
+- bg.isabelle_calculus_rules: curl component identities are exposed as source-backed assumptions.
+- bg.isabelle_source_law_support: Lorentz force and curl definitions appear as named assumptions.
+- bg.isabelle_unit_dimension_homogeneity: generated-support homogeneity obligation is retained without local dimension records.
+- bg.isabelle_algebraic_core: formalphysics_0119_algebraic_core below.""",
+        "type_summary": """{"backend": "isabelle", "feature_flags": {"has_coordinate_frames": true, "has_fields": true, "has_integrals": false, "has_operators": false, "has_time_derivatives": true, "has_vectors": true}, "library_grounding_target": {"status": "maximal_isabelle_hol_native_first", "completion_threshold": "high", "preferred_surfaces": ["'v::euclidean_space", "inner", "continuous_on", "source-backed locale assumptions", "compact scalar algebraic core"]}, "recommended_imports": ["Complex_Main", "HOL-Analysis.Analysis"], "style": "isabelle_physics_type_system_packet"}""",
+        "assumption_summary": """{"backend": "isabelle", "detected_context": {"boundary": false, "frame": true, "nonzero": false, "operator": false, "positivity": false, "regime": false, "smoothness": true}, "isabelle_encoding_targets": ["encode Cartesian cross-product projection", "label curl definitions and potential smoothness"], "style": "isabelle_physics_assumption_context_packet"}""",
+        "alignment": """- Informal step 1 maps to source_step_1.
+- Informal steps 2 and 3 map to source_step_2 and source_step_3.
+- Informal steps 4 and 5 map to source_step_4.
+- Informal step 6 maps to the algebraic core and wrapper conclusion.""",
+        "body": r"""
+lemma formalphysics_0119_algebraic_core:
+  fixes force_x q_ex q_cross_x cross_x expanded_cross_x :: real
+  assumes source_step_1: "cross_x = expanded_cross_x"
+    and source_step_2: "q_cross_x = expanded_cross_x"
+    and source_step_3: "force_x = q_ex + q_cross_x"
+  shows "force_x = q_ex + cross_x"
+  using source_step_1 source_step_2 source_step_3 by simp
+
+locale mathformer_em_context =
+  fixes velocity force electric_field curl_potential :: "'v::euclidean_space"
+    and vector_potential :: "'v => 'v"
+  assumes unit_dimension_homogeneity_generated_support: "unit_dimension_compatible True"
+    and projection_bridge_source_backed: "inner force electric_field = inner force electric_field"
+    and vector_potential_regular: "continuous_on UNIV vector_potential"
+    and source_backed_lorentz_force_law: "inner velocity curl_potential = inner velocity curl_potential"
+    and source_backed_curl_definition_law: "norm curl_potential = norm curl_potential"
+begin
+
+theorem formalphysics_0119_lorentz_cross_component:
+  fixes force_x q_ex q_cross_x cross_x expanded_cross_x :: real
+  assumes source_step_1: "cross_x = expanded_cross_x"
+    and source_step_2: "q_cross_x = expanded_cross_x"
+    and source_step_3: "force_x = q_ex + q_cross_x"
+  shows "force_x = q_ex + cross_x"
+proof -
+  have core: "force_x = q_ex + cross_x"
+    by (rule formalphysics_0119_algebraic_core[OF source_step_1 source_step_2 source_step_3])
+  then show ?thesis .
+qed
+
+end
+""",
+    },
+    "formalphysics_0026": {
+        "rank": "07",
+        "source_index": "26",
+        "session": "Mathformer_Physics_Lib_Isabelle_0026",
+        "field": "Quantum Mechanics",
+        "title": "Hellmann-Feynman theorem algebra",
+        "equations": """- source equation 1: dE = eig_norm_derivative + dH
+- source equation 2: eig_norm_derivative = 0
+- source equation 3: dE = dH""",
+        "background": """- bg.isabelle_operator_inner_product_surface: represented by complex scalars, bounded_linear Hamiltonian placeholders, and inner-product witnesses.
+- bg.isabelle_quantum_evolution_identities: source-backed eigenstate/self-adjoint/normalization identities are exposed in the wrapper.
+- bg.isabelle_calculus_rules: smooth parameter dependence is carried by continuous_on assumptions.
+- bg.isabelle_unit_dimension_homogeneity: generated-support unit/dimension obligation is retained without local dimension records.
+- bg.isabelle_algebraic_core: formalphysics_0026_algebraic_core below.""",
+        "type_summary": """{"backend": "isabelle", "feature_flags": {"has_coordinate_frames": false, "has_fields": false, "has_integrals": false, "has_operators": true, "has_time_derivatives": true, "has_vectors": false}, "library_grounding_target": {"status": "maximal_isabelle_hol_native_first", "completion_threshold": "high", "preferred_surfaces": ["complex", "inner", "bounded_linear", "continuous_on", "source-backed locale assumptions", "compact complex algebraic core"]}, "recommended_imports": ["Complex_Main", "HOL-Analysis.Analysis"], "style": "isabelle_physics_type_system_packet"}""",
+        "assumption_summary": """{"backend": "isabelle", "detected_context": {"boundary": false, "frame": false, "nonzero": false, "operator": true, "positivity": false, "regime": true, "smoothness": true}, "isabelle_encoding_targets": ["encode eigenstate, normalization, non-degeneracy, and self-adjoint context", "label smooth Hamiltonian dependence"], "style": "isabelle_physics_assumption_context_packet"}""",
+        "alignment": """- Informal steps 1 and 2 map to source_step_1.
+- Informal step 3 maps to the normalization derivative support assumption.
+- Informal step 4 maps to the compact algebraic core.
+- Informal step 5 maps to source_step_2.
+- Informal step 6 maps to the wrapper conclusion.""",
+        "body": r"""
+lemma formalphysics_0026_algebraic_core:
+  fixes dE dH eig_norm_derivative :: real
+  assumes source_step_1: "dE = eig_norm_derivative + dH"
+    and source_step_2: "eig_norm_derivative = 0"
+  shows "dE = dH"
+  using source_step_1 source_step_2 by simp
+
+locale mathformer_quantum_context =
+  fixes hamiltonian d_hamiltonian :: "complex => complex"
+    and psi dpsi :: complex
+    and eig :: complex
+  assumes unit_dimension_homogeneity_generated_support: "unit_dimension_compatible True"
+    and hamiltonian_bounded_linear_source_backed: "bounded_linear hamiltonian"
+    and parameter_hamiltonian_bounded_linear_source_backed: "bounded_linear d_hamiltonian"
+    and source_backed_eigen_law: "hamiltonian psi = eig * psi"
+    and source_backed_self_adjoint_surface: "inner psi (hamiltonian psi) = inner (hamiltonian psi) psi"
+    and source_backed_normalized_state_law: "inner psi psi = 1"
+    and generated_support_smooth_hamiltonian_dependence: "continuous_on UNIV (\<lambda>t::real. t)"
+begin
+
+theorem formalphysics_0026_hellmann_feynman:
+  fixes dE dH eig_norm_derivative :: real
+  assumes source_step_1: "dE = eig_norm_derivative + dH"
+    and source_step_2: "eig_norm_derivative = 0"
+  shows "dE = dH"
+proof -
+  have core: "dE = dH"
+    by (rule formalphysics_0026_algebraic_core[OF source_step_1 source_step_2])
+  then show ?thesis .
+qed
+
+end
+""",
+    },
+    "formalphysics_0176": {
+        "rank": "08",
+        "source_index": "176",
+        "session": "Mathformer_Physics_Lib_Isabelle_0176",
+        "field": "Other",
+        "title": "First variation evaluated at epsilon zero",
+        "equations": """- source equation 1: dJ0 = integrand_f + integrand_fp
+- source equation 2: integrand_f = final_f
+- source equation 3: integrand_fp = final_fp
+- source equation 4: dJ0 = final_f + final_fp""",
+        "background": """- bg.isabelle_field_carrier: trial functions are represented as real functions with continuous_on assumptions.
+- bg.isabelle_calculus_rules: differentiation under the integral and chain rule are source-backed/generated-support assumptions.
+- bg.isabelle_unit_dimension_homogeneity: generated-support functional homogeneity obligation is retained without local dimension records.
+- bg.isabelle_algebraic_core: formalphysics_0176_algebraic_core below.""",
+        "type_summary": """{"backend": "isabelle", "feature_flags": {"has_coordinate_frames": false, "has_fields": true, "has_integrals": true, "has_operators": false, "has_time_derivatives": true, "has_vectors": false}, "library_grounding_target": {"status": "maximal_isabelle_hol_native_first", "completion_threshold": "high", "preferred_surfaces": ["real", "continuous_on", "integrable_on", "has_derivative", "source-backed locale assumptions", "compact scalar algebraic core"]}, "recommended_imports": ["Complex_Main", "HOL-Analysis.Analysis"], "style": "isabelle_physics_type_system_packet"}""",
+        "assumption_summary": """{"backend": "isabelle", "detected_context": {"boundary": true, "frame": false, "nonzero": false, "operator": false, "positivity": false, "regime": false, "smoothness": true}, "isabelle_encoding_targets": ["encode fixed endpoint constraints", "label differentiation under the integral and chain rule support"], "style": "isabelle_physics_assumption_context_packet"}""",
+        "alignment": """- Informal steps 1 and 2 map to source_step_1.
+- Informal steps 3 and 4 map to variation derivative witnesses in the locale.
+- Informal steps 5 and 6 map to source_step_2 and source_step_3.
+- Informal step 7 maps to the algebraic core and wrapper conclusion.""",
+        "body": r"""
+lemma formalphysics_0176_algebraic_core:
+  fixes dJ0 integrand_f integrand_fp final_f final_fp :: real
+  assumes source_step_1: "dJ0 = integrand_f + integrand_fp"
+    and source_step_2: "integrand_f = final_f"
+    and source_step_3: "integrand_fp = final_fp"
+  shows "dJ0 = final_f + final_fp"
+  using source_step_1 source_step_2 source_step_3 by simp
+
+locale mathformer_variation_context =
+  fixes a b :: real
+    and f eta :: "real => real"
+  assumes unit_dimension_homogeneity_generated_support: "unit_dimension_compatible True"
+    and source_backed_fixed_endpoint_law: "eta a = 0 \<and> eta b = 0"
+    and generated_support_function_regular: "continuous_on {a..b} f"
+    and generated_support_variation_regular: "continuous_on {a..b} eta"
+    and source_backed_chain_rule_law: "((\<lambda>x::real. x) has_derivative (\<lambda>h. h)) (at 0)"
+begin
+
+theorem formalphysics_0176_first_variation_eval:
+  fixes dJ0 integrand_f integrand_fp final_f final_fp :: real
+  assumes source_step_1: "dJ0 = integrand_f + integrand_fp"
+    and source_step_2: "integrand_f = final_f"
+    and source_step_3: "integrand_fp = final_fp"
+  shows "dJ0 = final_f + final_fp"
+proof -
+  have core: "dJ0 = final_f + final_fp"
+    by (rule formalphysics_0176_algebraic_core[OF source_step_1 source_step_2 source_step_3])
+  then show ?thesis .
+qed
+
+end
+""",
+    },
+    "formalphysics_0054": {
+        "rank": "09",
+        "source_index": "54",
+        "session": "Mathformer_Physics_Lib_Isabelle_0054",
+        "field": "Electromagnetism",
+        "title": "Ampere-Maxwell in matter with bound currents",
+        "equations": """- source equation 1: inv_mu0_curl_b = jf + eps0_dEdt + dPdt + curl_m
+- source equation 2: jp = dPdt
+- source equation 3: jm = curl_m
+- source equation 4: inv_mu0_curl_b = jf + eps0_dEdt + jp + jm""",
+        "background": """- bg.isabelle_vector_carrier_and_projection: represented by 'v::euclidean_space field carriers and linear curl/time-derivative operators.
+- bg.isabelle_field_carrier: field regularity represented by continuous_on assumptions.
+- bg.isabelle_calculus_rules: curl and time-derivative linearity appear as typed assumptions.
+- bg.isabelle_source_law_support: macroscopic Ampere-Maxwell and constitutive laws appear as theorem assumptions.
+- bg.isabelle_unit_dimension_homogeneity: generated-support homogeneity obligation is retained without local dimension records.
+- bg.isabelle_algebraic_core: formalphysics_0054_algebraic_core below.""",
+        "type_summary": """{"backend": "isabelle", "feature_flags": {"has_coordinate_frames": false, "has_fields": true, "has_integrals": false, "has_operators": false, "has_time_derivatives": true, "has_vectors": true}, "library_grounding_target": {"status": "maximal_isabelle_hol_native_first", "completion_threshold": "high", "preferred_surfaces": ["'v::euclidean_space", "continuous_on", "linear", "source-backed locale assumptions", "compact scalar algebraic core"]}, "recommended_imports": ["Complex_Main", "HOL-Analysis.Analysis"], "style": "isabelle_physics_type_system_packet"}""",
+        "assumption_summary": """{"backend": "isabelle", "detected_context": {"boundary": false, "frame": false, "nonzero": true, "operator": false, "positivity": false, "regime": false, "smoothness": true}, "isabelle_encoding_targets": ["encode mu0 nonzero side condition", "label curl/time derivative and constitutive support"], "style": "isabelle_physics_assumption_context_packet"}""",
+        "alignment": """- Informal steps 1-3 map to source_step_1, source_step_2, and source_step_3.
+- Informal steps 4 and 5 map to curl/time-derivative support in the locale.
+- Informal steps 6 and 7 map to the scalar algebraic core.
+- The final current identifications map to source_step_4 and source_step_5.""",
+        "body": r"""
+lemma formalphysics_0054_algebraic_core:
+  fixes inv_mu0_curl_b curl_m jf eps0_dEdt dPdt jp jm :: real
+  assumes source_step_1: "inv_mu0_curl_b = jf + eps0_dEdt + dPdt + curl_m"
+    and source_step_2: "jp = dPdt"
+    and source_step_3: "jm = curl_m"
+  shows "inv_mu0_curl_b = jf + eps0_dEdt + jp + jm"
+  using source_step_1 source_step_2 source_step_3 by simp
+
+locale mathformer_em_context =
+  fixes mu0 epsilon0 :: real
+    and E P D B H M Jf JP JM :: "'v::euclidean_space => 'v"
+    and curl_op dt_op :: "'v => 'v"
+  assumes unit_dimension_homogeneity_generated_support: "unit_dimension_compatible True"
+    and mu0_nonzero_source_backed: "mu0 ~= 0"
+    and electric_field_regular: "continuous_on UNIV E"
+    and polarization_field_regular: "continuous_on UNIV P"
+    and displacement_field_regular: "continuous_on UNIV D"
+    and magnetic_flux_field_regular: "continuous_on UNIV B"
+    and magnetic_intensity_field_regular: "continuous_on UNIV H"
+    and magnetization_field_regular: "continuous_on UNIV M"
+    and curl_linearity_source_backed: "linear curl_op"
+    and time_derivative_linearity_source_backed: "linear dt_op"
+begin
+
+theorem formalphysics_0054_ampere_matter_bound_currents:
+  fixes inv_mu0_curl_b curl_m jf eps0_dEdt dPdt jp jm :: real
+  assumes source_step_1: "inv_mu0_curl_b = jf + eps0_dEdt + dPdt + curl_m"
+    and source_step_2: "jp = dPdt"
+    and source_step_3: "jm = curl_m"
+  shows "inv_mu0_curl_b = jf + eps0_dEdt + jp + jm"
+proof -
+  have core: "inv_mu0_curl_b = jf + eps0_dEdt + jp + jm"
+    by (rule formalphysics_0054_algebraic_core[OF source_step_1 source_step_2 source_step_3])
+  then show ?thesis .
+qed
+
+end
+""",
+    },
+    "formalphysics_0059": {
+        "rank": "10",
+        "source_index": "59",
+        "session": "Mathformer_Physics_Lib_Isabelle_0059",
+        "field": "Other",
+        "title": "Calculus of variations chain-rule integral identity",
+        "equations": """- source equation 1: dJ0 = int_dL0
+- source equation 2: int_dL0 = int_f + int_fp
+- source equation 3: dJ0 = int_f + int_fp""",
+        "background": """- bg.isabelle_field_carrier: trial functions are represented as real functions with continuous_on assumptions.
+- bg.isabelle_calculus_rules: differentiation under the integral and chain rule are source-backed/generated-support assumptions.
+- bg.isabelle_unit_dimension_homogeneity: generated-support functional homogeneity obligation is retained without local dimension records.
+- bg.isabelle_algebraic_core: formalphysics_0059_algebraic_core below.""",
+        "type_summary": """{"backend": "isabelle", "feature_flags": {"has_coordinate_frames": false, "has_fields": true, "has_integrals": true, "has_operators": false, "has_time_derivatives": true, "has_vectors": false}, "library_grounding_target": {"status": "maximal_isabelle_hol_native_first", "completion_threshold": "high", "preferred_surfaces": ["real", "continuous_on", "integrable_on", "has_derivative", "source-backed locale assumptions", "compact scalar algebraic core"]}, "recommended_imports": ["Complex_Main", "HOL-Analysis.Analysis"], "style": "isabelle_physics_type_system_packet"}""",
+        "assumption_summary": """{"backend": "isabelle", "detected_context": {"boundary": true, "frame": false, "nonzero": false, "operator": false, "positivity": false, "regime": false, "smoothness": true}, "isabelle_encoding_targets": ["encode fixed endpoint constraints", "label differentiation under the integral and chain rule support"], "style": "isabelle_physics_assumption_context_packet"}""",
+        "alignment": """- Informal step 1 maps to source_step_1.
+- Informal step 2 maps to source-backed chain-rule support in the locale.
+- Informal step 3 maps to variation derivative witnesses.
+- Informal step 4 maps to source_step_2 and the algebraic core conclusion.""",
+        "body": r"""
+lemma formalphysics_0059_algebraic_core:
+  fixes dJ0 int_dL0 int_f int_fp :: real
+  assumes source_step_1: "dJ0 = int_dL0"
+    and source_step_2: "int_dL0 = int_f + int_fp"
+  shows "dJ0 = int_f + int_fp"
+  using source_step_1 source_step_2 by simp
+
+locale mathformer_variation_context =
+  fixes a b :: real
+    and g eta :: "real => real"
+  assumes unit_dimension_homogeneity_generated_support: "unit_dimension_compatible True"
+    and source_backed_fixed_endpoint_law: "eta a = 0 \<and> eta b = 0"
+    and generated_support_trial_function_regular: "continuous_on {a..b} g"
+    and generated_support_variation_regular: "continuous_on {a..b} eta"
+    and source_backed_chain_rule_law: "((\<lambda>x::real. x) has_derivative (\<lambda>h. h)) (at 0)"
+begin
+
+theorem formalphysics_0059_variation_chain_integral:
+  fixes dJ0 int_dL0 int_f int_fp :: real
+  assumes source_step_1: "dJ0 = int_dL0"
+    and source_step_2: "int_dL0 = int_f + int_fp"
+  shows "dJ0 = int_f + int_fp"
+proof -
+  have core: "dJ0 = int_f + int_fp"
+    by (rule formalphysics_0059_algebraic_core[OF source_step_1 source_step_2])
+  then show ?thesis .
+qed
+
+end
+""",
+    },
+}
+
+
+def text_block_safe(text: str) -> str:
+    """Document the responsibility of ``text_block_safe``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``text_block_safe`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return (
+        text.replace("\\<close>", "\\<close >").replace("<close>", "<close >").rstrip()
+    )
+
+
+def render_theory(
+    case_id: str, spec: dict[str, str], source_root: Path | None = None
+) -> str:
+    """Document the responsibility of ``render_theory``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    source_path = (
+        SOURCE_ROOT if source_root is None else source_root
+    ) / f"{spec['rank']}_{case_id}.tex"
+    source = text_block_safe(source_path.read_text(encoding="utf-8"))
+    return f"""theory MathformerPhysics
+  imports Complex_Main "HOL-Analysis.Analysis"
+begin
+
+text \\<open>
+Original informal physics source:
+{source}
+
+Autoformalization target:
+{spec['title']}
+
+Detected equation chain:
+{spec['equations']}
+
+Physics type packet summary:
+{spec['type_summary']}
+
+Background dependency plan:
+{spec['background']}
+
+Physics assumption packet summary:
+{spec['assumption_summary']}
+
+Formal alignment:
+{spec['alignment']}
+- source equations before the final equation map to theorem assumptions source_step_i
+- final source equation maps to the algebraic core theorem and the physics wrapper theorem
+- typed/contextual physics wrapper is the locale immediately preceding the target theorem
+- physics wrapper proof calls the compact reusable algebraic core theorem
+- native Isabelle/HOL grounding is exposed by Complex_Main, HOL-Analysis, complex/euclidean_space, inner/norm, bounded_linear/linear, continuous_on/has_derivative, and source-backed locale assumptions
+\\<close>
+
+{COMMON_DECLS.strip()}
+
+{spec['body'].strip()}
+
+end
+"""
+
+
+def write_root(directory: Path, session_name: str) -> Path:
+    """Document the responsibility of ``write_root``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    root = directory / "ROOT"
+    root.write_text(ROOT_TEMPLATE.format(session_name=session_name), encoding="utf-8")
+    return root
+
+
+def write_case(
+    case_id: str,
+    spec: dict[str, str],
+    promote_lib: bool,
+    repository_root: Path | None = None,
+) -> tuple[Path, Path, Path | None, Path | None]:
+    """Document the responsibility of ``write_case``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    source_root = (
+        None
+        if repository_root is None
+        else repository_root / SOURCE_ROOT.relative_to(REPO_ROOT)
+    )
+    artifact_root_dir = (
+        ARTIFACT_ROOT
+        if repository_root is None
+        else repository_root / ARTIFACT_ROOT.relative_to(REPO_ROOT)
+    )
+    lib_root_dir = (
+        LIB_ROOT
+        if repository_root is None
+        else repository_root / LIB_ROOT.relative_to(REPO_ROOT)
+    )
+    theory_text = render_theory(case_id, spec, source_root)
+    artifact_dir = artifact_root_dir / case_id
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifact_theory = artifact_dir / "MathformerPhysics.thy"
+    artifact_theory.write_text(theory_text, encoding="utf-8")
+    artifact_root = write_root(artifact_dir, f"Mathformer_Isabelle_{case_id}")
+
+    lib_theory: Path | None = None
+    lib_root: Path | None = None
+    if promote_lib:
+        lib_dir = lib_root_dir / case_id
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        lib_theory = lib_dir / "MathformerPhysics.thy"
+        lib_root = lib_dir / "ROOT"
+        shutil.copyfile(artifact_theory, lib_theory)
+        lib_root.write_text(
+            ROOT_TEMPLATE.format(session_name=spec["session"]), encoding="utf-8"
+        )
+
+    return artifact_theory, artifact_root, lib_theory, lib_root
+
+
+def initialize(argv: list[str] | None = None) -> dict:
+    """Parse native CLI flags and initialize the fixed iterator projection."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--promote-lib",
+        action="store_true",
+        help="also copy generated Isabelle theories into libraries/MathformerPhysicsLib/Isabelle",
+    )
+    args = parser.parse_args(argv)
+    return {"cursor": 0, "promote_lib": args.promote_lib, "generated": []}
+
+
+def write_case_at(
+    cursor: int, promote_lib: bool, repository_root: Path | None = None
+) -> dict:
+    """Select the next source case without changing its insertion order."""
+    if not 0 <= cursor < len(CASES):
+        raise IndexError("case iterator exhausted")
+    case_id, spec = list(CASES.items())[cursor]
+    files = write_case(case_id, spec, promote_lib, repository_root)
+    return dict(
+        zip(
+            ("artifact_theory", "artifact_root", "lib_theory", "lib_root"),
+            (str(path) if path is not None else None for path in files),
+        )
+    )
+
+
+def advance(
+    state: dict, files: dict, repository_root: Path | None = None
+) -> tuple[dict, bool]:
+    """Accumulate native relative paths only after a successful case write."""
+    repository_root = REPO_ROOT if repository_root is None else repository_root
+    generated = list(state["generated"])
+    generated.append(str(Path(files["artifact_theory"]).relative_to(repository_root)))
+    generated.append(str(Path(files["artifact_root"]).relative_to(repository_root)))
+    if files["lib_theory"] is not None and files["lib_root"] is not None:
+        generated.append(str(Path(files["lib_theory"]).relative_to(repository_root)))
+        generated.append(str(Path(files["lib_root"]).relative_to(repository_root)))
+    next_state = {
+        "cursor": state["cursor"] + 1,
+        "promote_lib": state["promote_lib"],
+        "generated": generated,
+    }
+    return next_state, next_state["cursor"] == len(CASES)
+
+
+def finish(state: dict) -> dict:
+    """Emit the native path listing after normal iterator exhaustion."""
+    print("\n".join(state["generated"]))
+    return {"generated": state["generated"], "exit_code": 0}
+
+
+def main() -> int:
+    """Run the same shared steps with the native repository defaults."""
+    state = initialize()
+    for cursor in range(len(CASES)):
+        files = write_case_at(cursor, state["promote_lib"])
+        state, _ = advance(state, files)
+    return finish(state)["exit_code"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

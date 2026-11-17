@@ -1,0 +1,627 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_licenses_inventory_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Inventory installed Python distributions through shared native parsing, collection, rendering and UTF-8 publication steps.",
+  "aliases": [
+    "licenses:inventory"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Arguments": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "representation": "value"
+    },
+    "OutputPath": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "representation": "value"
+    },
+    "Rows": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "items": false,
+          "minItems": 4,
+          "maxItems": 4
+        }
+      },
+      "representation": "value"
+    },
+    "Markdown": {
+      "schema": {
+        "type": "string"
+      },
+      "representation": "value",
+      "media_type": "text/markdown"
+    },
+    "DirectoryReady": {
+      "schema": {
+        "type": "boolean",
+        "const": true
+      },
+      "representation": "value"
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "const": 0
+      },
+      "representation": "value"
+    },
+    "Halted": {
+      "schema": {
+        "type": "boolean"
+      },
+      "representation": "value"
+    },
+    "Stdout": {
+      "schema": {
+        "type": "string"
+      },
+      "representation": "value"
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "working_directory": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "working_directory",
+          "allow_mutating"
+        ],
+        "additionalProperties": false
+      },
+      "representation": "value"
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Arguments"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    },
+    "output_path": {
+      "type": "OutputPath",
+      "value": {
+        "ref": "flow.outputs.output_path"
+      }
+    },
+    "stdout": {
+      "type": "Stdout",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "parse_arguments": {
+      "inputs": {
+        "argv": {
+          "type": "Arguments"
+        }
+      },
+      "outputs": {
+        "output": {
+          "type": "OutputPath"
+        },
+        "halted": {
+          "type": "Halted"
+        },
+        "stdout": {
+          "type": "Stdout"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_license_inventory_parse",
+          "operation": "mathformer_license_inventory_parse"
+        }
+      }
+    },
+    "collect_rows": {
+      "inputs": {},
+      "outputs": {
+        "rows": {
+          "type": "Rows"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_license_inventory_collect",
+          "operation": "mathformer_license_inventory_collect"
+        }
+      }
+    },
+    "render_markdown": {
+      "inputs": {
+        "rows": {
+          "type": "Rows"
+        }
+      },
+      "outputs": {
+        "content": {
+          "type": "Markdown"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_license_inventory_render",
+          "operation": "mathformer_license_inventory_render"
+        }
+      }
+    },
+    "create_directory": {
+      "inputs": {
+        "output": {
+          "type": "OutputPath"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "ready": {
+          "type": "DirectoryReady"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_license_inventory_mkdir",
+          "operation": "mathformer_license_inventory_mkdir"
+        }
+      }
+    },
+    "write_inventory": {
+      "inputs": {
+        "output": {
+          "type": "OutputPath"
+        },
+        "content": {
+          "type": "Markdown"
+        },
+        "ready": {
+          "type": "DirectoryReady"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Stdout"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_license_inventory_write",
+          "operation": "mathformer_license_inventory_write"
+        }
+      }
+    },
+    "complete_help": {
+      "inputs": {
+        "stdout": {
+          "type": "Stdout"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Stdout"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_license_inventory_help",
+          "operation": "mathformer_license_inventory_help"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "parse",
+        "kind": "call",
+        "operation": "parse_arguments",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "help",
+            "when": {
+              "ref": "steps.parse.outputs.halted"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "help",
+                  "kind": "call",
+                  "operation": "complete_help",
+                  "arguments": {
+                    "stdout": {
+                      "ref": "steps.parse.outputs.stdout"
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "exit_code": {
+                  "type": "ExitCode",
+                  "value": {
+                    "ref": "steps.help.outputs.exit_code"
+                  }
+                },
+                "output_path": {
+                  "type": "OutputPath",
+                  "value": {
+                    "ref": "steps.parse.outputs.output"
+                  }
+                },
+                "stdout": {
+                  "type": "Stdout",
+                  "value": {
+                    "ref": "steps.help.outputs.stdout"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "collect",
+              "kind": "call",
+              "operation": "collect_rows",
+              "arguments": {}
+            },
+            {
+              "id": "render",
+              "kind": "call",
+              "operation": "render_markdown",
+              "arguments": {
+                "rows": {
+                  "ref": "steps.collect.outputs.rows"
+                }
+              }
+            },
+            {
+              "id": "mkdir",
+              "kind": "call",
+              "operation": "create_directory",
+              "arguments": {
+                "output": {
+                  "ref": "steps.parse.outputs.output"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            },
+            {
+              "id": "write",
+              "kind": "call",
+              "operation": "write_inventory",
+              "arguments": {
+                "output": {
+                  "ref": "steps.parse.outputs.output"
+                },
+                "content": {
+                  "ref": "steps.render.outputs.content"
+                },
+                "ready": {
+                  "ref": "steps.mkdir.outputs.ready"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "exit_code": {
+              "type": "ExitCode",
+              "value": {
+                "ref": "steps.write.outputs.exit_code"
+              }
+            },
+            "output_path": {
+              "type": "OutputPath",
+              "value": {
+                "ref": "steps.parse.outputs.output"
+              }
+            },
+            "stdout": {
+              "type": "Stdout",
+              "value": {
+                "ref": "steps.write.outputs.stdout"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "exit_code": {
+            "type": "ExitCode",
+            "value": {
+              "ref": "selected.outputs.exit_code"
+            }
+          },
+          "output_path": {
+            "type": "OutputPath",
+            "value": {
+              "ref": "selected.outputs.output_path"
+            }
+          },
+          "stdout": {
+            "type": "Stdout",
+            "value": {
+              "ref": "selected.outputs.stdout"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.dispatch.outputs.exit_code"
+        }
+      },
+      "output_path": {
+        "type": "OutputPath",
+        "value": {
+          "ref": "steps.dispatch.outputs.output_path"
+        }
+      },
+      "stdout": {
+        "type": "Stdout",
+        "value": {
+          "ref": "steps.dispatch.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/",
+          "docs/",
+          "cli_selected_output"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked inventory description only; no legal determination, runtime qualification, scientific result, or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/generate_python_license_inventory.py",
+        "selector": "main; parse_arguments; package_rows; license_summary; project_url; render; clean; escape_table; create_directory; write_inventory",
+        "digest": "sha256:53a2d72d3b477f0592ee5ea0d011b7f95bd6bc85ae315d3d297e032d6a9e4b25"
+      },
+      {
+        "path": "scripts/license_inventory_tools.py",
+        "selector": "register_license_inventory_tools; destination",
+        "digest": "sha256:596462b9040b91777cd41755254a9b067596bfc01e4add39f6b1399839a344c5"
+      },
+      {
+        "path": "tests/mcp/run_license_inventory_workflow_tests.py",
+        "selector": "InventoryTests; distributions; MCP fixture server",
+        "digest": "sha256:598b8aa3c3c5f12de9edc9f4216d16581a6e9a7c6f4b536ca9d2af5a0ff5afcd"
+      },
+      {
+        "path": "tests/mcp/fixtures/license_inventory_original.py.txt",
+        "selector": "original main oracle",
+        "digest": "sha256:6c203f05c26a398f65a2b5cae35a31c1653e6d61a115e172a4d1fd67b8cce438"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "mcp.license_inventory.workflow",
+        "digest": "sha256:f0e66e11cc246ec7f9814aede843d071809e8adeb0ff270f307bf3abe75be3b6"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_license_inventory_tools; _analysis_write_policy",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "service_coverage_report",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "licenses:inventory; licenses.inventory; run_action; preflight; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "hub_workflows authored licenses:inventory override",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Helper iterations remain native operations, with exhaustion and URL early returns unchanged and no artificial package-count cap.",
+      "Graph models selected main, not hub transport: hub preflight, dry-run, launch and write auditing remain outside this graph. Explicit direct-main context supplies working directory and mutation authorization; this does not change the hub no-extra-arguments route.",
+      "Native argparse errors propagate as failed MCP calls including the parser diagnostic; successful help exports stdout, exit 0 and null output_path without collecting or writing.",
+      "The native CLI has no timeout. Lunar enforces the retained contract wall-time and operation-call budgets and supplies receipts/digests; native completion printing is retained on the MCP diagnostic stream and stdout output port."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "licenses:inventory",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "licenses:inventory",
+        "summary": "Generate the Python dependency license inventory.",
+        "family": "licenses",
+        "kind": "generation",
+        "safety": "writes_repo",
+        "command": [
+          "{python}",
+          "scripts/generate_python_license_inventory.py"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "scripts/generate_python_license_inventory.py"
+        ],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [
+          "docs/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": null,
+        "notes": ""
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "licenses.inventory selects licenses:inventory. The direct-main graph uses five registered shared-source MCP operations; successful argparse help returns before collection.",
+      "context_fields": [
+        "working_directory",
+        "allow_mutating"
+      ],
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "entry_conditions": "Preflight rejects extra arguments, missing required paths, or missing mutation authorization unless dry_run. Errors return without launch; successful dry_run returns before launch.",
+      "launch": "Otherwise launch once, capturing exit code, stdout and stderr; no configured timeout. Unexpected launch errors propagate.",
+      "failure_policy": "Return native ok/status unchanged. Nonzero exit is failure. Audit writes against docs/; unexpected writes force ok=false and status=undeclared_writes even after exit 0.",
+      "scientific_payloads": "Exit code, selected output path (null on help), and source-owned stdout; not HubResult or proof artifacts.",
+      "output_scope": "Direct main accepts arbitrary --output; cli_selected_output denotes that path. Hub permits no extra args and uses the default docs/ path; this descriptor grants no bypass."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "command_after_dependencies": false,
+      "modeling": "No dependency traversal for this action. The sequence follows main; helper iterations remain internal."
+    }
+  }
+}

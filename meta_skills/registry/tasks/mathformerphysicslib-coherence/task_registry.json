@@ -1,0 +1,107 @@
+{
+  "schema_version": "mathformer.meta_skills.task_registry.v0.1",
+  "task_id": "mathformerphysicslib-coherence",
+  "title": "MathformerPhysicsLib coherence and grounding loop",
+  "summary": "Audit declarations, canonical concepts, Mathlib grounding, duplicate definitions, integration, API operability, generative probes, repair plans, and the coherence gate.",
+  "visible_workflows": [
+    {
+      "workflow_id": "mathformerphysicslib.coherence.grounded_gate",
+      "description": "Run deterministic and generative critics with repair evidence before claiming MathformerPhysicsLib coherence.",
+      "entry_actions": [
+        "physics-lib:coherence-suite",
+        "physics-lib:coherence-loop-report"
+      ],
+      "evidence_gates": [
+        "python scripts/mathformer.py ask \"audit MathformerPhysicsLib coherence and grounding\" --run --json",
+        "python tests/physics_lean/run_mathformerphysicslib_coherence_loop.py --json"
+      ]
+    }
+  ],
+  "composed_skills": [
+    {
+      "skill_id": "mathformerphysicslib-coherence-inventory-builder",
+      "role": "Build declaration, import, and concept inventory."
+    },
+    {
+      "skill_id": "mathformerphysicslib-concept-canonicalizer",
+      "role": "Canonicalize detected physics concepts and ownership."
+    },
+    {
+      "skill_id": "mathformerphysicslib-mathlib-grounding-auditor",
+      "role": "Audit Mathlib reuse before local support definitions."
+    },
+    {
+      "skill_id": "mathformerphysicslib-generative-coherence-critic",
+      "role": "Generate advisory probes that are bound back to deterministic evidence."
+    },
+    {
+      "skill_id": "mathformerphysicslib-coherence-gate",
+      "role": "Gate coherence with deterministic findings and repair-plan evidence."
+    }
+  ],
+  "controlled_actions": [
+    {
+      "action_id": "physics-lib:coherence-suite",
+      "role": "Run all coherence self-tests."
+    },
+    {
+      "action_id": "physics-lib:coherence-loop-report",
+      "role": "Write JSON and Markdown coherence reports."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "artifacts/mathformerphysicslib/coherence/inventory.json",
+      "state": "validated"
+    },
+    {
+      "path": "artifacts/mathformerphysicslib/coherence/generative_coherence_critic_plan.json",
+      "state": "validated"
+    },
+    {
+      "path": "artifacts/mathformerphysicslib/coherence/repair_plan.json",
+      "state": "validated"
+    },
+    {
+      "path": "artifacts/mathformerphysicslib/coherence/coherence_gate.json",
+      "state": "validated"
+    }
+  ],
+  "validators": [
+    {
+      "command": "python meta_skills/scripts/validate_task_registries.py --json",
+      "expected_artifact": "artifacts/meta_skills/task_registry_validation.json"
+    },
+    {
+      "command": "python tests/physics_lean/run_mathformerphysicslib_coherence_loop.py --json",
+      "expected_artifact": "artifacts/mathformerphysicslib/coherence/coherence_gate.json"
+    }
+  ],
+  "generated_skills": [
+    {
+      "id": "generative-coherence-probes",
+      "state": "task_local_validated",
+      "promotion_boundary": "Generative probes remain advisory until deterministic gates bind their findings."
+    }
+  ],
+  "release_boundaries": [
+    {
+      "boundary": "deterministic_gate_first",
+      "rule": "Generative coherence claims cannot block or promote without deterministic evidence."
+    },
+    {
+      "boundary": "repair_plan_required",
+      "rule": "Medium or high findings require repair actions or explicit blockers."
+    }
+  ],
+  "risk_controls": [
+    {
+      "risk": "Generative critic overstates support.",
+      "control": "Quality card requires deterministic evidence bindings and rerun gates."
+    },
+    {
+      "risk": "Coherence report hides unresolved blockers.",
+      "control": "Coherence gate records repair status and property gate values."
+    }
+  ]
+}

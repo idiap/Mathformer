@@ -1,0 +1,491 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Give the independent Mathformer MCP service an explicit configuration
+#   source that is separate from Codex, Claude, OpenCode, and skill-client
+#   environments.
+#
+# Intent:
+#   Load, validate, redact, and adapt repository-local service TOML files for
+#   scripts/mcp_server.py and scripts/mathformer_mcp_service.py.
+#
+# Function:
+#   Provides a small dependency-free configuration surface, including a TOML
+#   fallback parser for the simple config shape used by this repository,
+#   provider-key environment bridging, and secret scanning for tracked config
+#   examples.
+#
+# Maintenance Notes:
+#   Keep section/key names synchronized with config/mathformer_mcp.example.toml
+#   and docs/operations/INDEPENDENT_MCP_SERVICE_TODOS.md.
+
+"""Configuration helpers for the independent Mathformer MCP service."""
+
+from __future__ import annotations
+
+import dataclasses
+import json
+import os
+import re
+import sys
+from pathlib import Path
+from typing import Any, Mapping, MutableMapping, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONFIG_ROOT = REPO_ROOT / "config"
+DEFAULT_LOCAL_CONFIG = CONFIG_ROOT / "mathformer_mcp.local.toml"
+EXAMPLE_CONFIG = CONFIG_ROOT / "mathformer_mcp.example.toml"
+
+SECRET_FIELDS = {
+    ("security", "mcp_bearer_token"),
+    ("external_api_keys", "openai_api_key"),
+    ("external_api_keys", "anthropic_api_key"),
+    ("external_api_keys", "google_api_key"),
+    ("external_api_keys", "huggingface_token"),
+}
+
+PROVIDER_ENV_MAP = {
+    "openai_api_key": "OPENAI_API_KEY",
+    "anthropic_api_key": "ANTHROPIC_API_KEY",
+    "google_api_key": "GOOGLE_API_KEY",
+    "huggingface_token": "HUGGINGFACE_TOKEN",
+}
+
+SECRET_PATTERN = re.compile(
+    r"(sk-[A-Za-z0-9_-]{12,}|AKIA[0-9A-Z]{12,}|AIza[0-9A-Za-z_-]{20,}|[A-Za-z0-9_-]{32,})"
+)
+SECRET_CONTEXT_PATTERN = re.compile(
+    r"(api[_-]?key|token|secret|bearer|authorization)", re.IGNORECASE
+)
+
+DEFAULT_CONFIG: dict[str, dict[str, Any]] = {
+    "service": {
+        "name": "mathformer-mcp",
+        "transport": "stdio",
+        "host": "127.0.0.1",
+        "port": 8765,
+        "readonly": False,
+        "rate_limit_per_minute": 60,
+        "default_timeout_seconds": 600,
+        "call_log_path": "artifacts/mcp_server/calls.jsonl",
+    },
+    "security": {
+        "mcp_bearer_token": "",
+        "require_auth_for_http": False,
+    },
+    "paths": {
+        "repo_root": ".",
+        "artifacts_dir": "artifacts",
+        "venv_python": ".venv/bin/python",
+    },
+    "dependencies": {
+        "profile": "mcp-service",
+        "include_lean": True,
+        "include_atp_kb": True,
+        "include_sympy": True,
+        "include_benchmarks": True,
+        "include_paper_extraction": True,
+        "include_mcp": True,
+    },
+    "external_api_keys": {
+        "openai_api_key": "",
+        "anthropic_api_key": "",
+        "google_api_key": "",
+        "huggingface_token": "",
+    },
+    "providers": {
+        "default_llm_provider": "",
+        "default_llm_model": "",
+        "agentc_aspect_description": "Preserve the mathematical meaning of the informal statement.",
+        "default_embedding_provider": "",
+        "allow_network_tools": False,
+    },
+    "lean": {
+        "lake_bin": "lake",
+        "workdir": "",
+        "lean_timeout_seconds": 600,
+    },
+    "atp": {
+        "vampire_bin": "",
+        "vampire_timeout_seconds": 60,
+    },
+}
+
+
+@dataclasses.dataclass(frozen=True)
+class ServiceConfig:
+    """Loaded and validated MCP service configuration."""
+
+    data: dict[str, dict[str, Any]]
+    source_path: Path | None
+    source_kind: str
+    errors: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+
+    @property
+    def ok(self) -> bool:
+        return not self.errors
+
+    def get(self, section: str, key: str, default: Any = None) -> Any:
+        return self.data.get(section, {}).get(key, default)
+
+    def runtime_settings(self) -> dict[str, Any]:
+        return {
+            "transport": self.get("service", "transport"),
+            "host": self.get("service", "host"),
+            "port": int(self.get("service", "port")),
+            "readonly": bool(self.get("service", "readonly")),
+            "auth_token": self.get("security", "mcp_bearer_token") or "",
+            "rate_limit": int(self.get("service", "rate_limit_per_minute")),
+            "default_timeout_seconds": int(
+                self.get("service", "default_timeout_seconds")
+            ),
+            "call_log_path": str(
+                resolve_repo_path(str(self.get("service", "call_log_path")))
+            ),
+            "allowed_write_roots": [
+                str(resolve_repo_path(str(self.get("paths", "artifacts_dir"))))
+            ],
+            "require_auth_for_http": bool(
+                self.get("security", "require_auth_for_http")
+            ),
+        }
+
+
+def deep_copy_config(
+    value: Mapping[str, Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    return {str(section): dict(items) for section, items in value.items()}
+
+
+def deep_merge(
+    base: MutableMapping[str, dict[str, Any]], overlay: Mapping[str, Mapping[str, Any]]
+) -> None:
+    for section, values in overlay.items():
+        base.setdefault(str(section), {})
+        for key, value in values.items():
+            base[str(section)][str(key)] = value
+
+
+def parse_scalar(raw: str) -> Any:
+    text = raw.strip()
+    if text.startswith('"') and text.endswith('"'):
+        return text[1:-1]
+    if text in {"true", "false"}:
+        return text == "true"
+    try:
+        return int(text)
+    except ValueError:
+        return text
+
+
+def parse_simple_toml(text: str) -> dict[str, dict[str, Any]]:
+    """Parse the simple section/key TOML shape used by the service config."""
+
+    data: dict[str, dict[str, Any]] = {}
+    section: str | None = None
+    for raw_line in text.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            data.setdefault(section, {})
+            continue
+        if "=" not in line or section is None:
+            raise ValueError(f"unsupported TOML line: {raw_line}")
+        key, value = line.split("=", 1)
+        data.setdefault(section, {})[key.strip()] = parse_scalar(value)
+    return data
+
+
+def read_toml(path: Path) -> dict[str, dict[str, Any]]:
+    text = path.read_text(encoding="utf-8")
+    try:
+        import tomllib  # type: ignore[import-not-found]
+
+        payload = tomllib.loads(text)
+    except ModuleNotFoundError:
+        try:
+            import tomli  # type: ignore[import-not-found]
+
+            payload = tomli.loads(text)
+        except ModuleNotFoundError:
+            payload = parse_simple_toml(text)
+    return {str(section): dict(values) for section, values in payload.items()}
+
+
+def source_kind(path: Path | None) -> str:
+    if path is None:
+        return "defaults"
+    if path.name.endswith(".example.toml"):
+        return "example"
+    return "local"
+
+
+def resolve_repo_path(value: str) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else REPO_ROOT / path
+
+
+def is_under(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def validate_config(
+    data: Mapping[str, Mapping[str, Any]], *, path: Path | None, kind: str
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    for section in DEFAULT_CONFIG:
+        if section not in data:
+            errors.append(f"missing section [{section}]")
+
+    service = data.get("service", {})
+    security = data.get("security", {})
+    paths = data.get("paths", {})
+
+    transport = service.get("transport")
+    if transport not in {"stdio", "streamable-http"}:
+        errors.append("service.transport must be 'stdio' or 'streamable-http'")
+    try:
+        port = int(service.get("port", 0))
+        if not (1 <= port <= 65535):
+            errors.append("service.port must be between 1 and 65535")
+    except (TypeError, ValueError):
+        errors.append("service.port must be an integer")
+    for section, key in (
+        ("service", "rate_limit_per_minute"),
+        ("service", "default_timeout_seconds"),
+    ):
+        try:
+            if int(data.get(section, {}).get(key, -1)) < 0:
+                errors.append(f"{section}.{key} must be non-negative")
+        except (TypeError, ValueError):
+            errors.append(f"{section}.{key} must be an integer")
+
+    artifacts_dir = resolve_repo_path(str(paths.get("artifacts_dir", "artifacts")))
+    call_log_path = resolve_repo_path(
+        str(service.get("call_log_path", "artifacts/mcp_server/calls.jsonl"))
+    )
+    if not is_under(artifacts_dir, REPO_ROOT):
+        errors.append("paths.artifacts_dir must stay inside the repository root")
+    if not is_under(call_log_path, artifacts_dir):
+        errors.append("service.call_log_path must stay under paths.artifacts_dir")
+
+    token = str(security.get("mcp_bearer_token", "") or "")
+    require_auth = bool(security.get("require_auth_for_http", False))
+    if (
+        transport == "streamable-http"
+        and require_auth
+        and not token
+        and kind != "example"
+    ):
+        errors.append(
+            "streamable-http service config requires security.mcp_bearer_token"
+        )
+    if transport == "streamable-http" and not require_auth:
+        warnings.append("streamable-http service config does not require bearer auth")
+
+    if kind == "example":
+        for section, key in SECRET_FIELDS:
+            value = str(data.get(section, {}).get(key, "") or "")
+            if value:
+                errors.append(f"tracked example config must not set {section}.{key}")
+
+    if path and is_under(path, REPO_ROOT) and path.name.endswith(".example.toml"):
+        text = path.read_text(encoding="utf-8")
+        for match in SECRET_PATTERN.finditer(text):
+            token_text = match.group(0)
+            if token_text not in {"mathformer_mcp"}:
+                errors.append(
+                    f"tracked example config contains secret-like value near offset {match.start()}"
+                )
+                break
+
+    return errors, warnings
+
+
+def load_service_config(
+    path: str | Path | None = None,
+    *,
+    cli_overrides: Mapping[str, Mapping[str, Any]] | None = None,
+    require_existing: bool = False,
+) -> ServiceConfig:
+    source_path = (
+        Path(path).expanduser()
+        if path
+        else (DEFAULT_LOCAL_CONFIG if DEFAULT_LOCAL_CONFIG.exists() else None)
+    )
+    data = deep_copy_config(DEFAULT_CONFIG)
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if source_path is not None:
+        source_path = (
+            source_path if source_path.is_absolute() else REPO_ROOT / source_path
+        )
+        if not source_path.exists():
+            if require_existing:
+                errors.append(f"config file does not exist: {source_path}")
+            else:
+                warnings.append(
+                    f"config file does not exist, using defaults: {source_path}"
+                )
+        else:
+            try:
+                deep_merge(data, read_toml(source_path))
+            except Exception as exc:  # noqa: BLE001 - converted to config error
+                errors.append(f"could not parse config {source_path}: {exc}")
+
+    if cli_overrides:
+        deep_merge(data, cli_overrides)
+
+    kind = source_kind(source_path)
+    validation_errors, validation_warnings = validate_config(
+        data, path=source_path, kind=kind
+    )
+    errors.extend(validation_errors)
+    warnings.extend(validation_warnings)
+    return ServiceConfig(
+        data=data,
+        source_path=source_path,
+        source_kind=kind,
+        errors=tuple(errors),
+        warnings=tuple(warnings),
+    )
+
+
+def redact_value(section: str, key: str, value: Any) -> Any:
+    if (section, key) not in SECRET_FIELDS:
+        return value
+    text = str(value or "")
+    if not text:
+        return ""
+    return f"<redacted:{key}:len={len(text)}>"
+
+
+def redacted_config(
+    config: ServiceConfig | Mapping[str, Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    data = config.data if isinstance(config, ServiceConfig) else config
+    return {
+        section: {
+            key: redact_value(section, key, value) for key, value in values.items()
+        }
+        for section, values in data.items()
+    }
+
+
+def provider_environment(config: ServiceConfig) -> dict[str, str]:
+    values = config.data.get("external_api_keys", {})
+    env: dict[str, str] = {}
+    for key, env_name in PROVIDER_ENV_MAP.items():
+        value = str(values.get(key, "") or "")
+        if value:
+            env[env_name] = value
+    return env
+
+
+def apply_provider_environment(config: ServiceConfig) -> dict[str, str]:
+    env = provider_environment(config)
+    for key, value in env.items():
+        os.environ[key] = value
+    return env
+
+
+def scan_paths_for_secrets(paths: Sequence[Path]) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    for path in paths:
+        if not path.exists() or path.is_dir():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for index, line in enumerate(text.splitlines(), start=1):
+            if SECRET_CONTEXT_PATTERN.search(line) and SECRET_PATTERN.search(line):
+                findings.append(
+                    {
+                        "path": str(path.relative_to(REPO_ROOT)),
+                        "line": index,
+                        "kind": "secret_like_value",
+                    }
+                )
+    return findings
+
+
+def tracked_service_files() -> list[Path]:
+    candidates = [
+        CONFIG_ROOT / "README.md",
+        CONFIG_ROOT / "mathformer_mcp.example.toml",
+        REPO_ROOT / "docs" / "operations" / "INDEPENDENT_MCP_SERVICE_TODOS.md",
+        REPO_ROOT / "docs" / "architecture" / "MCP_SERVER.md",
+        REPO_ROOT / "TODO.md",
+        REPO_ROOT / "AGENTS.md",
+        REPO_ROOT / "README.md",
+        REPO_ROOT / "deploy" / "mcp" / "Dockerfile",
+        REPO_ROOT / "deploy" / "mcp" / "docker-compose.example.yml",
+        REPO_ROOT / "deploy" / "mcp" / "mathformer-mcp.service.example",
+    ]
+    return [path for path in candidates if path.exists()]
+
+
+def service_config_report(config: ServiceConfig) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "ok": config.ok,
+        "source_path": (
+            str(config.source_path.relative_to(REPO_ROOT))
+            if config.source_path and is_under(config.source_path, REPO_ROOT)
+            else str(config.source_path) if config.source_path else None
+        ),
+        "source_kind": config.source_kind,
+        "errors": list(config.errors),
+        "warnings": list(config.warnings),
+        "config": redacted_config(config),
+        "provider_env_keys": sorted(provider_environment(config)),
+        "runtime_settings": {
+            key: ("<redacted:auth_token>" if key == "auth_token" and value else value)
+            for key, value in config.runtime_settings().items()
+        },
+    }
+
+
+def print_json(payload: Mapping[str, Any]) -> None:
+    print(json.dumps(payload, indent=2, sort_keys=True))
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path)
+    parser.add_argument("--require-existing", action="store_true")
+    parser.add_argument("--scan-tracked", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+
+    config = load_service_config(args.config, require_existing=args.require_existing)
+    findings = (
+        scan_paths_for_secrets(tracked_service_files()) if args.scan_tracked else []
+    )
+    payload = service_config_report(config)
+    payload["secret_scan_findings"] = findings
+    payload["ok"] = bool(payload["ok"] and not findings)
+    if args.json:
+        print_json(payload)
+    else:
+        print("ok" if payload["ok"] else "failed")
+    return 0 if payload["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

@@ -1,0 +1,606 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_workflow_graphs_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected workflow.graphs route in order, retaining native admission, dry-run and write-audit behavior.",
+  "aliases": [
+    "workflow.graphs"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext",
+      "representation": "value"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult",
+      "representation": "value"
+    },
+    "SelectedMatch": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "object",
+            "properties": {
+              "route_id": {
+                "const": "workflow.graphs"
+              },
+              "action_ids": {
+                "const": [
+                  "docs:workflow-graph-render",
+                  "docs:workflow-graph-layout",
+                  "control:workflow-skill-integration-audit"
+                ]
+              }
+            },
+            "required": [
+              "route_id",
+              "action_ids"
+            ]
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ]
+      },
+      "representation": "value"
+    },
+    "IntentState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ]
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false
+      },
+      "representation": "value"
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "docs:workflow-graph-render",
+          "docs:workflow-graph-layout",
+          "control:workflow-skill-integration-audit"
+        ]
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RouteResult": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "intent_run_completed",
+              "intent_run_failed"
+            ]
+          },
+          "route": {
+            "type": "object"
+          },
+          "children": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ]
+            }
+          }
+        },
+        "required": [
+          "schema_version",
+          "ok",
+          "status",
+          "route",
+          "children"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object"
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "SelectedMatch"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot",
+      "required": false
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "RouteResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "IntentState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_workflow_graphs_initialize",
+          "operation": "mathformer_workflow_graphs_initialize"
+        }
+      }
+    },
+    "select": {
+      "inputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_workflow_graphs_select",
+          "operation": "mathformer_workflow_graphs_select"
+        }
+      }
+    },
+    "execute": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot",
+          "required": false
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_workflow_graphs_execute",
+          "operation": "mathformer_workflow_graphs_execute"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "done": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_workflow_graphs_advance",
+          "operation": "mathformer_workflow_graphs_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "RouteResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_workflow_graphs_finish",
+          "operation": "mathformer_workflow_graphs_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "Native ordered action traversal; the third update sets done, so reaching three children exits normally.",
+        "state_type": "IntentState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 3,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "execute",
+              "kind": "call",
+              "operation": "execute",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.execute.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "IntentState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Boolean",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "IntentState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "RouteResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_graphs/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 11
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked route behavior only; completion establishes no scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "intent_run_completed",
+      "intent_run_failed"
+    ]
+  },
+  "provenance": {
+    "coverage": "interface_only",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_workflow_graphs_route_tools; mathformer_ask; mathformer_run_workflow",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/workflow_graphs_route_tools.py",
+        "selector": "register_workflow_graphs_route_tools; checked_registry; selected_match; check_state",
+        "digest": "sha256:a0d0511e6cb0016edfbae537b59eea02afb40a749b05db6533b6eb547a34d2b0"
+      },
+      {
+        "path": "scripts/workflow_write_audit.py",
+        "selector": "snapshot_repository; audit_snapshots",
+        "digest": "sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1"
+      },
+      {
+        "path": "scripts/render_workflow_graphs.py",
+        "selector": "main; build_model; write_outputs",
+        "digest": "sha256:e67dcb14aa20399e6f1dc85d5f4a0ef1b708f012d816f41f91aacc7e6a2a43a3"
+      },
+      {
+        "path": "scripts/plan_workflow_graph_layout.py",
+        "selector": "main; read_graph; build_plan; emit_plan",
+        "digest": "sha256:1f45793b9634704a3ac655740eaf0cf39936e2b99e7edf6695667e62a5fc875f"
+      },
+      {
+        "path": "scripts/audit_workflow_skill_integration.py",
+        "selector": "main; build_report; publish_report",
+        "digest": "sha256:fd5d06f0cca193750808529263e8cc3032894610e00ab952a7577ffb94de88e6"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "workflow_graphs_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Subprocess action internals remain inside the shared native run_action boundary; HubResult retains transport envelopes rather than graph/report payload schemas.",
+      "The native route has no global budget and its actions inherit timeout_seconds=None. Lunar enforces the separate 3600-second and eleven-operation ceilings.",
+      "Lunar provides v1 receipts, digests and provenance. Native ordered children, captured output, write audits and route status are retained; optional caller-level reports remain outside this route."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "workflow.graphs",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "workflow.graphs",
+        "title": "Render and audit workflow graph reports",
+        "action_ids": [
+          "docs:workflow-graph-render",
+          "docs:workflow-graph-layout",
+          "control:workflow-skill-integration-audit"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Callable MCP tools delegate to shared native route helpers and run_action. Registry projections resolve only source declarations. An optional repository_root carries the same mount through preflight, process cwd and write audits.",
+      "selection": "CLI ask --run and MCP mathformer_ask(run=True) select the highest-ranked match; mathformer_run_workflow resolves this identity, rejects route extra arguments and constructs the match.",
+      "service_gate": "MCP callers additionally check configured service write roots before actual execution.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report",
+        "registry",
+        "repository_root"
+      ],
+      "child_failure": "Nonzero exit, admission/preflight rejection or undeclared writes makes a child fail; it is returned as data so advance can apply keep_going. Exceptions terminate without finish.",
+      "bounds": "Three-action specialization constrained by SelectedMatch; done is true at the third append. on_exhausted=fail is unreachable for conforming native updates, not native exhaustion behavior."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "docs:workflow-graph-render",
+        "docs:workflow-graph-layout",
+        "control:workflow-skill-integration-audit"
+      ],
+      "artifact_dataflow": "render_workflow_graphs.py --json writes workflow_graphs.json and HTML; plan_workflow_graph_layout.py --json reads that graph and publishes layout metadata; audit_workflow_skill_integration.py --json reads graph coverage and skills/hooks and writes integration reports under artifacts/workflow_graphs/.",
+      "dependencies": "The three registered actions have empty depends_on; filesystem graph reuse is retained inside execute and no feedback execution occurs."
+    }
+  }
+}

@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from control_validation_loop import (
+    ControlCase,
+    ControlDisposition,
+    CoverageCheckBasis,
+    FlowCheckBasis,
+    LogCheckBasis,
+    MathformerControlSurfaceSnapshot,
+    RoutingCheckBasis,
+)
+import occurrences as steps
+import relations as links
+
+# Audit Mathformer's declared workflow controls, test every control surface
+# independently, and apply the repository gate policy to the combined findings.
+reasoning ValidateMathformerControl(
+    snapshot: MathformerControlSurfaceSnapshot,
+) -> Generated[ControlDisposition]:
+    sequence:
+        # Establish the canonical hooks, owners, routes, and runtime paths that
+        # every subsequent audit must check.
+        [contract_check: steps.AuditWorkflowContract(snapshot)]
+        parallel:
+            # Confirm that named workflows remain reachable from natural language.
+            [route_check: steps.AuditWorkflowRoutes(RoutingCheckBasis(
+                workflow_source = snapshot,
+                contract_check = contract_check.value,
+            ))] by links.TestRouting
+            # Check the reasoning-flow syntax, type handles, relations, and endpoints.
+            [flow_check: steps.ValidateReasoningFlows(FlowCheckBasis(
+                workflow_source = snapshot,
+                contract_check = contract_check.value,
+            ))] by links.TestFlowIntegrity
+            # Check that skills, hooks, owners, routes, and loops remain connected.
+            [coverage_check: steps.AuditSkillHookCoverage(CoverageCheckBasis(
+                workflow_source = snapshot,
+                contract_check = contract_check.value,
+            ))] by links.TestCoverage
+            # Check structured run logs and their skill and hook identities.
+            [log_check: steps.ValidateReasoningLogs(LogCheckBasis(
+                workflow_source = snapshot,
+                contract_check = contract_check.value,
+            ))] by links.TestLogIntegrity
+        # Convert the independent findings into pass, warn, fail, skip, or
+        # waived status without treating the policy decision as new evidence.
+        [control_status: steps.ApplyControlGate(ControlCase(
+            contract_check = contract_check.value,
+            route_check = route_check.value,
+            flow_check = flow_check.value,
+            coverage_check = coverage_check.value,
+            log_check = log_check.value,
+        ))] by links.CalibrateControl
+    return control_status

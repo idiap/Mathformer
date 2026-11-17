@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: MIT
+def critic_redefinitions(
+    concept_graph: Mapping[str, Any], grounding: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Find competing declaration ownership without treating normal use as duplication."""
+    grounding_by_id = {
+        item["concept_id"]: item for item in grounding.get("concepts", [])
+    }
+    findings: list[dict[str, Any]] = []
+    reuse_metrics = {
+        "healthy_downstream_uses": 0,
+        "downstream_local_declarations": 0,
+        "confirmed_duplicate_owners": 0,
+    }
+    for concept in concept_graph.get("concepts", []):
+        concept_id = str(concept.get("concept_id"))
+        occurrences = [
+            item for item in concept.get("occurrences", []) if isinstance(item, Mapping)
+        ]
+        distinct_modules = sorted({str(item.get("path")) for item in occurrences})
+        foundation_occurrences = [
+            item for item in occurrences if item.get("is_foundation")
+        ]
+        downstream_occurrences = [
+            item for item in occurrences if not item.get("is_foundation")
+        ]
+        foundation_modules = sorted(
+            {str(item.get("path")) for item in foundation_occurrences}
+        )
+        foundation_names = {
+            str(decl.get("name"))
+            for item in foundation_occurrences
+            for decl in item.get("ownership_declarations", [])
+            if isinstance(decl, Mapping) and decl.get("name")
+        }
+        downstream_owners = [
+            item
+            for item in downstream_occurrences
+            if item.get("ownership_declarations")
+        ]
+        healthy_uses = [
+            item
+            for item in downstream_occurrences
+            if not item.get("ownership_declarations") and item.get("imports_foundation")
+        ]
+        reuse_metrics["healthy_downstream_uses"] += len(healthy_uses)
+        reuse_metrics["downstream_local_declarations"] += len(downstream_owners)
+
+        if len(downstream_owners) > 1 and not foundation_modules:
+            findings.append(
+                {
+                    "severity": "high",
+                    "kind": "concept_spread_without_foundation_owner",
+                    "concept_id": concept_id,
+                    "evidence": [
+                        {
+                            "path": item.get("path"),
+                            "declarations": item.get("ownership_declarations", []),
+                        }
+                        for item in downstream_owners[:8]
+                    ],
+                    "message": "Competing local declarations appear in multiple modules without a foundation owner.",
+                }
+            )
+        elif foundation_modules:
+            for item in downstream_owners:
+                local_names = {
+                    str(decl.get("name"))
+                    for decl in item.get("ownership_declarations", [])
+                    if isinstance(decl, Mapping) and decl.get("name")
+                }
+                exact_duplicates = sorted(local_names & foundation_names)
+                bypasses_foundation = not item.get("imports_foundation")
+                if exact_duplicates or bypasses_foundation:
+                    reuse_metrics["confirmed_duplicate_owners"] += 1
+                    findings.append(
+                        {
+                            "severity": "high",
+                            "kind": "confirmed_competing_concept_owner",
+                            "concept_id": concept_id,
+                            "owner_module": foundation_modules[0],
+                            "evidence": {
+                                "downstream_path": item.get("path"),
+                                "downstream_declarations": item.get(
+                                    "ownership_declarations", []
+                                ),
+                                "foundation_declaration_names": sorted(
+                                    foundation_names
+                                ),
+                                "exact_duplicate_names": exact_duplicates,
+                                "imports_foundation": item.get("imports_foundation"),
+                            },
+                            "message": "A downstream module declares competing ownership instead of ordinary foundation reuse.",
+                        }
+                    )
+        if (
+            grounding_by_id.get(concept_id, {}).get("grounding_level")
+            == "local_blocker"
+        ):
+            findings.append(
+                {
+                    "severity": "medium",
+                    "kind": "unresolved_grounding_blocker",
+                    "concept_id": concept_id,
+                    "evidence": distinct_modules[:8],
+                    "message": "Concept has Mathlib targets but no accepted owner.",
+                }
+            )
+    return {
+        "style": "mathformerphysicslib_redefinition_report",
+        "schema_version": 1,
+        "ok": not any(item["severity"] == "high" for item in findings),
+        "finding_count": len(findings),
+        "reuse_metrics": reuse_metrics,
+        "findings": findings,
+    }
+

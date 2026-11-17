@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathformerlib_accumulation_loop import (
+    AccumulationCase,
+    CandidateAssessment,
+    DocumentationBasis,
+    LibraryDocumentation,
+    LibraryPlacement,
+    MathformerLibraryCandidateSet,
+    MathformerLibUpdate,
+    PromotionCase,
+    PromotionDecision,
+    PublicationBasis,
+    RegistryUpdate,
+)
+import occurrences as steps
+import relations as links
+
+# Assess candidate artifacts, promote the valid subset, place accepted modules,
+# refresh the MathformerLib registry, and publish the library documentation.
+reasoning UpdateMathformerLib(
+    candidates: MathformerLibraryCandidateSet,
+) -> Generated[MathformerLibUpdate]:
+    sequence:
+        # Classify candidates and run realness, compilation, import, and provenance checks.
+        [assessment: steps.AssessLibraryCandidates(candidates)]
+        # Apply the MathformerLib promotion policy to every candidate.
+        [promotion: steps.DecidePromotions(PromotionCase(
+            candidates = candidates,
+            assessment = assessment.value,
+        ))] by links.QualifyPromotions
+        # Place accepted modules under their domain paths and retain blocked drafts.
+        [placement: steps.AccumulateModules(AccumulationCase(
+            candidates = candidates,
+            promotion = promotion.value,
+        ))] by links.PlaceModules
+        # Rebuild the authoritative module, declaration, import, and provenance registry.
+        [registry: steps.RefreshRegistry(placement.value)] by links.RegisterModules
+        # Generate Markdown library pages and indexes from the refreshed registry.
+        [documentation: steps.DocumentLibrary(DocumentationBasis(
+            placement = placement.value,
+            registry = registry.value,
+        ))] by links.DocumentRegistry
+        # Produce aligned HTML and return the complete MathformerLib update summary.
+        [update: steps.PublishLibraryUpdate(PublicationBasis(
+            placement = placement.value,
+            registry = registry.value,
+            documentation = documentation.value,
+        ))] by links.PublishAlignedDocs
+    return update

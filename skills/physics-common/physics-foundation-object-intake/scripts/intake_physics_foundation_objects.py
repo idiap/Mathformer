@@ -1,0 +1,621 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Normalize physics concepts into MathformerPhysicsLib foundation objects."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+from pathlib import Path
+from typing import Any, Sequence
+
+PROFILES: dict[str, dict[str, Any]] = {
+    "vector_field": {
+        "id": "vector_field.real.euclidean3",
+        "display": "Real vector field on Euclidean 3-space",
+        "module": "Fields",
+        "semantics": ["carrier", "pointwise operations", "component projection"],
+        "mathlib": ["EuclideanSpace", "Fin", "Pi", "Module"],
+        "priority": "high",
+        "cues": ["vector field", "electric field", "magnetic field", "velocity field"],
+    },
+    "basis_projection": {
+        "id": "projection.fin3.component",
+        "display": "Finite 3-vector component projection",
+        "module": "Carriers",
+        "semantics": ["finite index", "component projection"],
+        "mathlib": ["Fin", "EuclideanSpace", "Pi"],
+        "priority": "high",
+        "cues": ["component", "projection", "coordinate"],
+    },
+    "quantum_operator": {
+        "id": "linear_operator.field",
+        "display": "Linear operator over a physics field or state surface",
+        "module": "Operators",
+        "semantics": ["linearity", "domain", "codomain"],
+        "mathlib": ["LinearMap", "ContinuousLinearMap", "Matrix"],
+        "priority": "high",
+        "cues": ["linear operator", "operator", "hamiltonian"],
+    },
+    "gradient_divergence_curl": {
+        "id": "curl_like_linear_operator",
+        "display": "Curl-like linear vector-calculus operator",
+        "module": "VectorCalculus",
+        "semantics": ["operator", "field domain", "field codomain", "calculus context"],
+        "mathlib": ["HasFDerivAt", "fderiv", "ContinuousLinearMap"],
+        "priority": "high",
+        "cues": ["curl", "divergence", "gradient", "vector calculus"],
+    },
+    "integral_or_limit": {
+        "id": "time_derivative_linear_operator",
+        "display": "Time-derivative operator surface",
+        "module": "VectorCalculus",
+        "semantics": ["time parameter", "derivative role", "regularity assumption"],
+        "mathlib": ["HasDerivAt", "deriv", "Differentiable"],
+        "priority": "high",
+        "cues": ["time derivative", "derivative", "d/dt"],
+    },
+    "physical_law": {
+        "id": "physical_law.witness",
+        "display": "Source-backed physical law witness",
+        "module": "Laws",
+        "semantics": ["source law", "proposition", "provenance"],
+        "mathlib": ["Prop"],
+        "priority": "high",
+        "cues": ["law", "maxwell", "newton", "lorentz", "schrodinger", "equation"],
+    },
+    "unit_bridge": {
+        "id": "unit_dimension.compatible",
+        "display": "Unit and dimension compatibility witness",
+        "module": "Units",
+        "semantics": ["dimension homogeneity", "unit compatibility"],
+        "mathlib": ["Real", "Eq"],
+        "priority": "high",
+        "cues": ["unit", "dimension", "homogeneous", "compatible equality"],
+    },
+    "boundary_or_regime_assumption": {
+        "id": "generated_support.assumption_label",
+        "display": "Generated support assumption label",
+        "module": "Contexts",
+        "semantics": ["support assumption", "provenance", "regime"],
+        "mathlib": ["Prop", "Set", "Filter"],
+        "priority": "high",
+        "cues": ["assumption", "regime", "boundary", "gauge", "smoothness"],
+    },
+    "hilbert_space_inner_product": {
+        "id": "hilbert_state.inner_product_space",
+        "display": "Hilbert-state inner product surface",
+        "module": "HilbertSpace",
+        "semantics": ["inner product", "norm", "state carrier", "completeness"],
+        "mathlib": [
+            "InnerProductSpace",
+            "NormedAddCommGroup",
+            "CompleteSpace",
+            "Module",
+        ],
+        "priority": "high",
+        "cues": [
+            "hilbert",
+            "inner product",
+            "pre-hilbert",
+            "complete inner product",
+            "quantum state",
+        ],
+    },
+    "hilbert_orthogonality_projection": {
+        "id": "hilbert_state.orthogonality_projection",
+        "display": "Hilbert orthogonality and projection surface",
+        "module": "HilbertSpace",
+        "semantics": [
+            "orthogonality",
+            "projection",
+            "closed subspace",
+            "best approximation",
+        ],
+        "mathlib": ["orthogonal", "orthogonalProjection", "Submodule", "CompleteSpace"],
+        "priority": "high",
+        "cues": [
+            "orthogonal",
+            "orthogonality",
+            "projection",
+            "orthogonal projection",
+            "best approximation",
+        ],
+    },
+    "hilbert_basis": {
+        "id": "hilbert_state.orthonormal_basis",
+        "display": "Hilbert orthonormal basis surface",
+        "module": "HilbertSpace",
+        "semantics": ["orthonormal basis", "coordinates", "Parseval", "Bessel"],
+        "mathlib": ["HilbertBasis", "Orthonormal", "lp", "tsum"],
+        "priority": "high",
+        "cues": [
+            "orthonormal basis",
+            "hilbert basis",
+            "parseval",
+            "bessel",
+            "coordinates",
+        ],
+    },
+    "hilbert_operator_adjoint": {
+        "id": "hilbert_operator.adjoint_self_adjoint",
+        "display": "Hilbert adjoint and self-adjoint operator surface",
+        "module": "HilbertSpace",
+        "semantics": [
+            "bounded operator",
+            "adjoint relation",
+            "self-adjointness",
+            "unitarity",
+        ],
+        "mathlib": [
+            "ContinuousLinearMap",
+            "InnerProductSpace",
+            "adjoint",
+            "IsSelfAdjoint",
+            "unitary",
+        ],
+        "priority": "high",
+        "cues": [
+            "adjoint",
+            "self-adjoint",
+            "self adjoint",
+            "hermitian",
+            "unitary",
+            "bounded operator",
+        ],
+    },
+    "unbounded_position_momentum": {
+        "id": "unbounded_operator.position_momentum_core",
+        "display": "Unbounded position/momentum operator and common-domain surface",
+        "module": "UnboundedOperators",
+        "semantics": [
+            "domain-bearing operator",
+            "dense domain",
+            "closed graph",
+            "symmetric or self-adjoint witness",
+            "common invariant core",
+            "canonical commutator on the core",
+        ],
+        "mathlib": ["Submodule", "LinearMap", "Dense", "IsClosed", "InnerProductSpace"],
+        "priority": "high",
+        "cues": [
+            "unbounded operator",
+            "position operator",
+            "momentum operator",
+            "position and momentum",
+            "common domain",
+            "dense domain",
+            "canonical commutator",
+        ],
+    },
+    "schwartz_l2_position_momentum_model": {
+        "id": "position_momentum.schwartz_l2_model",
+        "display": "Schwartz/L2 realization of position and momentum",
+        "module": "PositionMomentumModels",
+        "semantics": [
+            "Mathlib Schwartz wavefunction",
+            "Schwartz derivative",
+            "Hilbert-space embedding",
+            "operator-action compatibility",
+            "canonical commutator realization",
+        ],
+        "mathlib": [
+            "SchwartzMap",
+            "SchwartzMap.derivCLM",
+            "InnerProductSpace",
+            "CompleteSpace",
+        ],
+        "priority": "high",
+        "cues": [
+            "schwartz",
+            "schwartz space",
+            "l2",
+            "l^2",
+            "square integrable wavefunction",
+            "position-momentum model",
+            "real line wavefunction",
+        ],
+    },
+    "real_line_l2_position_momentum_instantiation": {
+        "id": "position_momentum.real_line_l2_instantiation",
+        "display": "Real-line L2 position/momentum instantiation",
+        "module": "PositionMomentumModels",
+        "semantics": [
+            "Mathlib Lp carrier for L2(R)",
+            "Schwartz-to-L2 continuous map",
+            "almost-everywhere embedding agreement",
+            "Schwartz range density obligation",
+            "coordinate multiplication position action",
+        ],
+        "mathlib": ["MeasureTheory.Lp", "SchwartzMap.toLpCLM", "volume", "DenseRange"],
+        "priority": "high",
+        "cues": [
+            "l2(r)",
+            "l²(r)",
+            "l2 real line",
+            "l² real line",
+            "lebesgue l2",
+            "real-line l2",
+            "real line l2",
+            "schwartz to l2",
+            "schwartz-to-l2",
+        ],
+    },
+    "hilbert_schmidt_operator": {
+        "id": "hilbert_operator.hilbert_schmidt",
+        "display": "Hilbert-Schmidt operator and norm surface",
+        "module": "HilbertSpace",
+        "semantics": [
+            "Hilbert-Schmidt norm",
+            "matrix trace inner product",
+            "square summability",
+        ],
+        "mathlib": ["HilbertBasis", "lp", "Matrix.trace", "ContinuousLinearMap"],
+        "priority": "medium",
+        "cues": [
+            "hilbert-schmidt",
+            "hilbert schmidt",
+            "trace",
+            "matrix inner product",
+            "square-summable",
+        ],
+    },
+    "dirac_transition_amplitude": {
+        "id": "dirac.transition_amplitude",
+        "display": "Dirac transition amplitude and probability surface",
+        "module": "HilbertSpace",
+        "semantics": ["bra-ket amplitude", "probability", "inner product", "Born rule"],
+        "mathlib": ["inner", "norm", "InnerProductSpace", "Complex"],
+        "priority": "high",
+        "cues": [
+            "transition amplitude",
+            "probability amplitude",
+            "rabi",
+            "braket",
+            "bra",
+            "ket",
+            "born rule",
+        ],
+    },
+    "dirac_expectation_value": {
+        "id": "dirac.expectation_value",
+        "display": "Dirac expectation value surface",
+        "module": "HilbertSpace",
+        "semantics": ["expectation value", "operator-applied state", "inner product"],
+        "mathlib": ["inner", "ContinuousLinearMap", "InnerProductSpace"],
+        "priority": "high",
+        "cues": [
+            "expectation value",
+            "expval",
+            "expected value",
+            "bra",
+            "hat",
+            "observable",
+        ],
+    },
+    "dirac_fluctuation_ket": {
+        "id": "dirac.fluctuation_ket",
+        "display": "Dirac fluctuation ket and variance surface",
+        "module": "HilbertSpace",
+        "semantics": ["fluctuation ket", "variance", "commutator", "Cauchy-Schwarz"],
+        "mathlib": ["inner", "norm", "ContinuousLinearMap", "InnerProductSpace"],
+        "priority": "high",
+        "cues": [
+            "fluctuation ket",
+            "heisenberg bound",
+            "uncertainty",
+            "sigma_x",
+            "sigma_p",
+            "cauchy-schwarz",
+        ],
+    },
+    "dirac_position_wavefunction": {
+        "id": "dirac.position_wavefunction",
+        "display": "Position wavefunction and resolution-of-identity surface",
+        "module": "HilbertSpace",
+        "semantics": [
+            "position basis",
+            "wavefunction",
+            "Born density",
+            "expectation integrand",
+        ],
+        "mathlib": ["Pi", "MeasureTheory", "inner", "Complex"],
+        "priority": "high",
+        "cues": [
+            "position wavefunction",
+            "resolution of identity",
+            "position expectation",
+            "delta",
+            "psi(x)",
+            "braket{x",
+        ],
+    },
+    "dirac_imaginary_part": {
+        "id": "dirac.imaginary_part_identity",
+        "display": "Dirac braket imaginary-part identity surface",
+        "module": "HilbertSpace",
+        "semantics": ["conjugate symmetry", "imaginary part", "braket quotient"],
+        "mathlib": ["inner", "star", "Complex.im", "InnerProductSpace"],
+        "priority": "high",
+        "cues": ["imaginary part", "im z", "braket{f|g}", "braket{g|f}", "2i"],
+    },
+    "commutator": {
+        "id": "commutator.algebra",
+        "display": "Algebraic commutator surface",
+        "module": "Operators",
+        "semantics": ["noncommutative multiplication", "difference"],
+        "mathlib": ["Algebra", "Matrix", "Commute"],
+        "priority": "medium",
+        "cues": ["commutator", "[", "]"],
+    },
+}
+
+CLASSIFICATION_ORDER = [
+    "gradient_divergence_curl",
+    "integral_or_limit",
+    "unit_bridge",
+    "physical_law",
+    "dirac_fluctuation_ket",
+    "dirac_position_wavefunction",
+    "dirac_imaginary_part",
+    "dirac_expectation_value",
+    "dirac_transition_amplitude",
+    "hilbert_schmidt_operator",
+    "real_line_l2_position_momentum_instantiation",
+    "schwartz_l2_position_momentum_model",
+    "unbounded_position_momentum",
+    "hilbert_operator_adjoint",
+    "hilbert_orthogonality_projection",
+    "hilbert_basis",
+    "basis_projection",
+    "vector_field",
+    "commutator",
+    "hilbert_space_inner_product",
+    "quantum_operator",
+    "boundary_or_regime_assumption",
+]
+
+
+def slug(text: str) -> str:
+    """Build a stable fallback object id."""
+    return re.sub(r"[^a-z0-9]+", ".", text.lower()).strip(".") or "unknown"
+
+
+def load_json(path: Path | None) -> dict[str, Any]:
+    """Load optional JSON."""
+    if path is None:
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def classify(text: str) -> str:
+    """Classify informal concept text into a foundation object class."""
+    lower = text.lower()
+    for object_class in CLASSIFICATION_ORDER:
+        profile = PROFILES[object_class]
+        if any(cue in lower for cue in profile["cues"]):
+            return object_class
+    return "boundary_or_regime_assumption"
+
+
+def build_object(
+    *, object_class: str, concept: str, source: str, examples: list[str]
+) -> dict[str, Any]:
+    """Build one canonical object packet item."""
+    profile = PROFILES.get(object_class, PROFILES["boundary_or_regime_assumption"])
+    return {
+        "object_id": profile.get("id", slug(concept)),
+        "object_class": object_class,
+        "display_name": profile["display"],
+        "source_concepts": [concept],
+        "source": source,
+        "physics_roles": [concept],
+        "required_semantics": profile["semantics"],
+        "mathlib_search_terms": profile["mathlib"],
+        "candidate_imports": [],
+        "foundation_module": profile["module"],
+        "source_examples": examples,
+        "priority": profile["priority"],
+        "state": "intake_normalized",
+    }
+
+
+def merge(objects: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge duplicate objects by canonical object id."""
+    merged: dict[str, dict[str, Any]] = {}
+    for item in objects:
+        key = str(item["object_id"])
+        if key not in merged:
+            merged[key] = item
+            continue
+        merged[key]["source_concepts"].extend(item.get("source_concepts", []))
+        merged[key]["physics_roles"].extend(item.get("physics_roles", []))
+        merged[key]["source_examples"] = sorted(
+            set(
+                merged[key].get("source_examples", []) + item.get("source_examples", [])
+            )
+        )
+    for item in merged.values():
+        item["source_concepts"] = sorted(set(item.get("source_concepts", [])))
+        item["physics_roles"] = sorted(set(item.get("physics_roles", [])))
+    return sorted(
+        merged.values(),
+        key=lambda item: (item["priority"] != "high", item["object_id"]),
+    )
+
+
+def concepts_from_file(path: Path | None) -> list[str]:
+    """Load concepts from JSON or newline text."""
+    if path is None:
+        return []
+    text = path.read_text(encoding="utf-8")
+    if path.suffix == ".json":
+        data = json.loads(text)
+        if isinstance(data, list):
+            return [str(item) for item in data]
+        return [str(item) for item in data.get("concepts", [])]
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def build_packet(
+    *, concepts: list[str], detected_packet: dict[str, Any], packet_id: str, source: str
+) -> dict[str, Any]:
+    """Build a normalized foundation object packet."""
+    objects: list[dict[str, Any]] = []
+    for concept in concepts:
+        objects.append(
+            build_object(
+                object_class=classify(concept),
+                concept=concept,
+                source=source,
+                examples=[],
+            )
+        )
+    for raw in detected_packet.get("objects", []):
+        if not isinstance(raw, dict):
+            continue
+        object_class = str(raw.get("object_class", classify(str(raw))))
+        concept = str(
+            raw.get("display_name") or raw.get("object_class") or object_class
+        )
+        examples = [str(item) for item in raw.get("source_examples", [])]
+        objects.append(
+            build_object(
+                object_class=object_class,
+                concept=concept,
+                source="detected_pathology",
+                examples=examples,
+            )
+        )
+    normalized = merge(objects)
+    return {
+        "style": "physics_foundation_object_packet",
+        "packet_id": packet_id,
+        "source": source,
+        "object_count": len(normalized),
+        "objects": normalized,
+        "terminal_state": "intake_complete" if normalized else "no_objects",
+    }
+
+
+def parse_args(
+    argv: Sequence[str] | None = None,
+    *,
+    prog: str | None = None,
+    namespace: argparse.Namespace | None = None,
+) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__, prog=prog)
+    parser.add_argument("--concept", action="append", default=[])
+    parser.add_argument("--concept-file", type=Path)
+    parser.add_argument("--detected-object-packet", type=Path)
+    parser.add_argument("--packet-id", default="physics_foundations_run")
+    parser.add_argument("--source", default="manual")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv, namespace=namespace)
+
+
+def portable_options(args: argparse.Namespace) -> dict[str, Any]:
+    """Expose argparse values as portable ports without changing CLI defaults."""
+    return {
+        key: str(value) if isinstance(value, Path) else value
+        for key, value in vars(args).items()
+    }
+
+
+def parse_options(
+    argv: Sequence[str] | None = None,
+    *,
+    prog: str | None = None,
+    namespace: argparse.Namespace | None = None,
+) -> dict[str, Any]:
+    return portable_options(parse_args(argv, prog=prog, namespace=namespace))
+
+
+def self_test_inputs() -> dict[str, Any]:
+    """The native self-test ignores supplied concepts and input files."""
+    return dict(
+        concepts=[
+            "real vector field on Euclidean 3-space",
+            "dimension-compatible equality",
+            "source-backed physical law witness",
+        ],
+        detected_packet={},
+        packet_id="self_test",
+        source="manual",
+    )
+
+
+def runtime_path(
+    value: str | None, working_directory: Path | None = None
+) -> Path | None:
+    if value is None:
+        return None
+    path = Path(value)
+    return working_directory / path if working_directory is not None else path
+
+
+def load_inputs(
+    args: dict[str, Any], working_directory: Path | None = None
+) -> dict[str, Any]:
+    """Preserve concept/file order and load the detected packet afterwards."""
+    return dict(
+        concepts=[
+            *args["concept"],
+            *concepts_from_file(runtime_path(args["concept_file"], working_directory)),
+        ],
+        detected_packet=load_json(
+            runtime_path(args["detected_object_packet"], working_directory)
+        ),
+        packet_id=args["packet_id"],
+        source=args["source"],
+    )
+
+
+def serialize_packet(args: dict[str, Any], packet: dict[str, Any]) -> str:
+    """Keep native assertions before serialization and any output effects."""
+    if args["self_test"]:
+        assert packet["object_count"] == 3
+        assert {item["object_id"] for item in packet["objects"]} >= {
+            "vector_field.real.euclidean3",
+            "unit_dimension.compatible",
+            "physical_law.witness",
+        }
+    return json.dumps(packet, ensure_ascii=False, indent=2)
+
+
+def emit_output(
+    args: dict[str, Any],
+    output: str,
+    working_directory: Path | None = None,
+    *,
+    before_write=None,
+) -> int:
+    """Native mkdir/write/print order; an adapter may guard the output write."""
+    path = runtime_path(args["output"], working_directory)
+    if path:
+        if before_write is not None:
+            before_write(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(output + "\n", encoding="utf-8")
+    if args["json"] or not path:
+        print(output)
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run foundation object intake through the same steps exposed by MCP."""
+    args = parse_options(argv)
+    intake = self_test_inputs() if args["self_test"] else load_inputs(args)
+    packet = build_packet(**intake)
+    return emit_output(args, serialize_packet(args, packet))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

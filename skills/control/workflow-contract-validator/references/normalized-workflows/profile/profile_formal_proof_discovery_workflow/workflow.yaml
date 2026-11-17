@@ -1,0 +1,500 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: profile_formal_proof_discovery_workflow
+version: 1.0.0
+kind: workflow
+description: 'Read-only native formal-proof profile dispatch: resolve identity, digest-check
+  descriptor, then return specification_only without scientific work.'
+aliases:
+- formal_proof_discovery
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  WorkflowIdentity:
+    schema:
+      type: string
+      enum:
+      - formal_proof_discovery
+      - profile_formal_proof_discovery_workflow
+  Flag:
+    schema:
+      type: boolean
+  ExtraArguments:
+    schema:
+      anyOf:
+      - type: array
+        items:
+          type: string
+      - type: 'null'
+  DispatchResult:
+    schema:
+      oneOf:
+      - type: object
+        properties:
+          schema_version:
+            const: 1
+          ok:
+            const: false
+          status:
+            const: specification_only
+          workflow_id:
+            const: profile_formal_proof_discovery_workflow
+          coverage:
+            type: string
+          message:
+            const: Read this contract with mathformer_show_workflow; no executable
+              native binding is declared.
+        required:
+        - schema_version
+        - ok
+        - status
+        - workflow_id
+        - coverage
+        - message
+        additionalProperties: false
+      - type: object
+        properties:
+          ok:
+            const: false
+          status:
+            const: workflow_unavailable
+          error:
+            type: string
+        required:
+        - ok
+        - status
+        - error
+        additionalProperties: false
+inputs:
+  workflow_id:
+    type: WorkflowIdentity
+  dry_run:
+    type: Flag
+  allow_mutating:
+    type: Flag
+  keep_going:
+    type: Flag
+  extra_args:
+    type: ExtraArguments
+outputs:
+  result:
+    type: DispatchResult
+    value:
+      ref: steps.dispatch.outputs.result
+operations:
+  dispatch:
+    inputs:
+      workflow_id:
+        type: WorkflowIdentity
+      dry_run:
+        type: Flag
+      allow_mutating:
+        type: Flag
+      keep_going:
+        type: Flag
+      extra_args:
+        type: ExtraArguments
+    outputs:
+      result:
+        type: DispatchResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_formal_proof_discovery_dispatch
+        operation: mathformer_formal_proof_discovery_dispatch
+flow:
+  kind: sequence
+  steps:
+  - id: dispatch
+    kind: call
+    operation: dispatch
+    arguments:
+      workflow_id:
+        ref: inputs.workflow_id
+      dry_run:
+        ref: inputs.dry_run
+      allow_mutating:
+        ref: inputs.allow_mutating
+      keep_going:
+        ref: inputs.keep_going
+      extra_args:
+        ref: inputs.extra_args
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      write: []
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - inspect_declared_contract
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 1
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Runnable inspection boundary only. Native ok=false/specification_only
+    or workflow_unavailable remains result data; transport acceptance establishes
+    no proof, scientific result, runtime qualification of the ERFL graph, or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: interface_only
+  sources:
+  - path: scripts/mcp_server.py
+    selector: mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: examples/reasoning_flows/formal_proof_discovery.rflow
+    selector: formal_proof_discovery
+    digest: sha256:f32c6decc733bedd012fa04fb40ccd830b37c98f3017a9fbb261cd84ec6e6270
+  - path: skills/REASONING_TYPES.yaml
+    selector: reasoning_styles/formal_proof_discovery
+    digest: sha256:dcc2048dd94666d792aa70655e8ddcbe92feb420ef6a06c7ce8b4ce1617160a5
+  - path: scripts/workflow_catalog.py
+    selector: resolve_workflow; descriptor_text
+    digest: sha256:0aaeb77013e2e299cfaab4687084101ec815c25a49bcc4fa1286237c0977330a
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: declarative_interface; profile generation
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: plugins/mathformer/skills/workflow-profile-formal-proof-discovery-workflow/SKILL.md
+    selector: declarative inspection boundary
+    digest: sha256:31dea954c8e599f8095b54a84ceb68b7c2eeaf774d27dec5a8278a9be4744061
+  - path: tests/mcp/fixtures/formal_proof_dispatch_original.py.txt
+    selector: frozen original mathformer_run_workflow
+    digest: sha256:33eb85bf74ceddb15621fa82b37dde2a2d167d72ca12e38ef9fae1a0d0140933
+  - path: scripts/mathformer.py
+    selector: audit_pack_sources helper registration
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/mcp/run_formal_proof_dispatch_workflow_tests.py
+    selector: native equivalence and real MCP/Lunar/PRISM tests
+    digest: sha256:67a3a540636181becaf52dd22d6afac535ad77804a0342fa0d91963f4495110b
+  gaps:
+  - Only the authoritative dispatcher is callable. The ERFL dependency graph remains
+    declarative and is retained in mathformer.declarative_profile.
+  - No model/provider or proof compiler boundary exists in this profile. No scientific
+    operation, backend schedule, retry or repair loop is invented.
+  - The theorem_context port belongs to the declarative profile and is not consumed
+    by native dispatch. Runtime ports preserve all actual dispatcher arguments.
+  - Native dispatcher returns no proof_status, proof evidence or scientific receipt;
+    Lunar receipts describe only the single inspection call.
+  - The retained 3600-second and one-call limits bound the inspection adapter, not
+    proof search.
+extensions:
+  mathformer.source:
+    category: profile
+    native_id: formal_proof_discovery
+    owner_skill: skills/control/reasoning-flow-language/SKILL.md
+    contract:
+      id: formal_proof_discovery
+      goal: Derive a conclusion and retain authoritative formal proof evidence.
+      trust_transition:
+        from: formal_claim_candidate
+        to: proof_checked_artifact_or_search_failure
+  mathformer.native_boundary:
+    binding_declared: true
+    runtime_qualified: false
+    dispatch_order:
+    - Resolve canonical ID or alias.
+    - Read catalog-selected descriptor and verify its SHA-256 digest.
+    - Because category is profile, immediately return specification_only.
+    resolution_or_read_failure:
+      ok: false
+      status: workflow_unavailable
+      error: Exception text from OSError or ValueError.
+    profile_return:
+      schema_version: 1
+      ok: false
+      status: specification_only
+      workflow_id: profile_formal_proof_discovery_workflow
+      coverage: interface_only
+      message: Read this contract with mathformer_show_workflow; no executable native
+        binding is declared.
+    proof_status_is_not_dispatch_status: true
+    search_resource:
+      id: search0
+      connection: file
+      target: MathformerKB
+      consumer: q
+    no_runtime_schedule_defined: true
+    runtime_scope: Single read-only dispatcher call; scientific profile remains unavailable.
+  mathformer.declarative_profile:
+    types:
+      Context:
+        schema:
+          type: string
+          minLength: 1
+          description: Opaque ERFL Context dependency handle; no scientific payload
+            schema is declared.
+      Model:
+        schema:
+          type: string
+          minLength: 1
+          description: Opaque ERFL Model dependency handle; no scientific payload
+            schema is declared.
+      Bundle:
+        schema:
+          type: string
+          minLength: 1
+          description: Opaque ERFL Bundle dependency handle; no scientific payload
+            schema is declared.
+      Claim:
+        schema:
+          type: string
+          minLength: 1
+          description: Opaque ERFL Claim dependency handle; no scientific payload
+            schema is declared.
+      Evidence:
+        schema:
+          type: string
+          minLength: 1
+          description: Opaque ERFL Evidence dependency handle; no scientific payload
+            schema is declared.
+      Assessment:
+        schema:
+          type: string
+          minLength: 1
+          description: Opaque ERFL Assessment dependency handle; no scientific payload
+            schema is declared.
+      Decision:
+        schema:
+          type: string
+          enum:
+          - proof_checked
+          - repair_required
+          - blocked
+          description: Symbolic projection of the three declared e terminal decisions;
+            independent of dispatcher status.
+    inputs:
+      theorem_context:
+        type: Context
+    outputs:
+      proof_status:
+        type: Decision
+        value:
+          ref: flow.outputs.proof_status
+    operations:
+      model_context:
+        inputs:
+          theorem_context:
+            type: Context
+        outputs:
+          semantic_model:
+            type: Model
+        execution:
+          mode: specification_only
+          reason: formal_proof_discovery.rflow m:M; modeling adapter unavailable.
+      retrieve_and_route:
+        inputs:
+          semantic_model:
+            type: Model
+        outputs:
+          premises:
+            type: Bundle
+          route:
+            type: Claim
+        execution:
+          mode: specification_only
+          reason: formal_proof_discovery.rflow (q:Q & a:A), search0=MathformerKB;
+            dependency join only; adapters unavailable.
+      construct_candidate:
+        inputs:
+          premises:
+            type: Bundle
+          route:
+            type: Claim
+        outputs:
+          proof_candidate:
+            type: Bundle
+        execution:
+          mode: specification_only
+          reason: formal_proof_discovery.rflow f:F; construction adapter unavailable.
+      derive_claim:
+        inputs:
+          proof_candidate:
+            type: Bundle
+          premises:
+            type: Bundle
+        outputs:
+          claim:
+            type: Claim
+        execution:
+          mode: specification_only
+          reason: formal_proof_discovery.rflow d:D; derivation adapter unavailable.
+      check_claim:
+        inputs:
+          claim:
+            type: Claim
+        outputs:
+          checker_evidence:
+            type: Evidence
+        execution:
+          mode: specification_only
+          reason: formal_proof_discovery.rflow p:P; checker adapter unavailable.
+      assess_claim:
+        inputs:
+          claim:
+            type: Claim
+          checker_evidence:
+            type: Evidence
+        outputs:
+          assessment:
+            type: Assessment
+        execution:
+          mode: specification_only
+          reason: formal_proof_discovery.rflow r:R; critical assessment adapter unavailable.
+      calibrate:
+        inputs:
+          claim:
+            type: Claim
+          assessment:
+            type: Assessment
+        outputs:
+          proof_status:
+            type: Decision
+        execution:
+          mode: specification_only
+          reason: formal_proof_discovery.rflow e:E; calibration adapter unavailable.
+      accept:
+        inputs:
+          proof_status:
+            type: Decision
+        outputs: {}
+        execution:
+          mode: specification_only
+          reason: formal_proof_discovery.rflow on e.proof_checked => accept; terminal
+            semantics only, no adapter.
+      stop:
+        inputs:
+          proof_status:
+            type: Decision
+        outputs: {}
+        execution:
+          mode: specification_only
+          reason: formal_proof_discovery.rflow on e.repair_required or e.blocked =>
+            stop; no repair continuation or adapter.
+    flow:
+      kind: sequence
+      description: ERFL dependency ordering only. The grouped q/a operation leaves
+        their internal schedule unspecified.
+      steps:
+      - id: model
+        kind: call
+        operation: model_context
+        arguments:
+          theorem_context:
+            ref: inputs.theorem_context
+      - id: join
+        kind: call
+        operation: retrieve_and_route
+        arguments:
+          semantic_model:
+            ref: steps.model.outputs.semantic_model
+      - id: construct
+        kind: call
+        operation: construct_candidate
+        arguments:
+          premises:
+            ref: steps.join.outputs.premises
+          route:
+            ref: steps.join.outputs.route
+      - id: derive
+        kind: call
+        operation: derive_claim
+        arguments:
+          proof_candidate:
+            ref: steps.construct.outputs.proof_candidate
+          premises:
+            ref: steps.join.outputs.premises
+      - id: check
+        kind: call
+        operation: check_claim
+        arguments:
+          claim:
+            ref: steps.derive.outputs.claim
+      - id: assess
+        kind: call
+        operation: assess_claim
+        arguments:
+          claim:
+            ref: steps.derive.outputs.claim
+          checker_evidence:
+            ref: steps.check.outputs.checker_evidence
+      - id: calibrate
+        kind: call
+        operation: calibrate
+        arguments:
+          claim:
+            ref: steps.derive.outputs.claim
+          assessment:
+            ref: steps.assess.outputs.assessment
+      - id: terminal
+        kind: switch
+        description: Terminal accept/stop only; no downstream work or back edge.
+        cases:
+        - id: proof_checked
+          when:
+            eq:
+            - ref: steps.calibrate.outputs.proof_status
+            - literal: proof_checked
+          body:
+            kind: call
+            operation: accept
+            arguments:
+              proof_status:
+                ref: steps.calibrate.outputs.proof_status
+        - id: repair_required
+          when:
+            eq:
+            - ref: steps.calibrate.outputs.proof_status
+            - literal: repair_required
+          body:
+            kind: call
+            operation: stop
+            arguments:
+              proof_status:
+                ref: steps.calibrate.outputs.proof_status
+        default:
+          kind: call
+          description: Remaining Decision value is blocked; stop.
+          operation: stop
+          arguments:
+            proof_status:
+              ref: steps.calibrate.outputs.proof_status
+        outputs: {}
+      outputs:
+        proof_status:
+          type: Decision
+          value:
+            ref: steps.calibrate.outputs.proof_status
+    executable: false
+    description: ERFL dependency projection retained for inspection only; these nodes
+      are not runtime steps.
+# REUSE-IgnoreEnd

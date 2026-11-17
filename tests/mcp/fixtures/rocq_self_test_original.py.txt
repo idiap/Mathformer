@@ -1,0 +1,990 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Give Mathformer a concrete Rocq autoformalization backend that can be tested before it is wired into larger workflows.
+#
+# Intent:
+#   Convert controlled informal/LaTeX theorem cases into complete Rocq `.v` proof scripts with explicit validation evidence.
+#
+# Function:
+#   Defines case templates, source extraction helpers, structural proof checks, batch drafting, and optional compiler execution.
+#
+# Maintenance Notes:
+#   Add new deterministic cases by extending `CASE_TEMPLATES`, and keep generated proof scripts placeholder-free.
+
+"""Deterministic Rocq autoformalization and validation utilities.
+
+This module intentionally starts with the controlled Wikipedia-level theorem
+suite already used by the Lean, Isabelle, and SymPy smoke paths.  The backend is
+"full" in the local Mathformer sense: it can read source fixtures, emit complete
+Rocq proof scripts, validate the generated proof-artifact contract, and run a
+real Rocq compiler when one is available.
+"""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import time
+from typing import Any, Dict, List, Optional, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_MANIFEST = REPO_ROOT / "tests" / "latex" / "wiki_level" / "manifest.json"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "backends" / "rocq" / "MathformerRocq"
+ROCQ_STYLE = "stdlib_direct"
+PLACEHOLDER_RE = re.compile(r"\b(?:Admitted|admit|Axiom|Parameter|Abort|Fail)\b")
+
+
+@dataclass(frozen=True)
+class RocqCase:
+    """Describe one deterministic Rocq autoformalization template.
+
+    Motivation:
+        Keep the generated Rocq artifacts source-aware and reproducible.
+
+    Intent:
+        Store all backend-facing facts needed to draft, name, and validate one theorem case.
+
+    Inputs:
+        Instances are built from static template data and, optionally, source LaTeX metadata.
+
+    Outputs:
+        The fields drive `.v` rendering, reports, and structural validation.
+    """
+
+    case_id: str
+    file_name: str
+    theorem_name: str
+    title: str
+    imports: Sequence[str]
+    definitions: Sequence[str]
+    theorem_statement: str
+    proof: str
+    concepts: Sequence[str]
+    source_summary: str
+
+
+DEFAULT_CASE_ORDER = [
+    "wiki_contrapositive",
+    "wiki_injective_composition",
+    "wiki_monotone_composition",
+    "wiki_set_inter_union_distrib",
+    "wiki_sum_first_odd_numbers",
+]
+
+
+CASE_TEMPLATES: Dict[str, RocqCase] = {
+    "wiki_contrapositive": RocqCase(
+        case_id="wiki_contrapositive",
+        file_name="AutoformalizedWikiContrapositive.v",
+        theorem_name="wiki_contrapositive",
+        title="Contrapositive",
+        imports=(),
+        definitions=(),
+        theorem_statement=(
+            "Theorem wiki_contrapositive :\n"
+            "  forall P Q : Prop, (P -> Q) -> ~ Q -> ~ P."
+        ),
+        proof=(
+            "Proof.\n"
+            "  intros P Q hpq hnq hp.\n"
+            "  apply hnq.\n"
+            "  apply hpq.\n"
+            "  exact hp.\n"
+            "Qed."
+        ),
+        concepts=("proposition", "implication", "negation", "contradiction"),
+        source_summary="If P implies Q and Q is false, then P is false.",
+    ),
+    "wiki_injective_composition": RocqCase(
+        case_id="wiki_injective_composition",
+        file_name="AutoformalizedWikiInjectiveComposition.v",
+        theorem_name="wiki_injective_comp",
+        title="Composition Of Injective Functions",
+        imports=(),
+        definitions=(
+            "Definition Injective {A B : Type} (f : A -> B) : Prop :=\n"
+            "  forall x y : A, f x = f y -> x = y.",
+        ),
+        theorem_statement=(
+            "Theorem wiki_injective_comp :\n"
+            "  forall (A B C : Type) (f : A -> B) (g : B -> C),\n"
+            "    Injective f -> Injective g -> Injective (fun x => g (f x))."
+        ),
+        proof=(
+            "Proof.\n"
+            "  unfold Injective.\n"
+            "  intros A B C f g hf hg x y hxy.\n"
+            "  apply hf.\n"
+            "  apply hg.\n"
+            "  exact hxy.\n"
+            "Qed."
+        ),
+        concepts=("function", "composition", "injective", "type_variables"),
+        source_summary="The composite of two injective functions is injective.",
+    ),
+    "wiki_monotone_composition": RocqCase(
+        case_id="wiki_monotone_composition",
+        file_name="AutoformalizedWikiMonotoneComposition.v",
+        theorem_name="wiki_monotone_comp",
+        title="Composition Of Monotone Functions",
+        imports=(),
+        definitions=(
+            "Definition Monotone {A B : Type}\n"
+            "    (leA : A -> A -> Prop) (leB : B -> B -> Prop)\n"
+            "    (f : A -> B) : Prop :=\n"
+            "  forall x y : A, leA x y -> leB (f x) (f y).",
+        ),
+        theorem_statement=(
+            "Theorem wiki_monotone_comp :\n"
+            "  forall (A B C : Type)\n"
+            "    (leA : A -> A -> Prop) (leB : B -> B -> Prop) (leC : C -> C -> Prop)\n"
+            "    (f : A -> B) (g : B -> C),\n"
+            "    Monotone leA leB f -> Monotone leB leC g ->\n"
+            "    Monotone leA leC (fun x => g (f x))."
+        ),
+        proof=(
+            "Proof.\n"
+            "  unfold Monotone.\n"
+            "  intros A B C leA leB leC f g hf hg x y hxy.\n"
+            "  apply hg.\n"
+            "  apply hf.\n"
+            "  exact hxy.\n"
+            "Qed."
+        ),
+        concepts=("preorder", "monotone", "composition", "order_relation"),
+        source_summary="The composite of monotone functions is monotone.",
+    ),
+    "wiki_set_inter_union_distrib": RocqCase(
+        case_id="wiki_set_inter_union_distrib",
+        file_name="AutoformalizedWikiSetInterUnionDistrib.v",
+        theorem_name="wiki_set_inter_union_distrib",
+        title="Intersection Distributes Over Union",
+        imports=(),
+        definitions=(
+            "Definition Same_set {U : Type} (X Y : U -> Prop) : Prop :=\n"
+            "  forall x : U, X x <-> Y x.",
+        ),
+        theorem_statement=(
+            "Theorem wiki_set_inter_union_distrib :\n"
+            "  forall (U : Type) (A B C : U -> Prop),\n"
+            "    Same_set\n"
+            "      (fun x => A x /\\ (B x \\/ C x))\n"
+            "      (fun x => (A x /\\ B x) \\/ (A x /\\ C x))."
+        ),
+        proof=(
+            "Proof.\n"
+            "  intros U A B C.\n"
+            "  unfold Same_set.\n"
+            "  intro x.\n"
+            "  split.\n"
+            "  - intros [ha [hb | hc]].\n"
+            "    + left. split; assumption.\n"
+            "    + right. split; assumption.\n"
+            "  - intros [[ha hb] | [ha hc]].\n"
+            "    + split; [assumption | left; assumption].\n"
+            "    + split; [assumption | right; assumption].\n"
+            "Qed."
+        ),
+        concepts=("set", "intersection", "union", "extensionality", "case_split"),
+        source_summary="Set intersection distributes over set union.",
+    ),
+    "wiki_sum_first_odd_numbers": RocqCase(
+        case_id="wiki_sum_first_odd_numbers",
+        file_name="AutoformalizedWikiSumFirstOddNumbers.v",
+        theorem_name="wiki_sum_first_odd_numbers",
+        title="Sum Of The First Odd Numbers",
+        imports=("From Stdlib Require Import Arith Lia.",),
+        definitions=(
+            "Fixpoint sum_first_odds (n : nat) : nat :=\n"
+            "  match n with\n"
+            "  | 0 => 0\n"
+            "  | S k => sum_first_odds k + (2 * k + 1)\n"
+            "  end.",
+        ),
+        theorem_statement=(
+            "Theorem wiki_sum_first_odd_numbers :\n"
+            "  forall n : nat, sum_first_odds n = n * n."
+        ),
+        proof=(
+            "Proof.\n"
+            "  intro n.\n"
+            "  induction n as [| n ih].\n"
+            "  - reflexivity.\n"
+            "  - simpl.\n"
+            "    rewrite ih.\n"
+            "    lia.\n"
+            "Qed."
+        ),
+        concepts=(
+            "natural_number",
+            "finite_sum",
+            "induction",
+            "arithmetic_normalization",
+        ),
+        source_summary="The sum of the first n odd numbers is n squared.",
+    ),
+}
+
+
+def utc_now() -> str:
+    """Return the current UTC timestamp used in generated reports.
+
+    Motivation:
+        Make reports comparable across scripts without duplicating timestamp logic.
+
+    Intent:
+        Provide one stable ISO-8601 timestamp shape for Rocq backend artifacts.
+
+    Inputs:
+        No caller input is required.
+
+    Outputs:
+        Returns a timezone-aware UTC timestamp string.
+    """
+
+    return datetime.now(timezone.utc).isoformat()
+
+
+def rel(path: Path) -> str:
+    """Return a repository-relative path when possible.
+
+    Motivation:
+        Keep JSON reports readable and reproducible across machines.
+
+    Intent:
+        Avoid embedding absolute paths unless the file is outside the repository.
+
+    Inputs:
+        `path` is the file or directory path to render.
+
+    Outputs:
+        Returns a POSIX-style relative path or the original absolute path string.
+    """
+
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def sanitize_comment_text(text: str) -> str:
+    """Make source text safe for Rocq block comments.
+
+    Motivation:
+        Generated files preserve source prose, but source text must not close a Rocq comment accidentally.
+
+    Intent:
+        Normalize whitespace and neutralize the `*)` delimiter inside comments.
+
+    Inputs:
+        `text` is prose or LaTeX extracted from a fixture.
+
+    Outputs:
+        Returns a compact single-line comment payload.
+    """
+
+    normalized = re.sub(r"\s+", " ", text).strip()
+    return normalized.replace("*)", "* )")
+
+
+def strip_latex_comments(text: str) -> str:
+    """Remove simple LaTeX comments before environment extraction.
+
+    Motivation:
+        Controlled fixtures use metadata comments that should not be treated as theorem prose.
+
+    Intent:
+        Keep source parsing deterministic without pulling in a full TeX parser.
+
+    Inputs:
+        `text` is the raw LaTeX source.
+
+    Outputs:
+        Returns source text with unescaped percent-comment suffixes removed.
+    """
+
+    return re.sub(r"(?<!\\)%.*", "", text)
+
+
+def extract_latex_metadata(text: str) -> Dict[str, str]:
+    """Extract Mathformer `% key: value` metadata from a LaTeX fixture.
+
+    Motivation:
+        The Rocq drafter should reject accidental case/source mismatches.
+
+    Intent:
+        Mirror the metadata extraction used by the existing Isabelle smoke path.
+
+    Inputs:
+        `text` is the raw LaTeX fixture.
+
+    Outputs:
+        Returns a dictionary of metadata keys and values.
+    """
+
+    ignored_keys = {
+        "SPDX-FileContributor",
+        "SPDX-FileCopyrightText",
+        "SPDX-License-Identifier",
+        "File Documentation",
+        "Motivation",
+        "Intent",
+        "Function",
+        "Maintenance Notes",
+    }
+    metadata: Dict[str, str] = {}
+    for raw in text.splitlines():
+        match = re.match(r"^\s*%\s*([A-Za-z0-9_-]+):\s*(.*?)\s*$", raw)
+        if match and match.group(1) not in ignored_keys:
+            metadata[match.group(1)] = match.group(2)
+    return metadata
+
+
+def extract_latex_environment(text: str, name: str) -> str:
+    """Extract the first named LaTeX environment body.
+
+    Motivation:
+        Source-aware comments should quote the fixture theorem/proof, not a hand-written duplicate.
+
+    Intent:
+        Support the controlled theorem and proof environments used by the wiki-level suite.
+
+    Inputs:
+        `text` is raw LaTeX and `name` is the environment name.
+
+    Outputs:
+        Returns a whitespace-normalized body, or an empty string if absent.
+    """
+
+    match = re.search(
+        rf"\\begin\{{{re.escape(name)}\}}(?:\[[^\]]*\])?(.*?)\\end\{{{re.escape(name)}\}}",
+        strip_latex_comments(text),
+        flags=re.DOTALL,
+    )
+    if not match:
+        return ""
+    return re.sub(r"\s+", " ", match.group(1)).strip()
+
+
+def load_manifest(path: Path = DEFAULT_MANIFEST) -> Dict[str, Any]:
+    """Load the controlled-case manifest.
+
+    Motivation:
+        Batch drafting should use the same case list as the other backend smoke paths.
+
+    Intent:
+        Read and parse the JSON manifest once at the backend boundary.
+
+    Inputs:
+        `path` points to a Mathformer manifest JSON file.
+
+    Outputs:
+        Returns the parsed manifest dictionary.
+    """
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def case_from_id(case_id: str) -> RocqCase:
+    """Return the static Rocq template for a case id.
+
+    Motivation:
+        Keep unsupported case failures explicit and close to user input.
+
+    Intent:
+        Provide a narrow lookup boundary around `CASE_TEMPLATES`.
+
+    Inputs:
+        `case_id` is the manifest or CLI case identifier.
+
+    Outputs:
+        Returns the matching `RocqCase`.
+    """
+
+    try:
+        return CASE_TEMPLATES[case_id]
+    except KeyError as exc:
+        supported = ", ".join(sorted(CASE_TEMPLATES))
+        raise ValueError(
+            f"Unsupported Rocq case id {case_id!r}. Supported cases: {supported}"
+        ) from exc
+
+
+def render_rocq_file(
+    case: RocqCase,
+    *,
+    theorem_source: str = "",
+    proof_source: str = "",
+    metadata: Optional[Dict[str, str]] = None,
+) -> str:
+    """Render a complete Rocq proof script for one case.
+
+    Motivation:
+        Generated `.v` files should be human-reviewable, source-aware, and directly compiler-facing.
+
+    Intent:
+        Combine the standard repository header, source commentary, imports, definitions, theorem, and proof.
+
+    Inputs:
+        `case` supplies the formal template; source fields enrich comments and reports.
+
+    Outputs:
+        Returns Rocq vernacular text ready to write to disk.
+    """
+
+    metadata = metadata or {}
+    concepts = ", ".join(case.concepts)
+    theorem_comment = sanitize_comment_text(theorem_source or case.source_summary)
+    proof_comment = sanitize_comment_text(
+        proof_source or "The proof follows the direct textbook argument."
+    )
+    expected_lean = metadata.get("expected-lean-name", "n/a")
+    blocks: List[str] = [
+        "(*",
+        "# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>",
+        "#",
+        "# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>",
+        "# Neuro-symbolic AI Group",
+        "#",
+        # REUSE-IgnoreStart
+        "# SPDX-License-Identifier: MIT",
+        # REUSE-IgnoreEnd
+        "*)",
+        "",
+        "(*",
+        "File Documentation",
+        "",
+        "Motivation:",
+        "  Provide a complete Rocq proof artifact for a controlled Mathformer autoformalization case.",
+        "",
+        "Intent:",
+        "  Preserve the source theorem while expressing the statement and proof in Rocq vernacular.",
+        "",
+        "Function:",
+        "  Defines any minimal local concepts required by the case, states the theorem, and proves it without placeholders.",
+        "",
+        "Maintenance Notes:",
+        "  Regenerate with `scripts/run_rocq_autoformalization.py` after template or fixture changes.",
+        "*)",
+        "",
+        "(*",
+        f"Mathformer Rocq autoformalization: {case.title}",
+        f"Case id: {case.case_id}",
+        f"Concepts: {concepts}",
+        f"Related Lean target: {expected_lean}",
+        f"Source theorem: {theorem_comment}",
+        f"Source proof idea: {proof_comment}",
+        "Generated note: this file is deterministic and intentionally uses only",
+        "small local definitions plus the Rocq standard library when arithmetic",
+        "automation is needed.",
+        "*)",
+        "",
+    ]
+    blocks.extend(case.imports)
+    if case.imports:
+        blocks.append("")
+    blocks.extend(case.definitions)
+    if case.definitions:
+        blocks.append("")
+    blocks.append(case.theorem_statement)
+    blocks.append(case.proof)
+    return "\n".join(blocks).rstrip() + "\n"
+
+
+def output_path_for_case(case: RocqCase, output_dir: Path) -> Path:
+    """Return the conventional output path for one Rocq case.
+
+    Motivation:
+        Keep script, test, and committed example paths aligned.
+
+    Intent:
+        Centralize filename selection from the case template.
+
+    Inputs:
+        `case` is the template and `output_dir` is the target directory.
+
+    Outputs:
+        Returns the `.v` path for the case.
+    """
+
+    return output_dir / case.file_name
+
+
+def draft_case(
+    *,
+    latex_file: Path,
+    case_id: str,
+    output_file: Path,
+    style: str = ROCQ_STYLE,
+) -> Dict[str, Any]:
+    """Draft one source-aware Rocq proof script.
+
+    Motivation:
+        Let skills and tests generate the same file format through one deterministic operation.
+
+    Intent:
+        Read a controlled source fixture, render the matching Rocq template, write it, and report evidence.
+
+    Inputs:
+        `latex_file` is the source fixture, `case_id` selects the template, and `output_file` is the `.v` target.
+
+    Outputs:
+        Returns a JSON-serializable draft report.
+    """
+
+    if style != ROCQ_STYLE:
+        raise ValueError(f"Unsupported Rocq style: {style}. Expected {ROCQ_STYLE}.")
+    source_text = latex_file.read_text(encoding="utf-8")
+    metadata = extract_latex_metadata(source_text)
+    source_case_id = metadata.get("mathformer-case-id")
+    if source_case_id and source_case_id != case_id:
+        raise ValueError(
+            f"Case id mismatch: requested {case_id}, source has {source_case_id}"
+        )
+    theorem_source = extract_latex_environment(source_text, "theorem")
+    proof_source = extract_latex_environment(source_text, "proof")
+    if not theorem_source:
+        theorem_source = case_from_id(case_id).source_summary
+    case = case_from_id(case_id)
+    rendered = render_rocq_file(
+        case,
+        theorem_source=theorem_source,
+        proof_source=proof_source,
+        metadata=metadata,
+    )
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(rendered, encoding="utf-8")
+    validation = validate_rocq_text(rendered, expected_theorem=case.theorem_name)
+    return {
+        "schema_version": 1,
+        "skill": "rocq-autoformalization-drafter",
+        "hook_id": "draft.rocq_initial",
+        "generated_at_utc": utc_now(),
+        "case_id": case_id,
+        "style": style,
+        "latex_file": rel(latex_file),
+        "output_file": rel(output_file),
+        "theorem_name": case.theorem_name,
+        "metadata": metadata,
+        "line_count": len(rendered.splitlines()),
+        "validation": validation,
+        "ok": bool(validation["ok"]),
+        "status": "drafted",
+    }
+
+
+def manifest_cases(
+    manifest: Dict[str, Any], selected_case_ids: Optional[Sequence[str]] = None
+) -> List[Dict[str, Any]]:
+    """Return manifest case dictionaries in deterministic Rocq generation order.
+
+    Motivation:
+        Batch output should remain stable as manifest files evolve.
+
+    Intent:
+        Respect explicit selections while defaulting to `DEFAULT_CASE_ORDER`.
+
+    Inputs:
+        `manifest` is the parsed JSON manifest and `selected_case_ids` optionally narrows the batch.
+
+    Outputs:
+        Returns manifest case dictionaries for supported Rocq cases.
+    """
+
+    by_id = {
+        case["id"]: case
+        for case in manifest.get("cases", [])
+        if isinstance(case, dict) and "id" in case
+    }
+    requested = list(selected_case_ids or DEFAULT_CASE_ORDER)
+    missing = [case_id for case_id in requested if case_id not in by_id]
+    if missing:
+        raise ValueError(
+            f"Manifest does not contain requested Rocq case ids: {', '.join(missing)}"
+        )
+    return [by_id[case_id] for case_id in requested]
+
+
+def draft_manifest(
+    *,
+    manifest_file: Path = DEFAULT_MANIFEST,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    case_ids: Optional[Sequence[str]] = None,
+    style: str = ROCQ_STYLE,
+) -> Dict[str, Any]:
+    """Draft all selected Rocq cases from a manifest.
+
+    Motivation:
+        Give users one command that produces a complete backend corpus for the controlled suite.
+
+    Intent:
+        Iterate through manifest cases, write `.v` files, and aggregate per-case reports.
+
+    Inputs:
+        `manifest_file` names the source suite, `output_dir` receives files, and `case_ids` optionally narrows the run.
+
+    Outputs:
+        Returns a JSON-serializable suite report.
+    """
+
+    manifest = load_manifest(manifest_file)
+    selected = manifest_cases(manifest, case_ids)
+    reports: List[Dict[str, Any]] = []
+    for manifest_case in selected:
+        case = case_from_id(str(manifest_case["id"]))
+        latex_file = REPO_ROOT / str(manifest_case["latex_file"])
+        reports.append(
+            draft_case(
+                latex_file=latex_file,
+                case_id=case.case_id,
+                output_file=output_path_for_case(case, output_dir),
+                style=style,
+            )
+        )
+    return {
+        "schema_version": 1,
+        "skill": "rocq-autoformalization-drafter",
+        "hook_id": "draft.rocq_suite",
+        "generated_at_utc": utc_now(),
+        "manifest_file": rel(manifest_file),
+        "output_dir": rel(output_dir),
+        "style": style,
+        "case_count": len(reports),
+        "reports": reports,
+        "ok": all(report.get("ok") for report in reports),
+    }
+
+
+def validate_rocq_text(
+    text: str, *, expected_theorem: Optional[str] = None
+) -> Dict[str, Any]:
+    """Validate the local Rocq proof-artifact contract without invoking Rocq.
+
+    Motivation:
+        CI and development machines may not have Rocq installed, but generated files can still be checked for realness.
+
+    Intent:
+        Reject placeholders, missing theorem/proof boundaries, and malformed generated headers before external execution.
+
+    Inputs:
+        `text` is a Rocq script and `expected_theorem` optionally names the theorem that must appear.
+
+    Outputs:
+        Returns a JSON-serializable validation report.
+    """
+
+    theorem_names = re.findall(
+        r"(?m)^\s*(?:Theorem|Lemma|Corollary|Proposition)\s+([A-Za-z_][A-Za-z0-9_']*)\b",
+        text,
+    )
+    placeholder_markers = sorted(set(PLACEHOLDER_RE.findall(text)))
+    proof_count = len(re.findall(r"(?m)^\s*Proof\.", text))
+    qed_count = len(re.findall(r"(?m)^\s*Qed\.", text))
+    has_expected = (
+        expected_theorem in theorem_names if expected_theorem else bool(theorem_names)
+    )
+    checks = {
+        # REUSE-IgnoreStart
+        "has_spdx_header": "SPDX-License-Identifier: MIT" in text,
+        # REUSE-IgnoreEnd
+        "has_file_documentation": "File Documentation" in text,
+        "has_theorem": bool(theorem_names),
+        "has_expected_theorem": has_expected,
+        "has_proof": proof_count > 0,
+        "proof_qed_balanced": proof_count == qed_count and proof_count > 0,
+        "placeholder_free": not placeholder_markers,
+        "has_source_comment": "Source theorem:" in text,
+    }
+    return {
+        "schema_version": 1,
+        "backend": "rocq",
+        "style": ROCQ_STYLE,
+        "theorem_names": theorem_names,
+        "expected_theorem": expected_theorem,
+        "proof_count": proof_count,
+        "qed_count": qed_count,
+        "placeholder_markers": placeholder_markers,
+        "checks": checks,
+        "ok": all(checks.values()),
+    }
+
+
+def validate_file(
+    path: Path, *, expected_theorem: Optional[str] = None
+) -> Dict[str, Any]:
+    """Validate a Rocq file structurally.
+
+    Motivation:
+        Scripts and tests need a small reusable file-level validation entry point.
+
+    Intent:
+        Read a `.v` file and attach path metadata to `validate_rocq_text`.
+
+    Inputs:
+        `path` points to a Rocq source file.
+
+    Outputs:
+        Returns a validation report with file metadata.
+    """
+
+    text = path.read_text(encoding="utf-8")
+    report = validate_rocq_text(text, expected_theorem=expected_theorem)
+    report.update({"file": rel(path), "line_count": len(text.splitlines())})
+    return report
+
+
+def find_rocq_compiler(explicit: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Locate a Rocq compiler command.
+
+    Motivation:
+        Rocq has a new `rocq compile` interface while many systems still expose `coqc`.
+
+    Intent:
+        Prefer the modern Rocq command and retain a compatibility fallback for existing Coq installations.
+
+    Inputs:
+        `explicit` may point to either a `rocq` or `coqc` executable.
+
+    Outputs:
+        Returns compiler metadata or `None` when no compiler is available.
+    """
+
+    candidates: List[Path] = []
+    if explicit is not None:
+        candidates.append(explicit)
+    for name in ("rocq", "coqc"):
+        found = shutil.which(name)
+        if found:
+            candidates.append(Path(found))
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        name = candidate.name
+        if name == "rocq":
+            return {
+                "kind": "rocq",
+                "path": str(candidate),
+                "prefix": [str(candidate), "compile"],
+            }
+        return {"kind": "coqc", "path": str(candidate), "prefix": [str(candidate)]}
+    return None
+
+
+def run_external_check(
+    file_path: Path,
+    *,
+    compiler_bin: Optional[Path] = None,
+    timeout_sec: int = 120,
+) -> Dict[str, Any]:
+    """Run `rocq compile` or `coqc` on a generated file when available.
+
+    Motivation:
+        Structural validation is useful, but a real proof assistant check is stronger when the toolchain exists.
+
+    Intent:
+        Execute the located compiler and capture stdout, stderr, duration, and return status.
+
+    Inputs:
+        `file_path` is the `.v` file and `compiler_bin` optionally overrides discovery.
+
+    Outputs:
+        Returns a JSON-serializable execution report; missing compiler is reported as skipped.
+    """
+
+    compiler = find_rocq_compiler(compiler_bin)
+    payload: Dict[str, Any] = {
+        "schema_version": 1,
+        "backend": "rocq",
+        "file": rel(file_path),
+        "compiler": compiler,
+        "generated_at_utc": utc_now(),
+        "ok": False,
+        "skipped": False,
+    }
+    if compiler is None:
+        payload.update(
+            {
+                "skipped": True,
+                "skip_reason": "Rocq compiler not found. Install Rocq or pass --compiler-bin.",
+                "ok": True,
+            }
+        )
+        return payload
+    cmd = list(compiler["prefix"]) + [rel(file_path)]
+    started = time.perf_counter()
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=timeout_sec,
+        )
+        payload.update(
+            {
+                "cmd": cmd,
+                "returncode": proc.returncode,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 3),
+                "stdout": proc.stdout,
+                "stderr": proc.stderr,
+                "timeout": False,
+                "ok": proc.returncode == 0,
+            }
+        )
+    except subprocess.TimeoutExpired as exc:
+        payload.update(
+            {
+                "cmd": cmd,
+                "returncode": None,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 3),
+                "stdout": exc.stdout or "",
+                "stderr": exc.stderr or f"timeout after {timeout_sec}s",
+                "timeout": True,
+                "ok": False,
+            }
+        )
+    return payload
+
+
+def write_json(path: Path, payload: Dict[str, Any]) -> None:
+    """Write a JSON report with a trailing newline.
+
+    Motivation:
+        Keep report materialization consistent across scripts.
+
+    Intent:
+        Encapsulate parent directory creation and canonical JSON formatting.
+
+    Inputs:
+        `path` is the output file and `payload` is the report dictionary.
+
+    Outputs:
+        Writes the report to disk.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def self_test(
+    output_dir: Path = REPO_ROOT / "artifacts" / "rocq_self_test",
+) -> Dict[str, Any]:
+    """Run a deterministic backend self-test.
+
+    Motivation:
+        Provide a fast local confidence check for skill wrappers and comprehensive tests.
+
+    Intent:
+        Draft the full controlled suite into artifacts and validate every generated file structurally.
+
+    Inputs:
+        `output_dir` is the temporary artifact directory used by the self-test.
+
+    Outputs:
+        Returns an aggregate self-test report.
+    """
+
+    draft = draft_manifest(output_dir=output_dir)
+    validations = [
+        validate_file(
+            output_dir / case_from_id(report["case_id"]).file_name,
+            expected_theorem=report["theorem_name"],
+        )
+        for report in draft["reports"]
+    ]
+    return {
+        "schema_version": 1,
+        "backend": "rocq",
+        "suite": "rocq_self_test",
+        "generated_at_utc": utc_now(),
+        "draft": draft,
+        "validations": validations,
+        "ok": bool(draft["ok"] and all(item["ok"] for item in validations)),
+    }
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Run the package CLI.
+
+    Motivation:
+        Make the backend directly executable during development.
+
+    Intent:
+        Provide single-case, manifest, validation, and self-test modes from one command.
+
+    Inputs:
+        `argv` optionally supplies command-line arguments.
+
+    Outputs:
+        Returns a process exit code and prints or writes reports.
+    """
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest-file", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--latex-file", type=Path)
+    parser.add_argument("--case-id", action="append")
+    parser.add_argument("--output-file", type=Path)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--report-file", type=Path)
+    parser.add_argument("--validate-file", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+
+    try:
+        if args.self_test:
+            payload = self_test()
+        elif args.validate_file is not None:
+            payload = validate_file(args.validate_file)
+        elif args.latex_file is not None:
+            if args.output_file is None:
+                parser.error("--output-file is required with --latex-file")
+            case_ids = args.case_id or ["wiki_injective_composition"]
+            if len(case_ids) != 1:
+                parser.error("single-file mode accepts exactly one --case-id")
+            payload = draft_case(
+                latex_file=args.latex_file,
+                case_id=case_ids[0],
+                output_file=args.output_file,
+            )
+        else:
+            payload = draft_manifest(
+                manifest_file=args.manifest_file,
+                output_dir=args.output_dir,
+                case_ids=args.case_id,
+            )
+    except (FileNotFoundError, KeyError, OSError, ValueError) as exc:
+        payload = {
+            "schema_version": 1,
+            "backend": "rocq",
+            "generated_at_utc": utc_now(),
+            "ok": False,
+            "status": "error",
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+
+    if args.report_file is not None:
+        write_json(args.report_file, payload)
+    if args.json or args.self_test:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print("PASS" if payload.get("ok") else "FAIL")
+    return 0 if payload.get("ok") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

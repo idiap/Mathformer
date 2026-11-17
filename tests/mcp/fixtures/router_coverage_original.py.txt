@@ -1,0 +1,455 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Route natural-language requests through the Mathformer workflow hub."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SCRIPTS_ROOT = REPO_ROOT / "scripts"
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
+REASONING_LOG_SCRIPTS = (
+    REPO_ROOT / "skills" / "control" / "reasoning-log-schema-guardian" / "scripts"
+)
+if str(REASONING_LOG_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(REASONING_LOG_SCRIPTS))
+
+import mathformer  # noqa: E402
+from reasoning_log import append_skill_complete, append_skill_start  # noqa: E402
+
+
+def resolve_action_family(
+    action_id: str, registry: dict[str, mathformer.WorkflowAction]
+) -> str | None:
+    """Return the family reached by a route action id."""
+    if action_id in registry:
+        return registry[action_id].family
+    if action_id.startswith("test:family:"):
+        return action_id.rsplit(":", 1)[1]
+    return None
+
+
+def build_coverage_report() -> dict[str, Any]:
+    """Audit natural-language route coverage over workflow families."""
+    registry = mathformer.build_registry()
+    routes = mathformer.build_intent_routes()
+    all_families = sorted({action.family for action in registry.values()})
+    route_rows = []
+    covered: set[str] = set()
+    unknown_action_refs: list[dict[str, str]] = []
+    routes_without_actions: list[str] = []
+
+    for route in routes:
+        route_families = []
+        if not route.action_ids:
+            routes_without_actions.append(route.route_id)
+        for action_id in route.action_ids:
+            family = resolve_action_family(action_id, registry)
+            if family is None:
+                unknown_action_refs.append(
+                    {"route_id": route.route_id, "action_id": action_id}
+                )
+                continue
+            covered.add(family)
+            route_families.append(family)
+        route_rows.append(
+            {
+                "route_id": route.route_id,
+                "title": route.title,
+                "action_ids": list(route.action_ids),
+                "families": sorted(set(route_families)),
+                "skill_routes": list(route.skill_routes),
+                "examples": list(route.examples),
+            }
+        )
+
+    missing_families = sorted(set(all_families) - covered)
+    blockers = []
+    if missing_families:
+        blockers.append("missing_family_route_coverage")
+    if unknown_action_refs:
+        blockers.append("unknown_route_action_refs")
+    if routes_without_actions:
+        blockers.append("routes_without_actions")
+
+    return {
+        "style": "mathformer_workflow_router_coverage_report",
+        "ok": not blockers,
+        "family_count": len(all_families),
+        "covered_family_count": len(covered),
+        "route_count": len(routes),
+        "all_families": all_families,
+        "covered_families": sorted(covered),
+        "missing_families": missing_families,
+        "unknown_action_refs": unknown_action_refs,
+        "routes_without_actions": routes_without_actions,
+        "routes": route_rows,
+        "blockers": blockers,
+    }
+
+
+def build_pipeline_help() -> dict[str, Any]:
+    """Return a user-facing catalogue of routes and controlled pipeline stages."""
+    registry = mathformer.build_registry()
+    routes = mathformer.build_intent_routes()
+    family_rows: dict[str, dict[str, Any]] = {}
+    workflow_rows = []
+    meta_surfaces = load_meta_skill_surfaces()
+
+    for action in registry.values():
+        row = family_rows.setdefault(
+            action.family,
+            {
+                "family": action.family,
+                "action_count": 0,
+                "route_count": 0,
+                "actions": [],
+                "routes": [],
+            },
+        )
+        row["action_count"] += 1
+        row["actions"].append(
+            {
+                "action_id": action.action_id,
+                "summary": action.summary,
+                "kind": action.kind,
+                "safety": action.safety,
+                "writes": list(action.writes),
+            }
+        )
+
+    for route in routes:
+        route_actions = [
+            registry[action_id]
+            for action_id in route.action_ids
+            if action_id in registry
+        ]
+        route_families = sorted({action.family for action in route_actions})
+        workflow = {
+            "route_id": route.route_id,
+            "title": route.title,
+            "description": route.description,
+            "examples": list(route.examples),
+            "action_ids": list(route.action_ids),
+            "families": route_families,
+            "skill_routes": list(route.skill_routes),
+            "operator_note": route.operator_note,
+            "actions": [
+                {
+                    "action_id": action.action_id,
+                    "summary": action.summary,
+                    "kind": action.kind,
+                    "safety": action.safety,
+                    "writes": list(action.writes),
+                }
+                for action in route_actions
+            ],
+        }
+        workflow_rows.append(workflow)
+        for family in route_families:
+            row = family_rows[family]
+            row["route_count"] += 1
+            row["routes"].append(
+                {
+                    "route_id": route.route_id,
+                    "title": route.title,
+                    "action_ids": list(route.action_ids),
+                }
+            )
+
+    return {
+        "schema_version": 1,
+        "style": "mathformer_workflow_router_pipeline_help",
+        "ok": True,
+        "summary": (
+            "Mathformer routes natural-language requests into controlled "
+            "autoformalization, proof-search, library, physics, documentation, "
+            "quality, setup, and MCP service workflows."
+        ),
+        "usage": {
+            "inspect": "python skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py --help-pipeline --json",
+            "resolve": "python skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py --request '<goal>' --json",
+            "dry_run": "python skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py --request '<goal>' --run --dry-run --json",
+            "audit": "python skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py --audit-coverage --json",
+        },
+        "workflow_count": len(workflow_rows),
+        "family_count": len(family_rows),
+        "workflows": workflow_rows,
+        "pipeline": [family_rows[family] for family in sorted(family_rows)],
+        "meta_skill_surfaces": meta_surfaces,
+    }
+
+
+def load_meta_skill_surfaces() -> dict[str, Any]:
+    """Load implemented meta-skill workflow surfaces for router help."""
+    meta_root = REPO_ROOT / "meta_skills"
+    surfaces = {
+        "implemented": [
+            {
+                "surface": "workflow task registries",
+                "path": "meta_skills/registry/tasks",
+                "validator": "python meta_skills/scripts/validate_task_registries.py --json",
+            },
+            {
+                "surface": "skill quality cards",
+                "path": "meta_skills/quality_cards",
+                "validator": "python meta_skills/scripts/validate_skill_quality_cards.py --json",
+            },
+            {
+                "surface": "runtime skill-application traces",
+                "path": "artifacts/meta_skills/runtime",
+                "validator": "python meta_skills/scripts/validate_runtime_traces.py --json",
+            },
+            {
+                "surface": "workflow evolution graphs",
+                "path": "meta_skills/registry/tasks/*/workflow_evolution.json",
+                "validator": "python meta_skills/scripts/validate_workflow_evolution.py --json",
+            },
+            {
+                "surface": "taxonomy-first workflow navigation",
+                "path": "meta_skills/taxonomy/workflow_taxonomy.json",
+                "validator": "python meta_skills/scripts/navigate_workflow_taxonomy.py --self-test --json",
+            },
+            {
+                "surface": "generated skill promotion gate",
+                "path": "meta_skills/registry/generated_skills",
+                "validator": "python meta_skills/scripts/validate_generated_skill_lifecycle.py --json",
+            },
+            {
+                "surface": "workflow-level MCP boundary",
+                "path": "meta_skills/registry/workflow_actions.yaml",
+                "validator": "python meta_skills/scripts/validate_mcp_boundary.py --json",
+            },
+        ],
+        "planned": [],
+        "root_exists": meta_root.exists(),
+    }
+    return surfaces
+
+
+def render_pipeline_help(payload: dict[str, Any]) -> str:
+    """Render pipeline help for humans using the CLI without --json."""
+    lines = [
+        payload["summary"],
+        "",
+        f"Workflows: {payload['workflow_count']} | Families: {payload['family_count']}",
+        "",
+        "Top-level workflows:",
+    ]
+    for workflow in payload["workflows"]:
+        examples = workflow.get("examples") or []
+        example = f" Example: {examples[0]}" if examples else ""
+        lines.append(f"- {workflow['route_id']}: {workflow['title']}.{example}")
+        lines.append(f"  Actions: {', '.join(workflow['action_ids'])}")
+    lines.extend(["", "Pipeline families:"])
+    for family in payload["pipeline"]:
+        lines.append(
+            f"- {family['family']}: {family['route_count']} routed workflow(s), "
+            f"{family['action_count']} controlled action(s)"
+        )
+    meta = payload.get("meta_skill_surfaces") or {}
+    if meta.get("implemented"):
+        lines.extend(["", "Meta-skill surfaces:"])
+        for item in meta["implemented"]:
+            lines.append(f"- {item['surface']}: {item['path']}")
+    lines.extend(
+        [
+            "",
+            "Commands:",
+            f"- Inspect: {payload['usage']['inspect']}",
+            f"- Resolve: {payload['usage']['resolve']}",
+            f"- Dry-run: {payload['usage']['dry_run']}",
+            f"- Audit: {payload['usage']['audit']}",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def run_mathformer_ask(args: argparse.Namespace) -> dict[str, Any]:
+    """Call the canonical NL adapter and return parsed JSON."""
+    command = [sys.executable, "scripts/mathformer.py", "ask", args.request, "--json"]
+    if args.family:
+        command.extend(["--family", args.family])
+    if args.run:
+        command.append("--run")
+    if args.dry_run:
+        command.append("--dry-run")
+    if args.allow_mutating:
+        command.append("--allow-mutating")
+    if args.write_report:
+        command.append("--write-report")
+    proc = subprocess.run(
+        command, cwd=REPO_ROOT, text=True, capture_output=True, check=False
+    )
+    try:
+        payload: dict[str, Any] = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        payload = {"stdout": proc.stdout}
+    payload.setdefault("returncode", proc.returncode)
+    payload.setdefault("stderr", proc.stderr)
+    payload.setdefault("argv", command)
+    return payload
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--request",
+        help="Natural-language request to resolve through scripts/mathformer.py ask.",
+    )
+    parser.add_argument(
+        "--family", help="Optional family filter for the natural-language resolver."
+    )
+    parser.add_argument(
+        "--run", action="store_true", help="Run the selected route through the hub."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Plan the run without executing mutating commands.",
+    )
+    parser.add_argument(
+        "--allow-mutating", action="store_true", help="Allow mutating selected actions."
+    )
+    parser.add_argument(
+        "--write-report",
+        action="store_true",
+        help="Ask the hub to write a workflow report.",
+    )
+    parser.add_argument(
+        "--audit-coverage",
+        action="store_true",
+        help="Audit route coverage for every workflow family.",
+    )
+    parser.add_argument(
+        "--help-pipeline",
+        action="store_true",
+        help="List the routed Mathformer pipeline and available workflows.",
+    )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Run a small route and coverage smoke test.",
+    )
+    parser.add_argument(
+        "--reasoning-log-file",
+        type=Path,
+        help="Optional consumer-grade reasoning-log JSONL path.",
+    )
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """CLI entry point."""
+    args = parse_args(argv)
+    skill_call_id = None
+    if args.reasoning_log_file:
+        skill_call_id = append_skill_start(
+            args.reasoning_log_file,
+            skill="mathformer-workflow-router",
+            hook_id="control.workflow_router" if args.audit_coverage else None,
+            intent="Route or audit a Mathformer natural-language workflow request.",
+            inputs={
+                "request": args.request,
+                "run": bool(args.run),
+                "dry_run": bool(args.dry_run),
+                "audit_coverage": bool(args.audit_coverage),
+                "help_pipeline": bool(args.help_pipeline),
+                "self_test": bool(args.self_test),
+            },
+            artifacts={"report_requested": bool(args.write_report)},
+            human_summary="Started a Mathformer workflow-router invocation.",
+        )
+    if args.self_test:
+        coverage = build_coverage_report()
+        help_payload = build_pipeline_help()
+        route = run_mathformer_ask(
+            argparse.Namespace(
+                request="run the compact quality gate before commit",
+                family=None,
+                run=False,
+                dry_run=False,
+                allow_mutating=False,
+                write_report=False,
+            )
+        )
+        payload = {
+            "ok": coverage["ok"] and help_payload["ok"] and route.get("ok") is True,
+            "coverage": {
+                "ok": coverage["ok"],
+                "family_count": coverage["family_count"],
+                "covered_family_count": coverage["covered_family_count"],
+                "missing_families": coverage["missing_families"],
+            },
+            "help": {
+                "ok": help_payload["ok"],
+                "workflow_count": help_payload["workflow_count"],
+                "family_count": help_payload["family_count"],
+            },
+            "route_selected": (route.get("matches") or [{}])[0].get("route_id"),
+        }
+    elif args.help_pipeline:
+        payload = build_pipeline_help()
+    elif args.audit_coverage:
+        payload = build_coverage_report()
+    elif args.request:
+        payload = run_mathformer_ask(args)
+    else:
+        raise SystemExit(
+            "provide --request, --help-pipeline, --audit-coverage, or --self-test"
+        )
+
+    if args.reasoning_log_file and skill_call_id:
+        append_skill_complete(
+            args.reasoning_log_file,
+            skill="mathformer-workflow-router",
+            hook_id="control.workflow_router" if args.audit_coverage else None,
+            skill_call_id=skill_call_id,
+            intent="Route or audit a Mathformer natural-language workflow request.",
+            inputs={
+                "request": args.request,
+                "mode": "audit" if args.audit_coverage else "route",
+            },
+            artifacts={},
+            evidence={
+                "ok": payload.get("ok"),
+                "route_count": payload.get("route_count"),
+                "matched_route_id": (
+                    (payload.get("matches") or [{}])[0].get("route_id")
+                    if isinstance(payload.get("matches"), list)
+                    else None
+                ),
+            },
+            decision={"status": "pass" if payload.get("ok") else "fail"},
+            risks=(
+                {"blockers": payload.get("blockers", [])}
+                if payload.get("blockers")
+                else {}
+            ),
+            next_action="Inspect the matched action ids or route coverage blockers.",
+            human_summary="Completed the Mathformer workflow-router invocation.",
+        )
+
+    if args.json:
+        print(json.dumps(payload, indent=2))
+    elif args.help_pipeline:
+        print(render_pipeline_help(payload))
+    else:
+        print("ok" if payload.get("ok") else "failed")
+    return 0 if payload.get("ok") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

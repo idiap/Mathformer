@@ -1,0 +1,1003 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_atp_premise_guided_triple_workflow
+version: 1.0.0
+kind: workflow
+description: Fixed triple-inverse discovery and regression, with finite helper promotion
+  and greedy premise deletion.
+aliases:
+- atp:premise-guided-triple
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  Bool:
+    schema:
+      type: boolean
+  Profile:
+    schema:
+      type: object
+      required:
+      - statement
+      - budget
+      - seconds
+      - premise_loop
+      - generate
+      - minimize
+      properties:
+        statement:
+          const: 'Let G be a group with multiplication mul, identity element e, and
+            inverse operation inv. Prove that for all three elements x, y, and z of
+            G, the inverse of the triple product mul(mul(x,y),z) is the product of
+            the inverses in reverse order: inv(mul(mul(x,y),z)) = mul(inv(z),mul(inv(y),inv(x))).'
+        budget:
+          const: medium
+        seconds:
+          const: 3
+        premise_loop:
+          type: boolean
+          const: true
+        generate:
+          type: boolean
+          const: true
+        minimize:
+          type: boolean
+          const: true
+      additionalProperties: false
+  Pack:
+    schema:
+      type: object
+      required:
+      - token
+      - revision
+      - evidence
+      properties:
+        token:
+          type: string
+        revision:
+          type: integer
+          minimum: 0
+        evidence:
+          type: object
+      additionalProperties: false
+      description: Single-use worker continuation with source-owned evidence; scientific
+        Python objects remain in the native generator.
+inputs:
+  context:
+    type: RunContext
+  profile:
+    type: Profile
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  boundary:
+    inputs:
+      context:
+        type: RunContext
+    outputs:
+      execute:
+        type: Bool
+      payload:
+        type: HubResult
+      boundary:
+        type: Pack
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_boundary
+        operation: mathformer_triple_boundary
+  stop:
+    inputs:
+      payload:
+        type: HubResult
+      boundary:
+        type: Pack
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_stop
+        operation: mathformer_triple_stop
+  initialize:
+    inputs:
+      profile:
+        type: Profile
+      boundary:
+        type: Pack
+    outputs:
+      state:
+        type: Pack
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_initialize
+        operation: mathformer_triple_initialize
+  select:
+    inputs:
+      state:
+        type: Pack
+      profile:
+        type: Profile
+    outputs:
+      pack:
+        type: Pack
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_select
+        operation: mathformer_triple_select
+  generate:
+    inputs:
+      pack:
+        type: Pack
+    outputs:
+      state:
+        type: Pack
+      pending:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_generate
+        operation: mathformer_triple_generate
+  lemma:
+    inputs:
+      state:
+        type: Pack
+    outputs:
+      state:
+        type: Pack
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_lemma
+        operation: mathformer_triple_lemma
+  empty_helpers:
+    inputs:
+      state:
+        type: Pack
+    outputs:
+      state:
+        type: Pack
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_empty_helpers
+        operation: mathformer_triple_empty_helpers
+  generation_finish:
+    inputs:
+      state:
+        type: Pack
+    outputs:
+      pack:
+        type: Pack
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_generation_finish
+        operation: mathformer_triple_generation_finish
+  augment:
+    inputs:
+      pack:
+        type: Pack
+    outputs:
+      state:
+        type: Pack
+      pending:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_augment
+        operation: mathformer_triple_augment
+  deletion:
+    inputs:
+      state:
+        type: Pack
+    outputs:
+      state:
+        type: Pack
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_deletion
+        operation: mathformer_triple_deletion
+  empty_deletions:
+    inputs:
+      state:
+        type: Pack
+    outputs:
+      state:
+        type: Pack
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_empty_deletions
+        operation: mathformer_triple_empty_deletions
+  minimization_finish:
+    inputs:
+      state:
+        type: Pack
+    outputs:
+      pack:
+        type: Pack
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_minimization_finish
+        operation: mathformer_triple_minimization_finish
+  final_proof:
+    inputs:
+      pack:
+        type: Pack
+    outputs:
+      pack:
+        type: Pack
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_final_proof
+        operation: mathformer_triple_final_proof
+  carry:
+    inputs:
+      state:
+        type: Pack
+      pack:
+        type: Pack
+    outputs:
+      state:
+        type: Pack
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_carry
+        operation: mathformer_triple_carry
+  discovery_finish:
+    inputs:
+      state:
+        type: Pack
+      profile:
+        type: Profile
+    outputs:
+      report:
+        type: Pack
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_discovery_finish
+        operation: mathformer_triple_discovery_finish
+  regression_finish:
+    inputs:
+      report:
+        type: Pack
+      payload:
+        type: HubResult
+      context:
+        type: RunContext
+      boundary:
+        type: Pack
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_regression_finish
+        operation: mathformer_triple_regression_finish
+  forward:
+    inputs:
+      state:
+        type: Pack
+    outputs:
+      state:
+        type: Pack
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_triple_forward
+        operation: mathformer_triple_forward
+flow:
+  kind: sequence
+  steps:
+  - id: boundary
+    kind: call
+    operation: boundary
+    arguments:
+      context:
+        ref: inputs.context
+  - id: initialize
+    kind: switch
+    cases:
+    - id: execute
+      when:
+        ref: steps.boundary.outputs.execute
+      body:
+        id: native
+        kind: call
+        operation: initialize
+        arguments:
+          profile:
+            ref: inputs.profile
+          boundary:
+            ref: steps.boundary.outputs.boundary
+    default:
+      kind: sequence
+      steps:
+      - id: forward
+        kind: call
+        operation: forward
+        arguments:
+          state:
+            ref: steps.boundary.outputs.boundary
+      outputs:
+        state:
+          type: Pack
+          value:
+            ref: steps.forward.outputs.state
+    outputs:
+      state:
+        type: Pack
+        value:
+          ref: selected.outputs.state
+  - id: candidates
+    kind: loop
+    state_type: Pack
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: switch
+        cases:
+        - id: execute
+          when:
+            ref: steps.boundary.outputs.execute
+          body:
+            id: native
+            kind: call
+            operation: select
+            arguments:
+              state:
+                ref: loop.state
+              profile:
+                ref: inputs.profile
+        default:
+          kind: sequence
+          steps:
+          - id: forward
+            kind: call
+            operation: forward
+            arguments:
+              state:
+                ref: loop.state
+          outputs:
+            pack:
+              type: Pack
+              value:
+                ref: steps.forward.outputs.state
+        outputs:
+          pack:
+            type: Pack
+            value:
+              ref: selected.outputs.pack
+      - id: generate
+        kind: switch
+        cases:
+        - id: execute
+          when:
+            ref: steps.boundary.outputs.execute
+          body:
+            id: native
+            kind: call
+            operation: generate
+            arguments:
+              pack:
+                ref: steps.select.outputs.pack
+        default:
+          kind: sequence
+          steps:
+          - id: forward
+            kind: call
+            operation: forward
+            arguments:
+              state:
+                ref: steps.select.outputs.pack
+          outputs:
+            state:
+              type: Pack
+              value:
+                ref: steps.forward.outputs.state
+            pending:
+              type: Bool
+              value:
+                literal: false
+        outputs:
+          state:
+            type: Pack
+            value:
+              ref: selected.outputs.state
+          pending:
+            type: Bool
+            value:
+              ref: selected.outputs.pending
+      - id: helpers
+        kind: loop
+        state_type: Pack
+        initial:
+          ref: steps.generate.outputs.state
+        max_iterations: 2
+        on_exhausted: fail
+        body:
+          kind: switch
+          cases:
+          - id: execute
+            when:
+              ref: steps.boundary.outputs.execute
+            body:
+              kind: switch
+              cases:
+              - id: pending
+                when:
+                  ref: steps.generate.outputs.pending
+                body:
+                  id: native
+                  kind: call
+                  operation: lemma
+                  arguments:
+                    state:
+                      ref: loop.state
+              default:
+                id: empty
+                kind: call
+                operation: empty_helpers
+                arguments:
+                  state:
+                    ref: loop.state
+              outputs:
+                state:
+                  type: Pack
+                  value:
+                    ref: selected.outputs.state
+                done:
+                  type: Bool
+                  value:
+                    ref: selected.outputs.done
+          default:
+            id: skip
+            kind: call
+            operation: forward
+            arguments:
+              state:
+                ref: loop.state
+          outputs:
+            state:
+              type: Pack
+              value:
+                ref: selected.outputs.state
+            done:
+              type: Bool
+              value:
+                ref: selected.outputs.done
+        next_state:
+          ref: body.outputs.state
+        until:
+          ref: body.outputs.done
+        outputs:
+          state:
+            type: Pack
+            value:
+              ref: body.outputs.state
+      - id: generation_finish
+        kind: switch
+        cases:
+        - id: execute
+          when:
+            ref: steps.boundary.outputs.execute
+          body:
+            id: native
+            kind: call
+            operation: generation_finish
+            arguments:
+              state:
+                ref: steps.helpers.outputs.state
+        default:
+          kind: sequence
+          steps:
+          - id: forward
+            kind: call
+            operation: forward
+            arguments:
+              state:
+                ref: steps.helpers.outputs.state
+          outputs:
+            pack:
+              type: Pack
+              value:
+                ref: steps.forward.outputs.state
+        outputs:
+          pack:
+            type: Pack
+            value:
+              ref: selected.outputs.pack
+      - id: augment
+        kind: switch
+        cases:
+        - id: execute
+          when:
+            ref: steps.boundary.outputs.execute
+          body:
+            id: native
+            kind: call
+            operation: augment
+            arguments:
+              pack:
+                ref: steps.generation_finish.outputs.pack
+        default:
+          kind: sequence
+          steps:
+          - id: forward
+            kind: call
+            operation: forward
+            arguments:
+              state:
+                ref: steps.generation_finish.outputs.pack
+          outputs:
+            state:
+              type: Pack
+              value:
+                ref: steps.forward.outputs.state
+            pending:
+              type: Bool
+              value:
+                literal: false
+        outputs:
+          state:
+            type: Pack
+            value:
+              ref: selected.outputs.state
+          pending:
+            type: Bool
+            value:
+              ref: selected.outputs.pending
+      - id: deletions
+        kind: loop
+        state_type: Pack
+        initial:
+          ref: steps.augment.outputs.state
+        max_iterations: 10
+        on_exhausted: fail
+        body:
+          kind: switch
+          cases:
+          - id: execute
+            when:
+              ref: steps.boundary.outputs.execute
+            body:
+              kind: switch
+              cases:
+              - id: pending
+                when:
+                  ref: steps.augment.outputs.pending
+                body:
+                  id: native
+                  kind: call
+                  operation: deletion
+                  arguments:
+                    state:
+                      ref: loop.state
+              default:
+                id: empty
+                kind: call
+                operation: empty_deletions
+                arguments:
+                  state:
+                    ref: loop.state
+              outputs:
+                state:
+                  type: Pack
+                  value:
+                    ref: selected.outputs.state
+                done:
+                  type: Bool
+                  value:
+                    ref: selected.outputs.done
+          default:
+            id: skip
+            kind: call
+            operation: forward
+            arguments:
+              state:
+                ref: loop.state
+          outputs:
+            state:
+              type: Pack
+              value:
+                ref: selected.outputs.state
+            done:
+              type: Bool
+              value:
+                ref: selected.outputs.done
+        next_state:
+          ref: body.outputs.state
+        until:
+          ref: body.outputs.done
+        outputs:
+          state:
+            type: Pack
+            value:
+              ref: body.outputs.state
+      - id: minimization_finish
+        kind: switch
+        cases:
+        - id: execute
+          when:
+            ref: steps.boundary.outputs.execute
+          body:
+            id: native
+            kind: call
+            operation: minimization_finish
+            arguments:
+              state:
+                ref: steps.deletions.outputs.state
+        default:
+          kind: sequence
+          steps:
+          - id: forward
+            kind: call
+            operation: forward
+            arguments:
+              state:
+                ref: steps.deletions.outputs.state
+          outputs:
+            pack:
+              type: Pack
+              value:
+                ref: steps.forward.outputs.state
+        outputs:
+          pack:
+            type: Pack
+            value:
+              ref: selected.outputs.pack
+      - id: proof
+        kind: switch
+        cases:
+        - id: execute
+          when:
+            ref: steps.boundary.outputs.execute
+          body:
+            id: native
+            kind: call
+            operation: final_proof
+            arguments:
+              pack:
+                ref: steps.minimization_finish.outputs.pack
+        default:
+          kind: sequence
+          steps:
+          - id: forward
+            kind: call
+            operation: forward
+            arguments:
+              state:
+                ref: steps.minimization_finish.outputs.pack
+          outputs:
+            pack:
+              type: Pack
+              value:
+                ref: steps.forward.outputs.state
+        outputs:
+          pack:
+            type: Pack
+            value:
+              ref: selected.outputs.pack
+      - id: carry
+        kind: switch
+        cases:
+        - id: execute
+          when:
+            ref: steps.boundary.outputs.execute
+          body:
+            id: native
+            kind: call
+            operation: carry
+            arguments:
+              state:
+                ref: loop.state
+              pack:
+                ref: steps.proof.outputs.pack
+        default:
+          kind: sequence
+          steps:
+          - id: forward
+            kind: call
+            operation: forward
+            arguments:
+              state:
+                ref: steps.proof.outputs.pack
+          outputs:
+            state:
+              type: Pack
+              value:
+                ref: steps.forward.outputs.state
+            done:
+              type: Bool
+              value:
+                ref: steps.forward.outputs.done
+        outputs:
+          state:
+            type: Pack
+            value:
+              ref: selected.outputs.state
+          done:
+            type: Bool
+            value:
+              ref: selected.outputs.done
+      outputs:
+        state:
+          type: Pack
+          value:
+            ref: steps.carry.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: steps.carry.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: Pack
+        value:
+          ref: body.outputs.state
+  - id: report
+    kind: switch
+    cases:
+    - id: execute
+      when:
+        ref: steps.boundary.outputs.execute
+      body:
+        id: native
+        kind: call
+        operation: discovery_finish
+        arguments:
+          state:
+            ref: steps.candidates.outputs.state
+          profile:
+            ref: inputs.profile
+    default:
+      kind: sequence
+      steps:
+      - id: forward
+        kind: call
+        operation: forward
+        arguments:
+          state:
+            ref: steps.candidates.outputs.state
+      outputs:
+        report:
+          type: Pack
+          value:
+            ref: steps.forward.outputs.state
+    outputs:
+      report:
+        type: Pack
+        value:
+          ref: selected.outputs.report
+  - id: finish
+    kind: switch
+    cases:
+    - id: execute
+      when:
+        ref: steps.boundary.outputs.execute
+      body:
+        id: regression
+        kind: call
+        operation: regression_finish
+        arguments:
+          report:
+            ref: steps.report.outputs.report
+          payload:
+            ref: steps.boundary.outputs.payload
+          context:
+            ref: inputs.context
+          boundary:
+            ref: steps.boundary.outputs.boundary
+    default:
+      id: stop
+      kind: call
+      operation: stop
+      arguments:
+        payload:
+          ref: steps.boundary.outputs.payload
+        boundary:
+          ref: steps.boundary.outputs.boundary
+    outputs:
+      result:
+        type: HubResult
+        value:
+          ref: selected.outputs.result
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/vampire_atp/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 180
+    max_operation_calls: 40
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Native source execution and regression evidence; completion is not
+    an independent scientific endorsement.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: backends/atp/MathformerATP/vampire.py
+    selector: discover_proof_steps
+    digest: sha256:8b7d92bed2c701f704e124507d567c068969f4db6990a9ff0a906a180373bb2a
+  - path: backends/atp/MathformerATP/generation.py
+    selector: _group_triple_inverse_product_lemmas
+    digest: sha256:4e4c7f83ba77c26d1762dfecc9fcf7c0117771bd7622e9d3b49c989c21b2f4cd
+  - path: backends/atp/MathformerATP/premises.py
+    selector: select_premises; _budget_limit
+    digest: sha256:abf54197f8096e9ffe34008473c098fdd6f7b850b1f088203d17da6cb029bae6
+  - path: tests/atp/run_premise_guided_triple_inverse.py
+    selector: DEFAULT_STATEMENT; main
+    digest: sha256:aec6c5e9cace195d6b6fd3d64266b6a433609e3f54af87951cd67117f88c31fa
+  - path: scripts/mathformer.py
+    selector: build_registry/action:atp:premise-guided-triple; prepare_leaf_boundary;
+      run_leaf_action; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/premise_triple_tools.py
+    selector: TripleTools; _worker; register_premise_triple_tools
+    digest: sha256:21c06b97f9f53e933be6cb7b1bbb3a243deaab438efaff355705f05e6327a298
+  - path: scripts/mcp_server.py
+    selector: _TRIPLE_TOOLS
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: hub_contracts authored triple contract
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_premise_triple_workflow_tests.py
+    selector: TripleTests
+    digest: sha256:2a8c8c66650ebfc7421f8d0e3d4d610fe1c11aa6e2d38dea9a3007c8886b0d02
+  - path: tests/mcp/fixtures/premise_triple_boundary.py
+    selector: compiler; worker
+    digest: sha256:f3386de810c3eb8ba25b529f67a082b61a85435238de2933cb218c34ed6cff8b
+  gaps:
+  - 'Fixed registered profile: direct and disabled-option paths remain in the shared
+    native source and equivalence fixtures; their unreachable descriptor branches
+    are omitted. Loops are hoisted above execute guards to support Lunar scoped exhaustion;
+    forwarding has no scientific effects.'
+  - Scientific state is process-local; handles expose source evidence, not resumable
+    serialized theorem objects. Worker exceptions fail dependent steps.
+  - Effects remain native capability declarations; they are not provider grants.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: atp:premise-guided-triple
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: atp:premise-guided-triple
+      family: atp
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/atp/run_premise_guided_triple_inverse.py
+      - --json
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: 180
+  mathformer.native_boundary:
+    execution: Registered single-use MCP continuations over discover_proof_steps in
+      a worker bounded by the native 180 second deadline.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Preserve preflight/dry-run payloads; nonzero exit or timeout stays
+      failed; exceptions stop dependent work.
+    scientific_payloads: HubResult is the transport envelope; discovery Report carries
+      scientific artifacts.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: No dependencies or retries; synchronous discover_proof drains discover_proof_steps.
+# REUSE-IgnoreEnd

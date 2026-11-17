@@ -1,0 +1,648 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_lean_repair_expansion_map_workflow
+version: 1.0.0
+kind: workflow
+description: Map supplied Lean physics repair evidence into coverage and outstanding
+  obligations.
+aliases:
+- physics-lean:repair-expansion-map
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Arguments:
+    schema:
+      type: array
+      items:
+        type: string
+  Packets:
+    schema:
+      type: object
+      required:
+      - monitor_report
+      - object_packet
+      - workbench_plan
+      - repair_loop
+      - generative_repair
+      - repair_plans
+      properties:
+        monitor_report:
+          type: object
+        object_packet:
+          type: object
+        workbench_plan:
+          type: object
+        repair_loop:
+          type: object
+        generative_repair:
+          type: object
+        repair_plans:
+          type: array
+          items:
+            type: object
+  MapState:
+    schema:
+      type: object
+      required:
+      - packets
+      - categories
+      - classes
+      - repairs
+      - workbench
+      - nodes
+      properties:
+        packets:
+          type: object
+        categories:
+          type: array
+          items:
+            type: string
+        classes:
+          type: array
+          items:
+            type: string
+        repairs:
+          type: object
+        workbench:
+          type: object
+        nodes:
+          type: array
+          items:
+            type: object
+  Assessment:
+    schema:
+      type: object
+      required:
+      - not_required
+      - has_outstanding
+      - outstanding
+      - coverage_complete
+      - coverage
+      properties:
+        not_required:
+          type: boolean
+        has_outstanding:
+          type: boolean
+        outstanding:
+          type: array
+          items:
+            type: object
+        coverage_complete:
+          type: boolean
+        coverage:
+          type: object
+  Status:
+    schema:
+      type: string
+      enum:
+      - not_required
+      - needs_expansion
+      - complete
+  Expansion:
+    schema:
+      anyOf:
+      - type: object
+        required:
+        - style
+        - status
+        - exhaustive
+        - coverage
+        - nodes
+        - outstanding_nodes
+        - next_frontier
+        - recursive_rerun_gates
+        - iteration_signature
+        - iteration_signature_payload
+        properties:
+          style:
+            const: physics_lean_repair_expansion_map
+          status:
+            enum:
+            - not_required
+            - needs_expansion
+            - complete
+          exhaustive:
+            type: boolean
+          coverage:
+            type: object
+          nodes:
+            type: array
+            items:
+              type: object
+          outstanding_nodes:
+            type: array
+            items:
+              type: object
+          next_frontier:
+            type: array
+            items:
+              type: object
+          recursive_rerun_gates:
+            type: array
+            items:
+              type: string
+          iteration_signature:
+            type: string
+            pattern: ^[0-9a-f]{16}$
+          iteration_signature_payload:
+            type: object
+      - type: 'null'
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+  Text:
+    schema:
+      type: string
+  Context:
+    schema:
+      type: object
+      required:
+      - working_directory
+      - program_name
+      properties:
+        working_directory:
+          type: string
+        program_name:
+          type: string
+      additionalProperties: false
+  Options:
+    schema:
+      type: object
+      required:
+      - early_exit
+      - stdout_text
+      properties:
+        early_exit:
+          type: boolean
+        stdout_text:
+          type: string
+        self_test:
+          type: boolean
+        output:
+          type:
+          - string
+          - 'null'
+inputs:
+  extra_args:
+    type: Arguments
+  context:
+    type: Context
+outputs:
+  expansion:
+    type: Expansion
+    value:
+      ref: flow.outputs.expansion
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  stdout_text:
+    type: Text
+    value:
+      ref: flow.outputs.stdout_text
+  json_text:
+    type: Text
+    value:
+      ref: flow.outputs.json_text
+operations:
+  load:
+    inputs:
+      argv:
+        type: Arguments
+      context:
+        type: Context
+    outputs:
+      packets:
+        type: Packets
+      packets_json:
+        type: Text
+      options:
+        type: Options
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_repair_expansion_load
+        operation: mathformer_repair_expansion_load
+  seed:
+    inputs:
+      packets:
+        type: Packets
+      packets_json:
+        type: Text
+    outputs:
+      state:
+        type: MapState
+      state_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_repair_expansion_seed
+        operation: mathformer_repair_expansion_seed
+  expand_categories:
+    inputs:
+      state:
+        type: MapState
+      state_json:
+        type: Text
+    outputs:
+      state:
+        type: MapState
+      state_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_repair_expansion_expand_categories
+        operation: mathformer_repair_expansion_expand_categories
+  expand_objects:
+    inputs:
+      state:
+        type: MapState
+      state_json:
+        type: Text
+    outputs:
+      state:
+        type: MapState
+      state_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_repair_expansion_expand_objects
+        operation: mathformer_repair_expansion_expand_objects
+  append_policies:
+    inputs:
+      state:
+        type: MapState
+      state_json:
+        type: Text
+    outputs:
+      state:
+        type: MapState
+      state_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_repair_expansion_append_policies
+        operation: mathformer_repair_expansion_append_policies
+  assess:
+    inputs:
+      state:
+        type: MapState
+      state_json:
+        type: Text
+    outputs:
+      assessment:
+        type: Assessment
+      assessment_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_repair_expansion_assess
+        operation: mathformer_repair_expansion_assess
+  assign_status:
+    inputs:
+      value:
+        type: Status
+    outputs:
+      status:
+        type: Status
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_repair_expansion_assign_status
+        operation: mathformer_repair_expansion_assign_status
+  finish:
+    inputs:
+      state:
+        type: MapState
+      assessment:
+        type: Assessment
+      status:
+        type: Status
+      state_json:
+        type: Text
+      options:
+        type: Options
+      assessment_json:
+        type: Text
+    outputs:
+      expansion:
+        type: Expansion
+      exit_code:
+        type: ExitCode
+      stdout_text:
+        type: Text
+      json_text:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_repair_expansion_finish
+        operation: mathformer_repair_expansion_finish
+  help:
+    inputs:
+      options:
+        type: Options
+    outputs:
+      expansion:
+        type: Expansion
+      exit_code:
+        type: ExitCode
+      stdout_text:
+        type: Text
+      json_text:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_repair_expansion_help
+        operation: mathformer_repair_expansion_help
+flow:
+  kind: sequence
+  steps:
+  - id: load
+    kind: call
+    operation: load
+    arguments:
+      argv:
+        ref: inputs.extra_args
+      context:
+        ref: inputs.context
+  - id: dispatch
+    kind: switch
+    cases:
+    - id: help
+      when:
+        ref: steps.load.outputs.options.early_exit
+      body:
+        kind: call
+        operation: help
+        arguments:
+          options:
+            ref: steps.load.outputs.options
+    default:
+      kind: sequence
+      steps:
+      - id: seed
+        kind: call
+        operation: seed
+        arguments:
+          packets:
+            ref: steps.load.outputs.packets
+          packets_json:
+            ref: steps.load.outputs.packets_json
+      - id: categories
+        kind: call
+        operation: expand_categories
+        arguments:
+          state:
+            ref: steps.seed.outputs.state
+          state_json:
+            ref: steps.seed.outputs.state_json
+      - id: objects
+        kind: call
+        operation: expand_objects
+        arguments:
+          state:
+            ref: steps.categories.outputs.state
+          state_json:
+            ref: steps.categories.outputs.state_json
+      - id: policies
+        kind: call
+        operation: append_policies
+        arguments:
+          state:
+            ref: steps.objects.outputs.state
+          state_json:
+            ref: steps.objects.outputs.state_json
+      - id: assess
+        kind: call
+        operation: assess
+        arguments:
+          state:
+            ref: steps.policies.outputs.state
+          state_json:
+            ref: steps.policies.outputs.state_json
+      - id: status
+        kind: switch
+        cases:
+        - id: unnecessary
+          when:
+            ref: steps.assess.outputs.assessment.not_required
+          body:
+            kind: call
+            operation: assign_status
+            arguments:
+              value:
+                literal: not_required
+        - id: outstanding
+          when:
+            ref: steps.assess.outputs.assessment.has_outstanding
+          body:
+            kind: call
+            operation: assign_status
+            arguments:
+              value:
+                literal: needs_expansion
+        default:
+          kind: call
+          operation: assign_status
+          arguments:
+            value:
+              literal: complete
+        outputs:
+          status:
+            type: Status
+            value:
+              ref: selected.outputs.status
+      - id: finish
+        kind: call
+        operation: finish
+        arguments:
+          state:
+            ref: steps.policies.outputs.state
+          assessment:
+            ref: steps.assess.outputs.assessment
+          status:
+            ref: steps.status.outputs.status
+          options:
+            ref: steps.load.outputs.options
+          state_json:
+            ref: steps.policies.outputs.state_json
+          assessment_json:
+            ref: steps.assess.outputs.assessment_json
+      outputs:
+        expansion:
+          type: Expansion
+          value:
+            ref: steps.finish.outputs.expansion
+        exit_code:
+          type: ExitCode
+          value:
+            ref: steps.finish.outputs.exit_code
+        stdout_text:
+          type: Text
+          value:
+            ref: steps.finish.outputs.stdout_text
+        json_text:
+          type: Text
+          value:
+            ref: steps.finish.outputs.json_text
+    outputs:
+      expansion:
+        type: Expansion
+        value:
+          ref: selected.outputs.expansion
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+      stdout_text:
+        type: Text
+        value:
+          ref: selected.outputs.stdout_text
+      json_text:
+        type: Text
+        value:
+          ref: selected.outputs.json_text
+  outputs:
+    expansion:
+      type: Expansion
+      value:
+        ref: steps.dispatch.outputs.expansion
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.dispatch.outputs.exit_code
+    stdout_text:
+      type: Text
+      value:
+        ref: steps.dispatch.outputs.stdout_text
+    json_text:
+      type: Text
+      value:
+        ref: steps.dispatch.outputs.json_text
+policy:
+  effects:
+    filesystem:
+      read:
+      - native_runtime_inputs
+      write:
+      - selected_output_path
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - read_repair_evidence
+    - describe_expansion
+    - emit_expansion_map
+    forbidden:
+    - execute_repairs
+    - invoke_recursive_controller
+    - promote_scientific_claims
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 8
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Coverage and terminal-node bookkeeping establish no Lean proof or
+    scientific acceptance.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: complete
+  sources:
+  - path: skills/physics-lean/physics-lean-repair-expansion-cartographer/scripts/map_repair_expansion.py
+    selector: 'build_map (CLI entrypoint: main)'
+    digest: sha256:6da95b91a9ca360312631d9fe67e51f52aa8e81931465e0ceb8e38a5d612fd03
+  - path: scripts/mathformer.py
+    selector: physics-lean:repair-expansion-map; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/repair_expansion_tools.py
+    selector: register_repair_expansion_tools
+    digest: sha256:bff19375b8b76c639b40ae5fb9ad2ead35b5a769fe3aa2141947af0a36d7fbea
+  - path: scripts/mcp_server.py
+    selector: register_repair_expansion_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: 'inventory: physics-lean:repair-expansion-map authored override'
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_repair_expansion_workflow_tests.py
+    selector: 'ExpansionTests: frozen oracle and real PRISM/MCP runtime fixtures'
+    digest: sha256:b056863c2bf85c8cb4efa58cf73c752731910fd3cdfcadd09f6eaf414df9ff93
+  - path: tests/mcp/fixtures/repair_expansion_original.py.txt
+    selector: immutable pre-extraction CLI oracle
+    digest: sha256:3519c73936c5eb22eb50c9e6a09de14daab9c93b3af8a15eb40439a6a3c17b1f
+  gaps: []
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-lean:repair-expansion-map
+    owner_skill: skills/physics-lean/physics-lean-repair-expansion-cartographer/SKILL.md
+    contract:
+      id: physics-lean:repair-expansion-map
+      family: physics_lean
+      kind: validation
+      safety: writes_artifacts
+      depends_on: []
+      allows_extra_args: true
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Dependency-free hub leaf dispatches main through run_action then run_leaf_action.
+    carried_state: Local packet indexes and accumulated nodes/frontier only; no iteration
+      history.
+    stopping: Every finite input is consumed once per owning traversal; no exhaustion
+      signal.
+    controller_boundary: Separate controller checks exhaustive maps, prior signatures
+      and iteration >= max_iterations (default 6); emits a decision without recursion.
+    serialization: Paired JSON text ports preserve native nested insertion order across
+      canonicalizing transport. finish returns native stdout as data; output files
+      retain original bytes.
+    context: Explicit caller working_directory resolves relative CLI paths without
+      process-wide chdir; program_name preserves argparse help/diagnostics. Service
+      write policy still applies.
+# REUSE-IgnoreEnd

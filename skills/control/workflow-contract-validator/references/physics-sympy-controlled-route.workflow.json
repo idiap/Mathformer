@@ -1,0 +1,750 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_formalize_physics_sympy_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Controlled physics SymPy route with native admission, ordered eight-case traversal, CLI result capture and postexecution write auditing.",
+  "aliases": [
+    "formalize.physics.sympy"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "dry_run",
+          "json_output",
+          "keep_going",
+          "allow_mutating",
+          "write_report"
+        ],
+        "properties": {
+          "dry_run": {
+            "type": "boolean"
+          },
+          "json_output": {
+            "type": "boolean"
+          },
+          "keep_going": {
+            "type": "boolean"
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          },
+          "write_report": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "HubResult": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "Match": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RouteState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "ok"
+              ],
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Boundary": {
+      "schema": {
+        "type": "object",
+        "description": "Native admission, payload, argv, snapshot and process outcome; opaque projection."
+      }
+    },
+    "Cases": {
+      "schema": {
+        "type": "array",
+        "maxItems": 8,
+        "items": {
+          "type": "object",
+          "required": [
+            "case_id",
+            "status",
+            "controlled_validation_ok"
+          ],
+          "properties": {
+            "case_id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "controlled_validation_ok": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "ProcessError": {
+      "schema": {
+        "type": "object",
+        "description": "Captured CLI exception outcome; kind=none for normal execution.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "none",
+              "missing_sympy",
+              "unhandled_exception"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "Suite": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "cases",
+          "token"
+        ],
+        "properties": {
+          "cases": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "required": [
+                "case_id",
+                "status",
+                "controlled_validation_ok"
+              ],
+              "properties": {
+                "case_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "controlled_validation_ok": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "Match"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize_route": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_controlled_initialize_route",
+          "operation": "mathformer_sympy_controlled_initialize_route"
+        }
+      }
+    },
+    "prepare_attempt": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "boundary": {
+          "type": "Boundary"
+        },
+        "suite": {
+          "type": "Suite"
+        },
+        "entered": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_controlled_prepare_attempt",
+          "operation": "mathformer_sympy_controlled_prepare_attempt"
+        }
+      }
+    },
+    "process_case": {
+      "inputs": {
+        "suite": {
+          "type": "Suite"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "done": {
+          "type": "Flag"
+        },
+        "error": {
+          "type": "ProcessError"
+        },
+        "suite": {
+          "type": "Suite"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_controlled_process_case",
+          "operation": "mathformer_sympy_controlled_process_case"
+        }
+      }
+    },
+    "finish_suite": {
+      "inputs": {
+        "error": {
+          "type": "ProcessError"
+        },
+        "boundary": {
+          "type": "Boundary"
+        },
+        "suite": {
+          "type": "Suite"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_controlled_finish_suite",
+          "operation": "mathformer_sympy_controlled_finish_suite"
+        }
+      }
+    },
+    "return_early": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_controlled_return_early",
+          "operation": "mathformer_sympy_controlled_return_early"
+        }
+      }
+    },
+    "advance_route": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_controlled_advance_route",
+          "operation": "mathformer_sympy_controlled_advance_route"
+        }
+      }
+    },
+    "finish_route": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "Match"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_controlled_finish_route",
+          "operation": "mathformer_sympy_controlled_finish_route"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize_route",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "state_type": "RouteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "prepare",
+              "kind": "call",
+              "operation": "prepare_attempt",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "execute",
+              "kind": "switch",
+              "cases": [
+                {
+                  "id": "suite_entered",
+                  "when": {
+                    "ref": "steps.prepare.outputs.entered"
+                  },
+                  "body": {
+                    "kind": "sequence",
+                    "steps": [
+                      {
+                        "id": "cases",
+                        "kind": "loop",
+                        "state_type": "Suite",
+                        "initial": {
+                          "ref": "steps.prepare.outputs.suite"
+                        },
+                        "max_iterations": 8,
+                        "on_exhausted": "fail",
+                        "body": {
+                          "kind": "call",
+                          "operation": "process_case",
+                          "arguments": {
+                            "suite": {
+                              "ref": "loop.state"
+                            },
+                            "repository_root": {
+                              "ref": "inputs.repository_root"
+                            }
+                          }
+                        },
+                        "next_state": {
+                          "ref": "body.outputs.suite"
+                        },
+                        "until": {
+                          "ref": "body.outputs.done"
+                        },
+                        "outputs": {
+                          "error": {
+                            "type": "ProcessError",
+                            "value": {
+                              "ref": "body.outputs.error"
+                            }
+                          },
+                          "suite": {
+                            "type": "Suite",
+                            "value": {
+                              "ref": "loop.state"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "finish",
+                        "kind": "call",
+                        "operation": "finish_suite",
+                        "arguments": {
+                          "error": {
+                            "ref": "steps.cases.outputs.error"
+                          },
+                          "boundary": {
+                            "ref": "steps.prepare.outputs.boundary"
+                          },
+                          "suite": {
+                            "ref": "steps.cases.outputs.suite"
+                          },
+                          "repository_root": {
+                            "ref": "inputs.repository_root"
+                          }
+                        }
+                      }
+                    ],
+                    "outputs": {
+                      "result": {
+                        "type": "HubResult",
+                        "value": {
+                          "ref": "steps.finish.outputs.result"
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "default": {
+                "kind": "call",
+                "operation": "return_early",
+                "arguments": {
+                  "boundary": {
+                    "ref": "steps.prepare.outputs.boundary"
+                  }
+                }
+              },
+              "outputs": {
+                "result": {
+                  "type": "HubResult",
+                  "value": {
+                    "ref": "selected.outputs.result"
+                  }
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance_route",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.execute.outputs.result"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "RouteState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "RouteState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish_route",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/physics_sympy/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 13
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source projection; completion conveys neither scientific truth nor promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/physics_sympy/run_controlled_suite.py",
+        "selector": "main; dependency_blocker",
+        "digest": "sha256:bc884efb7831fe953cb988216a87e4ac8a10e38de265dc6de96694316b61506b"
+      },
+      {
+        "path": "backends/sympy/MathformerPhysicsSympy/pipeline.py",
+        "selector": "controlled_suite; controlled_suite_initialize; controlled_suite_generate; controlled_suite_assess; controlled_suite_append; controlled_suite_done; controlled_suite_finalize",
+        "digest": "sha256:42c1773f2d2121ec80a7a44b407caf7956ca3004c5a89da0c81da017ce72e056"
+      },
+      {
+        "path": "scripts/physics_sympy_controlled_route_tools.py",
+        "selector": "register_physics_sympy_controlled_route_tools; Attempt",
+        "digest": "sha256:7899037b45050c93365f7e940c3969fb890f107f32c858a1251ff6bf0055a30d"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_physics_sympy_controlled_route_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "physics_sympy_controlled_route_descriptor",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Native source has no mandatory receipts or operation budget. Lunar enforces the retained contract budgets, receipts, artifact digests and provenance. The private staged channel has no checkpoint or retry; process lifetime is one admitted attempt."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "formalize.physics.sympy",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "formalize.physics.sympy",
+        "title": "Check physics derivations with SymPy",
+        "action_ids": [
+          "physics-sympy:controlled"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "run_intent_match retains native subprocess behavior; registered staged tools reuse its route helpers, prepare_action, prepare_leaf_boundary, complete_leaf_boundary and finish_leaf_boundary. The case step is shared with pipeline.controlled_suite.",
+      "command": [
+        "repository_virtualenv_python",
+        "tests/physics_sympy/run_controlled_suite.py",
+        "--json"
+      ],
+      "dependencies": [],
+      "specialization": "The registered virtualenv argv is launched once per admitted attempt. A private inherited socket stages native CLI functions within that process. output_root=artifacts/physics_sympy/controlled_suite, include_details=false. stdout/stderr and exit status remain source-owned.",
+      "bounds": "Route done is true at child one; suite done is true at case eight. Both return normally at their bounds.",
+      "exceptions": "Suite exceptions end traversal and return through the subprocess boundary; unexpected launch errors propagate.",
+      "handoffs": "Phase 15 separately gates wiki execution on suite success; Phase 18 directly calls controlled_suite."
+    }
+  }
+}

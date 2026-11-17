@@ -1,0 +1,366 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from textbook_theory_autoformalization_loop import (
+    BatchSummaryBasis,
+    ChapterQueue,
+    LatexTextbookArchiveSelection,
+    LeanCheckBasis,
+    LeanUnitSet,
+    OrganizedTheory,
+    TextbookAutoformalizationAcceptanceSummary,
+    TextbookDisposition,
+    TextbookTheoryAutoformalizationArtifactRealnessGateArtifact,
+    TextbookTheoryAutoformalizationCheckCompileArtifact,
+    TextbookTheoryAutoformalizationDraftTextbookBatchAutoformalizeArtifact,
+    TextbookTheoryAutoformalizationDraftTextbookChapterAutoformalizationArtifact,
+    TextbookTheoryAutoformalizationDraftTextbookObjectAutoformalizationRunArtifact,
+    TextbookTheoryAutoformalizationExecuteInitialArtifact,
+    TextbookTheoryAutoformalizationIntakeLatexArchiveTheoryExtractArtifact,
+    TextbookTheoryAutoformalizationMathlibGroundingMaximizeArtifact,
+    TextbookTheoryAutoformalizationPostformalizationSourceAnchorDriftGuardArtifact,
+    TextbookTheoryAutoformalizationPreformalizationLineTranslationPacketArtifact,
+    TextbookTheoryAutoformalizationPreformalizationResultExistencePrecheckArtifact,
+    TextbookTheoryAutoformalizationPreformalizationTextbookTheoryOrganizeArtifact,
+    TheoryCorpus,
+    UnitGateReport,
+    UnitJobSet,
+)
+from material_relations import FormalizesDraftTextbookChapterAutoformalizationCertificate
+from material_relations import FormalizesDraftTextbookBatchAutoformalizeCertificate
+from material_relations import FormalizesDraftTextbookObjectAutoformalizationRunCertificate
+from reasoning import AutoformalizeTextbook
+from relations import AggregateBatchCertificate
+from relations import AssessUnitGatesCertificate
+from relations import ConstructLeanUnitsCertificate
+from relations import OrganizeTheoryCertificate
+from relations import PartitionChaptersCertificate
+from relations import PrepareJobsCertificate
+from generated.draft_textbook_chapter_autoformalization_skill import textbook_chapter_autoformalization_orchestrator_skill as draft_textbook_chapter_autoformalization_skill_binding
+from generated.draft_textbook_batch_autoformalize_skill import textbook_autoformalization_batch_orchestrator_skill as draft_textbook_batch_autoformalize_skill_binding
+from generated.draft_textbook_object_autoformalization_run_skill import textbook_autoformalization_batch_orchestrator_skill as draft_textbook_object_autoformalization_run_skill_binding
+from generated.reasoning_corpus_1_skill import latex_archive_theory_extractor_skill as corpus_reasoning_skill_1
+from generated.reasoning_theory_1_skill import textbook_theory_tex_organizer_skill as theory_reasoning_skill_1
+from generated.reasoning_chapters_1_skill import textbook_chapter_autoformalization_orchestrator_skill as chapters_reasoning_skill_1
+from generated.reasoning_jobs_1_skill import result_existence_precheck_orchestrator_skill as jobs_reasoning_skill_1
+from generated.reasoning_jobs_2_skill import source_line_translation_packet_builder_skill as jobs_reasoning_skill_2
+from generated.reasoning_lean_units_1_skill import textbook_autoformalization_batch_orchestrator_skill as lean_units_reasoning_skill_1
+from generated.reasoning_lean_units_2_skill import mathlib_grounding_maximizer_skill as lean_units_reasoning_skill_2
+from generated.reasoning_gate_report_1_skill import lean_execution_runner_skill as gate_report_reasoning_skill_1
+from generated.reasoning_gate_report_2_skill import lean_compile_checker_skill as gate_report_reasoning_skill_2
+from generated.reasoning_gate_report_3_skill import source_formalization_drift_guard_skill as gate_report_reasoning_skill_3
+from generated.reasoning_gate_report_4_skill import autoformalization_result_realness_verifier_skill as gate_report_reasoning_skill_4
+from generated.reasoning_disposition_1_skill import lean_consistency_report_orchestrator_skill as disposition_reasoning_skill_1
+
+def theory_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> OrganizeTheoryCertificate[SourceValue, TargetValue]:
+    return OrganizeTheoryCertificate(source = source, target = target)
+
+def chapters_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> PartitionChaptersCertificate[SourceValue, TargetValue]:
+    return PartitionChaptersCertificate(source = source, target = target)
+
+def jobs_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> PrepareJobsCertificate[SourceValue, TargetValue]:
+    return PrepareJobsCertificate(source = source, target = target)
+
+def lean_units_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ConstructLeanUnitsCertificate[SourceValue, TargetValue]:
+    return ConstructLeanUnitsCertificate(source = source, target = target)
+
+def gate_report_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AssessUnitGatesCertificate[SourceValue, TargetValue]:
+    return AssessUnitGatesCertificate(source = source, target = target)
+
+def disposition_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AggregateBatchCertificate[SourceValue, TargetValue]:
+    return AggregateBatchCertificate(source = source, target = target)
+
+# Generative interpretation ExtractTheoryCorpus uses skill context selected from material steps: intake_latex_archive_theory_extract.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: latex-archive-theory-extractor.
+agent corpus_reasoning_agent(
+    task: LatexTextbookArchiveSelection,
+) -> Result[Generated[TheoryCorpus], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LatexTextbookArchiveSelection] = [corpus_reasoning_skill_1]
+
+# Generative interpretation OrganizeTextbookTheory uses skill context selected from material steps: preformalization_textbook_theory_organize.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: textbook-theory-tex-organizer.
+agent theory_reasoning_agent(
+    task: TheoryCorpus,
+) -> Result[Generated[OrganizedTheory], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[TheoryCorpus] = [theory_reasoning_skill_1]
+
+# Generative interpretation BuildChapterQueue uses skill context selected from material steps: draft_textbook_chapter_autoformalization.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: textbook-chapter-autoformalization-orchestrator.
+agent chapters_reasoning_agent(
+    task: OrganizedTheory,
+) -> Result[Generated[ChapterQueue], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[OrganizedTheory] = [chapters_reasoning_skill_1]
+
+# Generative interpretation PrepareUnitJobs uses skill context selected from material steps: preformalization_result_existence_precheck, preformalization_line_translation_packet.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: result-existence-precheck-orchestrator, source-line-translation-packet-builder.
+agent jobs_reasoning_agent(
+    task: ChapterQueue,
+) -> Result[Generated[UnitJobSet], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ChapterQueue] = [jobs_reasoning_skill_1, jobs_reasoning_skill_2]
+
+# Generative interpretation AutoformalizeUnits uses skill context selected from material steps: draft_textbook_batch_autoformalize, draft_textbook_object_autoformalization_run, mathlib_grounding_maximize.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: textbook-autoformalization-batch-orchestrator, mathlib-grounding-maximizer.
+agent lean_units_reasoning_agent(
+    task: UnitJobSet,
+) -> Result[Generated[LeanUnitSet], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[UnitJobSet] = [lean_units_reasoning_skill_1, lean_units_reasoning_skill_2]
+
+# Generative interpretation CheckLeanUnits uses skill context selected from material steps: execute_initial, check_compile, postformalization_source_anchor_drift_guard, artifact_realness_gate.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-execution-runner, lean-compile-checker, source-formalization-drift-guard, autoformalization-result-realness-verifier.
+agent gate_report_reasoning_agent(
+    task: LeanCheckBasis,
+) -> Result[Generated[UnitGateReport], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanCheckBasis] = [gate_report_reasoning_skill_1, gate_report_reasoning_skill_2, gate_report_reasoning_skill_3, gate_report_reasoning_skill_4]
+
+# Generative interpretation SummarizeTextbookBatch uses skill context selected from material steps: consistency_unified_report.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-consistency-report-orchestrator.
+agent disposition_reasoning_agent(
+    task: BatchSummaryBasis,
+) -> Result[Generated[TextbookDisposition], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[BatchSummaryBasis] = [disposition_reasoning_skill_1]
+
+converted_reasoning = AutoformalizeTextbook(
+    corpus = corpus_reasoning_agent,
+    theory = theory_reasoning_agent,
+    theory_by = theory_reasoning_relation_builder,
+    chapters = chapters_reasoning_agent,
+    chapters_by = chapters_reasoning_relation_builder,
+    jobs = jobs_reasoning_agent,
+    jobs_by = jobs_reasoning_relation_builder,
+    lean_units = lean_units_reasoning_agent,
+    lean_units_by = lean_units_reasoning_relation_builder,
+    gate_report = gate_report_reasoning_agent,
+    gate_report_by = gate_report_reasoning_relation_builder,
+    disposition = disposition_reasoning_agent,
+    disposition_by = disposition_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `latex-archive-theory-extractor`; this does not execute the linked native resource.
+def intake_latex_archive_theory_extract_material_binding(source: LatexTextbookArchiveSelection) -> Computed[TextbookTheoryAutoformalizationIntakeLatexArchiveTheoryExtractArtifact]:
+    artifact = TextbookTheoryAutoformalizationIntakeLatexArchiveTheoryExtractArtifact(
+        subject = "typed material binding for intake_latex_archive_theory_extract",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: intake_latex_archive_theory_extract")
+
+# Material binding descriptor for `textbook-theory-tex-organizer`; this does not execute the linked native resource.
+def preformalization_textbook_theory_organize_material_binding(source: TextbookTheoryAutoformalizationIntakeLatexArchiveTheoryExtractArtifact) -> Computed[TextbookTheoryAutoformalizationPreformalizationTextbookTheoryOrganizeArtifact]:
+    artifact = TextbookTheoryAutoformalizationPreformalizationTextbookTheoryOrganizeArtifact(
+        subject = "typed material binding for preformalization_textbook_theory_organize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_textbook_theory_organize")
+
+# Epistemic occurrence owned by `textbook-chapter-autoformalization-orchestrator`; output assurance remains Generated.
+agent draft_textbook_chapter_autoformalization_agent(
+    task: TextbookTheoryAutoformalizationPreformalizationTextbookTheoryOrganizeArtifact,
+) -> Result[Generated[TextbookTheoryAutoformalizationDraftTextbookChapterAutoformalizationArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[TextbookTheoryAutoformalizationPreformalizationTextbookTheoryOrganizeArtifact] = [draft_textbook_chapter_autoformalization_skill_binding]
+
+def draft_textbook_chapter_autoformalization_relation_builder(
+    source: TextbookTheoryAutoformalizationPreformalizationTextbookTheoryOrganizeArtifact,
+    target: Generated[TextbookTheoryAutoformalizationDraftTextbookChapterAutoformalizationArtifact],
+) -> FormalizesDraftTextbookChapterAutoformalizationCertificate:
+    return FormalizesDraftTextbookChapterAutoformalizationCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `textbook-autoformalization-batch-orchestrator`; output assurance remains Generated.
+agent draft_textbook_batch_autoformalize_agent(
+    task: TextbookTheoryAutoformalizationDraftTextbookChapterAutoformalizationArtifact,
+) -> Result[Generated[TextbookTheoryAutoformalizationDraftTextbookBatchAutoformalizeArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[TextbookTheoryAutoformalizationDraftTextbookChapterAutoformalizationArtifact] = [draft_textbook_batch_autoformalize_skill_binding]
+
+def draft_textbook_batch_autoformalize_relation_builder(
+    source: TextbookTheoryAutoformalizationDraftTextbookChapterAutoformalizationArtifact,
+    target: Generated[TextbookTheoryAutoformalizationDraftTextbookBatchAutoformalizeArtifact],
+) -> FormalizesDraftTextbookBatchAutoformalizeCertificate:
+    return FormalizesDraftTextbookBatchAutoformalizeCertificate(source = source, target = target)
+
+# Material binding descriptor for `source-line-translation-packet-builder`; this does not execute the linked native resource.
+def preformalization_line_translation_packet_material_binding(source: TextbookTheoryAutoformalizationDraftTextbookBatchAutoformalizeArtifact) -> Computed[TextbookTheoryAutoformalizationPreformalizationLineTranslationPacketArtifact]:
+    artifact = TextbookTheoryAutoformalizationPreformalizationLineTranslationPacketArtifact(
+        subject = "typed material binding for preformalization_line_translation_packet",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_line_translation_packet")
+
+# Material binding descriptor for `result-existence-precheck-orchestrator`; this does not execute the linked native resource.
+def preformalization_result_existence_precheck_material_binding(source: TextbookTheoryAutoformalizationPreformalizationLineTranslationPacketArtifact) -> Computed[TextbookTheoryAutoformalizationPreformalizationResultExistencePrecheckArtifact]:
+    artifact = TextbookTheoryAutoformalizationPreformalizationResultExistencePrecheckArtifact(
+        subject = "typed material binding for preformalization_result_existence_precheck",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_result_existence_precheck")
+
+# Epistemic occurrence owned by `textbook-autoformalization-batch-orchestrator`; output assurance remains Generated.
+agent draft_textbook_object_autoformalization_run_agent(
+    task: TextbookTheoryAutoformalizationPreformalizationResultExistencePrecheckArtifact,
+) -> Result[Generated[TextbookTheoryAutoformalizationDraftTextbookObjectAutoformalizationRunArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[TextbookTheoryAutoformalizationPreformalizationResultExistencePrecheckArtifact] = [draft_textbook_object_autoformalization_run_skill_binding]
+
+def draft_textbook_object_autoformalization_run_relation_builder(
+    source: TextbookTheoryAutoformalizationPreformalizationResultExistencePrecheckArtifact,
+    target: Generated[TextbookTheoryAutoformalizationDraftTextbookObjectAutoformalizationRunArtifact],
+) -> FormalizesDraftTextbookObjectAutoformalizationRunCertificate:
+    return FormalizesDraftTextbookObjectAutoformalizationRunCertificate(source = source, target = target)
+
+# Material binding descriptor for `mathlib-grounding-maximizer`; this does not execute the linked native resource.
+def mathlib_grounding_maximize_material_binding(source: TextbookTheoryAutoformalizationDraftTextbookObjectAutoformalizationRunArtifact) -> Computed[TextbookTheoryAutoformalizationMathlibGroundingMaximizeArtifact]:
+    artifact = TextbookTheoryAutoformalizationMathlibGroundingMaximizeArtifact(
+        subject = "typed material binding for mathlib_grounding_maximize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_grounding_maximize")
+
+# Material binding descriptor for `lean-execution-runner`; this does not execute the linked native resource.
+def execute_initial_material_binding(source: TextbookTheoryAutoformalizationMathlibGroundingMaximizeArtifact) -> Computed[TextbookTheoryAutoformalizationExecuteInitialArtifact]:
+    artifact = TextbookTheoryAutoformalizationExecuteInitialArtifact(
+        subject = "typed material binding for execute_initial",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation execute_initial",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: execute_initial")
+
+# Material binding descriptor for `lean-compile-checker`; this does not execute the linked native resource.
+def check_compile_material_binding(source: TextbookTheoryAutoformalizationExecuteInitialArtifact) -> Computed[TextbookTheoryAutoformalizationCheckCompileArtifact]:
+    artifact = TextbookTheoryAutoformalizationCheckCompileArtifact(
+        subject = "typed material binding for check_compile",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: check_compile")
+
+# Material binding descriptor for `source-formalization-drift-guard`; this does not execute the linked native resource.
+def postformalization_source_anchor_drift_guard_material_binding(source: TextbookTheoryAutoformalizationCheckCompileArtifact) -> Computed[TextbookTheoryAutoformalizationPostformalizationSourceAnchorDriftGuardArtifact]:
+    artifact = TextbookTheoryAutoformalizationPostformalizationSourceAnchorDriftGuardArtifact(
+        subject = "typed material binding for postformalization_source_anchor_drift_guard",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: postformalization_source_anchor_drift_guard")
+
+# Material binding descriptor for `autoformalization-result-realness-verifier`; this does not execute the linked native resource.
+def artifact_realness_gate_material_binding(source: TextbookTheoryAutoformalizationPostformalizationSourceAnchorDriftGuardArtifact) -> Computed[TextbookTheoryAutoformalizationArtifactRealnessGateArtifact]:
+    artifact = TextbookTheoryAutoformalizationArtifactRealnessGateArtifact(
+        subject = "typed material binding for artifact_realness_gate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        considered_dispositions = ["pass", "warn", "fail", "blocked"],
+        selected_disposition = "not_tested",
+        rationale = "native execution is outside this structural PRISM fixture",
+    )
+    return compute(artifact, procedure = "linked material binding: artifact_realness_gate")
+
+# Material binding descriptor for `lean-consistency-report-orchestrator`; this does not execute the linked native resource.
+def consistency_unified_report_material_binding(source: TextbookTheoryAutoformalizationArtifactRealnessGateArtifact) -> Computed[TextbookAutoformalizationAcceptanceSummary]:
+    artifact = TextbookAutoformalizationAcceptanceSummary(
+        subject = "typed material binding for consistency_unified_report",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_unified_report")
+
+# LaTeX textbook archive extraction, thematic TeX organization, truthful per-unit job queuing, and standard Lean workflow gates for each target unit.
+workflow TextbookTheoryAutoformalizationLoop(
+    request: LatexTextbookArchiveSelection,
+) -> Computed[TextbookAutoformalizationAcceptanceSummary]
+    fails ModelFailure
+    ! {AI.Generate, Context.Disclose}:
+    sequence:
+        [intake_latex_archive_theory_extract: intake_latex_archive_theory_extract_material_binding(request)]
+        [preformalization_textbook_theory_organize: preformalization_textbook_theory_organize_material_binding(intake_latex_archive_theory_extract.value)]
+        [draft_textbook_chapter_autoformalization: draft_textbook_chapter_autoformalization_agent(preformalization_textbook_theory_organize.value)]
+        [draft_textbook_batch_autoformalize: draft_textbook_batch_autoformalize_agent(draft_textbook_chapter_autoformalization.value)]
+        [preformalization_line_translation_packet: preformalization_line_translation_packet_material_binding(draft_textbook_batch_autoformalize.value)]
+        [preformalization_result_existence_precheck: preformalization_result_existence_precheck_material_binding(preformalization_line_translation_packet.value)]
+        [draft_textbook_object_autoformalization_run: draft_textbook_object_autoformalization_run_agent(preformalization_result_existence_precheck.value)]
+        [mathlib_grounding_maximize: mathlib_grounding_maximize_material_binding(draft_textbook_object_autoformalization_run.value)]
+        [execute_initial: execute_initial_material_binding(mathlib_grounding_maximize.value)]
+        [check_compile: check_compile_material_binding(execute_initial.value)]
+        [postformalization_source_anchor_drift_guard: postformalization_source_anchor_drift_guard_material_binding(check_compile.value)]
+        [artifact_realness_gate: artifact_realness_gate_material_binding(postformalization_source_anchor_drift_guard.value)]
+        [consistency_unified_report: consistency_unified_report_material_binding(artifact_realness_gate.value)]
+    return consistency_unified_report

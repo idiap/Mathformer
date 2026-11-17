@@ -1,0 +1,919 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_sympy_goal_sample_plan_0004_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "One-pass SymPy goal evidence planning; repair steps are advice only.",
+  "aliases": [
+    "physics-sympy:goal-sample-plan-0004"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Request": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "case": {
+            "const": "formalphysics_0004"
+          },
+          "sympy_file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "run_gates": {
+            "type": "boolean"
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reasoning_log": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "case",
+          "sympy_file",
+          "run_gates",
+          "output",
+          "reasoning_log"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "description": "Invocation-local ordered JSON state. An opaque module_ref identifies the actual imported module within the same MCP server; it is never serialized or reimported.",
+        "properties": {
+          "case_id": {
+            "type": "string"
+          },
+          "artifact_path": {
+            "type": "string"
+          },
+          "run_gates": {
+            "type": "boolean"
+          },
+          "evidence": {
+            "type": "object"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "exists": {
+            "type": "boolean"
+          },
+          "stdout_text": {
+            "type": "string"
+          },
+          "_native_json": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "artifact_path",
+          "run_gates",
+          "evidence",
+          "findings",
+          "exists",
+          "stdout_text",
+          "_native_json"
+        ]
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "FindingKind": {
+      "schema": {
+        "enum": [
+          "artifact_missing",
+          "import_error",
+          "execution_gates_not_run"
+        ]
+      }
+    },
+    "Decision": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "next_action": {
+            "enum": [
+              "needs_initial_draft",
+              "blocked",
+              "recurse",
+              "complete"
+            ]
+          },
+          "goal_status": {
+            "enum": [
+              "missing_artifact",
+              "blocked",
+              "derivation_partial",
+              "complete_sympy_physics_derivation"
+            ]
+          },
+          "open_frontier_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "next_action",
+          "goal_status",
+          "open_frontier_count"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Plan": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "style": {
+            "const": "physics_sympy_goal_sample_autoformalization_plan"
+          },
+          "backend": {
+            "const": "sympy"
+          },
+          "case_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "sample_lock": {
+            "type": "object"
+          },
+          "source_only_policy": {
+            "type": "object"
+          },
+          "goal_status": {
+            "enum": [
+              "missing_artifact",
+              "blocked",
+              "derivation_partial",
+              "complete_sympy_physics_derivation"
+            ]
+          },
+          "next_action": {
+            "enum": [
+              "needs_initial_draft",
+              "blocked",
+              "recurse",
+              "complete"
+            ]
+          },
+          "current_evidence": {
+            "type": "object"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "open_frontier_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "recursive_workflow": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "controller_conditions": {
+            "type": "object"
+          },
+          "commands": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "style",
+          "backend",
+          "case_id",
+          "created_at",
+          "sample_lock",
+          "source_only_policy",
+          "goal_status",
+          "next_action",
+          "current_evidence",
+          "findings",
+          "open_frontier_count",
+          "recursive_workflow",
+          "controller_conditions",
+          "commands"
+        ]
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "const": 0
+      }
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "working_directory": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "working_directory"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "request": {
+      "type": "Request"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "plan": {
+      "type": "Plan",
+      "value": {
+        "ref": "steps.assemble.outputs.plan"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "steps.emit.outputs.exit_code"
+      }
+    },
+    "stdout_text": {
+      "type": "Text",
+      "value": {
+        "ref": "steps.emit.outputs.stdout_text"
+      }
+    },
+    "json_text": {
+      "type": "Text",
+      "value": {
+        "ref": "steps.emit.outputs.json_text"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "exists": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_plan_initialize",
+          "operation": "mathformer_sympy_goal_plan_initialize"
+        }
+      }
+    },
+    "scan_import": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "imported": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_plan_scan_import",
+          "operation": "mathformer_sympy_goal_plan_scan_import"
+        }
+      }
+    },
+    "inspect": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_plan_inspect",
+          "operation": "mathformer_sympy_goal_plan_inspect"
+        }
+      }
+    },
+    "gates": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_plan_gates",
+          "operation": "mathformer_sympy_goal_plan_gates"
+        }
+      }
+    },
+    "add_finding": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "kind": {
+          "type": "FindingKind"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_plan_add_finding",
+          "operation": "mathformer_sympy_goal_plan_add_finding"
+        }
+      }
+    },
+    "classify": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "decision": {
+          "type": "Decision"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_plan_classify",
+          "operation": "mathformer_sympy_goal_plan_classify"
+        }
+      }
+    },
+    "assemble": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "decision": {
+          "type": "Decision"
+        }
+      },
+      "outputs": {
+        "plan": {
+          "type": "Plan"
+        },
+        "plan_json": {
+          "type": "Text"
+        },
+        "stdout_text": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_plan_assemble",
+          "operation": "mathformer_sympy_goal_plan_assemble"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "plan": {
+          "type": "Plan"
+        },
+        "context": {
+          "type": "Context"
+        },
+        "plan_json": {
+          "type": "Text"
+        },
+        "prior_stdout": {
+          "type": "Text"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout_text": {
+          "type": "Text"
+        },
+        "json_text": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_plan_emit",
+          "operation": "mathformer_sympy_goal_plan_emit"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "request": {
+            "ref": "inputs.request"
+          }
+        }
+      },
+      {
+        "id": "artifact_selection",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "exists",
+            "when": {
+              "ref": "steps.initialize.outputs.exists"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "scan_import",
+                  "kind": "call",
+                  "operation": "scan_import",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.initialize.outputs.state"
+                    }
+                  }
+                },
+                {
+                  "id": "import_selection",
+                  "kind": "switch",
+                  "cases": [
+                    {
+                      "id": "loaded",
+                      "when": {
+                        "ref": "steps.scan_import.outputs.imported"
+                      },
+                      "body": {
+                        "kind": "sequence",
+                        "steps": [
+                          {
+                            "id": "inspect",
+                            "kind": "call",
+                            "operation": "inspect",
+                            "arguments": {
+                              "state": {
+                                "ref": "steps.scan_import.outputs.state"
+                              }
+                            }
+                          },
+                          {
+                            "id": "gate_selection",
+                            "kind": "switch",
+                            "cases": [
+                              {
+                                "id": "run",
+                                "when": {
+                                  "ref": "steps.initialize.outputs.state.run_gates"
+                                },
+                                "body": {
+                                  "kind": "call",
+                                  "operation": "gates",
+                                  "arguments": {
+                                    "state": {
+                                      "ref": "steps.inspect.outputs.state"
+                                    }
+                                  }
+                                }
+                              }
+                            ],
+                            "default": {
+                              "kind": "call",
+                              "operation": "add_finding",
+                              "arguments": {
+                                "state": {
+                                  "ref": "steps.inspect.outputs.state"
+                                },
+                                "kind": {
+                                  "literal": "execution_gates_not_run"
+                                }
+                              }
+                            },
+                            "outputs": {
+                              "state": {
+                                "type": "State",
+                                "value": {
+                                  "ref": "selected.outputs.state"
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        "outputs": {
+                          "state": {
+                            "type": "State",
+                            "value": {
+                              "ref": "steps.gate_selection.outputs.state"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "default": {
+                    "kind": "call",
+                    "operation": "add_finding",
+                    "arguments": {
+                      "state": {
+                        "ref": "steps.scan_import.outputs.state"
+                      },
+                      "kind": {
+                        "literal": "import_error"
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "state": {
+                      "type": "State",
+                      "value": {
+                        "ref": "selected.outputs.state"
+                      }
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "state": {
+                  "type": "State",
+                  "value": {
+                    "ref": "steps.import_selection.outputs.state"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "add_finding",
+          "arguments": {
+            "state": {
+              "ref": "steps.initialize.outputs.state"
+            },
+            "kind": {
+              "literal": "artifact_missing"
+            }
+          }
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "selected.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "classify",
+        "kind": "call",
+        "operation": "classify",
+        "arguments": {
+          "state": {
+            "ref": "steps.artifact_selection.outputs.state"
+          }
+        }
+      },
+      {
+        "id": "assemble",
+        "kind": "call",
+        "operation": "assemble",
+        "arguments": {
+          "state": {
+            "ref": "steps.artifact_selection.outputs.state"
+          },
+          "decision": {
+            "ref": "steps.classify.outputs.decision"
+          }
+        }
+      },
+      {
+        "id": "emit",
+        "kind": "call",
+        "operation": "emit",
+        "arguments": {
+          "request": {
+            "ref": "inputs.request"
+          },
+          "plan": {
+            "ref": "steps.assemble.outputs.plan"
+          },
+          "context": {
+            "ref": "inputs.context"
+          },
+          "plan_json": {
+            "ref": "steps.assemble.outputs.plan_json"
+          },
+          "prior_stdout": {
+            "ref": "steps.assemble.outputs.stdout_text"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "plan": {
+        "type": "Plan",
+        "value": {
+          "ref": "steps.assemble.outputs.plan"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.emit.outputs.exit_code"
+        }
+      },
+      "stdout_text": {
+        "type": "Text",
+        "value": {
+          "ref": "steps.emit.outputs.stdout_text"
+        }
+      },
+      "json_text": {
+        "type": "Text",
+        "value": {
+          "ref": "steps.emit.outputs.json_text"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/",
+          "requested_output",
+          "requested_reasoning_log",
+          "native_runtime_effects_require_qualification"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 300,
+      "max_operation_calls": 7
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Planning classification only; neither process success nor suggested repair steps establish scientific completion or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/scripts/plan_goal_sample_sympy_autoformalization.py",
+        "selector": "build_plan (CLI entry: main)",
+        "digest": "sha256:38455a8768c85c3d9f85dd11f00c4eb5a5e6aaec394171fb16d0cc1e49feb604"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:physics-sympy:goal-sample-plan-0004; run_action; run_leaf_action; preflight",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/sympy_goal_plan_tools.py",
+        "selector": "register_sympy_goal_plan_tools",
+        "digest": "sha256:19edc9149d59a67b07190f1dcd756f74cc093fa793661c7cc2d558164b25c6ab"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_sympy_goal_plan_tools(mcp, _graph_layout_write_policy)",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory authored planner contract",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_sympy_goal_plan_workflow_tests.py",
+        "selector": "PlannerTests; local artifact and compiler fixtures",
+        "digest": "sha256:6827a05da0f0cdeb6af1bc106412663583e40abf4e4a52bb49280483eeabc890"
+      },
+      {
+        "path": "tests/mcp/fixtures/sympy_goal_plan_original.py.txt",
+        "selector": "Frozen original CLI/build_plan oracle",
+        "digest": "sha256:9f295f9ee0cda6b7c5bda1b932a6293ac7ac700630e1761f45f0c7128a0b6801"
+      },
+      {
+        "path": "tests/mcp/run_sympy_goal_plan_0004_workflow_tests.py",
+        "selector": "case-0004 test entrypoint",
+        "digest": "sha256:f07bda21a745d9b6b242b1f2431361d503178fa9424db651f32b72dc908519bf"
+      }
+    ],
+    "gaps": [
+      "Scope is the selected case with optional file/gate/output settings; CLI self-test and generic case selection are outside this projection.",
+      "Hub preflight, dry-run, subprocess, timeout and write audit remain native boundary metadata, not independently executed graph steps.",
+      "Finite source scans, fixed-list inspection and validator loops remain inside owning operations. There is no repair iteration, persistent loop state, convergence test or exhaustion behavior.",
+      "The 300-second wall limit matches the native hub bound; seven calls include source-owned output/log emission. Lunar supplies execution receipts and provenance in addition to optional native logs.",
+      "Import/validator effects and scientific validity remain unqualified. The absent default planner path differs from the libraries/ path required by hub preflight.",
+      "Module references are invocation-local to one MCP server and released after inspection when gates are skipped or after gates; no checkpoint/resume is supported. Interrupted calls may retain native imports until server termination."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-sympy:goal-sample-plan-0004",
+      "owner_skill": "skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/SKILL.md",
+      "contract": {
+        "id": "physics-sympy:goal-sample-plan-0004",
+        "summary": "Plan one-sample recursive goal evidence for FormalPhysics SymPy 0004.",
+        "family": "physics_sympy",
+        "kind": "validation",
+        "safety": "read_only",
+        "command": [
+          ".venv/bin/python",
+          "skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/scripts/plan_goal_sample_sympy_autoformalization.py",
+          "--case",
+          "formalphysics_0004",
+          "--run-gates",
+          "--json"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/scripts/plan_goal_sample_sympy_autoformalization.py",
+          "libraries/MathformerPhysicsLib/SymPy/formalphysics_0004/MathformerPhysics.py"
+        ],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [],
+        "allows_extra_args": true,
+        "timeout_seconds": 300,
+        "notes": ""
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "run_action -> run_leaf_action: preflight; errors or dry-run return without launch; otherwise one subprocess with a 300-second timeout, followed by write audit. Unexpected launch exceptions can propagate.",
+      "failure_policy": "Preserve preflight, timeout, subprocess and undeclared-write failures. main returns 0 even for blocked/missing/partial plans.",
+      "default_path": "MathformerPhysicsLib/SymPy/formalphysics_0004/MathformerPhysics.py",
+      "path_discrepancy": "Hub requires libraries/MathformerPhysicsLib/SymPy/formalphysics_0004/MathformerPhysics.py; planner default omits libraries/ and is absent, so unmodified default planner execution reports missing_artifact.",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "timeouts": "Native hub subprocess bound is 300 seconds; repair-cartographer caller uses 240 seconds; the former generated 3600-second limit was not native."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "command_after_dependencies": false,
+      "modeling": "Dependency-free leaf. Expanded blocks describe one planner invocation; do not launch one subprocess per block."
+    },
+    "mathformer.callers": {
+      "recursive_controller": "run_recursive_goal_case.py::build_run invokes the planner as goal_plan stage.",
+      "repair_mapper": "map_physics_sympy_repair_expansion.py::run_goal_planner invokes the planner when no saved plan is supplied, with a 240-second timeout."
+    },
+    "mathformer.runtime": {
+      "module_transport": "Opaque process-local reference to the single native import; all following inspectors and gates share it.",
+      "ordered_payloads": "Validated paired JSON preserves source insertion order through PRISM canonicalization.",
+      "context": "Artifact paths retain native repository-relative resolution. Output and reasoning-log paths resolve relative to context.working_directory.",
+      "tests": "No external model/provider or theorem compiler boundary belongs to this planner. Tests supply local artifact files and compiler input fixtures; real PRISM compilation and runtime execute the bindings.",
+      "call_budget": "Six planning calls plus one source-owned emit call; no refinement or recursive repair is executed."
+    },
+    "mathformer.source_steps": {
+      "initialize": "Source: plan_goal_sample_sympy_autoformalization.py::main, normalize_case, case_path, build_plan initialization. Normalize case, resolve explicit/default path, initialize findings and evidence including existence/run_gates, and pack invocation state. Invalid normalization can abort.",
+      "scan_import": "Source: plan_goal_sample_sympy_autoformalization.py::build_plan existing-artifact block, scan_open_markers, load_module. Read source; scan every source line against three marker patterns, accumulating high findings; then import and store its report/module. Caught import Exceptions produce imported=false. Read failures can escape. No source-line cap or repair iteration.",
+      "inspect": "Source: plan_goal_sample_sympy_autoformalization.py::inspect_module; build_plan evidence.update/findings.extend. Inspect 12 required surfaces, 17 functions, then three commentary markers. Preserve all evidence and findings; missing requirements do not prevent subsequent gate execution.",
+      "gates": "Source: plan_goal_sample_sympy_autoformalization.py::run_executable_gates, call_validator; build_plan gate accumulation. Invoke all 12 fixed validators in order, including run_all, collecting reports before mapping failed reports to high findings. Failed reports do not stop later calls. func() TypeError triggers one func(None) retry; exceptions from that retry or getattr can escape. Other first-call Exceptions become failed reports. Store executable_gates evidence and append findings.",
+      "add_finding": "Source: plan_goal_sample_sympy_autoformalization.py::build_plan missing-artifact/import-error/gates-skipped blocks; finding. Append the selected source-defined high finding with its evidence. Missing artifact avoids read/import; import failure avoids inspection/gates; skipped gates prevents completion. Preserve accumulated state.",
+      "classify": "Source: plan_goal_sample_sympy_autoformalization.py::build_plan high_findings/next_action/status. Filter/count high findings. Initial action is needs_initial_draft for the missing-artifact branch, otherwise recurse. Recheck path.exists(): existing with no high findings becomes complete; otherwise any high import_error makes blocked. Map actions to missing_artifact, derivation_partial, complete_sympy_physics_derivation or blocked. These are plan values, not graph failures.",
+      "assemble": "Source: plan_goal_sample_sympy_autoformalization.py::build_plan return, recursive_workflow. Pack native plan with evidence/findings, decision, timestamp, sample/source-only policies, controller descriptions, six descriptive workflow steps and suggested argv. Suggested commands are not executed.",
+      "emit": "Source: plan_goal_sample_sympy_autoformalization.py::main serialization/output, append_goal_event. JSON-safe serialize; write requested output with parent creation or print; then optionally append reasoning log if logging is available. Return 0 for every normally produced plan, including blocked/partial. Serialization, write or log exceptions can abort."
+    },
+    "mathformer.iteration": {
+      "ownership": "scan_open_markers traverses all source lines and 3 patterns; inspect_module traverses fixed lists; run_executable_gates traverses 12 validators and then all reports.",
+      "state": "Findings and evidence accumulate in one state; validators share the same imported module; reports accumulate in source order.",
+      "stopping": "Helpers finish their finite traversals normally; failed validator reports never skip later validators. No refinement loop, recursive execution or exhaustion outcome exists.",
+      "failures": "load_module catches Exception as import evidence; call_validator catches initial non-TypeError Exception as failure reports, retries TypeError once with None; getattr and fallback exceptions can escape and abort."
+    }
+  }
+}

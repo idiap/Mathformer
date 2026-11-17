@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+{
+  "schema_version": "mathformer.meta_skills.skill_quality_card.v0.1",
+  "card_id": "mathformerphysicslib-generative-coherence-critic",
+  "subject": "mathformerphysicslib-generative-coherence-critic",
+  "subject_type": "skill",
+  "skill_path": "skills/mathformerphysicslib/mathformerphysicslib-generative-coherence-critic/SKILL.md",
+  "deterministic_boundary": [
+    "Reads deterministic coherence reports and summarizes evidence bindings.",
+    "Writes advisory probe plans with required deterministic gates."
+  ],
+  "generative_boundary": [
+    "May propose coherence probes, repair hypotheses, and overreach risks.",
+    "May not mark a finding blocking without deterministic source report evidence."
+  ],
+  "epistemic_risks": [
+    "Overstating advisory probes as accepted coherence findings.",
+    "Inventing Mathlib grounding that was not found by deterministic auditors."
+  ],
+  "necessary_conditions": [
+    "Input reports include source report styles and evidence paths.",
+    "Every probe names deterministic gates to rerun.",
+    "Raw generative output is archived when Codex-exec is used."
+  ],
+  "sufficiency_claim": "Sufficient only for advisory coherence probing; not sufficient for promotion or blocking without deterministic gate evidence.",
+  "representation_contract": [
+    "Probe payloads include evidence_bindings, repair_hypotheses, deterministic_gates_to_rerun, and overreach_risks.",
+    "Allowed verdicts are pass, advisory_findings, deterministic_blocker_supported, and insufficient_evidence."
+  ],
+  "validation_oracles": [
+    "python skills/mathformerphysicslib/mathformerphysicslib-generative-coherence-critic/scripts/build_generative_coherence_critic_plan.py --self-test --json",
+    "python meta_skills/scripts/validate_skill_quality_cards.py --json"
+  ],
+  "failure_modes": [
+    "Probe lacks deterministic evidence binding.",
+    "Probe bypasses Mathlib-first grounding.",
+    "Probe promotes a repair without rerun gates."
+  ],
+  "promotion_gate": {
+    "state": "task_local_validated",
+    "required_evidence": [
+      "self-test JSON",
+      "quality card validation",
+      "coherence gate rerun evidence"
+    ],
+    "blocking_conditions": [
+      "deterministic evidence missing",
+      "generative finding treated as accepted fact"
+    ]
+  }
+}

@@ -1,0 +1,686 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_lean_foundation_verify_workflow
+version: 1.0.0
+kind: workflow
+description: Structural foundation verification, optional index compilation, report
+  emission, and native exit status.
+aliases:
+- physics-lean:foundation-verify
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type: array
+      items:
+        type: string
+      maxItems: 256
+      description: Native main argv; specialization admits at most 256 tokens and
+        at most 256 selected modules, including defaults.
+  Bool:
+    schema:
+      type: boolean
+  Args:
+    schema:
+      type: object
+      required:
+      - module
+      - output
+      - skip_index_compile
+      - self_test
+      - json
+      properties:
+        module:
+          type: array
+          items:
+            type: string
+          maxItems: 256
+        output:
+          type:
+          - string
+          - 'null'
+        skip_index_compile:
+          type: boolean
+        self_test:
+          type: boolean
+        json:
+          type: boolean
+      additionalProperties: false
+  ScanState:
+    schema:
+      type: object
+      required:
+      - paths
+      - cursor
+      - modules
+      properties:
+        paths:
+          type: array
+          items:
+            type: string
+          maxItems: 256
+        cursor:
+          type: integer
+          minimum: 0
+          maximum: 256
+        modules:
+          type: array
+          items:
+            type: object
+          maxItems: 256
+          description: Ordered check_module results with path, ok, promotion_ready,
+            blockers, warnings, declaration_comment_count.
+      additionalProperties: false
+  Structure:
+    schema:
+      type: object
+      required:
+      - modules
+      - blockers
+      properties:
+        modules:
+          type: array
+          items:
+            type: object
+          maxItems: 256
+        blockers:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+  IndexResult:
+    schema:
+      type: object
+      required:
+      - ok
+      properties:
+        ok:
+          type: boolean
+        skipped:
+          type: boolean
+        module:
+          type: string
+        returncode:
+          type: integer
+        stdout_tail:
+          type: string
+        stderr_tail:
+          type: string
+      additionalProperties: false
+  Report:
+    schema:
+      type: object
+      required:
+      - style
+      - module_count
+      - ok
+      - promotion_ready_count
+      - modules
+      - accepted_index_compile
+      - blockers
+      - terminal_state
+      properties:
+        style:
+          const: physics_foundation_verification_report
+        module_count:
+          type: integer
+          minimum: 0
+        ok:
+          type: boolean
+        promotion_ready_count:
+          type: integer
+          minimum: 0
+        modules:
+          type: array
+          items:
+            type: object
+          maxItems: 256
+        accepted_index_compile:
+          type: object
+        blockers:
+          type: array
+          items:
+            type: string
+        terminal_state:
+          enum:
+          - verification_passed
+          - verification_blocked
+      additionalProperties: false
+  Emission:
+    schema:
+      type: object
+      required:
+      - text
+      - exit_code
+      properties:
+        text:
+          type: string
+        exit_code:
+          type: integer
+          enum:
+          - 0
+          - 1
+      additionalProperties: false
+  Context:
+    schema:
+      type: object
+      required:
+      - repository_root
+      - allow_mutating
+      properties:
+        repository_root:
+          type: string
+          minLength: 1
+        allow_mutating:
+          type: boolean
+      additionalProperties: false
+  VerifyState:
+    schema:
+      type: object
+      required:
+      - scan
+      - done
+      - self_test_report
+      properties:
+        scan:
+          type: object
+          required:
+          - paths
+          - cursor
+          - modules
+          properties:
+            paths:
+              type: array
+              items:
+                type: string
+              maxItems: 256
+            cursor:
+              type: integer
+              minimum: 0
+              maximum: 256
+            modules:
+              type: array
+              items:
+                type: object
+              maxItems: 256
+              description: Ordered check_module results with path, ok, promotion_ready,
+                blockers, warnings, declaration_comment_count.
+          additionalProperties: false
+        done:
+          type: boolean
+        self_test_report:
+          type:
+          - object
+          - 'null'
+      additionalProperties: false
+inputs:
+  argv:
+    type: Argv
+  context:
+    type: Context
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+  emission:
+    type: Emission
+    value:
+      ref: flow.outputs.emission
+operations:
+  parse:
+    inputs:
+      argv:
+        type: Argv
+    outputs:
+      args:
+        type: Args
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundation_verify_parse
+        operation: mathformer_foundation_verify_parse
+  self_test:
+    inputs:
+      context:
+        type: Context
+    outputs:
+      state:
+        type: VerifyState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundation_verify_self_test
+        operation: mathformer_foundation_verify_self_test
+  initialize:
+    inputs:
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      state:
+        type: VerifyState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundation_verify_initialize
+        operation: mathformer_foundation_verify_initialize
+  scan_next:
+    inputs:
+      state:
+        type: VerifyState
+      context:
+        type: Context
+    outputs:
+      state:
+        type: VerifyState
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundation_verify_scan_next
+        operation: mathformer_foundation_verify_scan_next
+  collect:
+    inputs:
+      state:
+        type: VerifyState
+    outputs:
+      structure:
+        type: Structure
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundation_verify_collect
+        operation: mathformer_foundation_verify_collect
+  compile_index:
+    inputs:
+      context:
+        type: Context
+    outputs:
+      index:
+        type: IndexResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundation_verify_compile_index
+        operation: mathformer_foundation_verify_compile_index
+  skip_compile:
+    inputs: {}
+    outputs:
+      index:
+        type: IndexResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundation_verify_skip_compile
+        operation: mathformer_foundation_verify_skip_compile
+  finalize:
+    inputs:
+      structure:
+        type: Structure
+      index:
+        type: IndexResult
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundation_verify_finalize
+        operation: mathformer_foundation_verify_finalize
+  emit:
+    inputs:
+      args:
+        type: Args
+      report:
+        type: Report
+      context:
+        type: Context
+    outputs:
+      emission:
+        type: Emission
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundation_verify_emit
+        operation: mathformer_foundation_verify_emit
+  retain_empty:
+    inputs:
+      state:
+        type: VerifyState
+    outputs:
+      state:
+        type: VerifyState
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundation_verify_retain_empty
+        operation: mathformer_foundation_verify_retain_empty
+  self_test_report:
+    inputs:
+      state:
+        type: VerifyState
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundation_verify_self_test_report
+        operation: mathformer_foundation_verify_self_test_report
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse
+    arguments:
+      argv:
+        ref: inputs.argv
+  - id: prepare
+    kind: switch
+    cases:
+    - id: self_test
+      when:
+        ref: steps.parse.outputs.args.self_test
+      body:
+        kind: call
+        operation: self_test
+        arguments:
+          context:
+            ref: inputs.context
+    default:
+      kind: call
+      operation: initialize
+      arguments:
+        args:
+          ref: steps.parse.outputs.args
+        context:
+          ref: inputs.context
+    outputs:
+      state:
+        type: VerifyState
+        value:
+          ref: selected.outputs.state
+  - id: modules
+    kind: loop
+    state_type: VerifyState
+    initial:
+      ref: steps.prepare.outputs.state
+    body:
+      kind: switch
+      cases:
+      - id: empty_or_self_test
+        when:
+          ref: loop.state.done
+        body:
+          kind: call
+          operation: retain_empty
+          arguments:
+            state:
+              ref: loop.state
+      default:
+        kind: call
+        operation: scan_next
+        arguments:
+          state:
+            ref: loop.state
+          context:
+            ref: inputs.context
+      outputs:
+        state:
+          type: VerifyState
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 256
+    on_exhausted: fail
+    outputs:
+      state:
+        type: VerifyState
+        value:
+          ref: body.outputs.state
+  - id: verify
+    kind: switch
+    cases:
+    - id: self_test
+      when:
+        ref: steps.parse.outputs.args.self_test
+      body:
+        kind: call
+        operation: self_test_report
+        arguments:
+          state:
+            ref: steps.modules.outputs.state
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: collect
+        arguments:
+          state:
+            ref: steps.modules.outputs.state
+        id: collect
+      - id: index
+        kind: switch
+        cases:
+        - id: skip
+          when:
+            ref: steps.parse.outputs.args.skip_index_compile
+          body:
+            kind: call
+            operation: skip_compile
+            arguments: {}
+        default:
+          kind: call
+          operation: compile_index
+          arguments:
+            context:
+              ref: inputs.context
+        outputs:
+          index:
+            type: IndexResult
+            value:
+              ref: selected.outputs.index
+      - id: finalize
+        kind: call
+        operation: finalize
+        arguments:
+          structure:
+            ref: steps.collect.outputs.structure
+          index:
+            ref: steps.index.outputs.index
+      outputs:
+        report:
+          type: Report
+          value:
+            ref: steps.finalize.outputs.report
+    outputs:
+      report:
+        type: Report
+        value:
+          ref: selected.outputs.report
+  - id: emit
+    kind: call
+    operation: emit
+    arguments:
+      args:
+        ref: steps.parse.outputs.args
+      report:
+        ref: steps.verify.outputs.report
+      context:
+        ref: inputs.context
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.verify.outputs.report
+    emission:
+      type: Emission
+      value:
+        ref: steps.emit.outputs.emission
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/mathformerphysicslib/foundations/
+      - caller_selected_output
+      - lake_build_artifacts
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 264
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked structural verification only; no runtime qualification,
+    scientific truth or durable promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/mathformerphysicslib/mathformerphysicslib-foundation-verifier/scripts/verify_foundation_modules.py
+    selector: main; parse_options; select_modules; initialize_scan; scan_next; check_module;
+      collect_structure; check_foundation_index_compile; skip_compile; finalize_report;
+      build_report; self_test; emit_report
+    digest: sha256:b4125ab1944bf073ef87538d1819efba4c1e133ecd3972966eca52e84c119e8c
+  - path: scripts/mathformer.py
+    selector: build_registry physics-lean:foundation-verify; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/foundation_verify_tools.py
+    selector: register_foundation_verify_tools
+    digest: sha256:17a128c7e3d9f17b683cb68d11d6395346c7235067ac70b806f2b9d092ce0340
+  - path: scripts/mcp_server.py
+    selector: register_foundation_verify_tools; _analysis_write_policy; apply_runtime_config
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory physics-lean:foundation-verify authored descriptor
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_foundation_verify_workflow_tests.py
+    selector: FoundationVerifyTests
+    digest: sha256:ffa9c83ea426c6df6b6502d1217f7c742eaa4512358a284774a04ffdda98a39c
+  - path: tests/mcp/fixtures/foundation_verify_original.py.txt
+    selector: original main before shared step extraction
+    digest: sha256:1716e5923d823c985c096d94a1aa1f711e1036447f2c82c617040507e11e3806
+  - path: tests/mcp/fixtures/foundation_verify_compiler/sitecustomize.py
+    selector: test-only compiler_boundary
+    digest: sha256:fa33b9b123f761f003e4c6c274e49fe3e1d3dc9a7fdf940f25837d7bce835b6e
+  gaps:
+  - This main projection excludes hub preflight/dry-run/launch/write-audit internals
+    and the HubResult transport envelope. MCP tools enforce the service mutation gate
+    for compiler, self-test and output writes.
+  - Admission specializes argv and the selected module list to at most 256; native
+    source has no numeric cap. At 256 modules done is true on iteration 256, so normal
+    completion wins; exhaustion is unreachable for admitted inputs with the authored
+    bound.
+  - Context repository_root supplies the native repository/cwd mount; relative argv
+    paths resolve there, and sorted legacy MathformerPhysicsLib/Lean/Foundations defaults
+    are discovered on initialization of that mount. The direct CLI retains import-time
+    DEFAULT_MODULES. Mounted defaults must fit 256 modules.
+  - The 3600-second/call budgets and required receipts are enforced by the Lunar host,
+    not by native Lake; neither the original hub leaf nor Lake sets a timeout. Complete
+    Lake/network effects need qualification. Tests substitute only the external compiler
+    boundary.
+  - Native printed reports and argparse diagnostics are routed to MCP stderr to preserve
+    protocol framing; Emission.text is the exact native serialized report.
+  - Lunar cannot compile branch-local loop exhaustion. The module loop is hoisted
+    to the root sequence with a typed VerifyState carrier. retain_empty performs no
+    module visit on empty input or after self-test; self_test_report unpacks the already-computed
+    native report. Selected scans and all side effects retain native order.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-lean:foundation-verify
+    owner_skill: skills/mathformerphysicslib/mathformerphysicslib-foundation-verifier/SKILL.md
+    contract:
+      id: physics-lean:foundation-verify
+      family: physics_lean
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - skills/mathformerphysicslib/mathformerphysicslib-foundation-verifier/scripts/verify_foundation_modules.py
+      - --json
+      depends_on: []
+      writes:
+      - artifacts/mathformerphysicslib/foundations/
+      allows_extra_args: true
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Dependency-free native hub leaf remains unchanged. Bound MCP tools
+      share extracted source steps with main; context supplies repository/cwd and
+      explicit mutation authorization. The graph preserves native scan, compile, report
+      and emission order.
+    failure_policy: Preserve native nonzero status; reporting blockers is normal main
+      completion with exit 1, while uncaught exceptions abort.
+    scientific_payloads: Report is the native verification payload; Emission exposes
+      serialized output and main return status.
+# REUSE-IgnoreEnd

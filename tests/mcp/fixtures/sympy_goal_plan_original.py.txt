@@ -1,0 +1,643 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Keep FormalPhysics SymPy autoformalization goal loops one-sample scoped,
+#   recursive, source-only, and explicit.
+#
+# Intent:
+#   Build a deterministic plan that tells agents which SymPy sample is locked,
+#   which evidence exists, and where recursive repair should move next.
+#
+# Function:
+#   Emits a physics_sympy_goal_sample_autoformalization_plan and optionally runs
+#   executable gates for one formalphysics_#### SymPy artifact.
+#
+# Maintenance Notes:
+#   Keep status semantics synchronized with the SymPy repair cartographer and
+#   recursive loop controller.
+
+"""Plan one-sample recursive SymPy physics autoformalization."""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import importlib.util
+import json
+from pathlib import Path
+import re
+import sys
+import traceback
+from typing import Any, Callable, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SYMPY_ROOT = REPO_ROOT / "MathformerPhysicsLib" / "SymPy"
+CASE_RE = re.compile(r"formalphysics_(\d{4})")
+REASONING_LOG_SCRIPTS = (
+    REPO_ROOT / "skills" / "control" / "reasoning-log-schema-guardian" / "scripts"
+)
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+if str(REASONING_LOG_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(REASONING_LOG_SCRIPTS))
+try:
+    from reasoning_log import append_reasoning_log_entry
+except Exception:  # pragma: no cover - logging is optional for this script.
+    append_reasoning_log_entry = None
+
+REQUIRED_SURFACES = [
+    "CLAIM",
+    "QUANTITY_TABLE",
+    "ASSUMPTIONS",
+    "DERIVATION_STEPS",
+    "EQUATION_SURFACE",
+    "QUANTITY_SURFACE",
+    "EQUATION_GRAPH",
+    "LAW_TABLE",
+    "PROJECTION_BRIDGES",
+    "EQUIVALENCE_CERTIFICATES",
+    "SYMPY_LIBRARY_GROUNDING",
+    "ASSUMPTION_CONTEXT",
+]
+
+REQUIRED_FUNCTIONS = [
+    "build_symbols",
+    "build_units",
+    "build_equations",
+    "derive_target",
+    "validate_dimensions",
+    "validate_derivation_steps",
+    "validate_numeric_samples",
+    "validate_symbolic",
+    "validate_equational_semantics",
+    "validate_assumption_context",
+    "validate_projection_bridges",
+    "validate_no_hidden_target",
+    "validate_law_usage",
+    "validate_library_grounding",
+    "review_final_equations",
+    "explain_trace",
+    "run_all",
+]
+
+COMMENTARY_MARKERS = [
+    "Original informal statement",
+    "Informal derivation commentary",
+    "SymPy alignment",
+]
+
+OPEN_MARKERS: list[tuple[str, re.Pattern[str]]] = [
+    ("todo", re.compile(r"\bTODO\b|\bFIXME\b", re.IGNORECASE)),
+    ("not_implemented", re.compile(r"NotImplementedError|\bpass\s*(?:#.*)?$")),
+    ("placeholder_function", re.compile(r"raise\s+NotImplementedError")),
+]
+
+VALIDATOR_FUNCTIONS = [
+    "validate_dimensions",
+    "validate_derivation_steps",
+    "validate_numeric_samples",
+    "validate_symbolic",
+    "validate_equational_semantics",
+    "validate_assumption_context",
+    "validate_projection_bridges",
+    "validate_no_hidden_target",
+    "validate_law_usage",
+    "validate_library_grounding",
+    "review_final_equations",
+    "run_all",
+]
+
+SURFACE_BY_FINDING = {
+    "artifact_missing": "trace_realness",
+    "import_error": "trace_realness",
+    "missing_commentary_marker": "source_anchor",
+    "missing_artifact_surface": "trace_realness",
+    "missing_validator_function": "trace_realness",
+    "open_marker": "trace_realness",
+    "execution_gates_not_run": "trace_realness",
+    "validator_failed": "transformation_step",
+    "run_all_failed": "trace_realness",
+    "library_grounding_not_high": "sympy_api_grounding",
+    "target_leakage_failed": "target_nonleakage",
+    "projection_bridge_failed": "projection_bridge",
+    "law_usage_failed": "law_grounding",
+}
+
+
+def now() -> str:
+    """Return an ISO timestamp."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def rel(path: Path) -> str:
+    """Return a repository-relative path when possible."""
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def normalize_case(raw: str | None, sympy_file: Path | None) -> str:
+    """Normalize user input into formalphysics_####."""
+    if raw:
+        match = CASE_RE.search(raw)
+        if match:
+            return f"formalphysics_{match.group(1)}"
+        if raw.isdigit():
+            return f"formalphysics_{int(raw):04d}"
+    if sympy_file:
+        match = CASE_RE.search(sympy_file.as_posix())
+        if match:
+            return f"formalphysics_{match.group(1)}"
+    raise SystemExit(
+        "provide --case formalphysics_#### or --sympy-file under formalphysics_####"
+    )
+
+
+def case_path(case_id: str, sympy_file: Path | None) -> Path:
+    """Resolve the selected SymPy artifact path."""
+    if sympy_file:
+        return sympy_file if sympy_file.is_absolute() else REPO_ROOT / sympy_file
+    return SYMPY_ROOT / case_id / "MathformerPhysics.py"
+
+
+def finding(
+    *,
+    code: str,
+    severity: str,
+    message: str,
+    repair_surface: str | None = None,
+    line: int | None = None,
+    evidence: Any = None,
+) -> dict[str, Any]:
+    """Create one planner finding."""
+    result: dict[str, Any] = {
+        "code": code,
+        "severity": severity,
+        "message": message,
+        "repair_surface": repair_surface
+        or SURFACE_BY_FINDING.get(code, "trace_realness"),
+    }
+    if line is not None:
+        result["line"] = line
+    if evidence is not None:
+        result["evidence"] = json_safe(evidence)
+    return result
+
+
+def json_safe(value: Any) -> Any:
+    """Convert values containing SymPy objects or exceptions to JSON-safe data."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, Path):
+        return rel(value)
+    if isinstance(value, dict):
+        return {str(key): json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [json_safe(item) for item in value]
+    return str(value)
+
+
+def scan_open_markers(path: Path) -> list[dict[str, Any]]:
+    """Find source-level markers that prevent complete status."""
+    if not path.exists():
+        return []
+    results: list[dict[str, Any]] = []
+    for index, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        for kind, pattern in OPEN_MARKERS:
+            if pattern.search(line):
+                results.append(
+                    finding(
+                        code="open_marker",
+                        severity="high",
+                        message=f"open marker found: {kind}",
+                        line=index,
+                        evidence={"kind": kind, "text": line.strip()},
+                    )
+                )
+    return results
+
+
+def load_module(path: Path, case_id: str) -> tuple[Any | None, dict[str, Any]]:
+    """Import a SymPy artifact without requiring package-level registration."""
+    module_name = f"_mathformer_physics_sympy_{case_id}"
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"could not build import spec for {path}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+        return module, {"ok": True, "module_name": module_name}
+    except Exception as exc:  # pragma: no cover - exact dependency failures vary.
+        return None, {
+            "ok": False,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "traceback_tail": traceback.format_exc()[-2000:],
+        }
+
+
+def safe_len(value: Any) -> int | None:
+    """Return len(value) when available."""
+    try:
+        return len(value)
+    except Exception:
+        return None
+
+
+def pass_status(value: Any) -> bool:
+    """Interpret common report shapes as pass/fail."""
+    if isinstance(value, bool):
+        return value
+    if not isinstance(value, dict):
+        return bool(value)
+    for key in ("passed", "ok"):
+        if isinstance(value.get(key), bool):
+            return bool(value[key])
+    status = str(value.get("status", "")).lower()
+    if status in {"pass", "passed", "complete", "ready", "success"}:
+        return True
+    if status in {"fail", "failed", "blocked", "error"}:
+        return False
+    if isinstance(value.get("completion_blocked"), bool):
+        return not bool(value["completion_blocked"])
+    if "final_reviews" in value and isinstance(value["final_reviews"], dict):
+        return pass_status(value["final_reviews"])
+    child_reports = [
+        child
+        for child in value.values()
+        if isinstance(child, dict)
+        and any(
+            key in child for key in ("passed", "ok", "status", "completion_blocked")
+        )
+    ]
+    return all(pass_status(child) for child in child_reports) if child_reports else True
+
+
+def call_validator(module: Any, name: str) -> dict[str, Any]:
+    """Run one validator function and summarize its result."""
+    func: Callable[..., Any] = getattr(module, name)
+    try:
+        value = func()
+    except TypeError:
+        value = func(None)
+    except Exception as exc:  # pragma: no cover - exact artifact failures vary.
+        return {
+            "name": name,
+            "ok": False,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+    return {
+        "name": name,
+        "ok": pass_status(value),
+        "summary": json_safe(value),
+    }
+
+
+def inspect_module(
+    module: Any, text: str
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Inspect required surfaces and validators on an imported artifact."""
+    findings: list[dict[str, Any]] = []
+    surfaces = {}
+    for name in REQUIRED_SURFACES:
+        present = hasattr(module, name)
+        value = getattr(module, name, None)
+        surfaces[name] = {
+            "present": present,
+            "type": type(value).__name__ if present else None,
+            "count": safe_len(value) if present else None,
+        }
+        if not present:
+            findings.append(
+                finding(
+                    code="missing_artifact_surface",
+                    severity="high",
+                    message=f"missing required artifact surface: {name}",
+                    evidence={"surface": name},
+                )
+            )
+    functions = {}
+    for name in REQUIRED_FUNCTIONS:
+        present = callable(getattr(module, name, None))
+        functions[name] = {"present": present}
+        if not present:
+            findings.append(
+                finding(
+                    code="missing_validator_function",
+                    severity="high",
+                    message=f"missing required validator/function: {name}",
+                    evidence={"function": name},
+                )
+            )
+    commentary = {}
+    for marker in COMMENTARY_MARKERS:
+        present = marker in text
+        commentary[marker] = present
+        if not present:
+            findings.append(
+                finding(
+                    code="missing_commentary_marker",
+                    severity="high",
+                    message=f"missing source commentary marker: {marker}",
+                    repair_surface="source_anchor",
+                    evidence={"marker": marker},
+                )
+            )
+    evidence = {
+        "artifact_surfaces": surfaces,
+        "functions": functions,
+        "commentary_markers": commentary,
+    }
+    return evidence, findings
+
+
+def run_executable_gates(module: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Run the artifact validators that establish executable evidence."""
+    reports = [call_validator(module, name) for name in VALIDATOR_FUNCTIONS]
+    findings: list[dict[str, Any]] = []
+    for report in reports:
+        name = report["name"]
+        if report["ok"]:
+            continue
+        code = "validator_failed"
+        surface = "transformation_step"
+        if name == "run_all":
+            code = "run_all_failed"
+            surface = "trace_realness"
+        elif name == "validate_library_grounding":
+            code = "library_grounding_not_high"
+            surface = "sympy_api_grounding"
+        elif name == "validate_no_hidden_target":
+            code = "target_leakage_failed"
+            surface = "target_nonleakage"
+        elif name == "validate_projection_bridges":
+            code = "projection_bridge_failed"
+            surface = "projection_bridge"
+        elif name == "validate_law_usage":
+            code = "law_usage_failed"
+            surface = "law_grounding"
+        findings.append(
+            finding(
+                code=code,
+                severity="high",
+                message=f"executable gate failed: {name}",
+                repair_surface=surface,
+                evidence=report,
+            )
+        )
+    return {
+        "validators": reports,
+        "all_gates_passed": all(report["ok"] for report in reports),
+    }, findings
+
+
+def recursive_workflow(case_id: str) -> list[dict[str, Any]]:
+    """Return the SymPy-only recursive workflow sequence."""
+    return [
+        {
+            "step": "lock_one_sample_goal",
+            "owner_skill": "physics-sympy-goal-sample-autoformalizer",
+            "purpose": f"Only work on {case_id} until complete or explicitly blocked.",
+        },
+        {
+            "step": "inspect_current_evidence",
+            "owner_skill": "physics-sympy-goal-sample-autoformalizer",
+            "purpose": "Inspect source commentary, artifact surfaces, validators, and optional executable gates.",
+        },
+        {
+            "step": "map_repair_expansion",
+            "owner_skill": "physics-sympy-repair-expansion-cartographer",
+            "purpose": "Classify each missing support surface before any repair iteration.",
+        },
+        {
+            "step": "control_recursive_repair",
+            "owner_skill": "physics-sympy-recursive-repair-loop-controller",
+            "purpose": "Decide complete, recurse, or blocked from the expansion map.",
+        },
+        {
+            "step": "repair_local_sympy_surface",
+            "owner_skill": "physics-sympy-review-refinement-router",
+            "purpose": "Apply only local monotonic repairs to SymPy artifact or SymPy pipeline support.",
+        },
+        {
+            "step": "rerun_sympy_gates",
+            "owner_skill": "physics-sympy-workflow-orchestrator",
+            "purpose": "Rerun affected SymPy execution, grounding, unit, numeric, critic, final-review, and consistency gates.",
+        },
+    ]
+
+
+def build_plan(case_id: str, path: Path, *, run_gates: bool) -> dict[str, Any]:
+    """Build the one-case goal plan."""
+    findings: list[dict[str, Any]] = []
+    evidence: dict[str, Any] = {
+        "artifact_path": rel(path),
+        "artifact_exists": path.exists(),
+        "run_gates": run_gates,
+    }
+    if not path.exists():
+        findings.append(
+            finding(
+                code="artifact_missing",
+                severity="high",
+                message=f"SymPy artifact does not exist: {rel(path)}",
+                evidence={"path": path},
+            )
+        )
+        next_action = "needs_initial_draft"
+    else:
+        text = path.read_text(encoding="utf-8")
+        findings.extend(scan_open_markers(path))
+        module, import_report = load_module(path, case_id)
+        evidence["import"] = import_report
+        if module is None:
+            findings.append(
+                finding(
+                    code="import_error",
+                    severity="high",
+                    message="SymPy artifact import failed.",
+                    evidence=import_report,
+                )
+            )
+        else:
+            module_evidence, module_findings = inspect_module(module, text)
+            evidence.update(module_evidence)
+            findings.extend(module_findings)
+            if run_gates:
+                gate_evidence, gate_findings = run_executable_gates(module)
+                evidence["executable_gates"] = gate_evidence
+                findings.extend(gate_findings)
+            else:
+                findings.append(
+                    finding(
+                        code="execution_gates_not_run",
+                        severity="high",
+                        message="Executable gates were not run; complete status is not justified.",
+                        evidence={"rerun_with": "--run-gates"},
+                    )
+                )
+        next_action = "recurse"
+
+    high_findings = [item for item in findings if item["severity"] == "high"]
+    if path.exists() and not high_findings:
+        next_action = "complete"
+    elif any(item["code"] == "import_error" for item in high_findings):
+        next_action = "blocked"
+
+    status = (
+        "complete_sympy_physics_derivation"
+        if next_action == "complete"
+        else "derivation_partial"
+    )
+    if next_action == "blocked":
+        status = "blocked"
+    if next_action == "needs_initial_draft":
+        status = "missing_artifact"
+
+    commands = {
+        "plan_current_case": [
+            sys.executable,
+            rel(Path(__file__)),
+            "--case",
+            case_id,
+            "--run-gates",
+            "--json",
+        ],
+        "map_repair_expansion": [
+            sys.executable,
+            "skills/physics-sympy/physics-sympy-repair-expansion-cartographer/scripts/map_physics_sympy_repair_expansion.py",
+            "--case",
+            case_id,
+            "--json",
+        ],
+        "control_recursive_repair": [
+            sys.executable,
+            "skills/physics-sympy/physics-sympy-recursive-repair-loop-controller/scripts/control_physics_sympy_recursive_repair.py",
+            "--case",
+            case_id,
+            "--json",
+        ],
+    }
+
+    return {
+        "style": "physics_sympy_goal_sample_autoformalization_plan",
+        "backend": "sympy",
+        "case_id": case_id,
+        "created_at": now(),
+        "sample_lock": {
+            "one_sample_only": True,
+            "case_id": case_id,
+            "artifact_path": rel(path),
+            "forbidden_backend_workflows": [
+                "physics_lean",
+                "lean_physics_derivation_trace_loop",
+            ],
+        },
+        "goal_status": status,
+        "next_action": next_action,
+        "source_only_policy": {
+            "first_pass_source_only": True,
+            "formal_answer_use": "forbidden_before_source_candidate_or_blocker_report",
+        },
+        "current_evidence": evidence,
+        "findings": findings,
+        "open_frontier_count": len(high_findings),
+        "recursive_workflow": recursive_workflow(case_id),
+        "controller_conditions": {
+            "complete": "no high-severity findings after executable gates run",
+            "recurse": "repairable source, surface, grounding, equation, assumption, projection, numeric, or trace frontier exists",
+            "blocked": "artifact cannot import or repeated controller state blocks further local progress",
+            "needs_initial_draft": "selected SymPy artifact file is missing",
+        },
+        "commands": commands,
+    }
+
+
+def append_goal_event(
+    reasoning_log: Path | None, plan: dict[str, Any], output_path: Path | None
+) -> None:
+    """Append the one-case goal-plan decision to a reasoning-log JSONL file."""
+    if reasoning_log is None or append_reasoning_log_entry is None:
+        return
+    case_id = str(plan.get("case_id", "unspecified"))
+    append_reasoning_log_entry(
+        reasoning_log,
+        step="physics_sympy_goal_sample_plan_complete",
+        payload={
+            "skill": "physics-sympy-goal-sample-autoformalizer",
+            "hook_id": "physics.sympy.goal_sample.plan",
+            "goal_id": f"sympy:{case_id}:recursive_goal",
+            "case_id": case_id,
+            "stage": "physics_sympy_goal_sample_plan_complete",
+            "status": plan.get("goal_status"),
+            "evidence": {
+                "artifact_exists": plan.get("current_evidence", {}).get(
+                    "artifact_exists"
+                ),
+                "run_gates": plan.get("current_evidence", {}).get("run_gates"),
+                "open_frontier_count": plan.get("open_frontier_count"),
+            },
+            "artifacts": {
+                "artifact_path": plan.get("sample_lock", {}).get("artifact_path"),
+                "output": None if output_path is None else rel(output_path),
+            },
+            "decision": {
+                "next_action": plan.get("next_action"),
+                "status": plan.get("goal_status"),
+            },
+            "risks": plan.get("findings", []),
+            "next_action": plan.get("next_action", "recurse"),
+        },
+    )
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--case")
+    parser.add_argument("--sympy-file", type=Path)
+    parser.add_argument("--run-gates", action="store_true")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--reasoning-log", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the planner."""
+    args = parse_args(argv)
+    if args.self_test:
+        case_id = "formalphysics_0000"
+        path = case_path(case_id, None)
+        plan = build_plan(case_id, path, run_gates=False)
+        assert plan["style"] == "physics_sympy_goal_sample_autoformalization_plan"
+        assert plan["backend"] == "sympy"
+        assert plan["sample_lock"]["one_sample_only"] is True
+        assert plan["next_action"] in {"recurse", "blocked", "needs_initial_draft"}
+    else:
+        case_id = normalize_case(args.case, args.sympy_file)
+        path = case_path(case_id, args.sympy_file)
+        plan = build_plan(case_id, path, run_gates=args.run_gates)
+    output = json.dumps(json_safe(plan), ensure_ascii=False, indent=2)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output + "\n", encoding="utf-8")
+    else:
+        print(output)
+    append_goal_event(args.reasoning_log, plan, args.output)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

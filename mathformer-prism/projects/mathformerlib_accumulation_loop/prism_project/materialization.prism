@@ -1,0 +1,226 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathformerlib_accumulation_loop import (
+    AccumulationCase,
+    CandidateAssessment,
+    DocumentationBasis,
+    LibraryDocumentation,
+    LibraryPlacement,
+    MathformerLibUpdate,
+    MathformerLibraryAccumulationDisposition,
+    MathformerLibraryCandidateSet,
+    MathformerlibAccumulationArtifactRealnessGateArtifact,
+    MathformerlibAccumulationLibraryDocumentationArtifact,
+    MathformerlibAccumulationMathformerlibAccumulateArtifact,
+    MathformerlibAccumulationMathformerlibPromotionGateArtifact,
+    MathformerlibAccumulationMathformerlibRegistryArtifact,
+    PromotionCase,
+    PromotionDecision,
+    PublicationBasis,
+    RegistryUpdate,
+)
+from reasoning import UpdateMathformerLib
+from relations import DocumentRegistryCertificate
+from relations import PlaceModulesCertificate
+from relations import PublishAlignedDocsCertificate
+from relations import QualifyPromotionsCertificate
+from relations import RegisterModulesCertificate
+from generated.reasoning_assessment_1_skill import autoformalization_result_realness_verifier_skill as assessment_reasoning_skill_1
+from generated.reasoning_promotion_1_skill import mathformerlib_promotion_gate_skill as promotion_reasoning_skill_1
+from generated.reasoning_placement_1_skill import mathformerlib_accumulation_orchestrator_skill as placement_reasoning_skill_1
+from generated.reasoning_registry_1_skill import mathformerlib_registry_manager_skill as registry_reasoning_skill_1
+from generated.reasoning_documentation_1_skill import mathformer_library_docs_generator_skill as documentation_reasoning_skill_1
+from generated.reasoning_update_1_skill import mathformer_library_docs_generator_skill as update_reasoning_skill_1
+
+def promotion_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> QualifyPromotionsCertificate[SourceValue, TargetValue]:
+    return QualifyPromotionsCertificate(source = source, target = target)
+
+def placement_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> PlaceModulesCertificate[SourceValue, TargetValue]:
+    return PlaceModulesCertificate(source = source, target = target)
+
+def registry_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> RegisterModulesCertificate[SourceValue, TargetValue]:
+    return RegisterModulesCertificate(source = source, target = target)
+
+def documentation_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> DocumentRegistryCertificate[SourceValue, TargetValue]:
+    return DocumentRegistryCertificate(source = source, target = target)
+
+def update_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> PublishAlignedDocsCertificate[SourceValue, TargetValue]:
+    return PublishAlignedDocsCertificate(source = source, target = target)
+
+# Generative interpretation AssessLibraryCandidates uses skill context selected from material steps: artifact_realness_gate.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: autoformalization-result-realness-verifier.
+agent assessment_reasoning_agent(
+    task: MathformerLibraryCandidateSet,
+) -> Result[Generated[CandidateAssessment], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[MathformerLibraryCandidateSet] = [assessment_reasoning_skill_1]
+
+# Generative interpretation DecidePromotions uses skill context selected from material steps: mathformerlib_promotion_gate.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerlib-promotion-gate.
+agent promotion_reasoning_agent(
+    task: PromotionCase,
+) -> Result[Generated[PromotionDecision], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PromotionCase] = [promotion_reasoning_skill_1]
+
+# Generative interpretation AccumulateModules uses skill context selected from material steps: mathformerlib_accumulate.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerlib-accumulation-orchestrator.
+agent placement_reasoning_agent(
+    task: AccumulationCase,
+) -> Result[Generated[LibraryPlacement], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[AccumulationCase] = [placement_reasoning_skill_1]
+
+# Generative interpretation RefreshRegistry uses skill context selected from material steps: mathformerlib_registry.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformerlib-registry-manager.
+agent registry_reasoning_agent(
+    task: LibraryPlacement,
+) -> Result[Generated[RegistryUpdate], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LibraryPlacement] = [registry_reasoning_skill_1]
+
+# Generative interpretation DocumentLibrary uses skill context selected from material steps: library_documentation.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformer-library-docs-generator.
+agent documentation_reasoning_agent(
+    task: DocumentationBasis,
+) -> Result[Generated[LibraryDocumentation], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[DocumentationBasis] = [documentation_reasoning_skill_1]
+
+# Generative interpretation PublishLibraryUpdate uses skill context selected from material steps: library_aligned_html_documentation.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformer-library-docs-generator.
+agent update_reasoning_agent(
+    task: PublicationBasis,
+) -> Result[Generated[MathformerLibUpdate], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PublicationBasis] = [update_reasoning_skill_1]
+
+converted_reasoning = UpdateMathformerLib(
+    assessment = assessment_reasoning_agent,
+    promotion = promotion_reasoning_agent,
+    promotion_by = promotion_reasoning_relation_builder,
+    placement = placement_reasoning_agent,
+    placement_by = placement_reasoning_relation_builder,
+    registry = registry_reasoning_agent,
+    registry_by = registry_reasoning_relation_builder,
+    documentation = documentation_reasoning_agent,
+    documentation_by = documentation_reasoning_relation_builder,
+    update = update_reasoning_agent,
+    update_by = update_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `autoformalization-result-realness-verifier`; this does not execute the linked native resource.
+def artifact_realness_gate_material_binding(source: MathformerLibraryCandidateSet) -> Computed[MathformerlibAccumulationArtifactRealnessGateArtifact]:
+    artifact = MathformerlibAccumulationArtifactRealnessGateArtifact(
+        subject = "typed material binding for artifact_realness_gate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        considered_dispositions = ["pass", "warn", "fail", "blocked"],
+        selected_disposition = "not_tested",
+        rationale = "native execution is outside this structural PRISM fixture",
+    )
+    return compute(artifact, procedure = "linked material binding: artifact_realness_gate")
+
+# Material binding descriptor for `mathformerlib-promotion-gate`; this does not execute the linked native resource.
+def mathformerlib_promotion_gate_material_binding(source: MathformerlibAccumulationArtifactRealnessGateArtifact) -> Computed[MathformerlibAccumulationMathformerlibPromotionGateArtifact]:
+    artifact = MathformerlibAccumulationMathformerlibPromotionGateArtifact(
+        subject = "typed material binding for mathformerlib_promotion_gate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        considered_dispositions = ["pass", "warn", "fail", "blocked"],
+        selected_disposition = "not_tested",
+        rationale = "native execution is outside this structural PRISM fixture",
+    )
+    return compute(artifact, procedure = "linked material binding: mathformerlib_promotion_gate")
+
+# Material binding descriptor for `mathformerlib-accumulation-orchestrator`; this does not execute the linked native resource.
+def mathformerlib_accumulate_material_binding(source: MathformerlibAccumulationMathformerlibPromotionGateArtifact) -> Computed[MathformerlibAccumulationMathformerlibAccumulateArtifact]:
+    artifact = MathformerlibAccumulationMathformerlibAccumulateArtifact(
+        subject = "typed material binding for mathformerlib_accumulate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathformerlib_accumulate",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathformerlib_accumulate")
+
+# Material binding descriptor for `mathformerlib-registry-manager`; this does not execute the linked native resource.
+def mathformerlib_registry_material_binding(source: MathformerlibAccumulationMathformerlibAccumulateArtifact) -> Computed[MathformerlibAccumulationMathformerlibRegistryArtifact]:
+    artifact = MathformerlibAccumulationMathformerlibRegistryArtifact(
+        subject = "typed material binding for mathformerlib_registry",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathformerlib_registry",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathformerlib_registry")
+
+# Material binding descriptor for `mathformer-library-docs-generator`; this does not execute the linked native resource.
+def library_documentation_material_binding(source: MathformerlibAccumulationMathformerlibRegistryArtifact) -> Computed[MathformerlibAccumulationLibraryDocumentationArtifact]:
+    artifact = MathformerlibAccumulationLibraryDocumentationArtifact(
+        subject = "typed material binding for library_documentation",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation library_documentation",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_documentation")
+
+# Material binding descriptor for `mathformer-library-docs-generator`; this does not execute the linked native resource.
+def library_aligned_html_documentation_material_binding(source: MathformerlibAccumulationLibraryDocumentationArtifact) -> Computed[MathformerLibraryAccumulationDisposition]:
+    artifact = MathformerLibraryAccumulationDisposition(
+        subject = "typed material binding for library_aligned_html_documentation",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation library_aligned_html_documentation",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_aligned_html_documentation")
+
+# controlled accumulation into the parallel MathformerLib library.
+workflow MathformerlibAccumulationLoop(
+    candidates: MathformerLibraryCandidateSet,
+) -> Computed[MathformerLibraryAccumulationDisposition]:
+    sequence:
+        [artifact_realness_gate: artifact_realness_gate_material_binding(candidates)]
+        [mathformerlib_promotion_gate: mathformerlib_promotion_gate_material_binding(artifact_realness_gate.value)]
+        [mathformerlib_accumulate: mathformerlib_accumulate_material_binding(mathformerlib_promotion_gate.value)]
+        [mathformerlib_registry: mathformerlib_registry_material_binding(mathformerlib_accumulate.value)]
+        [library_documentation: library_documentation_material_binding(mathformerlib_registry.value)]
+        [library_aligned_html_documentation: library_aligned_html_documentation_material_binding(library_documentation.value)]
+    return library_aligned_html_documentation

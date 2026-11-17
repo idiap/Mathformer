@@ -1,0 +1,373 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_rocq_wiki_suite_workflow
+version: 1.0.0
+kind: workflow
+description: Prepare Rocq wiki artifacts, draft, check, and aggregate the native suite
+  report.
+aliases:
+- rocq:wiki-suite
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  SuiteOptions:
+    schema:
+      type: object
+      required:
+      - output_dir
+      - require_compiler
+      - timeout_sec
+      properties:
+        output_dir:
+          type: string
+          minLength: 1
+        require_compiler:
+          type: boolean
+          default: false
+        timeout_sec:
+          type: integer
+          default: 120
+      additionalProperties: false
+  Prepared:
+    schema:
+      type: object
+      required:
+      - output_dir
+      - require_compiler
+      - timeout_sec
+      - draft_cmd
+      - execution_cmd
+      properties:
+        output_dir:
+          type: string
+        require_compiler:
+          type: boolean
+        timeout_sec:
+          type: integer
+        draft_cmd:
+          type: array
+          items:
+            type: string
+        execution_cmd:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+  CommandResult:
+    schema:
+      type: object
+      required:
+      - cmd
+      - ok
+      - returncode
+      - duration_ms
+      - stdout
+      - stderr
+      - timeout
+      properties:
+        cmd:
+          type: array
+          items:
+            type: string
+        ok:
+          type: boolean
+        returncode:
+          type:
+          - integer
+          - 'null'
+        duration_ms:
+          type: number
+        stdout: {}
+        stderr: {}
+        timeout:
+          type: boolean
+      additionalProperties: false
+  SuiteReport:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - suite
+      - generated_at_utc
+      - output_dir
+      - require_compiler
+      - steps
+      - checks
+      - ok
+      properties:
+        schema_version:
+          const: 1
+        suite:
+          const: rocq_wiki_level
+        generated_at_utc:
+          type: string
+        output_dir:
+          type: string
+        require_compiler:
+          type: boolean
+        steps:
+          type: object
+          required:
+          - draft
+          - execution
+          properties:
+            draft:
+              type: object
+            execution:
+              type: object
+          additionalProperties: false
+        checks:
+          type: object
+          required:
+          - draft_command_ok
+          - draft_report_ok
+          - execution_command_ok
+          - execution_report_ok
+          - all_files_produced
+          - all_theorems_seen
+          properties:
+            draft_command_ok:
+              type: boolean
+            draft_report_ok:
+              type: boolean
+            execution_command_ok:
+              type: boolean
+            execution_report_ok:
+              type: boolean
+            all_files_produced:
+              type: boolean
+            all_theorems_seen:
+              type: boolean
+          additionalProperties: false
+        ok:
+          type: boolean
+      additionalProperties: false
+inputs:
+  options:
+    type: SuiteOptions
+outputs:
+  report:
+    type: SuiteReport
+    value:
+      ref: flow.outputs.report
+operations:
+  prepare:
+    inputs:
+      options:
+        type: SuiteOptions
+    outputs:
+      prepared:
+        type: Prepared
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_rocq_wiki_suite_prepare
+        operation: mathformer_rocq_wiki_suite_prepare
+  draft:
+    inputs:
+      prepared:
+        type: Prepared
+    outputs:
+      result:
+        type: CommandResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_rocq_wiki_suite_draft
+        operation: mathformer_rocq_wiki_suite_draft
+  check:
+    inputs:
+      prepared:
+        type: Prepared
+    outputs:
+      result:
+        type: CommandResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_rocq_wiki_suite_check
+        operation: mathformer_rocq_wiki_suite_check
+  aggregate:
+    inputs:
+      prepared:
+        type: Prepared
+      draft:
+        type: CommandResult
+      execution:
+        type: CommandResult
+    outputs:
+      report:
+        type: SuiteReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_rocq_wiki_suite_aggregate
+        operation: mathformer_rocq_wiki_suite_aggregate
+flow:
+  kind: sequence
+  steps:
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      options:
+        ref: inputs.options
+  - id: draft
+    kind: call
+    operation: draft
+    arguments:
+      prepared:
+        ref: steps.prepare.outputs.prepared
+  - id: check
+    kind: call
+    operation: check
+    arguments:
+      prepared:
+        ref: steps.prepare.outputs.prepared
+  - id: aggregate
+    kind: call
+    operation: aggregate
+    arguments:
+      prepared:
+        ref: steps.prepare.outputs.prepared
+      draft:
+        ref: steps.draft.outputs.result
+      execution:
+        ref: steps.check.outputs.result
+  outputs:
+    report:
+      type: SuiteReport
+      value:
+        ref: steps.aggregate.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - output_dir
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    - generate_rocq_artifacts
+    - validate_rocq_artifacts
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 4
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Suite success is the six native checks, not scientific endorsement
+    or artifact promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/rocq/run_wiki_suite.py
+    selector: run_suite
+    digest: sha256:50f6ea4e7452745bd0e73e0718d8ca48990e137d8d6b0d56ea09c436b433d3d7
+  - path: backends/rocq/MathformerRocq/autoformalize.py
+    selector: draft_manifest; initialize_draft; draft_next; finish_draft; run_external_check
+    digest: sha256:f9c9d219a34c1e02c9cad4259613f1235122d3f389ac3cdfebb7c858d18bee23
+  - path: skills/rocq/rocq-execution-runner/scripts/check_rocq_file.py
+    selector: run_validation; structural_pass; external_pass; aggregate_validation
+    digest: sha256:31df31ec4979898572f90fa951fb4fe5ee06f7f5c54876094d4da97583bff6c2
+  - path: scripts/mathformer.py
+    selector: build_registry/action:rocq:wiki-suite
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/rocq_wiki_suite_tools.py
+    digest: sha256:6a213347468764877dfa4bca13a2a99a2f42f6db76264b4805135f8d545c38b9
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  gaps:
+  - Native finite traversals remain inside their owning subprocesses; no graph iteration
+    cap is imposed.
+  - Nested reports are partial types; unavailable compiler skips do not establish
+    compilation.
+  - Native subprocess limits coexist with Lunar descriptor budgets and runtime receipts.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: rocq:wiki-suite
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: rocq:wiki-suite
+      summary: Run the Rocq wiki-level controlled suite.
+      family: rocq
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/rocq/run_wiki_suite.py
+      - --json
+      writes:
+      - artifacts/rocq_wiki_level/
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Four registered MCP tools share prepare_suite, draft_suite, check_suite
+      and aggregate_suite with run_suite; subprocess calls remain native.
+    hub_defaults:
+      output_dir: artifacts/rocq_wiki_level
+      require_compiler: false
+      timeout_sec: 120
+    callers:
+    - formalize.rocq
+    - quality:smoke
+    - tests/test_matrix.json
+    main: Optional suite report write, then JSON or PASS/FAIL; exit 0 iff report.ok,
+      otherwise 1.
+    failure_policy: Failed command values continue to aggregation; unexpected exceptions
+      stop execution.
+  mathformer.expectations:
+    files:
+    - AutoformalizedWikiContrapositive.v
+    - AutoformalizedWikiInjectiveComposition.v
+    - AutoformalizedWikiMonotoneComposition.v
+    - AutoformalizedWikiSetInterUnionDistrib.v
+    - AutoformalizedWikiSumFirstOddNumbers.v
+    theorems:
+    - wiki_contrapositive
+    - wiki_injective_comp
+    - wiki_monotone_comp
+    - wiki_set_inter_union_distrib
+    - wiki_sum_first_odd_numbers
+# REUSE-IgnoreEnd

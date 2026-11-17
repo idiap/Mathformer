@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+#
+# Intent:
+#   Tell coding agents what context to load, what invariants to preserve, and how to validate their work.
+#
+# Function:
+#   Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Generate JSON + LaTeX statistics reports from autoformalization artifacts."""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import fields
+import json
+from pathlib import Path
+from typing import Any, Dict
+
+from agentc import (
+    SystematicAutoformalizationReport,
+    save_autoformalization_statistics,
+)
+
+
+def _load_report_payload(path: str | Path) -> Dict[str, Any]:
+    """Document the responsibility of ``_load_report_payload``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Load data from the declared source while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    report_path = Path(path)
+    if not report_path.exists():
+        raise FileNotFoundError(f"Report file not found: {report_path}")
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Report JSON must be an object.")
+    return payload
+
+
+def _coerce_report(payload: Dict[str, Any]) -> SystematicAutoformalizationReport:
+    """Document the responsibility of ``_coerce_report``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_coerce_report`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    allowed = {f.name for f in fields(SystematicAutoformalizationReport)}
+    filtered = {k: v for k, v in payload.items() if k in allowed}
+    filtered.setdefault("expanded_statement", None)
+    filtered.setdefault("core_statement_annotations", None)
+    filtered.setdefault("latex_expansion_reviews", None)
+    filtered.setdefault("latex_expansion_review_passed", None)
+    filtered.setdefault("mathlib_concept_coverage", None)
+    filtered.setdefault("mathlib_concept_compatibility_rounds", None)
+    return SystematicAutoformalizationReport(**filtered)
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(
+        description=(
+            "Analyze autoformalization reasoning logs/intermediate Lean files and "
+            "emit a JSON + LaTeX statistics report."
+        )
+    )
+    parser.add_argument(
+        "--report-file",
+        required=True,
+        help="Path to a workflow report JSON (from run_systematic_workflow).",
+    )
+    parser.add_argument(
+        "--output-json",
+        default=None,
+        help="Optional output path for statistics JSON.",
+    )
+    parser.add_argument(
+        "--output-tex",
+        default=None,
+        help="Optional output path for statistics LaTeX.",
+    )
+    args = parser.parse_args()
+
+    payload = _load_report_payload(args.report_file)
+    report = _coerce_report(payload)
+    stats_json, stats_tex, _ = save_autoformalization_statistics(
+        report,
+        statistics_file=args.output_json,
+        statistics_tex_file=args.output_tex,
+    )
+    print(str(stats_json))
+    print(str(stats_tex))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

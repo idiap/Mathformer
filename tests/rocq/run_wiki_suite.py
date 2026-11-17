@@ -1,0 +1,316 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Protect the new Rocq backend against parser drift, placeholder proofs, and broken workflow wiring.
+#
+# Intent:
+#   Exercise full-suite Rocq drafting and execution-runner validation from the public skill scripts.
+#
+# Function:
+#   Generates controlled `.v` files into artifacts, validates them structurally, and optionally compiles them.
+#
+# Maintenance Notes:
+#   Keep expected theorem names synchronized with `backends/rocq/MathformerRocq/autoformalize.py`.
+
+"""Run the Rocq controlled wiki-level autoformalization smoke suite."""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import subprocess
+import sys
+import time
+from typing import Any, Dict, Optional, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+if not PYTHON.exists():
+    PYTHON = Path(sys.executable)
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "rocq_wiki_level"
+
+
+def rel(path: Path) -> str:
+    """Return a repository-relative path when possible.
+
+    Motivation:
+        Keep test reports portable across machines.
+
+    Intent:
+        Avoid absolute paths in JSON unless the file lives outside the repository.
+
+    Inputs:
+        `path` is the path to render.
+
+    Outputs:
+        Returns a POSIX-style relative path or absolute fallback.
+    """
+
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def run_command(cmd: Sequence[str], *, timeout_sec: int = 120) -> Dict[str, Any]:
+    """Run a subprocess and capture a compact test result.
+
+    Motivation:
+        The smoke suite should expose enough evidence to diagnose backend failures.
+
+    Intent:
+        Standardize command execution reports for draft and validation steps.
+
+    Inputs:
+        `cmd` is the command sequence and `timeout_sec` bounds execution time.
+
+    Outputs:
+        Returns process metadata, stdout, stderr, and success status.
+    """
+
+    started = time.perf_counter()
+    try:
+        proc = subprocess.run(
+            list(cmd),
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=timeout_sec,
+        )
+        return {
+            "cmd": list(cmd),
+            "ok": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "duration_ms": round((time.perf_counter() - started) * 1000, 3),
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+            "timeout": False,
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "cmd": list(cmd),
+            "ok": False,
+            "returncode": None,
+            "duration_ms": round((time.perf_counter() - started) * 1000, 3),
+            "stdout": exc.stdout or "",
+            "stderr": exc.stderr or f"timeout after {timeout_sec}s",
+            "timeout": True,
+        }
+
+
+def parse_json_stdout(result: Dict[str, Any]) -> Optional[Any]:
+    """Parse JSON from a command result.
+
+    Motivation:
+        Each skill script reports structured evidence that the suite should inspect.
+
+    Intent:
+        Convert stdout into Python data while keeping parse failures explicit.
+
+    Inputs:
+        `result` is a command report from `run_command`.
+
+    Outputs:
+        Returns parsed JSON or `None`.
+    """
+
+    text = str(result.get("stdout") or "").strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def run_suite(
+    *, output_dir: Path, require_compiler: bool, timeout_sec: int
+) -> Dict[str, Any]:
+    """Run the full Rocq drafting and validation suite.
+
+    Motivation:
+        A complete backend needs a reproducible end-to-end check from sources to proof artifacts.
+
+    Intent:
+        Generate all controlled Rocq files, validate them through the execution runner, and summarize the outcome.
+
+    Inputs:
+        `output_dir` receives generated artifacts, `require_compiler` controls external execution policy.
+
+    Outputs:
+        Returns a JSON-serializable suite report.
+    """
+
+    prepared = prepare_suite(
+        output_dir=output_dir,
+        require_compiler=require_compiler,
+        timeout_sec=timeout_sec,
+    )
+    draft = draft_suite(prepared)
+    execution = check_suite(prepared)
+    return aggregate_suite(prepared, draft, execution)
+
+
+def prepare_suite(
+    *, output_dir: Path, require_compiler: bool, timeout_sec: int
+) -> Dict[str, Any]:
+    """Create the native destination and retain exact subprocess arguments."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return suite_context(
+        output_dir=output_dir,
+        require_compiler=require_compiler,
+        timeout_sec=timeout_sec,
+    )
+
+
+def suite_context(
+    *, output_dir: Path, require_compiler: bool, timeout_sec: int
+) -> Dict[str, Any]:
+    """Construct native commands without filesystem effects (also used for admission)."""
+    draft_report = output_dir / "wiki_level_draft.json"
+    execution_report = output_dir / "wiki_level_execution.json"
+    draft_cmd = [
+        str(PYTHON),
+        "skills/rocq/rocq-autoformalization-drafter/scripts/draft_rocq_wiki_case.py",
+        "--manifest-file",
+        "tests/latex/wiki_level/manifest.json",
+        "--output-dir",
+        rel(output_dir),
+        "--report-file",
+        rel(draft_report),
+        "--json",
+    ]
+    execution_cmd = [
+        str(PYTHON),
+        "skills/rocq/rocq-execution-runner/scripts/check_rocq_file.py",
+        "--path",
+        rel(output_dir),
+        "--report-file",
+        rel(execution_report),
+        "--timeout-sec",
+        str(timeout_sec),
+        "--json",
+    ]
+    if require_compiler:
+        execution_cmd.append("--require-compiler")
+    return dict(
+        output_dir=str(output_dir),
+        require_compiler=require_compiler,
+        timeout_sec=timeout_sec,
+        draft_cmd=draft_cmd,
+        execution_cmd=execution_cmd,
+    )
+
+
+def draft_suite(prepared: Dict[str, Any]) -> Dict[str, Any]:
+    """Run drafting with the native outer subprocess timeout."""
+    return run_command(prepared["draft_cmd"], timeout_sec=prepared["timeout_sec"])
+
+
+def check_suite(prepared: Dict[str, Any]) -> Dict[str, Any]:
+    """Run checking even after a reported drafting failure."""
+    return run_command(prepared["execution_cmd"], timeout_sec=prepared["timeout_sec"])
+
+
+def aggregate_suite(
+    prepared: Dict[str, Any], draft: Dict[str, Any], execution: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Retain native parsing, artifact subsets and theorem-name union checks."""
+    output_dir = Path(prepared["output_dir"])
+    require_compiler = prepared["require_compiler"]
+    parsed_draft = parse_json_stdout(draft)
+    parsed_execution = parse_json_stdout(execution)
+    expected_files = {
+        "AutoformalizedWikiContrapositive.v",
+        "AutoformalizedWikiInjectiveComposition.v",
+        "AutoformalizedWikiMonotoneComposition.v",
+        "AutoformalizedWikiSetInterUnionDistrib.v",
+        "AutoformalizedWikiSumFirstOddNumbers.v",
+    }
+    produced_files = {path.name for path in output_dir.glob("*.v")}
+    theorem_names = set()
+    if isinstance(parsed_execution, dict):
+        for item in parsed_execution.get("validations", []):
+            theorem_names.update(item.get("theorem_names", []))
+    expected_theorems = {
+        "wiki_contrapositive",
+        "wiki_injective_comp",
+        "wiki_monotone_comp",
+        "wiki_set_inter_union_distrib",
+        "wiki_sum_first_odd_numbers",
+    }
+    checks = {
+        "draft_command_ok": draft["ok"],
+        "draft_report_ok": isinstance(parsed_draft, dict)
+        and parsed_draft.get("ok") is True,
+        "execution_command_ok": execution["ok"],
+        "execution_report_ok": isinstance(parsed_execution, dict)
+        and parsed_execution.get("ok") is True,
+        "all_files_produced": expected_files <= produced_files,
+        "all_theorems_seen": expected_theorems <= theorem_names,
+    }
+    return {
+        "schema_version": 1,
+        "suite": "rocq_wiki_level",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "output_dir": rel(output_dir),
+        "require_compiler": require_compiler,
+        "steps": {
+            "draft": {**draft, "parsed": parsed_draft},
+            "execution": {**execution, "parsed": parsed_execution},
+        },
+        "checks": checks,
+        "ok": all(checks.values()),
+    }
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Run the command-line smoke suite.
+
+    Motivation:
+        Make the Rocq backend easy to run locally and from the comprehensive test program.
+
+    Intent:
+        Parse CLI arguments, run the suite, optionally save a report, and emit JSON.
+
+    Inputs:
+        `argv` optionally supplies command-line arguments.
+
+    Outputs:
+        Returns zero only when all configured checks pass.
+    """
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--require-compiler", action="store_true")
+    parser.add_argument("--timeout-sec", type=int, default=120)
+    parser.add_argument("--report-file", type=Path)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+
+    report = run_suite(
+        output_dir=args.output_dir,
+        require_compiler=args.require_compiler,
+        timeout_sec=args.timeout_sec,
+    )
+    if args.report_file is not None:
+        args.report_file.parent.mkdir(parents=True, exist_ok=True)
+        args.report_file.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        print("PASS" if report["ok"] else "FAIL")
+    return 0 if report["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

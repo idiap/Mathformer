@@ -1,0 +1,635 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_control_audit_workflow
+version: 1.0.0
+kind: workflow
+description: Selected control.audit route with native admission, nine ordered dependency
+  visits, sticky failure and route aggregation.
+aliases:
+- control.audit
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  Boolean:
+    schema:
+      type: boolean
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+      minLength: 1
+  SelectedMatch:
+    schema:
+      type: object
+      properties:
+        route:
+          type: object
+          properties:
+            route_id:
+              const: control.audit
+            action_ids:
+              const:
+              - control:all
+          required:
+          - route_id
+          - action_ids
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+      required:
+      - route
+      - score
+      - matched_terms
+  RouteState:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          items:
+            type: object
+          maxItems: 1
+      required:
+      - ok
+      - children
+      additionalProperties: false
+  Admission:
+    schema:
+      type: object
+      properties:
+        accepted:
+          type: boolean
+        status:
+          enum:
+          - accepted
+          - unknown_action
+          - dependency_cycle
+          - extra_args_for_sequence
+        ancestry:
+          type: array
+          items:
+            type: string
+      required:
+      - accepted
+      - status
+      - ancestry
+      additionalProperties: false
+  DependencyState:
+    schema:
+      type: object
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          maximum: 9
+        children:
+          type: array
+          items:
+            type: object
+          maxItems: 9
+        dependencies_ok:
+          type: boolean
+        ancestry:
+          type: array
+          items:
+            type: string
+      required:
+      - index
+      - children
+      - dependencies_ok
+      - ancestry
+      additionalProperties: false
+  Registry:
+    schema:
+      type: object
+      additionalProperties:
+        type: object
+  StringList:
+    schema:
+      type: array
+      items:
+        type: string
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: SelectedMatch
+  repository_root:
+    type: RepositoryRoot
+  registry:
+    type: Registry
+  extra_args:
+    type: StringList
+  seen:
+    type: StringList
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize_route:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_audit_initialize_route
+        operation: mathformer_control_audit_initialize_route
+  admit:
+    inputs:
+      registry:
+        type: Registry
+      extra_args:
+        type: StringList
+      seen:
+        type: StringList
+    outputs:
+      admission:
+        type: Admission
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_audit_admit
+        operation: mathformer_control_audit_admit
+  initialize_dependencies:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      state:
+        type: DependencyState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_audit_initialize_dependencies
+        operation: mathformer_control_audit_initialize_dependencies
+  visit:
+    inputs:
+      state:
+        type: DependencyState
+      context:
+        type: RunContext
+      repository_root:
+        type: RepositoryRoot
+      registry:
+        type: Registry
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_audit_visit
+        operation: mathformer_control_audit_visit
+  advance:
+    inputs:
+      state:
+        type: DependencyState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+      registry:
+        type: Registry
+    outputs:
+      state:
+        type: DependencyState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_audit_advance
+        operation: mathformer_control_audit_advance
+  finish_dependencies:
+    inputs:
+      state:
+        type: DependencyState
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_audit_finish_dependencies
+        operation: mathformer_control_audit_finish_dependencies
+  reject:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_audit_reject
+        operation: mathformer_control_audit_reject
+  finish_route:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+      match:
+        type: SelectedMatch
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_audit_finish_route
+        operation: mathformer_control_audit_finish_route
+  carry:
+    inputs:
+      state:
+        type: DependencyState
+      result:
+        type: HubResult
+    outputs:
+      state:
+        type: DependencyState
+      done:
+        type: Boolean
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_audit_carry
+        operation: mathformer_control_audit_carry
+flow:
+  kind: sequence
+  steps:
+  - id: route_start
+    kind: call
+    operation: initialize_route
+    arguments: {}
+  - id: admission
+    kind: call
+    operation: admit
+    arguments:
+      registry:
+        ref: inputs.registry
+      extra_args:
+        ref: inputs.extra_args
+      seen:
+        ref: inputs.seen
+  - id: dispatch
+    kind: switch
+    cases:
+    - id: accepted
+      when:
+        ref: steps.admission.outputs.admission.accepted
+      body:
+        kind: sequence
+        steps:
+        - id: initial
+          kind: call
+          operation: initialize_dependencies
+          arguments:
+            admission:
+              ref: steps.admission.outputs.admission
+        outputs:
+          state:
+            type: DependencyState
+            value:
+              ref: steps.initial.outputs.state
+          rejection:
+            type: HubResult
+            value:
+              literal:
+                ok: true
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: reject
+        arguments:
+          admission:
+            ref: steps.admission.outputs.admission
+        id: rejection
+      outputs:
+        state:
+          type: DependencyState
+          value:
+            literal:
+              index: 0
+              children: []
+              dependencies_ok: true
+              ancestry: []
+        rejection:
+          type: HubResult
+          value:
+            ref: steps.rejection.outputs.result
+    outputs:
+      state:
+        type: DependencyState
+        value:
+          ref: selected.outputs.state
+      rejection:
+        type: HubResult
+        value:
+          ref: selected.outputs.rejection
+  - id: dependencies
+    kind: loop
+    state_type: DependencyState
+    initial:
+      ref: steps.dispatch.outputs.state
+    max_iterations: 9
+    on_exhausted: fail
+    body:
+      kind: switch
+      cases:
+      - id: accepted
+        when:
+          ref: steps.admission.outputs.admission.accepted
+        body:
+          kind: sequence
+          steps:
+          - id: child
+            kind: call
+            operation: visit
+            arguments:
+              state:
+                ref: loop.state
+              context:
+                ref: inputs.context
+              registry:
+                ref: inputs.registry
+              repository_root:
+                ref: inputs.repository_root
+          - id: advance
+            kind: call
+            operation: advance
+            arguments:
+              state:
+                ref: loop.state
+              child:
+                ref: steps.child.outputs.child
+              context:
+                ref: inputs.context
+              registry:
+                ref: inputs.registry
+          outputs:
+            state:
+              type: DependencyState
+              value:
+                ref: steps.advance.outputs.state
+            done:
+              type: Boolean
+              value:
+                ref: steps.advance.outputs.done
+      default:
+        kind: sequence
+        steps:
+        - kind: call
+          operation: carry
+          arguments:
+            state:
+              ref: loop.state
+            result:
+              ref: steps.dispatch.outputs.rejection
+          id: carry
+        outputs:
+          state:
+            type: DependencyState
+            value:
+              ref: steps.carry.outputs.state
+          done:
+            type: Boolean
+            value:
+              ref: steps.carry.outputs.done
+      outputs:
+        state:
+          type: DependencyState
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: DependencyState
+        value:
+          ref: body.outputs.state
+  - id: completion
+    kind: switch
+    cases:
+    - id: accepted
+      when:
+        ref: steps.admission.outputs.admission.accepted
+      body:
+        id: completion
+        kind: call
+        operation: finish_dependencies
+        arguments:
+          state:
+            ref: steps.dependencies.outputs.state
+          registry:
+            ref: inputs.registry
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: carry
+        arguments:
+          state:
+            ref: steps.dispatch.outputs.state
+          result:
+            ref: steps.dispatch.outputs.rejection
+        id: carry
+      outputs:
+        result:
+          type: HubResult
+          value:
+            ref: steps.carry.outputs.result
+    outputs:
+      result:
+        type: HubResult
+        value:
+          ref: selected.outputs.result
+  - id: route_result
+    kind: call
+    operation: finish_route
+    arguments:
+      state:
+        ref: steps.route_start.outputs.state
+      child:
+        ref: steps.completion.outputs.result
+      context:
+        ref: inputs.context
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.route_result.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 23
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Native execution status only; no scientific truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match; build_intent_routes/control.audit; build_registry/control:all;
+      admit_action through prepare_action; initialize_intent_state through finish_intent_state;
+      run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/control_audit_route_tools.py
+    selector: register_control_audit_route_tools; checked_registry; selected_match;
+      check_state
+    digest: sha256:a3fee1c38f40cf207ec39290d117c09b20e50f55ca9ae8e5fc2cebee64c3d6bb
+  - path: scripts/mcp_server.py
+    selector: register_control_audit_route_tools; native mathformer_ask and mathformer_run_workflow
+      callers
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: control_audit_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: scripts/adoption_check_tools.py
+    selector: Context; Admission; State; typed output envelopes
+    digest: sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac
+  - path: scripts/benchmark_route_tools.py
+    selector: State (route accumulator wire type)
+    digest: sha256:97480cdc2c306090e422360cdc645bd95fe075c6e565afa51d2054d4fe24cfcf
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report/mcp_tools
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  gaps:
+  - Leaf implementations remain opaque native calls; this graph models the route and
+    dependency controller, not the internals of each validation subprocess.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: control.audit
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: control.audit
+      title: Audit workflow control coverage
+      action_ids:
+      - control:all
+  mathformer.native_boundary:
+    execution: scripts/control_audit_route_tools.py MCP ports call the same controller
+      steps as scripts/mathformer.py:run_intent_match and prepare_action.
+    registry: Caller registry projections select source-owned control:all declarations;
+      omissions retain unknown-action failures. Arbitrary commands and changed graph
+      topology are rejected.
+    timeout: These block adapters retain CLI leaf timeouts (None for these gates).
+      Existing mathformer_ask and mathformer_run_workflow separately cap unbounded
+      leaves at configurable 600 seconds. Lunar enforces the descriptor wall-time
+      and operation-call ceilings.
+    failure_policy: Negative native results remain data through aggregation; unexpected
+      launch exceptions propagate.
+    audit_caveat: hub:audit runs audit --json without --strict; JSON ok=false can
+      exit zero, and parent success uses exit status plus write audit.
+  mathformer.composition:
+    ordered_actions:
+    - control:all
+    action_workflows:
+    - hub_control_all_workflow
+    selection: Already-selected canonical route. Scoring, CLI/MCP wrapper logging
+      and optional report publication stay with the original callers. extra_args and
+      seen expose native action admission context; registry contains checked source
+      metadata, never executable caller code.
+    bound: Nine source-ordered dependencies; done=true on visit nine completes normally.
+      Early failure stops unless keep_going. Loop exhaustion is unreachable for valid
+      native states; Lunar fails if the declared guard is exhausted.
+    order: Entrypoints, layout, contracts, reasoning language/catalog, skill/log coverage,
+      log smoke, Git diff.
+    admission_bypass: The dependency loop is top-level for Lunar scoped-exit compatibility.
+      On rejected admission, carry transports the unchanged empty state and native
+      rejection with done=true, without any native dependency initialization, visit,
+      advance or completion. Carry is a wire adapter, never a native step or child
+      result.
+# REUSE-IgnoreEnd

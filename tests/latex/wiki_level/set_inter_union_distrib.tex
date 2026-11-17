@@ -1,0 +1,71 @@
+% SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+% SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+% SPDX-License-Identifier: MIT
+% Neuro-symbolic AI Group
+% File Documentation
+%
+% Motivation:
+%   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+%
+% Intent:
+%   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+%
+% Function:
+%   Contains executable tests, fixtures, and manifests used for local and CI validation.
+%
+% Maintenance Notes:
+%   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+% mathformer-case-id: wiki_set_inter_union_distrib
+% expected-lean-name: WikiLevelGold.wiki_set_inter_union_distrib
+% controlled-suite: wiki_level_latex_to_lean
+% difficulty: easy
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+
+\newtheorem{theorem}{Theorem}
+
+\title{Intersection Distributes over Union}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Controlled Origin Annotation}
+This is a synthetic controlled case written in a Wikipedia-style exposition.
+It is intended to test extensional set reasoning, membership expansion, and
+the translation of informal logical cases into Lean proof branches.
+
+\section*{Statement and Proof}
+
+\begin{theorem}[Intersection distributes over union]
+Let $A$, $B$, and $C$ be subsets of a set $X$. Then
+\[
+  A \cap (B \cup C) = (A \cap B) \cup (A \cap C).
+\]
+\end{theorem}
+
+\begin{proof}
+We prove equality by showing that the two sets have the same elements.
+Let $x \in A \cap (B \cup C)$. Then $x \in A$ and $x \in B \cup C$.
+If $x \in B$, then $x \in A \cap B$, so
+$x \in (A \cap B) \cup (A \cap C)$. If $x \in C$, then
+$x \in A \cap C$, so again $x \in (A \cap B) \cup (A \cap C)$.
+
+Conversely, let $x \in (A \cap B) \cup (A \cap C)$. If
+$x \in A \cap B$, then $x \in A$ and $x \in B$, hence
+$x \in A \cap (B \cup C)$. If $x \in A \cap C$, then $x \in A$ and
+$x \in C$, hence $x \in A \cap (B \cup C)$. Thus the two sets are equal.
+\end{proof}
+
+\section*{Lean Target}
+Formalize the theorem for arbitrary type $\alpha$ and sets
+$A,B,C : \operatorname{Set}\,\alpha$. The expected Lean theorem is
+\texttt{WikiLevelGold.wiki\_set\_inter\_union\_distrib}.
+
+\end{document}

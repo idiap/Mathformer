@@ -1,0 +1,1587 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+# File Documentation
+#
+# Motivation:
+#   Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+#
+# Intent:
+#   Tell coding agents what context to load, what invariants to preserve, and how to validate their work.
+#
+# Function:
+#   Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Observe Mathformer autoformalization artifacts and propose monotonic refinements."""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import sys
+from typing import Any, Dict, List, Optional, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+
+REASONING_LOG_SCRIPTS = (
+    REPO_ROOT / "skills" / "control" / "reasoning-log-schema-guardian" / "scripts"
+)
+GATE_POLICY_SCRIPTS = (
+    REPO_ROOT / "skills" / "control" / "gate-policy-controller" / "scripts"
+)
+for script_dir in (REASONING_LOG_SCRIPTS, GATE_POLICY_SCRIPTS):
+    if str(script_dir) not in sys.path:
+        sys.path.insert(0, str(script_dir))
+
+from gate_policy import decide_gate
+from reasoning_log import (
+    append_reasoning_log_entry,
+)
+from validate_reasoning_log import (
+    validate_reasoning_log,
+)
+
+SKILL_NAME = "autoformalization-reflective-refinement-loop"
+HOOK_ID = "reflection.process_refinement"
+
+
+def load_json(path: Path) -> Dict[str, Any]:
+    """Document the responsibility of ``load_json``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Load data from the declared source while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parsed = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(parsed, dict):
+        raise ValueError(f"Expected JSON object: {path}")
+    return parsed
+
+
+def write_json(path: Path, payload: Dict[str, Any]) -> None:
+    """Document the responsibility of ``write_json``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def rel(path: Path) -> str:
+    """Document the responsibility of ``rel``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``rel`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def append_event(
+    output_file: Optional[Path],
+    *,
+    step: str,
+    payload: Dict[str, Any],
+) -> None:
+    """Document the responsibility of ``append_event``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``append_event`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if output_file is None:
+        return
+    append_reasoning_log_entry(
+        output_file,
+        step=step,
+        payload={"skill": SKILL_NAME, "hook_id": HOOK_ID, **payload},
+    )
+
+
+def case_passed(case: Dict[str, Any]) -> bool:
+    """Document the responsibility of ``case_passed``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``case_passed`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    static_ok = bool(case.get("static_latex_review", {}).get("passed", False))
+    difficulty_ok = bool(case.get("difficulty", {}).get("ok", False))
+    concept_map = case.get("concept_map")
+    concept_ok = True if concept_map is None else bool(concept_map.get("ok", False))
+    hierarchy = case.get("hierarchy_navigation")
+    hierarchy_ok = True if hierarchy is None else bool(hierarchy.get("ok", False))
+    return (
+        bool(case.get("lean_theorem_present", False))
+        and static_ok
+        and difficulty_ok
+        and concept_ok
+        and hierarchy_ok
+    )
+
+
+def successful_case_map(report: Dict[str, Any]) -> Dict[str, bool]:
+    """Document the responsibility of ``successful_case_map``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``successful_case_map`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return {
+        str(case.get("id")): case_passed(case)
+        for case in report.get("cases", [])
+        if case.get("id")
+    }
+
+
+def baseline_snapshot(report: Dict[str, Any]) -> Dict[str, Any]:
+    """Document the responsibility of ``baseline_snapshot``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``baseline_snapshot`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    summary = report.get("summary", {})
+    return {
+        "suite": report.get("suite"),
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "gold_lean_file": report.get("gold_lean_file"),
+        "successful_cases": successful_case_map(report),
+        "metrics": {
+            "case_count": summary.get("case_count"),
+            "passed": summary.get("passed"),
+            "lean_execution_ok": summary.get("lean_execution_ok"),
+            "compatibility_audit_ok": summary.get("compatibility_audit_ok"),
+            "compatibility_score": summary.get("compatibility_score"),
+            "expected_declaration_checks_ok": summary.get(
+                "expected_declaration_checks_ok"
+            ),
+            "max_difficulty_score": summary.get("max_difficulty_score"),
+        },
+    }
+
+
+def compare_baseline(
+    current: Dict[str, Any],
+    baseline: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Document the responsibility of ``compare_baseline``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``compare_baseline`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    current_cases = successful_case_map(current)
+    if baseline is None:
+        return {
+            "baseline_present": False,
+            "regressions": [],
+            "warnings": [],
+            "previous_successful_cases": [],
+            "current_successful_cases": sorted(
+                case_id for case_id, passed in current_cases.items() if passed
+            ),
+        }
+
+    previous_cases = baseline.get("successful_cases", {})
+    regressions: List[Dict[str, Any]] = []
+    warnings: List[Dict[str, Any]] = []
+    for case_id, was_successful in previous_cases.items():
+        if was_successful and not current_cases.get(case_id, False):
+            regressions.append(
+                {
+                    "case_id": case_id,
+                    "message": "Previously successful case is not successful in current report.",
+                }
+            )
+
+    current_summary = current.get("summary", {})
+    baseline_metrics = baseline.get("metrics", {})
+    baseline_score = baseline_metrics.get("compatibility_score")
+    current_score = current_summary.get("compatibility_score")
+    if isinstance(baseline_score, (int, float)) and isinstance(
+        current_score, (int, float)
+    ):
+        if current_score < baseline_score:
+            regressions.append(
+                {
+                    "metric": "compatibility_score",
+                    "baseline": baseline_score,
+                    "current": current_score,
+                    "message": "Compatibility score decreased from baseline.",
+                }
+            )
+
+    baseline_max_difficulty = baseline_metrics.get("max_difficulty_score")
+    current_max_difficulty = current_summary.get("max_difficulty_score")
+    if isinstance(baseline_max_difficulty, (int, float)) and isinstance(
+        current_max_difficulty, (int, float)
+    ):
+        if current_max_difficulty > baseline_max_difficulty + 5:
+            warnings.append(
+                {
+                    "metric": "max_difficulty_score",
+                    "baseline": baseline_max_difficulty,
+                    "current": current_max_difficulty,
+                    "message": "Difficulty estimate rose by more than five points.",
+                }
+            )
+
+    return {
+        "baseline_present": True,
+        "regressions": regressions,
+        "warnings": warnings,
+        "previous_successful_cases": sorted(
+            case_id for case_id, passed in previous_cases.items() if passed
+        ),
+        "current_successful_cases": sorted(
+            case_id for case_id, passed in current_cases.items() if passed
+        ),
+    }
+
+
+def read_reasoning_events(path: Optional[Path]) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``read_reasoning_events``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Load data from the declared source while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if path is None or not path.exists():
+        return []
+    events: List[Dict[str, Any]] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            events.append(parsed)
+    return events
+
+
+def summarize_reasoning_events(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Document the responsibility of ``summarize_reasoning_events``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``summarize_reasoning_events`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    steps = Counter()
+    skills = Counter()
+    hooks = Counter()
+    elapsed_by_skill: Dict[str, float] = defaultdict(float)
+    for event in events:
+        step = event.get("step")
+        if isinstance(step, str):
+            steps[step] += 1
+        payload = event.get("payload")
+        if isinstance(payload, dict):
+            skill = payload.get("skill")
+            hook_id = payload.get("hook_id")
+            if isinstance(skill, str):
+                skills[skill] += 1
+                elapsed = event.get("elapsed_ms_since_prev_event")
+                if isinstance(elapsed, (int, float)) and elapsed >= 0:
+                    elapsed_by_skill[skill] += float(elapsed)
+            if isinstance(hook_id, str):
+                hooks[hook_id] += 1
+
+    return {
+        "event_count": len(events),
+        "top_steps": steps.most_common(12),
+        "top_skills": skills.most_common(12),
+        "top_hooks": hooks.most_common(12),
+        "elapsed_ms_by_skill": {
+            skill: round(value, 3)
+            for skill, value in sorted(
+                elapsed_by_skill.items(), key=lambda item: item[1], reverse=True
+            )[:12]
+        },
+    }
+
+
+def regression_commands(reasoning_log_file: Path, hooks_file: Path) -> List[str]:
+    """Document the responsibility of ``regression_commands``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``regression_commands`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return [
+        "python tests/wiki_level/run_suite.py",
+        "python tests/sympy/run_controlled_suite.py --json",
+        "lake env lean tests/lean/WikiLevelGold.lean",
+        "python skills/rfde/reference-free-critic-monitor/scripts/monitor_reference_free_critics.py --self-test --json",
+        "python skills/control/workflow-contract-validator/scripts/validate_skill_hooks.py --strict",
+        (
+            "python skills/control/reasoning-log-schema-guardian/scripts/"
+            f"validate_reasoning_log.py --log-file {rel(reasoning_log_file)} "
+            f"--hooks-file {rel(hooks_file)} --strict"
+        ),
+    ]
+
+
+def opportunity(
+    *,
+    opp_id: str,
+    priority: str,
+    owner_skill: str,
+    target_surface: str,
+    title: str,
+    evidence: List[Dict[str, Any]],
+    proposed_refinement: str,
+    invalidation_risk: str,
+    commands: Sequence[str],
+    preserved_cases: Sequence[str],
+) -> Dict[str, Any]:
+    """Document the responsibility of ``opportunity``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``opportunity`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return {
+        "id": opp_id,
+        "priority": priority,
+        "title": title,
+        "owner_skill": owner_skill,
+        "target_surface": target_surface,
+        "evidence": evidence,
+        "proposed_refinement": proposed_refinement,
+        "monotonicity_gate": {
+            "must_preserve_cases": list(preserved_cases),
+            "required_commands": list(commands),
+            "acceptance_checks": [
+                "suite summary passed remains true",
+                "previously successful cases remain successful",
+                "Lean execution remains passing",
+                "compatibility score does not decrease below baseline floor",
+                "strict hook and reasoning-log validators pass",
+            ],
+        },
+        "invalidation_risk": invalidation_risk,
+        "apply_mode": "manual_review_required",
+    }
+
+
+def collect_static_warning_evidence(report: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``collect_static_warning_evidence``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``collect_static_warning_evidence`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    rows: List[Dict[str, Any]] = []
+    for case in report.get("cases", []):
+        warnings = case.get("static_latex_review", {}).get("warnings", [])
+        if warnings:
+            rows.append({"case_id": case.get("id"), "warnings": warnings})
+    return rows
+
+
+def collect_hierarchy_miss_evidence(report: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``collect_hierarchy_miss_evidence``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``collect_hierarchy_miss_evidence`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    rows: List[Dict[str, Any]] = []
+    for case in report.get("cases", []):
+        hierarchy = case.get("hierarchy_navigation")
+        if not isinstance(hierarchy, dict):
+            continue
+        if hierarchy.get("ok") and hierarchy.get("matching_module_count") == 0:
+            rows.append(
+                {
+                    "case_id": case.get("id"),
+                    "query": hierarchy.get("query"),
+                    "matching_module_count": hierarchy.get("matching_module_count"),
+                    "matching_declaration_count": hierarchy.get(
+                        "matching_declaration_count"
+                    ),
+                }
+            )
+    return rows
+
+
+def collect_hint_candidate_evidence(report: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``collect_hint_candidate_evidence``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``collect_hint_candidate_evidence`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    rows: List[Dict[str, Any]] = []
+    for case in report.get("cases", []):
+        concept_map = case.get("concept_map")
+        if not isinstance(concept_map, dict):
+            continue
+        summary = concept_map.get("summary", {})
+        if not isinstance(summary, dict):
+            continue
+        for concept, concept_summary in summary.items():
+            if not isinstance(concept_summary, dict):
+                continue
+            top_candidate = concept_summary.get("top_candidate", {})
+            if (
+                top_candidate.get("kind") == "hint"
+                or top_candidate.get("module") == "Mathlib"
+            ):
+                rows.append(
+                    {
+                        "case_id": case.get("id"),
+                        "concept": concept,
+                        "top_candidate": top_candidate,
+                    }
+                )
+    return rows
+
+
+def collect_import_context_evidence(report: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``collect_import_context_evidence``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``collect_import_context_evidence`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    rows: List[Dict[str, Any]] = []
+    expected_checks = report.get("expected_declaration_checks", {})
+    if not expected_checks.get("ok"):
+        return rows
+    checked = expected_checks.get("checks", {})
+    case_imports = []
+    for case in report.get("cases", []):
+        # The suite manifest stores expected imports; report does not yet mirror them.
+        latex_file = case.get("latex_file")
+        if latex_file:
+            case_imports.append({"case_id": case.get("id"), "latex_file": latex_file})
+    if checked:
+        rows.append(
+            {
+                "checked_count": expected_checks.get("checked_count"),
+                "scratch_file": expected_checks.get("scratch_file"),
+                "note": "Expected declaration checks passed, but the current suite scratch file uses a broad import profile.",
+                "case_refs": case_imports,
+            }
+        )
+    return rows
+
+
+def collect_difficulty_evidence(report: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``collect_difficulty_evidence``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``collect_difficulty_evidence`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    rows: List[Dict[str, Any]] = []
+    for case in report.get("cases", []):
+        difficulty = case.get("difficulty", {})
+        score = difficulty.get("max_difficulty_score")
+        if isinstance(score, (int, float)) and score >= 35:
+            rows.append(
+                {
+                    "case_id": case.get("id"),
+                    "max_difficulty_score": score,
+                    "expected_difficulty": difficulty.get("expected_difficulty"),
+                    "web_search_recommended_count": difficulty.get(
+                        "web_search_recommended_count"
+                    ),
+                }
+            )
+    return rows
+
+
+def collect_reference_free_regression_evidence(
+    reference_free_monitor: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``collect_reference_free_regression_evidence``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``collect_reference_free_regression_evidence`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if not isinstance(reference_free_monitor, dict):
+        return []
+    comparison = reference_free_monitor.get("monotonicity_comparison", {})
+    if not isinstance(comparison, dict):
+        return []
+    regressions = comparison.get("regressions", [])
+    return [item for item in regressions if isinstance(item, dict)]
+
+
+def collect_reference_free_weak_dimension_evidence(
+    reference_free_monitor: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``collect_reference_free_weak_dimension_evidence``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``collect_reference_free_weak_dimension_evidence`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if not isinstance(reference_free_monitor, dict):
+        return []
+    measures = reference_free_monitor.get("measures", {})
+    if not isinstance(measures, dict):
+        return []
+    rows: List[Dict[str, Any]] = []
+    for name, payload in measures.items():
+        if not isinstance(payload, dict):
+            continue
+        score = payload.get("score")
+        if isinstance(score, (int, float)) and score < 65:
+            rows.append(
+                {
+                    "measure": name,
+                    "score": score,
+                    "evidence": payload.get("evidence", {}),
+                }
+            )
+    return rows
+
+
+def collect_sympy_validation_failure_evidence(
+    report: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``collect_sympy_validation_failure_evidence``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``collect_sympy_validation_failure_evidence`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    rows: List[Dict[str, Any]] = []
+    sympy_reports: List[Dict[str, Any]] = []
+    if report.get("backend") == "sympy":
+        sympy_reports.append(report)
+    for case in report.get("cases", []):
+        if isinstance(case, dict):
+            consistency = case.get("consistency")
+            if isinstance(consistency, dict) and consistency.get("backend") == "sympy":
+                sympy_reports.append({"case_id": case.get("case_id"), **consistency})
+            elif case.get("backend") == "sympy":
+                sympy_reports.append(case)
+    for item in sympy_reports:
+        blockers = item.get("blockers", [])
+        criteria = item.get("validation_criteria", {})
+        failed_criteria = [name for name, passed in criteria.items() if passed is False]
+        metrics = item.get("metrics", {})
+        weak_metrics = {
+            name: value
+            for name, value in metrics.items()
+            if isinstance(value, (int, float)) and value < 1.0
+        }
+        if (
+            blockers
+            or failed_criteria
+            or weak_metrics
+            or item.get("status") not in {None, "complete"}
+        ):
+            rows.append(
+                {
+                    "case_id": item.get("case_id") or item.get("artifact"),
+                    "status": item.get("status"),
+                    "blockers": blockers,
+                    "failed_criteria": failed_criteria,
+                    "weak_metrics": weak_metrics,
+                }
+            )
+    return rows
+
+
+def build_opportunities(
+    report: Dict[str, Any],
+    *,
+    log_validation: Dict[str, Any],
+    baseline_comparison: Dict[str, Any],
+    reasoning_summary: Dict[str, Any],
+    reference_free_monitor: Optional[Dict[str, Any]],
+    commands: Sequence[str],
+    max_opportunities: int,
+) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``build_opportunities``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Build the local data structure or artifact used by the next workflow stage.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    preserved_cases = (
+        baseline_comparison.get("previous_successful_cases")
+        or baseline_comparison.get("current_successful_cases")
+        or []
+    )
+    opportunities: List[Dict[str, Any]] = []
+
+    sympy_failures = collect_sympy_validation_failure_evidence(report)
+    if sympy_failures:
+        opportunities.append(
+            opportunity(
+                opp_id="sympy-validation-refinement",
+                priority="P0",
+                owner_skill="sympy-consistency-report-orchestrator",
+                target_surface="SymPy parse, assumption, grounding, drafting, execution, identity, counterexample, and trace validation reports",
+                title="Treat SymPy validation failures as first-class refinement signals",
+                evidence=sympy_failures[:10],
+                proposed_refinement=(
+                    "Route each failed SymPy validation criterion to the owning "
+                    "skill before prompt or artifact changes are accepted: parse "
+                    "coverage to the parser, assumption fidelity to the assumption "
+                    "modeler, API grounding to the grounding navigator, symbolic "
+                    "or numeric failures to the validators, and trace failures to "
+                    "the trace verifier."
+                ),
+                invalidation_risk="medium: symbolic execution can pass under strengthened assumptions unless assumption fidelity is preserved",
+                commands=commands,
+                preserved_cases=preserved_cases,
+            )
+        )
+
+    if log_validation.get("summary", {}).get("finding_count", 0):
+        opportunities.append(
+            opportunity(
+                opp_id="reasoning-log-schema-repair",
+                priority="P0",
+                owner_skill="reasoning-log-schema-guardian",
+                target_surface="reasoning log event writers and hook manifest",
+                title="Repair reasoning-log schema or hook drift before prompt tuning",
+                evidence=log_validation.get("findings", [])[:10],
+                proposed_refinement=(
+                    "Fix malformed events, unknown hook ids, or undeclared hook steps "
+                    "before interpreting process traces for prompt changes."
+                ),
+                invalidation_risk="low: schema repairs are deterministic but can hide process regressions if waived",
+                commands=commands,
+                preserved_cases=preserved_cases,
+            )
+        )
+
+    reference_free_regressions = collect_reference_free_regression_evidence(
+        reference_free_monitor
+    )
+    if reference_free_regressions:
+        opportunities.append(
+            opportunity(
+                opp_id="reference-free-regression-repair",
+                priority="P0",
+                owner_skill="reference-free-critic-monitor",
+                target_surface="reference-free critic snapshot, prompt changes, and refinement acceptance policy",
+                title="Repair reference-free critic regressions before accepting prompt or skill changes",
+                evidence=reference_free_regressions[:10],
+                proposed_refinement=(
+                    "Localize the score or hard-risk regression, then revise the "
+                    "responsible prompt/skill only if the reference-free monitor "
+                    "returns to or exceeds the accepted baseline."
+                ),
+                invalidation_risk="high: benchmark-free regressions are the primary non-reference guard for prompt changes",
+                commands=commands,
+                preserved_cases=preserved_cases,
+            )
+        )
+
+    reference_free_weak_dimensions = collect_reference_free_weak_dimension_evidence(
+        reference_free_monitor
+    )
+    if reference_free_weak_dimensions:
+        opportunities.append(
+            opportunity(
+                opp_id="reference-free-weak-dimension-uplift",
+                priority="P1",
+                owner_skill="reference-free-critic-monitor",
+                target_surface="critic measure thresholds, Lean artifact controls, and refinement prompts",
+                title="Raise weak reference-free critic dimensions before broad prompt tuning",
+                evidence=reference_free_weak_dimensions[:10],
+                proposed_refinement=(
+                    "Use the weak dimension evidence to target the next refinement "
+                    "cycle, while preventing aggregate-score gains from hiding "
+                    "semantic-anchor loss, vacuity, or placeholder growth."
+                ),
+                invalidation_risk="medium: weak-dimension work can overfit a proxy unless anti-gaming checks remain active",
+                commands=commands,
+                preserved_cases=preserved_cases,
+            )
+        )
+
+    hierarchy_misses = collect_hierarchy_miss_evidence(report)
+    if hierarchy_misses:
+        opportunities.append(
+            opportunity(
+                opp_id="hierarchy-query-fallbacks",
+                priority="P1",
+                owner_skill="mathlib-hierarchy-navigator",
+                target_surface="skills/mathlib/mathlib-hierarchy-navigator/references/navigation.md and suite query construction",
+                title="Add fallback hierarchy queries from concepts, expected imports, and verified declarations",
+                evidence=hierarchy_misses[:8],
+                proposed_refinement=(
+                    "When a broad text query returns zero modules/declarations, retry with "
+                    "declared concepts, expected imports, and verified candidate namespaces. "
+                    "Keep the original query result in the packet for provenance."
+                ),
+                invalidation_risk="medium: broader fallback search can add noise unless ranked and bounded",
+                commands=commands,
+                preserved_cases=preserved_cases,
+            )
+        )
+
+    hint_candidates = collect_hint_candidate_evidence(report)
+    if hint_candidates:
+        opportunities.append(
+            opportunity(
+                opp_id="concept-ontology-profile",
+                priority="P1",
+                owner_skill="mathlib-concept-candidate-mapper",
+                target_surface="concept synonym/preferred-declaration policy and mapper prompts",
+                title="Turn repeated hint-level candidates into versioned concept ontology entries",
+                evidence=hint_candidates[:10],
+                proposed_refinement=(
+                    "Promote stable successful hint candidates into reviewed concept profiles "
+                    "with expected declarations, import hints, and mathlib-native examples."
+                ),
+                invalidation_risk="medium: overly strong preferred declarations can mis-rank unrelated concepts",
+                commands=commands,
+                preserved_cases=preserved_cases,
+            )
+        )
+
+    static_warnings = collect_static_warning_evidence(report)
+    if static_warnings:
+        opportunities.append(
+            opportunity(
+                opp_id="latex-concept-tag-normalization",
+                priority="P2",
+                owner_skill="latex-expansion-review-orchestrator",
+                target_surface="controlled-suite fixture review and LaTeX expansion review prompts",
+                title="Normalize concept tags that are metadata concepts rather than literal LaTeX terms",
+                evidence=static_warnings[:10],
+                proposed_refinement=(
+                    "Distinguish semantic metadata tags from literal expected terms so "
+                    "fixture warnings focus on true binding/completeness issues."
+                ),
+                invalidation_risk="low: warning policy changes should not affect Lean artifacts",
+                commands=commands,
+                preserved_cases=preserved_cases,
+            )
+        )
+
+    import_context = collect_import_context_evidence(report)
+    if import_context:
+        opportunities.append(
+            opportunity(
+                opp_id="minimal-import-declaration-checks",
+                priority="P1",
+                owner_skill="lean-import-context-verifier",
+                target_surface="expected declaration checks and controlled-suite runner",
+                title="Verify expected declarations under declared import contexts",
+                evidence=import_context,
+                proposed_refinement=(
+                    "Replace broad `import Mathlib` declaration checks with per-case "
+                    "declared imports, falling back to broad imports only as diagnostic context."
+                ),
+                invalidation_risk="medium: minimal imports can reveal hidden failures in previously broad checks",
+                commands=commands,
+                preserved_cases=preserved_cases,
+            )
+        )
+
+    difficulty_evidence = collect_difficulty_evidence(report)
+    if difficulty_evidence:
+        opportunities.append(
+            opportunity(
+                opp_id="proof-pattern-template-candidates",
+                priority="P2",
+                owner_skill="proof-expansion-difficulty-estimator",
+                target_surface="proof expansion scoring and drafter guidance",
+                title="Attach proof-pattern templates for moderate controlled cases",
+                evidence=difficulty_evidence,
+                proposed_refinement=(
+                    "For moderate but successful cases, record the proof pattern "
+                    "(for example induction plus ring normalization) as reusable drafter guidance."
+                ),
+                invalidation_risk="low: templates should be advisory and activated only by matching concepts",
+                commands=commands,
+                preserved_cases=preserved_cases,
+            )
+        )
+
+    if not opportunities and report.get("summary", {}).get("passed"):
+        opportunities.append(
+            opportunity(
+                opp_id="expand-regression-suite",
+                priority="P2",
+                owner_skill="controlled-formalization-suite-runner",
+                target_surface="controlled suite manifest and fixture set",
+                title="Add harder fixtures before broad prompt changes",
+                evidence=[
+                    {
+                        "case_count": report.get("summary", {}).get("case_count"),
+                        "compatibility_score": report.get("summary", {}).get(
+                            "compatibility_score"
+                        ),
+                        "reasoning_events": reasoning_summary.get("event_count"),
+                    }
+                ],
+                proposed_refinement=(
+                    "When all gates pass and no strong weakness is detected, add "
+                    "new fixture coverage before changing successful prompts."
+                ),
+                invalidation_risk="low: suite expansion should not change existing cases",
+                commands=commands,
+                preserved_cases=preserved_cases,
+            )
+        )
+
+    priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+    opportunities.sort(key=lambda item: priority_order.get(item["priority"], 9))
+    return opportunities[:max_opportunities]
+
+
+def build_monotonicity_contract(
+    report: Dict[str, Any],
+    *,
+    baseline_comparison: Dict[str, Any],
+    reference_free_monitor: Optional[Dict[str, Any]],
+    commands: Sequence[str],
+) -> Dict[str, Any]:
+    """Document the responsibility of ``build_monotonicity_contract``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Build the local data structure or artifact used by the next workflow stage.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    summary = report.get("summary", {})
+    reference_free_summary = (
+        reference_free_monitor.get("summary", {})
+        if isinstance(reference_free_monitor, dict)
+        else {}
+    )
+    return {
+        "policy": "No prompt or skill refinement may be accepted if it invalidates a previously successful case.",
+        "preserve_cases": (
+            baseline_comparison.get("previous_successful_cases")
+            or baseline_comparison.get("current_successful_cases")
+            or []
+        ),
+        "metric_floors": {
+            "suite_passed": True,
+            "lean_execution_ok": True,
+            "compatibility_audit_ok": True,
+            "expected_declaration_checks_ok": True,
+            "compatibility_score_min": summary.get("compatibility_score", 100),
+            "reference_free_confidence_score_min": reference_free_summary.get(
+                "reference_free_confidence_score"
+            ),
+        },
+        "risk_ceilings": (
+            reference_free_monitor.get("risk_counts", {})
+            if isinstance(reference_free_monitor, dict)
+            else {}
+        ),
+        "required_commands": list(commands),
+    }
+
+
+def build_todos(opportunities: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``build_todos``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Build the local data structure or artifact used by the next workflow stage.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return [
+        {
+            "status": "todo",
+            "priority": item["priority"],
+            "owner_skill": item["owner_skill"],
+            "task": item["title"],
+            "gate": "Run opportunity.monotonicity_gate.required_commands before accepting changes.",
+        }
+        for item in opportunities
+    ]
+
+
+def build_summary(
+    report: Dict[str, Any],
+    *,
+    opportunities: Sequence[Dict[str, Any]],
+    log_validation: Dict[str, Any],
+    baseline_comparison: Dict[str, Any],
+    reference_free_monitor: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Document the responsibility of ``build_summary``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Build the local data structure or artifact used by the next workflow stage.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    report_summary = report.get("summary", {})
+    reference_free_summary = (
+        reference_free_monitor.get("summary", {})
+        if isinstance(reference_free_monitor, dict)
+        else {}
+    )
+    priority_counts = Counter(item["priority"] for item in opportunities)
+    return {
+        "suite": report.get("suite"),
+        "report_passed": report_summary.get("passed"),
+        "case_count": report_summary.get("case_count"),
+        "current_successful_case_count": len(
+            baseline_comparison.get("current_successful_cases", [])
+        ),
+        "baseline_present": baseline_comparison.get("baseline_present"),
+        "regression_count": len(baseline_comparison.get("regressions", [])),
+        "reasoning_log_ok": log_validation.get("ok"),
+        "reasoning_log_findings": log_validation.get("summary", {}).get(
+            "finding_count"
+        ),
+        "opportunity_count": len(opportunities),
+        "opportunity_priority_counts": dict(priority_counts),
+        "compatibility_score": report_summary.get("compatibility_score"),
+        "max_difficulty_score": report_summary.get("max_difficulty_score"),
+        "reference_free_monitor_present": isinstance(reference_free_monitor, dict),
+        "reference_free_confidence_score": reference_free_summary.get(
+            "reference_free_confidence_score"
+        ),
+        "reference_free_regression_count": reference_free_summary.get(
+            "regression_count"
+        ),
+    }
+
+
+def render_text(packet: Dict[str, Any]) -> str:
+    """Document the responsibility of ``render_text``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    summary = packet["summary"]
+    lines = [
+        f"ok: {packet['ok']}",
+        f"suite: {summary.get('suite')}",
+        f"cases: {summary.get('case_count')}",
+        f"regressions: {summary.get('regression_count')}",
+        f"reasoning_log_ok: {summary.get('reasoning_log_ok')}",
+        f"opportunities: {summary.get('opportunity_count')}",
+    ]
+    for item in packet["opportunities"]:
+        lines.append(
+            f"- {item['priority']} {item['id']} [{item['owner_skill']}]: {item['title']}"
+        )
+    return "\n".join(lines)
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    """Document the responsibility of ``parse_args``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--report-file",
+        type=Path,
+        default=Path("artifacts/wiki_level_suite/report.json"),
+    )
+    parser.add_argument(
+        "--reasoning-log-file",
+        type=Path,
+        default=Path("artifacts/wiki_level_suite/reasoning.jsonl"),
+    )
+    parser.add_argument("--reference-free-monitor-file", type=Path)
+    parser.add_argument(
+        "--hooks-file", type=Path, default=Path("skills/SKILL_HOOKS.yaml")
+    )
+    parser.add_argument("--baseline-file", type=Path)
+    parser.add_argument("--write-baseline", action="store_true")
+    parser.add_argument(
+        "--output-file",
+        type=Path,
+        default=Path("artifacts/reflection/refinement_packet.json"),
+    )
+    parser.add_argument(
+        "--observer-reasoning-log-file",
+        type=Path,
+        default=Path("artifacts/reflection/reasoning.jsonl"),
+    )
+    parser.add_argument("--max-opportunities", type=int, default=8)
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def prepare_reflection(argv: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+    """Parse the native CLI and resolve its filesystem context without I/O."""
+    args = parse_args(argv)
+    report_file = (REPO_ROOT / args.report_file).resolve()
+    reasoning_log_file = (REPO_ROOT / args.reasoning_log_file).resolve()
+    reference_free_monitor_file = (
+        None
+        if args.reference_free_monitor_file is None
+        else (REPO_ROOT / args.reference_free_monitor_file).resolve()
+    )
+    hooks_file = (REPO_ROOT / args.hooks_file).resolve()
+    output_file = (REPO_ROOT / args.output_file).resolve()
+    observer_log = (
+        None
+        if args.observer_reasoning_log_file is None
+        else (REPO_ROOT / args.observer_reasoning_log_file).resolve()
+    )
+    baseline_file = (
+        None
+        if args.baseline_file is None
+        else (REPO_ROOT / args.baseline_file).resolve()
+    )
+
+    return {
+        "paths": {
+            "report_file": None if report_file is None else str(report_file),
+            "reasoning_log_file": (
+                None if reasoning_log_file is None else str(reasoning_log_file)
+            ),
+            "reference_free_monitor_file": (
+                None
+                if reference_free_monitor_file is None
+                else str(reference_free_monitor_file)
+            ),
+            "hooks_file": None if hooks_file is None else str(hooks_file),
+            "output_file": None if output_file is None else str(output_file),
+            "observer_log": None if observer_log is None else str(observer_log),
+            "baseline_file": None if baseline_file is None else str(baseline_file),
+        },
+        "max_opportunities": args.max_opportunities,
+        "write_baseline": args.write_baseline,
+        "json": args.json,
+        "halted": False,
+    }
+
+
+def load_reflection_inputs(loaded: Dict[str, Any]) -> Dict[str, Any]:
+    """Emit start, then load required and existing optional JSON objects."""
+    paths = loaded["paths"]
+    report_file = None if paths["report_file"] is None else Path(paths["report_file"])
+    reasoning_log_file = (
+        None
+        if paths["reasoning_log_file"] is None
+        else Path(paths["reasoning_log_file"])
+    )
+    reference_free_monitor_file = (
+        None
+        if paths["reference_free_monitor_file"] is None
+        else Path(paths["reference_free_monitor_file"])
+    )
+    observer_log = (
+        None if paths["observer_log"] is None else Path(paths["observer_log"])
+    )
+    baseline_file = (
+        None if paths["baseline_file"] is None else Path(paths["baseline_file"])
+    )
+    append_event(
+        observer_log,
+        step="reflective_refinement_loop_start",
+        payload={
+            "report_file": rel(report_file),
+            "reasoning_log_file": rel(reasoning_log_file),
+            "reference_free_monitor_file": (
+                None
+                if reference_free_monitor_file is None
+                else rel(reference_free_monitor_file)
+            ),
+            "baseline_file": None if baseline_file is None else rel(baseline_file),
+        },
+    )
+
+    report = load_json(report_file)
+    baseline = (
+        load_json(baseline_file) if baseline_file and baseline_file.exists() else None
+    )
+    reference_free_monitor = (
+        load_json(reference_free_monitor_file)
+        if reference_free_monitor_file and reference_free_monitor_file.exists()
+        else None
+    )
+    return {
+        **loaded,
+        "report": report,
+        "baseline": baseline,
+        "monitor": reference_free_monitor,
+    }
+
+
+def observe_reflection(loaded: Dict[str, Any]) -> Dict[str, Any]:
+    """Strictly validate and summarize evidence, without running commands."""
+    paths = loaded["paths"]
+    reasoning_log_file = (
+        None
+        if paths["reasoning_log_file"] is None
+        else Path(paths["reasoning_log_file"])
+    )
+    hooks_file = None if paths["hooks_file"] is None else Path(paths["hooks_file"])
+    observer_log = (
+        None if paths["observer_log"] is None else Path(paths["observer_log"])
+    )
+    report = loaded["report"]
+    baseline = loaded["baseline"]
+    reference_free_monitor = loaded["monitor"]
+    log_validation = validate_reasoning_log(
+        reasoning_log_file,
+        hooks_file=hooks_file,
+        strict=True,
+    )
+    reasoning_events = read_reasoning_events(reasoning_log_file)
+    reasoning_summary = summarize_reasoning_events(reasoning_events)
+    baseline_comparison = compare_baseline(report, baseline)
+    commands = regression_commands(reasoning_log_file, hooks_file)
+
+    append_event(
+        observer_log,
+        step="reflective_refinement_observation_complete",
+        payload={
+            "report_passed": report.get("summary", {}).get("passed"),
+            "reasoning_log_ok": log_validation.get("ok"),
+            "event_count": reasoning_summary.get("event_count"),
+            "baseline_present": baseline is not None,
+            "reference_free_monitor_present": reference_free_monitor is not None,
+            "regression_count": len(baseline_comparison.get("regressions", [])),
+        },
+    )
+
+    return {
+        "log_validation": log_validation,
+        "reasoning_summary": reasoning_summary,
+        "baseline_comparison": baseline_comparison,
+        "commands": commands,
+    }
+
+
+def propose_reflection(
+    loaded: Dict[str, Any], observation: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Build, sort and slice native opportunities, then emit retained events."""
+    paths = loaded["paths"]
+    observer_log = (
+        None if paths["observer_log"] is None else Path(paths["observer_log"])
+    )
+    report = loaded["report"]
+    reference_free_monitor = loaded["monitor"]
+    log_validation = observation["log_validation"]
+    reasoning_summary = observation["reasoning_summary"]
+    baseline_comparison = observation["baseline_comparison"]
+    commands = observation["commands"]
+    opportunities = build_opportunities(
+        report,
+        log_validation=log_validation,
+        baseline_comparison=baseline_comparison,
+        reasoning_summary=reasoning_summary,
+        reference_free_monitor=reference_free_monitor,
+        commands=commands,
+        max_opportunities=loaded["max_opportunities"],
+    )
+    for item in opportunities:
+        append_event(
+            observer_log,
+            step="reflective_refinement_opportunity_identified",
+            payload={
+                "opportunity_id": item["id"],
+                "priority": item["priority"],
+                "owner_skill": item["owner_skill"],
+            },
+        )
+
+    return opportunities
+
+
+def pack_reflection(
+    loaded: Dict[str, Any],
+    observation: Dict[str, Any],
+    opportunities: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Evaluate all four gates and package evidence and TODOs."""
+    paths = loaded["paths"]
+    report_file = None if paths["report_file"] is None else Path(paths["report_file"])
+    reasoning_log_file = (
+        None
+        if paths["reasoning_log_file"] is None
+        else Path(paths["reasoning_log_file"])
+    )
+    reference_free_monitor_file = (
+        None
+        if paths["reference_free_monitor_file"] is None
+        else Path(paths["reference_free_monitor_file"])
+    )
+    output_file = None if paths["output_file"] is None else Path(paths["output_file"])
+    observer_log = (
+        None if paths["observer_log"] is None else Path(paths["observer_log"])
+    )
+    baseline_file = (
+        None if paths["baseline_file"] is None else Path(paths["baseline_file"])
+    )
+    report = loaded["report"]
+    reference_free_monitor = loaded["monitor"]
+    log_validation = observation["log_validation"]
+    reasoning_summary = observation["reasoning_summary"]
+    baseline_comparison = observation["baseline_comparison"]
+    commands = observation["commands"]
+    monotonicity_contract = build_monotonicity_contract(
+        report,
+        baseline_comparison=baseline_comparison,
+        reference_free_monitor=reference_free_monitor,
+        commands=commands,
+    )
+    gate_decision = decide_gate(
+        gate_id="autoformalization-reflective-refinement",
+        hook_id=HOOK_ID,
+        checks=[
+            {
+                "id": "report_passed",
+                "passed": bool(report.get("summary", {}).get("passed", False)),
+                "severity": "high",
+                "blocking": True,
+                "message": "Observed report summary must pass before using it as improvement evidence.",
+            },
+            {
+                "id": "reasoning_log_strict",
+                "passed": bool(log_validation.get("ok", False)),
+                "severity": "high",
+                "blocking": True,
+                "message": "Reasoning log must validate strictly before process reflection.",
+            },
+            {
+                "id": "baseline_regressions",
+                "passed": not baseline_comparison.get("regressions"),
+                "severity": "high",
+                "blocking": True,
+                "message": "No previously successful baseline case may regress.",
+            },
+            {
+                "id": "reference_free_regressions",
+                "passed": not collect_reference_free_regression_evidence(
+                    reference_free_monitor
+                ),
+                "severity": "high",
+                "blocking": True,
+                "message": "Reference-free critic measures must not regress when supplied.",
+            },
+        ],
+    )
+
+    append_event(
+        observer_log,
+        step="reflective_refinement_monotonicity_gate_complete",
+        payload={
+            "status": gate_decision["status"],
+            "ok": gate_decision["ok"],
+            "blocking_failure_count": len(gate_decision["blocking_failures"]),
+        },
+    )
+
+    packet: Dict[str, Any] = {
+        "ok": bool(gate_decision["ok"]),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "report_file": rel(report_file),
+        "reasoning_log_file": rel(reasoning_log_file),
+        "reference_free_monitor_file": (
+            None
+            if reference_free_monitor_file is None
+            else rel(reference_free_monitor_file)
+        ),
+        "baseline_file": None if baseline_file is None else rel(baseline_file),
+        "output_file": rel(output_file),
+        "summary": {},
+        "baseline_comparison": baseline_comparison,
+        "reference_free_monitor": reference_free_monitor,
+        "reasoning_log_validation": log_validation,
+        "reasoning_event_summary": reasoning_summary,
+        "monotonicity_contract": monotonicity_contract,
+        "opportunities": opportunities,
+        "gate_decision": gate_decision,
+        "todos": build_todos(opportunities),
+    }
+    packet["summary"] = build_summary(
+        report,
+        opportunities=opportunities,
+        log_validation=log_validation,
+        baseline_comparison=baseline_comparison,
+        reference_free_monitor=reference_free_monitor,
+    )
+    return packet
+
+
+def persist_reflection(loaded: Dict[str, Any], packet: Dict[str, Any]) -> None:
+    """Write the packet before any baseline write or completion event."""
+    write_json(Path(loaded["paths"]["output_file"]), packet)
+
+
+def finish_reflection(loaded: Dict[str, Any], packet: Dict[str, Any]) -> int:
+    """Optionally snapshot even a failed report; emit completion and native text."""
+    paths = loaded["paths"]
+    output_file = None if paths["output_file"] is None else Path(paths["output_file"])
+    observer_log = (
+        None if paths["observer_log"] is None else Path(paths["observer_log"])
+    )
+    baseline_file = (
+        None if paths["baseline_file"] is None else Path(paths["baseline_file"])
+    )
+    report = loaded["report"]
+
+    if loaded["write_baseline"]:
+        if baseline_file is None:
+            raise ValueError("--write-baseline requires --baseline-file")
+        write_json(baseline_file, baseline_snapshot(report))
+
+    append_event(
+        observer_log,
+        step="reflective_refinement_loop_complete",
+        payload={
+            "ok": packet["ok"],
+            "output_file": rel(output_file),
+            "opportunity_count": len(packet["opportunities"]),
+        },
+    )
+
+    if loaded["json"]:
+        print(json.dumps(packet, ensure_ascii=False, indent=2))
+    else:
+        print(render_text(packet))
+    return 0 if packet["ok"] else 3
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Run the same one-pass phases used by the registered MCP tools."""
+    loaded = load_reflection_inputs(prepare_reflection(argv))
+    observation = observe_reflection(loaded)
+    opportunities = propose_reflection(loaded, observation)
+    packet = pack_reflection(loaded, observation, opportunities)
+    persist_reflection(loaded, packet)
+    return finish_reflection(loaded, packet)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

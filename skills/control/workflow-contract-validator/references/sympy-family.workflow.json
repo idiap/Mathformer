@@ -1,0 +1,787 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_test_family_sympy_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "SymPy matrix traversal projected from run(args), with native main publication.",
+  "aliases": [
+    "test:family:sympy"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Invocation": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "module_family",
+          "profile",
+          "extra_args",
+          "selected_rows_upper_bound"
+        ],
+        "properties": {
+          "module_family": {
+            "const": "sympy"
+          },
+          "profile": {
+            "const": "workstation"
+          },
+          "extra_args": {
+            "const": []
+          },
+          "selected_rows_upper_bound": {
+            "const": 4096,
+            "description": "Domain restriction; the loaded SymPy selection must contain at most 4096 rows."
+          }
+        }
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "matrix",
+          "selected",
+          "families",
+          "index",
+          "results"
+        ],
+        "properties": {
+          "matrix": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "selected": {
+            "type": "array",
+            "maxItems": 4096,
+            "items": {
+              "type": "object"
+            }
+          },
+          "families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "status",
+                "ok"
+              ],
+              "properties": {
+                "status": {
+                  "enum": [
+                    "pass",
+                    "fail",
+                    "skip",
+                    "warn"
+                  ]
+                },
+                "ok": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "ok",
+          "profile",
+          "families",
+          "summary",
+          "results",
+          "schema_errors",
+          "matrix_errors",
+          "capability_ledger",
+          "dependency_map"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "profile": {
+            "const": "workstation"
+          },
+          "families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "object"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "schema_errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "matrix_errors": {
+            "const": []
+          },
+          "capability_ledger": {
+            "type": "object"
+          },
+          "dependency_map": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          3
+        ]
+      }
+    },
+    "RuntimeContext": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "handle"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "handle": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "Cursor": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "state",
+          "pending"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "type": "object",
+            "required": [
+              "matrix",
+              "selected",
+              "families",
+              "index",
+              "results"
+            ],
+            "properties": {
+              "matrix": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "selected": {
+                "type": "array",
+                "maxItems": 4096,
+                "items": {
+                  "type": "object"
+                }
+              },
+              "families": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "results": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "ok"
+                  ],
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "pass",
+                        "fail",
+                        "skip",
+                        "warn"
+                      ]
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "pending": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "inputs": {
+    "invocation": {
+      "type": "Invocation"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "prepare": {
+      "inputs": {
+        "invocation": {
+          "type": "Invocation"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_family_prepare",
+          "operation": "mathformer_sympy_family_prepare"
+        }
+      }
+    },
+    "pending": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "pending": {
+          "type": "Flag"
+        },
+        "cursor": {
+          "type": "Cursor"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_family_pending",
+          "operation": "mathformer_sympy_family_pending"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "invocation": {
+          "type": "Invocation"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_family_advance",
+          "operation": "mathformer_sympy_family_advance"
+        }
+      }
+    },
+    "finalize": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "invocation": {
+          "type": "Invocation"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_family_finalize",
+          "operation": "mathformer_sympy_family_finalize"
+        }
+      }
+    },
+    "publish": {
+      "inputs": {
+        "report": {
+          "type": "Report"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_family_publish",
+          "operation": "mathformer_sympy_family_publish"
+        }
+      }
+    },
+    "retain_empty": {
+      "inputs": {
+        "cursor": {
+          "type": "Cursor"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "cursor": {
+          "type": "Cursor"
+        },
+        "pending": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_family_retain_empty",
+          "operation": "mathformer_sympy_family_retain_empty"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare",
+        "arguments": {
+          "invocation": {
+            "ref": "inputs.invocation"
+          }
+        }
+      },
+      {
+        "id": "initial_guard",
+        "kind": "call",
+        "operation": "pending",
+        "arguments": {
+          "state": {
+            "ref": "steps.prepare.outputs.state"
+          },
+          "context": {
+            "ref": "steps.prepare.outputs.context"
+          }
+        }
+      },
+      {
+        "kind": "loop",
+        "state_type": "Cursor",
+        "initial": {
+          "ref": "steps.initial_guard.outputs.cursor"
+        },
+        "max_iterations": 4096,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "pending",
+              "when": {
+                "ref": "loop.state.pending"
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "advance",
+                    "kind": "call",
+                    "operation": "advance",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state.state"
+                      },
+                      "invocation": {
+                        "ref": "inputs.invocation"
+                      },
+                      "context": {
+                        "ref": "steps.prepare.outputs.context"
+                      }
+                    }
+                  },
+                  {
+                    "id": "next_guard",
+                    "kind": "call",
+                    "operation": "pending",
+                    "arguments": {
+                      "state": {
+                        "ref": "steps.advance.outputs.state"
+                      },
+                      "context": {
+                        "ref": "steps.prepare.outputs.context"
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "cursor": {
+                    "type": "Cursor",
+                    "value": {
+                      "ref": "steps.next_guard.outputs.cursor"
+                    }
+                  },
+                  "pending": {
+                    "type": "Flag",
+                    "value": {
+                      "ref": "steps.next_guard.outputs.pending"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "sequence",
+            "steps": [
+              {
+                "id": "empty",
+                "kind": "call",
+                "operation": "retain_empty",
+                "arguments": {
+                  "cursor": {
+                    "ref": "loop.state"
+                  },
+                  "context": {
+                    "ref": "steps.prepare.outputs.context"
+                  }
+                }
+              }
+            ],
+            "outputs": {
+              "cursor": {
+                "type": "Cursor",
+                "value": {
+                  "ref": "steps.empty.outputs.cursor"
+                }
+              },
+              "pending": {
+                "type": "Flag",
+                "value": {
+                  "ref": "steps.empty.outputs.pending"
+                }
+              }
+            }
+          },
+          "outputs": {
+            "cursor": {
+              "type": "Cursor",
+              "value": {
+                "ref": "selected.outputs.cursor"
+              }
+            },
+            "pending": {
+              "type": "Flag",
+              "value": {
+                "ref": "selected.outputs.pending"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.cursor"
+        },
+        "until": {
+          "not": {
+            "ref": "body.outputs.pending"
+          }
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state.state"
+            }
+          }
+        },
+        "id": "traverse"
+      },
+      {
+        "id": "finalize",
+        "kind": "call",
+        "operation": "finalize",
+        "arguments": {
+          "state": {
+            "ref": "steps.traverse.outputs.state"
+          },
+          "invocation": {
+            "ref": "inputs.invocation"
+          },
+          "context": {
+            "ref": "steps.prepare.outputs.context"
+          }
+        }
+      },
+      {
+        "id": "publish",
+        "kind": "call",
+        "operation": "publish",
+        "arguments": {
+          "report": {
+            "ref": "steps.finalize.outputs.report"
+          },
+          "context": {
+            "ref": "steps.prepare.outputs.context"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.finalize.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.publish.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 8197
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked native test outcomes; completion establishes no scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/test_program/run_comprehensive_tests.py",
+        "selector": "run",
+        "digest": "sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a"
+      },
+      {
+        "path": "tests/test_program/run_comprehensive_tests.py",
+        "selector": "enter_checks; prepare_checks; checks_pending; advance_check; run_check; finalize_checks; main; publish_report",
+        "digest": "sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/test:family:sympy; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/sympy_family_workflow_tools.py",
+        "selector": "register_sympy_family_tools",
+        "digest": "sha256:25d5873b17a9d78faae9ccc95577a88e5d7b129166d43f6a64d41d2eb5a0a1a2"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_sympy_family_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/comprehensive_strict_tools.py",
+        "selector": "source_runner",
+        "digest": "sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory/test:family:sympy",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Invocation restricts the loaded selection to at most 4096 rows; native traversal has no row cap. At exactly 4096 rows the last guard exits normally; exhaustion is unreachable for valid states in this restricted domain.",
+      "Hub preflight, dry-run handling, 900-second subprocess supervision and outer write auditing remain native hub boundary responsibilities. The callable DAG projects run(args) and main publication.",
+      "Complete native effects require deployment qualification; Lunar records runtime events, effects and provenance. Completion establishes no scientific truth or artifact promotion."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "test:family:sympy",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "test:family:sympy",
+        "summary": "Run the comprehensive test matrix for the sympy module family.",
+        "family": "sympy",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "tests/test_program/run_comprehensive_tests.py",
+          "--module-family",
+          "sympy",
+          "--json"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "tests/test_program/run_comprehensive_tests.py",
+          "tests/test_matrix.json"
+        ],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [
+          "artifacts/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": 900,
+        "notes": ""
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered MCP blocks call shared native runner functions; owned context retains parse-time defaults and rejects changed/replayed state. Native stdout is preserved on MCP stderr.",
+      "defaults": "Dependency-map-only, changed-file selection, matrix validation, strict mode and fail-on-warning are false; JSONL/JUnit unset; run_id and output_file use parser defaults.",
+      "timing": "Native hub subprocess timeout is 900 seconds; per-row default is 120 seconds. The 3600-second policy limit is only a normalization ceiling.",
+      "failure_policy": "Failed checks remain report data; publication returns 3 when report.ok is false. Uncaught errors abort without normal publication.",
+      "scientific_payloads": "Report describes test outcomes and capabilities, not proofs."
+    }
+  }
+}

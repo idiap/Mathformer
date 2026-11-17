@@ -1,0 +1,487 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "profile_theory_library_curation_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Specification-only projection of the theory-library curation epistemic dependencies and terminal dispositions; no execution schedule is established.",
+  "aliases": [
+    "theory_library_curation"
+  ],
+  "lifecycle": "draft",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Context": {
+      "schema": {
+        "description": "Opaque ERFL Context; concrete invocation payload is unspecified."
+      },
+      "representation": "value"
+    },
+    "Bundle": {
+      "schema": {
+        "description": "Opaque ERFL Bundle; candidates and curated candidates retain the same semantic kind."
+      },
+      "representation": "value"
+    },
+    "Evidence": {
+      "schema": {
+        "description": "Opaque ERFL Evidence for grounding."
+      },
+      "representation": "value"
+    },
+    "Assessment": {
+      "schema": {
+        "description": "Opaque ERFL Assessment against grounding evidence."
+      },
+      "representation": "value"
+    },
+    "Plan": {
+      "schema": {
+        "description": "Opaque ERFL Plan; deriving a plan does not execute it."
+      },
+      "representation": "value"
+    },
+    "Decision": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "accepted",
+          "repair_required",
+          "rejected"
+        ],
+        "description": "Symbolic encoding of the three declared e dispositions, not a native runtime payload schema."
+      },
+      "representation": "value"
+    }
+  },
+  "inputs": {
+    "curation_request": {
+      "type": "Context",
+      "required": true
+    }
+  },
+  "outputs": {
+    "curation_status": {
+      "type": "Decision",
+      "value": {
+        "ref": "flow.outputs.curation_status"
+      }
+    }
+  },
+  "operations": {
+    "retrieve_candidates": {
+      "inputs": {
+        "curation_request": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "candidates": {
+          "type": "Bundle"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/theory_library_curation.rflow (q:Q): retrieve candidates; no executable normalized binding exists."
+      }
+    },
+    "establish_grounding": {
+      "inputs": {
+        "candidates": {
+          "type": "Bundle"
+        }
+      },
+      "outputs": {
+        "grounding": {
+          "type": "Evidence"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/theory_library_curation.rflow (g:G): establish grounding evidence; no executable normalized binding exists."
+      }
+    },
+    "assess_candidates": {
+      "inputs": {
+        "candidates": {
+          "type": "Bundle"
+        },
+        "grounding": {
+          "type": "Evidence"
+        }
+      },
+      "outputs": {
+        "assessment": {
+          "type": "Assessment"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/theory_library_curation.rflow (r:R): assess candidates against grounding; no executable normalized binding exists."
+      }
+    },
+    "derive_repair_plan": {
+      "inputs": {
+        "candidates": {
+          "type": "Bundle"
+        },
+        "assessment": {
+          "type": "Assessment"
+        }
+      },
+      "outputs": {
+        "repair": {
+          "type": "Plan"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/theory_library_curation.rflow (x:X): derive a repair plan without applying it; no executable normalized binding exists."
+      }
+    },
+    "construct_curated_candidate": {
+      "inputs": {
+        "candidates": {
+          "type": "Bundle"
+        },
+        "repair": {
+          "type": "Plan"
+        }
+      },
+      "outputs": {
+        "curated_candidate": {
+          "type": "Bundle"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/theory_library_curation.rflow (f:F): construct a candidate from candidates and repair; no executable normalized binding exists."
+      }
+    },
+    "calibrate_candidate": {
+      "inputs": {
+        "curated_candidate": {
+          "type": "Bundle"
+        },
+        "assessment": {
+          "type": "Assessment"
+        }
+      },
+      "outputs": {
+        "curation_status": {
+          "type": "Decision"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/theory_library_curation.rflow (e:E): calibrate using the existing assessment; no executable normalized binding exists."
+      }
+    },
+    "declare_persistence": {
+      "inputs": {
+        "curation_status": {
+          "type": "Decision"
+        }
+      },
+      "outputs": {},
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/theory_library_curation.rflow (e -persist-> kb0): declare persistence of the calibrated decision to file(\"MathformerKB\"); this declaration neither writes nor attests persistence success; no executable normalized binding exists."
+      }
+    },
+    "accept": {
+      "inputs": {
+        "curation_status": {
+          "type": "Decision"
+        }
+      },
+      "outputs": {},
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/theory_library_curation.rflow (on e.accepted => accept): terminal epistemic acceptance, without asserting durable promotion; no executable normalized binding exists."
+      }
+    },
+    "stop": {
+      "inputs": {
+        "curation_status": {
+          "type": "Decision"
+        }
+      },
+      "outputs": {},
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/theory_library_curation.rflow (on e.repair_required => stop; on e.rejected => stop): terminate this profile without repair execution or repetition; no executable normalized binding exists."
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "description": "Declaration order and epistemic data dependencies only; all calls are unavailable specification interfaces.",
+    "steps": [
+      {
+        "id": "q",
+        "kind": "call",
+        "operation": "retrieve_candidates",
+        "arguments": {
+          "curation_request": {
+            "ref": "inputs.curation_request"
+          }
+        }
+      },
+      {
+        "id": "g",
+        "kind": "call",
+        "operation": "establish_grounding",
+        "arguments": {
+          "candidates": {
+            "ref": "steps.q.outputs.candidates"
+          }
+        }
+      },
+      {
+        "id": "r",
+        "kind": "call",
+        "operation": "assess_candidates",
+        "arguments": {
+          "candidates": {
+            "ref": "steps.q.outputs.candidates"
+          },
+          "grounding": {
+            "ref": "steps.g.outputs.grounding"
+          }
+        }
+      },
+      {
+        "id": "x",
+        "kind": "call",
+        "operation": "derive_repair_plan",
+        "arguments": {
+          "candidates": {
+            "ref": "steps.q.outputs.candidates"
+          },
+          "assessment": {
+            "ref": "steps.r.outputs.assessment"
+          }
+        }
+      },
+      {
+        "id": "f",
+        "kind": "call",
+        "operation": "construct_curated_candidate",
+        "arguments": {
+          "candidates": {
+            "ref": "steps.q.outputs.candidates"
+          },
+          "repair": {
+            "ref": "steps.x.outputs.repair"
+          }
+        }
+      },
+      {
+        "id": "e",
+        "kind": "call",
+        "operation": "calibrate_candidate",
+        "arguments": {
+          "curated_candidate": {
+            "ref": "steps.f.outputs.curated_candidate"
+          },
+          "assessment": {
+            "ref": "steps.r.outputs.assessment"
+          }
+        }
+      },
+      {
+        "id": "persistence",
+        "kind": "call",
+        "operation": "declare_persistence",
+        "arguments": {
+          "curation_status": {
+            "ref": "steps.e.outputs.curation_status"
+          }
+        }
+      },
+      {
+        "id": "terminal",
+        "kind": "switch",
+        "description": "The source declares accept on accepted and stop on repair_required or rejected.",
+        "cases": [
+          {
+            "id": "accepted",
+            "when": {
+              "eq": [
+                {
+                  "ref": "steps.e.outputs.curation_status"
+                },
+                {
+                  "literal": "accepted"
+                }
+              ]
+            },
+            "body": {
+              "kind": "call",
+              "operation": "accept",
+              "arguments": {
+                "curation_status": {
+                  "ref": "steps.e.outputs.curation_status"
+                }
+              }
+            }
+          },
+          {
+            "id": "repair_required",
+            "when": {
+              "eq": [
+                {
+                  "ref": "steps.e.outputs.curation_status"
+                },
+                {
+                  "literal": "repair_required"
+                }
+              ]
+            },
+            "body": {
+              "kind": "call",
+              "operation": "stop",
+              "arguments": {
+                "curation_status": {
+                  "ref": "steps.e.outputs.curation_status"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "stop",
+          "description": "Rejected is the remaining value in the closed symbolic Decision type.",
+          "arguments": {
+            "curation_status": {
+              "ref": "steps.e.outputs.curation_status"
+            }
+          }
+        },
+        "outputs": {
+          "curation_status": {
+            "type": "Decision",
+            "value": {
+              "ref": "steps.e.outputs.curation_status"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "curation_status": {
+        "type": "Decision",
+        "value": {
+          "ref": "steps.terminal.outputs.curation_status"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository"
+        ],
+        "write": []
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "inspect_declared_contract"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 8
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked epistemic description only; no scientific result, runtime qualification, persistence success or durable promotion is established."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "examples/reasoning_flows/theory_library_curation.rflow",
+        "selector": "reasoning theory_library_curation",
+        "digest": "sha256:8a016a9fdb46474a8ec47298bcb3661f914ee81d4f57dd685d0a1b171f34a2ea"
+      },
+      {
+        "path": "skills/REASONING_TYPES.yaml",
+        "selector": "reasoning_styles/theory_library_curation",
+        "digest": "sha256:dcc2048dd94666d792aa70655e8ddcbe92feb420ef6a06c7ce8b4ce1617160a5"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "theory_library_curation_descriptor; inventory reasoning_styles profile normalization",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/control:theory-library-curation-qualification",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/mcp/run_theory_library_curation_workflow_tests.py",
+        "selector": "TheoryLibraryCurationTests",
+        "digest": "sha256:8b245901862faf8dfab190d7d02d4a9fed71eaff9ecb2c93100ce55c4c198a78"
+      }
+    ],
+    "gaps": [
+      "No authoritative executable implementation is bound to this profile; all operations, including persistence and terminal dispositions, remain specification-only.",
+      "The source establishes epistemic dependencies, not an execution schedule, concrete payload schemas, operational failures, or persistence ordering relative to terminal handling.",
+      "Opaque semantic payload types and symbolic Decision labels are descriptive interfaces; native serialization and disposition adapters remain unspecified.",
+      "No repeat, loop-carried state, retry algorithm, convergence criterion, or executable iteration bound is declared.",
+      "The retained 3600-second ceiling and authored eight-call graph ceiling are descriptor budgets only; the former generated one-call placeholder was expanded, not interpreted as runtime behavior.",
+      "The related coherence run_loop is a single-pass materialization, not this profile's implementation binding."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "profile",
+      "native_id": "theory_library_curation",
+      "owner_skill": "skills/control/reasoning-flow-language/SKILL.md",
+      "contract": {
+        "id": "theory_library_curation",
+        "goal": "Turn reusable candidates into coherent, provenance-bearing library knowledge.",
+        "trust_transition": {
+          "from": "reusable_candidate",
+          "to": "accepted_curated_entry_or_repair_plan"
+        }
+      }
+    }
+  }
+}

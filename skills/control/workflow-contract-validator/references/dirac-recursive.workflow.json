@@ -1,0 +1,949 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lean_dirac_recursive_formalphysics_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Fixed five-case Dirac FormalPhysics batch; recursive recommendations do not execute another pass.",
+  "aliases": [
+    "physics-lean:dirac-recursive-formalphysics"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "BatchState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "records",
+          "selected",
+          "lean_results",
+          "review_reports",
+          "completeness_reports"
+        ],
+        "properties": {
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "selected": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 5
+          },
+          "lean_results": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 5
+          },
+          "review_reports": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 5
+          },
+          "completeness_reports": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 5
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Bool": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Grounding": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "concept_file",
+          "intake",
+          "surface",
+          "workbench",
+          "verification"
+        ],
+        "properties": {
+          "concept_file": {
+            "type": "string"
+          },
+          "intake": {
+            "type": "object"
+          },
+          "surface": {
+            "type": "object"
+          },
+          "workbench": {
+            "type": "object"
+          },
+          "verification": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "CompletionGuards": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "target_restating",
+          "partial",
+          "all_complete"
+        ],
+        "properties": {
+          "target_restating": {
+            "type": "boolean"
+          },
+          "partial": {
+            "type": "boolean"
+          },
+          "all_complete": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Status": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "blocked_target_restating_assumption",
+          "derivation_partial",
+          "complete_autoformalization",
+          "grounded_scaffold"
+        ]
+      }
+    },
+    "RunReport": {
+      "representation": "file",
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "status",
+          "selected",
+          "grounding_artifacts"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "selected": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 5
+          },
+          "grounding_artifacts": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "GroundingPlan": {
+      "representation": "file",
+      "schema": {
+        "type": "object",
+        "required": [
+          "status",
+          "next_policy",
+          "recursive_frontier_count"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "next_policy": {
+            "type": "object"
+          },
+          "recursive_frontier_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          1
+        ]
+      }
+    },
+    "RuntimeContext": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "repository_root",
+          "allow_mutating"
+        ],
+        "properties": {
+          "repository_root": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RuntimeContext"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "RunReport",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "recursive_plan": {
+      "type": "GroundingPlan",
+      "value": {
+        "ref": "flow.outputs.recursive_plan"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "load_and_pack": {
+      "inputs": {
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "BatchState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dirac_load_and_pack",
+          "operation": "mathformer_dirac_load_and_pack"
+        }
+      }
+    },
+    "write_next_source": {
+      "inputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dirac_write_next_source",
+          "operation": "mathformer_dirac_write_next_source"
+        }
+      }
+    },
+    "build_grounding": {
+      "inputs": {
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "grounding": {
+          "type": "Grounding"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dirac_build_grounding",
+          "operation": "mathformer_dirac_build_grounding"
+        }
+      }
+    },
+    "compile_next": {
+      "inputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dirac_compile_next",
+          "operation": "mathformer_dirac_compile_next"
+        }
+      }
+    },
+    "review_next": {
+      "inputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dirac_review_next",
+          "operation": "mathformer_dirac_review_next"
+        }
+      }
+    },
+    "check_next": {
+      "inputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "grounding": {
+          "type": "Grounding"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dirac_check_next",
+          "operation": "mathformer_dirac_check_next"
+        }
+      }
+    },
+    "compute_guards": {
+      "inputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "grounding": {
+          "type": "Grounding"
+        }
+      },
+      "outputs": {
+        "guards": {
+          "type": "CompletionGuards"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dirac_compute_guards",
+          "operation": "mathformer_dirac_compute_guards"
+        }
+      }
+    },
+    "return_status": {
+      "inputs": {
+        "status": {
+          "type": "Status"
+        }
+      },
+      "outputs": {
+        "status": {
+          "type": "Status"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dirac_return_status",
+          "operation": "mathformer_dirac_return_status"
+        }
+      }
+    },
+    "write_reports": {
+      "inputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "grounding": {
+          "type": "Grounding"
+        },
+        "status": {
+          "type": "Status"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "RunReport"
+        },
+        "recursive_plan": {
+          "type": "GroundingPlan"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dirac_write_reports",
+          "operation": "mathformer_dirac_write_reports"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "load",
+        "kind": "call",
+        "operation": "load_and_pack",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "select",
+        "kind": "loop",
+        "state_type": "BatchState",
+        "initial": {
+          "ref": "steps.load.outputs.state"
+        },
+        "body": {
+          "kind": "call",
+          "operation": "write_next_source",
+          "arguments": {
+            "state": {
+              "ref": "loop.state"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 5,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "BatchState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "ground",
+        "kind": "call",
+        "operation": "build_grounding",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "compile",
+        "kind": "loop",
+        "state_type": "BatchState",
+        "initial": {
+          "ref": "steps.select.outputs.state"
+        },
+        "body": {
+          "kind": "call",
+          "operation": "compile_next",
+          "arguments": {
+            "state": {
+              "ref": "loop.state"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 5,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "BatchState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "review",
+        "kind": "loop",
+        "state_type": "BatchState",
+        "initial": {
+          "ref": "steps.compile.outputs.state"
+        },
+        "body": {
+          "kind": "call",
+          "operation": "review_next",
+          "arguments": {
+            "state": {
+              "ref": "loop.state"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 5,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "BatchState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "completeness",
+        "kind": "loop",
+        "state_type": "BatchState",
+        "initial": {
+          "ref": "steps.review.outputs.state"
+        },
+        "body": {
+          "kind": "call",
+          "operation": "check_next",
+          "arguments": {
+            "state": {
+              "ref": "loop.state"
+            },
+            "grounding": {
+              "ref": "steps.ground.outputs.grounding"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 5,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "BatchState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "guards",
+        "kind": "call",
+        "operation": "compute_guards",
+        "arguments": {
+          "state": {
+            "ref": "steps.completeness.outputs.state"
+          },
+          "grounding": {
+            "ref": "steps.ground.outputs.grounding"
+          }
+        }
+      },
+      {
+        "id": "classify",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "blocked",
+            "when": {
+              "ref": "steps.guards.outputs.guards.target_restating"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "return_status",
+              "arguments": {
+                "status": {
+                  "literal": "blocked_target_restating_assumption"
+                }
+              }
+            }
+          },
+          {
+            "id": "partial",
+            "when": {
+              "ref": "steps.guards.outputs.guards.partial"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "return_status",
+              "arguments": {
+                "status": {
+                  "literal": "derivation_partial"
+                }
+              }
+            }
+          },
+          {
+            "id": "complete",
+            "when": {
+              "ref": "steps.guards.outputs.guards.all_complete"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "return_status",
+              "arguments": {
+                "status": {
+                  "literal": "complete_autoformalization"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "return_status",
+          "arguments": {
+            "status": {
+              "literal": "grounded_scaffold"
+            }
+          }
+        },
+        "outputs": {
+          "status": {
+            "type": "Status",
+            "value": {
+              "ref": "selected.outputs.status"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "write_reports",
+        "arguments": {
+          "state": {
+            "ref": "steps.completeness.outputs.state"
+          },
+          "grounding": {
+            "ref": "steps.ground.outputs.grounding"
+          },
+          "status": {
+            "ref": "steps.classify.outputs.status"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "RunReport",
+        "value": {
+          "ref": "steps.finish.outputs.report"
+        }
+      },
+      "recursive_plan": {
+        "type": "GroundingPlan",
+        "value": {
+          "ref": "steps.finish.outputs.recursive_plan"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.finish.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/physics_lean/dirac_recursive_batch/",
+          "artifacts/workflow_hub/",
+          "libraries/MathformerPhysicsLib/Lean/formalphysics_0014/",
+          "libraries/MathformerPhysicsLib/Lean/formalphysics_0015/",
+          "libraries/MathformerPhysicsLib/Lean/formalphysics_0021/",
+          "libraries/MathformerPhysicsLib/Lean/formalphysics_0052/",
+          "libraries/MathformerPhysicsLib/Lean/formalphysics_0074/",
+          "MathformerPhysicsLib/Lean/formalphysics_0014/",
+          "MathformerPhysicsLib/Lean/formalphysics_0015/",
+          "MathformerPhysicsLib/Lean/formalphysics_0021/",
+          "MathformerPhysicsLib/Lean/formalphysics_0052/",
+          "MathformerPhysicsLib/Lean/formalphysics_0074/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 25
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Executable source-backed steps; exit 0 is compilation/foundation success, not complete autoformalization, scientific endorsement or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/physics-lean/generate_formalphysics_dirac_recursive_lean.py",
+        "selector": "main",
+        "digest": "sha256:8c61e5752b6e0d1bda029fad8063795208bfa824f8e5cbf20119873aa44b9511"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:physics-lean:dirac-recursive-formalphysics; run_action; run_leaf_action; preflight",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/dirac_recursive_tools.py",
+        "selector": "native implementation or MCP registration",
+        "digest": "sha256:ec3bf434f66b76650fe7a770c8ea2a5ae4a7ad364e1fcd494cf3180257422814"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "native implementation or MCP registration",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "native implementation or MCP registration",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "native implementation or MCP registration",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "skills/physics-common/physics-foundation-object-intake/scripts/intake_physics_foundation_objects.py",
+        "selector": "native implementation or MCP registration",
+        "digest": "sha256:9f2b4c46fc26545adb3d3d4751b2e3e11c0589733185a94a0b7d08fcade8a227"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-foundation-surface-designer/scripts/design_foundation_surfaces.py",
+        "selector": "native implementation or MCP registration",
+        "digest": "sha256:ac23adcb545f9336065fab38dc0651e7151c718d9bc6ab103db92289674949b0"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-object-workbench/scripts/build_mathformerphysicslib_object_workbench.py",
+        "selector": "native implementation or MCP registration",
+        "digest": "sha256:4e69286cd1ee8a2ea4e7b7619171243a97577acc28fe1efaa6f376e04fdc7887"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-foundation-verifier/scripts/verify_foundation_modules.py",
+        "selector": "native implementation or MCP registration",
+        "digest": "sha256:b4125ab1944bf073ef87538d1819efba4c1e133ecd3972966eca52e84c119e8c"
+      },
+      {
+        "path": "skills/autoformalization/mathematical-final-hypothesis-reviewer/scripts/review_mathematical_final_hypotheses.py",
+        "selector": "native implementation or MCP registration",
+        "digest": "sha256:18d8e2b5ee860ac27437cbf8dafe4df7b9a2f26403bab0f6309291db3b7ae40a"
+      },
+      {
+        "path": "skills/physics-common/physics-final-hypothesis-reviewer/scripts/review_physics_final_hypotheses.py",
+        "selector": "native implementation or MCP registration",
+        "digest": "sha256:351ab0e2d346a694d97a17108311501dd62c8888f7f50bc27f8b42a891a44216"
+      },
+      {
+        "path": "skills/physics-lean/physics-lean-derivation-completeness-checker/scripts/check_derivation_completeness.py",
+        "selector": "native implementation or MCP registration",
+        "digest": "sha256:e0583725510d24378fc99eb74caeba2827be462e7365c415c6e740355f3be01f"
+      }
+    ],
+    "gaps": [
+      "The main graph is bound to shared native implementations. Hub dry-run and post-execution write auditing remain outside this main graph; MCP results are native reports, not HubResult audit attestations. The load tool reuses hub preflight; service mutation and write-root guards apply to native writes.",
+      "The 3600-second and 25-call limits are descriptor budgets, not native limits. Main and its subprocess wrappers specify no timeout, retry budget or convergence bound.",
+      "Filesystem policy retains hub-declared library destinations and additionally identifies the legacy MathformerPhysicsLib/Lean paths actually used by the selected native source. Deployment must qualify resource mounts and external effects; capability labels are not runtime grants."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lean:dirac-recursive-formalphysics",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "physics-lean:dirac-recursive-formalphysics",
+        "family": "physics_lean",
+        "kind": "generation",
+        "safety": "writes_repo",
+        "command": [
+          "{python}",
+          "scripts/physics-lean/generate_formalphysics_dirac_recursive_lean.py",
+          "--json"
+        ],
+        "depends_on": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null,
+        "summary": "Generate five recursively grounded Dirac-notation FormalPhysics Lean examples."
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Native main steps invoked by typed MCP tools; context supplies repository root and explicit mutation authorization. Original hub NL route, dry-run and audit wrapper remain available unchanged.",
+      "guards": "Load uses hub preflight for required paths and mutation authorization; each writing tool applies service read-only and allowed-root policy. Status supplied to write_reports must match native completion_status.",
+      "failure_policy": "run_json nonzero exits raise immediately; launch, I/O and JSON errors propagate and stop remaining work. Lean nonzero exits and negative review/completeness findings are data, not exceptions.",
+      "scientific_payloads": "Main exports native reports and exit code, not the HubResult transport envelope; hub success also requires the write audit.",
+      "effects_status": "native paths declared; deployment resource qualification required",
+      "qualification_capability_names_are_not_runtime_grants": true
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "command_after_dependencies": false,
+      "modeling": "Four sequential five-item passes in native order. Accumulators and records are packed into BatchState; progress is each pass's list length. Packing introduces no extra scientific work.",
+      "bounds": "Fixed SELECTED_IDS is not configurable. Every pass returns done=true on its fifth append, including failed Lean checks; no sixth attempt or exhaustion signal occurs natively. on_exhausted=fail is an unreachable contract invariant guard.",
+      "grounding": "Shared grounding feeds completeness frontier counts and final guards/reports. Concept traversal and report assembly stay inside their owning operations.",
+      "bindings": "scripts/dirac_recursive_tools.py calls shared write_source/write_selection/finish_batch/completion_guards and native singleton-list helper passes. No provider or compiler substitution exists in production."
+    }
+  }
+}

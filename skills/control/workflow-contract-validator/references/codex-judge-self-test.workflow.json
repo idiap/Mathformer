@@ -1,0 +1,673 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lean_formalphysics_codex_exec_judge_runner_self_test_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Prepare one synthetic Codex judge prompt, check runner files, and remove the temporary tree.",
+  "aliases": [
+    "physics-lean:formalphysics-codex-exec-judge-runner-self-test"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "FixtureArgs": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "tmp",
+          "prompts_json",
+          "output_dir",
+          "limit",
+          "execute",
+          "workers",
+          "resume",
+          "case_id",
+          "candidate_id",
+          "judge_id",
+          "model",
+          "profile",
+          "codex_bin",
+          "sandbox",
+          "timeout",
+          "self_test",
+          "json"
+        ],
+        "properties": {
+          "tmp": {
+            "type": "string"
+          },
+          "prompts_json": {
+            "type": "string"
+          },
+          "output_dir": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "const": 1
+          },
+          "execute": {
+            "type": "boolean",
+            "const": false
+          },
+          "workers": {
+            "type": "integer",
+            "const": 1
+          },
+          "resume": {
+            "type": "boolean",
+            "const": false
+          },
+          "case_id": {
+            "type": "null"
+          },
+          "candidate_id": {
+            "type": "null"
+          },
+          "judge_id": {
+            "type": "null"
+          },
+          "model": {
+            "type": "null"
+          },
+          "profile": {
+            "type": "null"
+          },
+          "codex_bin": {
+            "type": "string"
+          },
+          "sandbox": {
+            "const": "read-only",
+            "type": "string"
+          },
+          "timeout": {
+            "const": 900,
+            "type": "integer"
+          },
+          "self_test": {
+            "const": false,
+            "type": "boolean"
+          },
+          "json": {
+            "const": false,
+            "type": "boolean"
+          }
+        },
+        "description": "Fresh native parse_args projection plus the owned temporary root; all parser defaults are retained.",
+        "additionalProperties": false
+      }
+    },
+    "RunnerState": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "args",
+          "artifacts",
+          "selected",
+          "rows"
+        ],
+        "properties": {
+          "args": {
+            "type": "object"
+          },
+          "artifacts": {
+            "type": "object",
+            "required": [
+              "selected_prompts",
+              "results",
+              "manifest",
+              "prompt_dir"
+            ],
+            "properties": {
+              "selected_prompts": {
+                "type": "string"
+              },
+              "results": {
+                "type": "string"
+              },
+              "manifest": {
+                "type": "string"
+              },
+              "prompt_dir": {
+                "type": "string"
+              }
+            }
+          },
+          "selected": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "judge_id",
+                "case_id",
+                "candidate_id",
+                "prompt"
+              ],
+              "properties": {
+                "judge_id": {
+                  "const": "lean_tp_judge"
+                },
+                "case_id": {
+                  "const": "formalphysics_0000"
+                },
+                "candidate_id": {
+                  "const": "current_mathformer_lean"
+                },
+                "prompt": {
+                  "const": "Return strict JSON."
+                }
+              }
+            }
+          },
+          "rows": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "judge_id",
+                "case_id",
+                "candidate_id",
+                "prompt_path",
+                "final_message_path",
+                "status",
+                "command"
+              ],
+              "properties": {
+                "status": {
+                  "const": "dry_run_prompt_written"
+                },
+                "command": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "Packed native args, artifact paths, selected accumulator and sequential rows accumulator."
+      }
+    },
+    "Manifest": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "style",
+          "created_at",
+          "execute",
+          "prompts_json",
+          "selected_prompt_count",
+          "completed_result_count",
+          "filters",
+          "workers",
+          "resume",
+          "artifacts",
+          "rows"
+        ],
+        "properties": {
+          "selected_prompt_count": {
+            "type": "integer"
+          },
+          "completed_result_count": {
+            "type": "integer",
+            "const": 0
+          },
+          "execute": {
+            "type": "boolean",
+            "const": false
+          },
+          "artifacts": {
+            "type": "object",
+            "required": [
+              "selected_prompts",
+              "results",
+              "manifest",
+              "prompt_dir"
+            ],
+            "properties": {
+              "selected_prompts": {
+                "type": "string"
+              },
+              "results": {
+                "type": "string"
+              },
+              "manifest": {
+                "type": "string"
+              },
+              "prompt_dir": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "description": "Native run manifest including the preparation row and proposed command."
+      }
+    },
+    "SelfTestReport": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "style",
+          "artifacts"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "style": {
+            "const": "formalphysics_codex_exec_judge_runner"
+          },
+          "artifacts": {
+            "type": "object",
+            "required": [
+              "selected_prompts",
+              "results",
+              "manifest",
+              "prompt_dir"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "selected_prompts": {
+                "type": "string"
+              },
+              "results": {
+                "type": "string"
+              },
+              "manifest": {
+                "type": "string"
+              },
+              "prompt_dir": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "description": "Returned path strings describe deleted temporary artifacts, not durable files."
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      },
+      "representation": "value"
+    },
+    "ScopeContext": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "session_id"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 32
+          }
+        },
+        "description": "Opaque server-owned TemporaryDirectory scope; no caller-supplied paths or execution options are trusted."
+      }
+    }
+  },
+  "inputs": {},
+  "outputs": {
+    "result": {
+      "type": "SelfTestReport",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "fixture_args": {
+      "inputs": {},
+      "outputs": {
+        "args": {
+          "type": "FixtureArgs"
+        },
+        "context": {
+          "type": "ScopeContext"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_codex_judge_self_test_fixture_args",
+          "operation": "mathformer_codex_judge_self_test_fixture_args"
+        }
+      }
+    },
+    "select_pack": {
+      "inputs": {
+        "args": {
+          "type": "FixtureArgs"
+        },
+        "context": {
+          "type": "ScopeContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RunnerState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_codex_judge_self_test_select_pack",
+          "operation": "mathformer_codex_judge_self_test_select_pack"
+        }
+      }
+    },
+    "prepare_append": {
+      "inputs": {
+        "state": {
+          "type": "RunnerState"
+        },
+        "context": {
+          "type": "ScopeContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RunnerState"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_codex_judge_self_test_prepare_append",
+          "operation": "mathformer_codex_judge_self_test_prepare_append"
+        }
+      }
+    },
+    "persist": {
+      "inputs": {
+        "state": {
+          "type": "RunnerState"
+        },
+        "context": {
+          "type": "ScopeContext"
+        }
+      },
+      "outputs": {
+        "manifest": {
+          "type": "Manifest"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_codex_judge_self_test_persist",
+          "operation": "mathformer_codex_judge_self_test_persist"
+        }
+      }
+    },
+    "check_cleanup": {
+      "inputs": {
+        "args": {
+          "type": "FixtureArgs"
+        },
+        "manifest": {
+          "type": "Manifest"
+        },
+        "context": {
+          "type": "ScopeContext"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "SelfTestReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_codex_judge_self_test_check_cleanup",
+          "operation": "mathformer_codex_judge_self_test_check_cleanup"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "fixture",
+        "kind": "call",
+        "operation": "fixture_args",
+        "arguments": {}
+      },
+      {
+        "id": "selection",
+        "kind": "call",
+        "operation": "select_pack",
+        "arguments": {
+          "args": {
+            "ref": "steps.fixture.outputs.args"
+          },
+          "context": {
+            "ref": "steps.fixture.outputs.context"
+          }
+        }
+      },
+      {
+        "id": "rows",
+        "kind": "loop",
+        "description": "One native append iteration; done becomes true after its sole selected item, including at max_iterations=1. Bound failure never substitutes successful completion.",
+        "state_type": "RunnerState",
+        "initial": {
+          "ref": "steps.selection.outputs.state"
+        },
+        "body": {
+          "kind": "call",
+          "operation": "prepare_append",
+          "arguments": {
+            "state": {
+              "ref": "loop.state"
+            },
+            "context": {
+              "ref": "steps.fixture.outputs.context"
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "RunnerState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "persistence",
+        "kind": "call",
+        "operation": "persist",
+        "arguments": {
+          "state": {
+            "ref": "steps.rows.outputs.state"
+          },
+          "context": {
+            "ref": "steps.fixture.outputs.context"
+          }
+        }
+      },
+      {
+        "id": "checked_return",
+        "kind": "call",
+        "operation": "check_cleanup",
+        "arguments": {
+          "args": {
+            "ref": "steps.fixture.outputs.args"
+          },
+          "manifest": {
+            "ref": "steps.persistence.outputs.manifest"
+          },
+          "context": {
+            "ref": "steps.fixture.outputs.context"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "SelfTestReport",
+        "value": {
+          "ref": "steps.checked_return.outputs.report"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "temporary_self_test_tree"
+        ],
+        "write": [
+          "temporary_self_test_tree"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "prepare_synthetic_judge_prompt",
+        "check_temporary_files",
+        "remove_temporary_tree"
+      ],
+      "forbidden": [
+        "execute_codex",
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 120,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Synthetic preparation smoke test only; no judge execution or scientific acceptance."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/physics-common/formalphysics-judge-synthesis-reporter/scripts/run_codex_exec_judges.py",
+        "selector": "self_test; self_test_args; initialize_run; append_run_row; persist_run; check_self_test; execute_prompt; parse_args",
+        "digest": "sha256:a26b894a4385adc99b948dfae35ebc8799c36068d720d27c9679fcd93752ac54"
+      },
+      {
+        "path": "skills/physics-common/formalphysics-judge-synthesis-reporter/scripts/build_synthesis_report.py",
+        "selector": "read_json; write_json",
+        "digest": "sha256:dacee4e55a52990c28d1f88988c2bebdbc884a1258743e3af912b414d61f0017"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry; preflight; prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/codex_judge_self_test_tools.py",
+        "selector": "register_codex_judge_self_test_tools; owned; judge_self_test_lifespan",
+        "digest": "sha256:33ea4dfb831a6ed89003e9041ee759d21c0162c98414386bdcd50bb5b9265897"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mcp registration; judge_self_test_lifespan",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory authored contract preservation",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Host interruption between MCP calls cannot enter a source finally block in v1. Abandoned temporary scopes close at server lifespan exit; source/tool exceptions and normal return clean immediately. The native hub envelope is retained outside this self_test graph."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lean:formalphysics-codex-exec-judge-runner-self-test",
+      "owner_skill": "skills/physics-common/formalphysics-judge-synthesis-reporter/SKILL.md"
+    },
+    "mathformer.native_boundary": {
+      "command_arguments": [
+        "--self-test",
+        "--json"
+      ],
+      "main": "Print the returned report as JSON; exit 0 if ok, otherwise 3. Uncaught errors terminate.",
+      "hub": "Preflight first; hub dry-run skips launch; otherwise subprocess timeout is 120 seconds and repository writes are audited.",
+      "bounds": "The former 3600-second normalization bound is not native; 120 seconds is the hub subprocess timeout, not a self_test internal timer.",
+      "branches": "Fresh execute=False, workers=1, resume=False exclude executable lookup, parallel execution, Codex launch and reuse.",
+      "iteration": "Fixed one-item selection and row accumulation; no retries, refinement, dependency traversal or persistent state.",
+      "loop_bound": "done is true after the only row; on_exhausted is unreachable for the fixed fixture, whose native loop returns normally.",
+      "temporary_lifetime": "Native TemporaryDirectory is retained in a server-owned scope between calls. Reported paths are removed before check_cleanup returns and on source/tool errors. Abandoned scopes after host budget/loop/authorization failure are closed at MCP server lifespan exit; v1 has no finally node. Unknown, modified, stale or reordered state is rejected.",
+      "observability": "Native selected prompts, prompt text, empty results and manifest retain their exact formats, order and timestamps inside the temporary scope. Lunar records operation digests, receipts, provenance and replay artifacts; artifact path strings are ephemeral."
+    }
+  }
+}

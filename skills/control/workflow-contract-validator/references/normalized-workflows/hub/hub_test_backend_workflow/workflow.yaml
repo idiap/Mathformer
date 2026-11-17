@@ -1,0 +1,445 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_test_backend_workflow
+version: 1.0.0
+kind: workflow
+description: 'Model tests/run_backend.py::main: select backend families, accumulate
+  argv, launch one comprehensive runner, and return its exit code.'
+aliases:
+- test:backend
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type: array
+      items:
+        type: string
+  Parsed:
+    schema:
+      type: object
+      properties:
+        backends:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - lean
+            - isabelle
+            - sympy
+            - physics_sympy
+            - all
+        all:
+          type: boolean
+        json:
+          type: boolean
+        fail_on_warning:
+          type: boolean
+      required:
+      - backends
+      - all
+      - json
+      - fail_on_warning
+      additionalProperties: false
+  Families:
+    schema:
+      type: array
+      items:
+        type: string
+        enum:
+        - lean
+        - isabelle
+        - sympy
+        - physics_sympy
+      minItems: 1
+      maxItems: 4
+      uniqueItems: true
+  BuildState:
+    schema:
+      type: object
+      properties:
+        families:
+          type: array
+          items:
+            type: string
+            enum:
+            - lean
+            - isabelle
+            - sympy
+            - physics_sympy
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+        command:
+          type: array
+          items:
+            type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 4
+      required:
+      - families
+      - command
+      - index
+      additionalProperties: false
+  Command:
+    schema:
+      type: array
+      items:
+        type: string
+  Done:
+    schema:
+      type: boolean
+  ExitCode:
+    schema:
+      type: integer
+inputs:
+  extra_args:
+    type: Argv
+outputs:
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  parse:
+    inputs:
+      argv:
+        type: Argv
+    outputs:
+      args:
+        type: Parsed
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_backend_test_parse
+        operation: mathformer_backend_test_parse
+  select_all:
+    inputs:
+      args:
+        type: Parsed
+    outputs:
+      families:
+        type: Families
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_backend_test_select_all
+        operation: mathformer_backend_test_select_all
+  select_sorted:
+    inputs:
+      args:
+        type: Parsed
+    outputs:
+      families:
+        type: Families
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_backend_test_select_sorted
+        operation: mathformer_backend_test_select_sorted
+  pack:
+    inputs:
+      families:
+        type: Families
+    outputs:
+      state:
+        type: BuildState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_backend_test_pack
+        operation: mathformer_backend_test_pack
+  append_family:
+    inputs:
+      state:
+        type: BuildState
+    outputs:
+      state:
+        type: BuildState
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_backend_test_append_family
+        operation: mathformer_backend_test_append_family
+  finalize:
+    inputs:
+      state:
+        type: BuildState
+      args:
+        type: Parsed
+    outputs:
+      command:
+        type: Command
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_backend_test_finalize
+        operation: mathformer_backend_test_finalize
+  launch:
+    inputs:
+      command:
+        type: Command
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_backend_test_launch
+        operation: mathformer_backend_test_launch
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse
+    arguments:
+      argv:
+        ref: inputs.extra_args
+  - id: families
+    kind: switch
+    cases:
+    - id: all
+      when:
+        ref: steps.parse.outputs.args.all
+      body:
+        kind: sequence
+        steps:
+        - id: choose
+          kind: call
+          operation: select_all
+          arguments:
+            args:
+              ref: steps.parse.outputs.args
+        outputs:
+          families:
+            type: Families
+            value:
+              ref: steps.choose.outputs.families
+    default:
+      kind: sequence
+      steps:
+      - id: choose
+        kind: call
+        operation: select_sorted
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+      outputs:
+        families:
+          type: Families
+          value:
+            ref: steps.choose.outputs.families
+    outputs:
+      families:
+        type: Families
+        value:
+          ref: selected.outputs.families
+  - id: pack
+    kind: call
+    operation: pack
+    arguments:
+      families:
+        ref: steps.families.outputs.families
+  - id: build
+    kind: loop
+    state_type: BuildState
+    initial:
+      ref: steps.pack.outputs.state
+    body:
+      kind: sequence
+      steps:
+      - id: append
+        kind: call
+        operation: append_family
+        arguments:
+          state:
+            ref: loop.state
+      outputs:
+        state:
+          type: BuildState
+          value:
+            ref: steps.append.outputs.state
+        done:
+          type: Done
+          value:
+            ref: steps.append.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 4
+    on_exhausted: fail
+    outputs:
+      state:
+        type: BuildState
+        value:
+          ref: body.outputs.state
+    description: One iteration per selected family, carrying argv. Families are nonempty
+      with at most four entries; the fourth iteration completes normally when done
+      is true. Exhaustion is unreachable for source-valid state; it is not native
+      behavior.
+  - id: finalize
+    kind: call
+    operation: finalize
+    arguments:
+      state:
+        ref: steps.build.outputs.state
+      args:
+        ref: steps.parse.outputs.args
+  - id: launch
+    kind: call
+    operation: launch
+    arguments:
+      command:
+        ref: steps.finalize.outputs.command
+  outputs:
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.launch.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 9
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked workflow description only; no scientific result, runtime
+    qualification or promotion is established.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/run_backend.py
+    selector: main
+    digest: sha256:bc698906ab90612003b8429faeae2e4822dc3d6c59e2cb2ad6664b0a4b261226
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: main; run; run_check
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: scripts/mathformer.py
+    selector: build_registry/action:test:backend; run_action; run_leaf_action; preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/backend_test_tools.py
+    digest: sha256:6eebf4e7d64ffddfcf9ac9ac8685598f6589219fc11d0440fdcb8d4d0fbe1376
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Delegated runner checks, reports, dependency probes and audits remain inside launch,
+    not an expanded graph.
+  - 'The hub envelope is contextual metadata, not this main graph: no dependencies,
+    preflight errors or dry-run prevent execution, and write auditing follows execution.'
+  - 3600 seconds and nine operation calls are normalization metadata, not native execution
+    bounds; wrapper and registered action have no overall timeout.
+  - Contract receipts and mandatory provenance do not upgrade optional native logs;
+    external capabilities and full effects remain unqualified.
+  - MCP launch restricts argv to the native backend command and forwards child stdout
+    to stderr to preserve the transport; native reports remain source-owned.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: test:backend
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: test:backend
+      summary: Run a backend test through the generic backend runner; pass backend
+        arguments after `--`.
+      family: test
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/run_backend.py
+      depends_on: []
+      required_paths:
+      - tests/run_backend.py
+      required_tools: []
+      optional_tools: []
+      writes:
+      - artifacts/
+      allows_extra_args: true
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: Shared tests/run_backend.py functions, registered by scripts/backend_test_tools.py
+      in scripts/mcp_server.py; launch delegates to the unchanged comprehensive runner.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Main returns child exit status unchanged. The outer hub preserves
+      failure and audits writes; nonzero exit is not acceptance.
+    scientific_payloads: Main returns an integer; delegated reports are filesystem
+      side effects, not a fabricated HubResult.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: Selected main is the modeled boundary. Hub preflight, dry-run and post-execution
+      audits remain with the controller.
+# REUSE-IgnoreEnd

@@ -1,0 +1,517 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_kb_manage_workflow
+version: 1.0.0
+kind: workflow
+description: Parse one premise-KB command, execute its exclusive branch, print its
+  payload, and return its status.
+aliases:
+- kb:manage
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type: array
+      items:
+        type: string
+  State:
+    schema:
+      type: object
+      required:
+      - command
+      - options
+      - kb_root
+      - json_output
+      - store
+      properties:
+        command:
+          type: string
+          enum:
+          - init
+          - ingest-seeds
+          - ingest-vampire
+          - ingest-corpus
+          - build-bloom
+          - build-embeddings
+          - refresh-canonical
+          - has
+          - search
+          - distance
+          - enqueue-source
+          - enqueue-web
+          - promote
+          - reject
+          - report
+        options:
+          type: object
+          description: Parsed argparse namespace with command-specific required fields
+            and native defaults.
+        kb_root:
+          type: string
+        json_output:
+          type: boolean
+        store:
+          type: object
+          required:
+          - root
+          properties:
+            root:
+              type: string
+          additionalProperties: false
+      additionalProperties: false
+  Payload:
+    schema:
+      type: object
+      required:
+      - ok
+      properties:
+        ok:
+          type: boolean
+      additionalProperties: true
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+  Text:
+    schema:
+      type: string
+inputs:
+  extra_args:
+    type: Argv
+outputs:
+  payload:
+    type: Payload
+    value:
+      ref: flow.outputs.payload
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  stdout:
+    type: Text
+    value:
+      ref: flow.outputs.stdout
+operations:
+  prepare:
+    inputs:
+      argv:
+        type: Argv
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_kb_manage_prepare
+        operation: mathformer_kb_manage_prepare
+  initialize:
+    inputs:
+      state:
+        type: State
+    outputs:
+      payload:
+        type: Payload
+      payload_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_kb_manage_initialize
+        operation: mathformer_kb_manage_initialize
+  ingest:
+    inputs:
+      state:
+        type: State
+    outputs:
+      payload:
+        type: Payload
+      payload_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_kb_manage_ingest
+        operation: mathformer_kb_manage_ingest
+  index:
+    inputs:
+      state:
+        type: State
+    outputs:
+      payload:
+        type: Payload
+      payload_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_kb_manage_index
+        operation: mathformer_kb_manage_index
+  refresh:
+    inputs:
+      state:
+        type: State
+    outputs:
+      payload:
+        type: Payload
+      payload_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_kb_manage_refresh
+        operation: mathformer_kb_manage_refresh
+  query:
+    inputs:
+      state:
+        type: State
+    outputs:
+      payload:
+        type: Payload
+      payload_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_kb_manage_query
+        operation: mathformer_kb_manage_query
+  enqueue:
+    inputs:
+      state:
+        type: State
+    outputs:
+      payload:
+        type: Payload
+      payload_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_kb_manage_enqueue
+        operation: mathformer_kb_manage_enqueue
+  curate:
+    inputs:
+      state:
+        type: State
+    outputs:
+      payload:
+        type: Payload
+      payload_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_kb_manage_curate
+        operation: mathformer_kb_manage_curate
+  report:
+    inputs:
+      state:
+        type: State
+    outputs:
+      payload:
+        type: Payload
+      payload_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_kb_manage_report
+        operation: mathformer_kb_manage_report
+  finish:
+    inputs:
+      state:
+        type: State
+      payload_json:
+        type: Text
+    outputs:
+      exit_code:
+        type: ExitCode
+      stdout:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_kb_manage_finish
+        operation: mathformer_kb_manage_finish
+flow:
+  kind: sequence
+  steps:
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      argv:
+        ref: inputs.extra_args
+  - id: dispatch
+    kind: switch
+    description: Exactly one parsed command; default is report because argparse restricts
+      the command enum.
+    cases:
+    - id: initialize
+      when:
+        eq:
+        - ref: steps.prepare.outputs.state.command
+        - literal: init
+      body:
+        kind: call
+        operation: initialize
+        arguments:
+          state:
+            ref: steps.prepare.outputs.state
+    - id: ingest
+      when:
+        any:
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: ingest-seeds
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: ingest-vampire
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: ingest-corpus
+      body:
+        kind: call
+        operation: ingest
+        arguments:
+          state:
+            ref: steps.prepare.outputs.state
+    - id: index
+      when:
+        any:
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: build-bloom
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: build-embeddings
+      body:
+        kind: call
+        operation: index
+        arguments:
+          state:
+            ref: steps.prepare.outputs.state
+    - id: refresh
+      when:
+        eq:
+        - ref: steps.prepare.outputs.state.command
+        - literal: refresh-canonical
+      body:
+        kind: call
+        operation: refresh
+        arguments:
+          state:
+            ref: steps.prepare.outputs.state
+    - id: query
+      when:
+        any:
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: has
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: search
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: distance
+      body:
+        kind: call
+        operation: query
+        arguments:
+          state:
+            ref: steps.prepare.outputs.state
+    - id: enqueue
+      when:
+        any:
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: enqueue-source
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: enqueue-web
+      body:
+        kind: call
+        operation: enqueue
+        arguments:
+          state:
+            ref: steps.prepare.outputs.state
+    - id: curate
+      when:
+        any:
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: promote
+        - eq:
+          - ref: steps.prepare.outputs.state.command
+          - literal: reject
+      body:
+        kind: call
+        operation: curate
+        arguments:
+          state:
+            ref: steps.prepare.outputs.state
+    default:
+      kind: call
+      operation: report
+      arguments:
+        state:
+          ref: steps.prepare.outputs.state
+    outputs:
+      payload:
+        type: Payload
+        value:
+          ref: selected.outputs.payload
+      payload_json:
+        type: Text
+        value:
+          ref: selected.outputs.payload_json
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.prepare.outputs.state
+      payload_json:
+        ref: steps.dispatch.outputs.payload_json
+  outputs:
+    payload:
+      type: Payload
+      value:
+        ref: steps.dispatch.outputs.payload
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.finish.outputs.exit_code
+    stdout:
+      type: Text
+      value:
+        ref: steps.finish.outputs.stdout
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/kb/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 3
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked control-flow specification; completion does not establish
+    scientific truth or runtime qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: complete
+  sources:
+  - path: scripts/manage_premise_kb.py
+    selector: main
+    digest: sha256:8958cc33ee6dac46bda051e32109c0ff37c6fb50213e3f37279c180a51e01d82
+  - path: scripts/mathformer.py
+    selector: build_registry; run_action; run_leaf_action; preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: backends/premise_kb/MathformerKB/ingest.py
+    selector: entries_from_vampire_artifacts; entries_from_jsonl_corpus
+    digest: sha256:68cdc009389413d2747ac9d3449ea782a88cf5a443c2b8f276046a6cdc14d485
+  - path: backends/premise_kb/MathformerKB/search.py
+    selector: PremiseKB.search_semantic
+    digest: sha256:ff88b135e7f57356deeca9bce7991bb4a2d4300b72fa5a089206df6e04b01687
+  - path: backends/premise_kb/MathformerKB/storage.py
+    selector: KBStore.update_status; KBStore.add_entries
+    digest: sha256:e5db14b9c4e77c622e02907264cc79f2946b56c3cc0888a27fabecc9e55987df
+  - path: backends/premise_kb/MathformerKB/indexing.py
+    selector: build_bloom_indexes; build_embedding_index
+    digest: sha256:3abc75177266fdd372d4935fafcb56a6b678654de21b80e337de7d2bc0354b37
+  - path: scripts/kb_manage_tools.py
+    selector: register_kb_manage_tools
+    digest: sha256:8362c23eb73b9211b3113e1f04a9964e0de6906f6bd42d018a34bd6eed6ebc4a
+  - path: scripts/mcp_server.py
+    selector: register_kb_manage_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  gaps: []
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: kb:manage
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+  mathformer.native_boundary:
+    execution: Shared native parse, exclusive command dispatch and finish functions,
+      exposed by registered MCP tools. Hub invocation retains its independent subprocess
+      audit boundary.
+    failure_policy: Argument errors and uncaught exceptions terminate before normal
+      output; hub nonzero exits or undeclared writes are unsuccessful. No native timeout
+      or retry.
+    input_semantics: Remove all --json tokens before argparse, retaining the requested
+      output mode; require one subcommand and resolve relative paths against REPO_ROOT.
+    defaults: kb_root=artifacts/kb/premise_kb; limit=None; k=10; false_positive_rate=0.01;
+      dimension=512
+    iteration_semantics: No workflow-level loop; helpers stop over finite input collections
+      or native early-stop conditions, returning normally on search candidate exhaustion.
+    limits_status: Three calls per normal path; Lunar enforces contract budgets. CLI
+      has no timeout.
+    effects_status: MCP dispatch restricts KB writes to declared roots and applies
+      service write policy; native CLI retains its path semantics.
+    qualification_capability_names_are_not_runtime_grants: true
+# REUSE-IgnoreEnd

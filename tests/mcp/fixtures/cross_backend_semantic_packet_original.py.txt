@@ -1,0 +1,401 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Build a source-anchored Lean/SymPy semantic alignment packet for one case."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import re
+import sys
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SYMPY_ROOT = REPO_ROOT / "MathformerPhysicsLib" / "SymPy"
+LEAN_ROOT = REPO_ROOT / "MathformerPhysicsLib" / "Lean"
+ISABELLE_ROOT = REPO_ROOT / "MathformerPhysicsLib" / "Isabelle"
+CASE_RE = re.compile(r"formalphysics_(\d{4})")
+
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from libraries.MathformerPhysicsLib.physics_ir import (  # noqa: E402 - direct-script path setup above
+    backend_packet,
+    compare_backend_packets,
+    from_case_spec,
+    validate_ir,
+)
+
+
+def rel(path: Path) -> str:
+    """Return a repository-relative path when possible."""
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def normalize_case(case: str | None) -> str:
+    """Normalize a case id to formalphysics_####."""
+    if not case:
+        return "formalphysics_0000"
+    match = CASE_RE.search(case)
+    if match:
+        return f"formalphysics_{match.group(1)}"
+    if case.isdigit():
+        return f"formalphysics_{int(case):04d}"
+    return case
+
+
+def load_sympy_module(path: Path, case_id: str) -> tuple[Any | None, dict[str, Any]]:
+    """Import one SymPy artifact and keep dependency failures structured."""
+    try:
+        spec = importlib.util.spec_from_file_location(f"cross_backend_{case_id}", path)
+        if spec is None or spec.loader is None:
+            return None, {"status": "missing_spec", "path": rel(path)}
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module, {"status": "pass", "path": rel(path)}
+    except ModuleNotFoundError as exc:
+        if exc.name and exc.name.startswith("sympy"):
+            return None, {
+                "status": "dependency_blocker",
+                "path": rel(path),
+                "missing_required": ["sympy"],
+                "message": "SymPy is unavailable; rerun with .venv/bin/python.",
+            }
+        raise
+    except Exception as exc:  # pragma: no cover - artifact failures vary.
+        return None, {
+            "status": "import_failed",
+            "path": rel(path),
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def lean_theorem_targets(text: str) -> list[dict[str, str]]:
+    """Extract compact theorem/def target snippets from a Lean artifact."""
+    targets: list[dict[str, str]] = []
+    names = [
+        "lorentz_force_x_core_replay",
+        "lorentz_force_x",
+        "lorentz_force_x_witness",
+    ]
+    for name in names:
+        match = re.search(
+            rf"(?:theorem|def)\s+{re.escape(name)}\b(?P<body>.*?)(?:\n\n/--|\nend\s|\Z)",
+            text,
+            re.S,
+        )
+        if match:
+            snippet = " ".join(match.group(0).split())
+            targets.append({"name": name, "statement_excerpt": snippet[:700]})
+    return targets
+
+
+def build_packet(case_id: str, artifact_root: Path | None = None) -> dict[str, Any]:
+    """Build the cross-backend semantic packet."""
+    sympy_root = SYMPY_ROOT if artifact_root is None else artifact_root / "SymPy"
+    lean_root = LEAN_ROOT if artifact_root is None else artifact_root / "Lean"
+    isabelle_root = ISABELLE_ROOT if artifact_root is None else artifact_root / "Isabelle"
+    sympy_path = sympy_root / case_id / "MathformerPhysics.py"
+    lean_path = lean_root / case_id / "MathformerPhysics.lean"
+    isabelle_path = isabelle_root / case_id / "MathformerPhysics.thy"
+    sympy_module, sympy_import = load_sympy_module(sympy_path, case_id)
+    lean_exists = lean_path.exists()
+    isabelle_exists = isabelle_path.exists()
+    lean_text = lean_path.read_text(encoding="utf-8") if lean_exists else ""
+    findings: list[dict[str, Any]] = []
+    if sympy_module is None:
+        findings.append(
+            {
+                "severity": "high",
+                "code": "sympy_artifact_unavailable",
+                "evidence": sympy_import,
+            }
+        )
+    if not lean_exists:
+        findings.append(
+            {
+                "severity": "high",
+                "code": "lean_artifact_missing",
+                "path": rel(lean_path),
+            }
+        )
+
+    claim = getattr(sympy_module, "CLAIM", {}) if sympy_module is not None else {}
+    target_expression = None
+    dimension_report: dict[str, Any] = {}
+    numeric_report: dict[str, Any] = {}
+    if sympy_module is not None:
+        try:
+            target_expression = str(sympy_module.derive_target())
+            dimension_report = sympy_module.validate_dimensions()
+            numeric_report = sympy_module.validate_numeric_samples()
+        except Exception as exc:  # pragma: no cover - artifact failures vary.
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "sympy_validation_failed",
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+
+    sympy_assumptions = []
+    if sympy_module is not None:
+        assumption_context = getattr(sympy_module, "ASSUMPTION_CONTEXT", {})
+        if isinstance(assumption_context, dict):
+            sympy_assumptions = assumption_context.get("CONTEXT_ASSUMPTIONS", [])
+    lean_frontier_mentions = sorted(
+        set(
+            re.findall(
+                r"\bLorentzForceXComponentFrontier\b|\bPhysicalLawWitness\b|\bDifferentiable\b",
+                lean_text,
+            )
+        )
+    )
+    lean_bridge_defs = sorted(
+        set(re.findall(r"\bdef\s+(lorentz_[A-Za-z0-9_']+)", lean_text))
+    )
+
+    sympy_projection = (
+        getattr(sympy_module, "PROJECTION_BRIDGES", [])
+        if sympy_module is not None
+        else []
+    )
+    lean_projection_bridge_count = len(
+        [
+            name
+            for name in lean_bridge_defs
+            if "component" in name or "magnetic" in name or "force" in name
+        ]
+    )
+    sympy_grounding = (
+        getattr(sympy_module, "SYMPY_LIBRARY_GROUNDING", {})
+        if sympy_module is not None
+        else {}
+    )
+    final_reviews = (
+        sympy_module.review_final_equations()
+        if sympy_module is not None and hasattr(sympy_module, "review_final_equations")
+        else {}
+    )
+    physics_ir = None
+    semantic_packets: list[dict[str, Any]] = []
+    semantic_parity: dict[str, Any] = {
+        "schema_version": 1,
+        "coverage_ok": False,
+        "semantic_parity": False,
+        "findings": [{"code": "physics_ir_unavailable"}],
+    }
+    if sympy_module is not None and isinstance(claim, dict):
+        assumption_context = getattr(sympy_module, "ASSUMPTION_CONTEXT", {})
+        assumption_rows = (
+            assumption_context.get("CONTEXT_ASSUMPTIONS", [])
+            if isinstance(assumption_context, dict)
+            else []
+        )
+        ir_spec = {
+            **claim,
+            "target": claim.get("statement_latex") or claim.get("statement_nl"),
+            "quantities": getattr(sympy_module, "QUANTITY_TABLE", {}),
+            "assumptions": [
+                str(item.get("text"))
+                for item in assumption_rows
+                if isinstance(item, dict) and item.get("text")
+            ],
+            "projection_bridges": getattr(sympy_module, "PROJECTION_BRIDGES", []),
+        }
+        ir = from_case_spec(
+            case_id,
+            ir_spec,
+            steps=getattr(sympy_module, "DERIVATION_STEPS", []),
+            projection_bridges=getattr(sympy_module, "PROJECTION_BRIDGES", []),
+        )
+        ir_errors = validate_ir(ir)
+        if ir_errors:
+            findings.append(
+                {"severity": "high", "code": "physics_ir_invalid", "errors": ir_errors}
+            )
+        physics_ir = {**ir.to_dict(), "ir_digest": ir.ir_digest}
+        shared_projections = [bridge.bridge_id for bridge in ir.projection_bridges]
+        semantic_packets.append(
+            backend_packet(
+                ir,
+                backend="sympy",
+                artifact_path=rel(sympy_path),
+                intentional_projections=shared_projections,
+                artifact_digest=hashlib.sha256(sympy_path.read_bytes()).hexdigest(),
+            )
+        )
+        if lean_exists:
+            semantic_packets.append(
+                backend_packet(
+                    ir,
+                    backend="lean",
+                    artifact_path=rel(lean_path),
+                    intentional_projections=shared_projections,
+                    artifact_digest=hashlib.sha256(lean_path.read_bytes()).hexdigest(),
+                )
+            )
+        if isabelle_exists:
+            semantic_packets.append(
+                backend_packet(
+                    ir,
+                    backend="isabelle",
+                    artifact_path=rel(isabelle_path),
+                    intentional_projections=shared_projections,
+                    artifact_digest=hashlib.sha256(
+                        isabelle_path.read_bytes()
+                    ).hexdigest(),
+                )
+            )
+        semantic_parity = compare_backend_packets(semantic_packets)
+        if not semantic_parity["semantic_parity"]:
+            findings.extend(semantic_parity["findings"])
+
+    packet = {
+        "schema_version": 1,
+        "ok": not any(item["severity"] == "high" for item in findings),
+        "style": "physics_sympy_cross_backend_semantic_packet",
+        "case_id": case_id,
+        "policy": {
+            "comparison_role": "alignment_evidence_only",
+            "backend_artifacts_are_not_gold_labels_for_each_other": True,
+            "completion_criteria": {
+                "sympy": "executable source-preserving SymPy validation gates",
+                "lean": "Lean compilation/proof obligations and MathformerPhysicsLib grounding",
+            },
+        },
+        "source_target": {
+            "statement_nl": (
+                claim.get("statement_nl") if isinstance(claim, dict) else None
+            ),
+            "statement_latex": (
+                claim.get("statement_latex") if isinstance(claim, dict) else None
+            ),
+            "source_anchors": (
+                claim.get("source_anchors", []) if isinstance(claim, dict) else []
+            ),
+        },
+        "physics_ir": physics_ir,
+        "backend_semantic_packets": semantic_packets,
+        "semantic_parity": semantic_parity,
+        "backend_targets": {
+            "sympy": {
+                "artifact_path": rel(sympy_path),
+                "import_status": sympy_import,
+                "target_expression": target_expression,
+            },
+            "lean": {
+                "artifact_path": rel(lean_path),
+                "artifact_exists": lean_exists,
+                "target_statements": lean_theorem_targets(lean_text),
+            },
+            "isabelle": {
+                "artifact_path": rel(isabelle_path),
+                "artifact_exists": isabelle_exists,
+                "projection_role": (
+                    "scalar/component projection"
+                    if isabelle_exists
+                    else "backend_absent"
+                ),
+            },
+        },
+        "assumptions": {
+            "sympy": sympy_assumptions,
+            "lean_surface_mentions": lean_frontier_mentions,
+            "alignment_note": "SymPy exposes assumptions as runtime-inspectable packets; Lean packages side conditions inside the frontier and law witnesses.",
+        },
+        "not_modeled_content": [
+            "This packet does not compare against dataset formal_answer.",
+            "This packet does not require Lean compilation; Lean completion remains backend-native.",
+            "This packet does not require SymPy to mirror Lean proof objects.",
+        ],
+        "semantic_deltas": [
+            {
+                "surface": "target_notation",
+                "sympy": "expanded scalar expression over derivative placeholders",
+                "lean": "frontier theorem over force, velocity, electric field, and magnetic field components",
+                "review_use": "alignment hint only; do not rewrite either backend from the other without source evidence",
+            },
+            {
+                "surface": "support_objects",
+                "sympy": "runtime dictionaries, validators, and executable residual checks",
+                "lean": "frontier structure, theorem replay, and PhysicalLawWitness bridge defs",
+                "review_use": "use to locate missing source/support surfaces, not to assign gold correctness",
+            },
+        ],
+        "unit_dimension_treatment": {
+            "sympy": {
+                "dimensionally_consistent": dimension_report.get(
+                    "dimensionally_consistent"
+                ),
+                "target_dimension": dimension_report.get("target_dimension"),
+                "expected_dimension": dimension_report.get("expected_dimension"),
+                "numeric_sample_passed": numeric_report.get("passed"),
+            },
+            "lean": {
+                "unit_dimension_surface": "typed/proof-side foundation scaffolds and frontier fields; no runtime numeric sample in this packet",
+                "mentions_units_or_dimensions": bool(
+                    re.search(
+                        r"Unit|Dimension|component|RealVector3|EuclideanSpace",
+                        lean_text,
+                    )
+                ),
+            },
+        },
+        "projection_bridges": {
+            "sympy": sympy_projection,
+            "lean_bridge_defs": lean_bridge_defs,
+            "lean_projection_bridge_count": lean_projection_bridge_count,
+        },
+        "support_object_status": {
+            "sympy_library_grounding_level": (
+                sympy_grounding.get("grounding_level")
+                if isinstance(sympy_grounding, dict)
+                else None
+            ),
+            "sympy_final_review_statuses": {
+                name: item.get("status")
+                for name, item in final_reviews.items()
+                if isinstance(item, dict)
+            },
+            "lean_support_object_count": len(lean_bridge_defs),
+            "feeds_reviews_without_overriding_completion": True,
+        },
+        "findings": findings,
+    }
+    return packet
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--case", default="formalphysics_0000")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the cross-backend packet builder."""
+    args = parse_args(argv)
+    packet = build_packet(normalize_case(args.case))
+    output = json.dumps(packet, ensure_ascii=False, indent=2, default=str)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output + "\n", encoding="utf-8")
+    else:
+        print(output)
+    return 0 if packet["ok"] else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

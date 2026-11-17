@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from sympy_equational_trace_loop import (
+    ParsedEquations,
+    SympyGroundingContext,
+    SympyExecutionReport,
+    SympyAssessmentCase,
+    SympyDraftBasis,
+    SympyEquationFormalizationRequest,
+    SympyArtifact,
+    SympyTraceCase,
+    SympyConsistencyReport,
+    SympyValidationReport,
+)
+import occurrences as steps
+import relations as links
+
+# Parse source equations, ground their assumptions and SymPy APIs, draft and
+# execute an artifact, validate its identity and trace, and report consistency.
+reasoning TraceSympyEquations(
+    workflow_source: SympyEquationFormalizationRequest,
+) -> Generated[SympyConsistencyReport]:
+    sequence:
+        parallel:
+            # Expose equations, symbols, and the exact identity under investigation.
+            [equations: steps.ParseEquations(workflow_source)]
+            # Model assumptions and establish scope-bound API applicability.
+            [sympy_context: steps.GroundSympyContext(workflow_source)]
+        # Construct an executable candidate while retaining validation obligations.
+        [sympy_artifact: steps.DraftSympyArtifact(SympyDraftBasis(
+            equations = equations.value,
+            sympy_context = sympy_context.value,
+        ))] by links.DraftExecutableArtifact
+        # Execute the artifact and retain symbolic, numeric, and trace outputs.
+        [execution_report: steps.RunSympyArtifact(sympy_artifact.value)] by links.ExecuteSympyArtifact
+        # Validate the identity, search bounded counterexamples, and verify each
+        # cited transformation without turning nonrefutation into proof.
+        [validation_report: steps.ValidateSympyTrace(SympyTraceCase(
+            sympy_artifact = sympy_artifact.value,
+            execution_report = execution_report.value,
+        ))] by links.CheckSympyTrace
+        # Merge parsing, grounding, execution, identity, counterexample, and
+        # trace findings into the backend-specific consistency report.
+        [report: steps.ReportSympyConsistency(SympyAssessmentCase(
+            execution_report = execution_report.value,
+            validation_report = validation_report.value,
+        ))] by links.SummarizeSympyChecks
+    return report

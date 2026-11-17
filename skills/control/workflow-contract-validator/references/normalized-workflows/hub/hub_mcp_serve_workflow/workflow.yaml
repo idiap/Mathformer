@@ -1,0 +1,392 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-FileContributor: Danilo Gusicuma <danilo.gusicuma@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_mcp_serve_workflow
+version: 1.0.0
+kind: workflow
+description: Configure and serve the native Mathformer MCP entrypoint; return its
+  integer exit code after termination.
+aliases:
+- mcp:serve
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type:
+      - array
+      - 'null'
+      items:
+        type: string
+    representation: value
+  Arguments:
+    schema:
+      type: object
+      required:
+      - config
+      - has_config
+      properties:
+        config:
+          type:
+          - string
+          - 'null'
+        has_config:
+          type: boolean
+      description: 'Parsed CLI namespace: config, transport, host, port, readonly,
+        auth_token, rate_limit. Unspecified options are null.'
+  Startup:
+    schema:
+      type: object
+      required:
+      - valid
+      properties:
+        valid:
+          type: boolean
+      description: Source-backed envelope packing validation outcome and resolved
+        runtime locals/configuration. Invalid configuration has no usable runtime.
+  Runtime:
+    schema:
+      type: object
+      required:
+      - transport
+      properties:
+        transport:
+          type: string
+          enum:
+          - stdio
+          - streamable-http
+      description: Resolved host, port, readonly, auth_token, rate_limit and require_auth_for_http;
+        transport selects serving branch.
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 2
+inputs:
+  argv:
+    type: Argv
+outputs:
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  parse:
+    inputs:
+      argv:
+        type: Argv
+    outputs:
+      args:
+        type: Arguments
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_serve_parse
+        operation: mathformer_serve_parse
+  load_config:
+    inputs:
+      args:
+        type: Arguments
+    outputs:
+      startup:
+        type: Startup
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_serve_load_config
+        operation: mathformer_serve_load_config
+  defaults:
+    inputs:
+      args:
+        type: Arguments
+    outputs:
+      startup:
+        type: Startup
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_serve_defaults
+        operation: mathformer_serve_defaults
+  invalid_config:
+    inputs:
+      startup:
+        type: Startup
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_serve_invalid_config
+        operation: mathformer_serve_invalid_config
+  apply_policy:
+    inputs:
+      startup:
+        type: Startup
+    outputs:
+      runtime:
+        type: Runtime
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_serve_apply_policy
+        operation: mathformer_serve_apply_policy
+  serve_stdio:
+    inputs:
+      runtime:
+        type: Runtime
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_serve_stdio
+        operation: mathformer_serve_stdio
+  serve_http:
+    inputs:
+      runtime:
+        type: Runtime
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_serve_http
+        operation: mathformer_serve_http
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse
+    arguments:
+      argv:
+        ref: inputs.argv
+  - id: configure
+    kind: switch
+    cases:
+    - id: configured
+      when:
+        ref: steps.parse.outputs.args.has_config
+      body:
+        id: load
+        kind: call
+        operation: load_config
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+    default:
+      id: defaults
+      kind: call
+      operation: defaults
+      arguments:
+        args:
+          ref: steps.parse.outputs.args
+    outputs:
+      startup:
+        type: Startup
+        value:
+          ref: selected.outputs.startup
+  - id: start
+    kind: switch
+    cases:
+    - id: invalid
+      when:
+        not:
+          ref: steps.configure.outputs.startup.valid
+      body:
+        id: reject
+        kind: call
+        operation: invalid_config
+        arguments:
+          startup:
+            ref: steps.configure.outputs.startup
+    default:
+      kind: sequence
+      steps:
+      - id: policy
+        kind: call
+        operation: apply_policy
+        arguments:
+          startup:
+            ref: steps.configure.outputs.startup
+      - id: transport
+        kind: switch
+        cases:
+        - id: stdio
+          when:
+            eq:
+            - ref: steps.policy.outputs.runtime.transport
+            - literal: stdio
+          body:
+            id: stdio
+            kind: call
+            operation: serve_stdio
+            arguments:
+              runtime:
+                ref: steps.policy.outputs.runtime
+        default:
+          id: http
+          kind: call
+          operation: serve_http
+          arguments:
+            runtime:
+              ref: steps.policy.outputs.runtime
+        outputs:
+          exit_code:
+            type: ExitCode
+            value:
+              ref: selected.outputs.exit_code
+      outputs:
+        exit_code:
+          type: ExitCode
+          value:
+            ref: steps.transport.outputs.exit_code
+    outputs:
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+  outputs:
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.start.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - service_configuration
+      write:
+      - configured_call_log
+      - configured_allowed_write_roots
+    network:
+    - configured_http_listener
+    - native_tool_capabilities_require_qualification
+    external_write:
+    - native_tool_capabilities_require_qualification
+  authority:
+    allowed:
+    - serve_mcp
+    - apply_native_service_configuration
+    - dispatch_under_native_controls
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked server description; completion establishes no scientific
+    result, promotion or runtime qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mcp_server.py
+    selector: main
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mcp_server.py
+    selector: parse_args; _RateLimitMiddleware; _BearerAuthMiddleware
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer.py
+    selector: build_registry mcp:serve; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer_mcp_service.py
+    selector: main
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: tests/mcp/fixtures/mcp_serve_original.py.txt
+    selector: pre-extraction main oracle
+    digest: sha256:12ae0580952af89898b80a39f8ce707f89b8a71a8668c356f7d57bc7ac90522a
+  gaps:
+  - HTTP setup guards, callbacks, logs and request middleware internals remain inside
+    serve_http; FastMCP/Uvicorn own request iteration.
+  - The mandatory 3600-second contract limit is a host-only normalization bound, not
+    a native deadline; direct hub serving has no timeout. Enforcing it changes unbounded
+    native lifetime.
+  - Required v1 receipts/provenance are not guaranteed by native optional logging;
+    effects of dispatched tools need separate qualification.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: mcp:serve
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: mcp:serve
+      family: mcp
+      kind: server
+      safety: read_only
+      command:
+      - '{python}'
+      - scripts/mcp_server.py
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Selected source is scripts/mcp_server.py::main; registered hub leaf
+      preflights, supports dry-run, launches once with buffered output, and audits
+      repository writes afterward.
+    delegation: scripts/mathformer_mcp_service.py::main forwards configuration flags
+      here. Use direct server launch for interactive stdio; hub buffering does not
+      proxy stdin.
+    failure_policy: Invalid config or required missing HTTP token returns 2; normal
+      serving termination returns 0. Other exceptions propagate. No retry or checkpoint
+      support.
+    timeouts: MCP mathformer_run_workflow -> mathformer_run_action -> hub.run_action
+      uses a registry imposing a default 600-second cap on otherwise unbounded leaves,
+      configurable via service settings. This is not main's server deadline.
+  mathformer.http_state:
+    owner_operation: serve_http
+    state: Process-local per-IP timestamp lists, initially empty, retained across
+      requests.
+    transition: 'For each HTTP request reaching the limiter: use client IP or unknown,
+      obtain monotonic time, discard timestamps strictly older than now-60; if count
+      >= configured threshold return 429 without appending; otherwise append now and
+      delegate.'
+    authentication: 'Bearer wrapper is outermost: HTTP authorization must exactly
+      match Bearer plus token or return 401 before limiter. Non-HTTP scopes bypass
+      both checks.'
+    iteration: No explicit main retry loop, iteration budget or overall deadline.
+      Limiter eviction while-loop stays in middleware; request repetition belongs
+      to FastMCP/Uvicorn.
+# REUSE-IgnoreEnd

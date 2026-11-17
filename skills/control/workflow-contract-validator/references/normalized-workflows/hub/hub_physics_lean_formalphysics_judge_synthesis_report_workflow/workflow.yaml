@@ -1,0 +1,571 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_lean_formalphysics_judge_synthesis_report_workflow
+version: 1.0.0
+kind: workflow
+description: FormalPhysics synthesis CLI; load comparative evidence, ingest optional
+  judge results, summarize, and emit reports.
+aliases:
+- physics-lean:formalphysics-judge-synthesis-report
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type: array
+      items:
+        type: string
+  Options:
+    schema:
+      type: object
+      required:
+      - self_test
+      - comparative_report
+      - output_dir
+      - codex_results_json
+      - codex_results_dir
+      - json
+      properties:
+        self_test:
+          type: boolean
+        comparative_report:
+          type:
+          - string
+          - 'null'
+        output_dir:
+          type: string
+        codex_results_json:
+          type: array
+          items:
+            type: string
+        codex_results_dir:
+          type: array
+          items:
+            type: string
+        json:
+          type: boolean
+  Loaded:
+    schema:
+      type: object
+      required:
+      - native_json
+      properties:
+        native_json:
+          type: string
+          description: Native ordered JSON for Loaded; preserves insertion order used
+            by rankings, TODO IDs, and renderers.
+      additionalProperties: false
+  Report:
+    schema:
+      type: object
+      required:
+      - native_json
+      properties:
+        native_json:
+          type: string
+          description: Native ordered JSON for Report; preserves insertion order used
+            by rankings, TODO IDs, and renderers.
+      additionalProperties: false
+  Approaches:
+    schema:
+      type: object
+      required:
+      - native_json
+      properties:
+        native_json:
+          type: string
+          description: Native ordered JSON for Approaches; preserves insertion order
+            used by rankings, TODO IDs, and renderers.
+      additionalProperties: false
+  AspectState:
+    schema:
+      type: object
+      required:
+      - native_json
+      properties:
+        native_json:
+          type: string
+          description: Native ordered JSON for AspectState; preserves insertion order
+            used by rankings, TODO IDs, and renderers.
+      additionalProperties: false
+  Done:
+    schema:
+      type: boolean
+  Synthesis:
+    schema:
+      type: object
+      required:
+      - native_json
+      properties:
+        native_json:
+          type: string
+          description: Native ordered JSON for Synthesis; preserves insertion order
+            used by rankings, TODO IDs, and renderers.
+      additionalProperties: false
+  Completion:
+    schema:
+      type: object
+      required:
+      - returncode
+      - printed_result
+      properties:
+        returncode:
+          type: integer
+          const: 0
+        printed_result:
+          type: object
+          required:
+          - ok
+          - style
+          - artifacts
+          properties:
+            ok:
+              const: true
+            style:
+              type: string
+            artifacts:
+              type: object
+inputs:
+  argv:
+    type: Argv
+outputs:
+  result:
+    type: Completion
+    value:
+      ref: flow.outputs.result
+operations:
+  parse_cli:
+    inputs:
+      argv:
+        type: Argv
+    outputs:
+      options:
+        type: Options
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_builder_parse_cli
+        operation: mathformer_synthesis_builder_parse_cli
+  self_test:
+    inputs:
+      options:
+        type: Options
+    outputs:
+      result:
+        type: Completion
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_builder_self_test
+        operation: mathformer_synthesis_builder_self_test
+  load_inputs:
+    inputs:
+      options:
+        type: Options
+    outputs:
+      loaded:
+        type: Loaded
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_builder_load_inputs
+        operation: mathformer_synthesis_builder_load_inputs
+  attach_results:
+    inputs:
+      loaded:
+        type: Loaded
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_builder_attach_results
+        operation: mathformer_synthesis_builder_attach_results
+  summarize_approaches:
+    inputs:
+      report:
+        type: Report
+    outputs:
+      approaches:
+        type: Approaches
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_builder_summarize_approaches
+        operation: mathformer_synthesis_builder_summarize_approaches
+  pack_aspects:
+    inputs:
+      approaches:
+        type: Approaches
+    outputs:
+      state:
+        type: AspectState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_builder_pack_aspects
+        operation: mathformer_synthesis_builder_pack_aspects
+  compare_next_aspect:
+    inputs:
+      state:
+        type: AspectState
+    outputs:
+      state:
+        type: AspectState
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_builder_compare_next_aspect
+        operation: mathformer_synthesis_builder_compare_next_aspect
+  finish_synthesis:
+    inputs:
+      report:
+        type: Report
+      aspects:
+        type: AspectState
+    outputs:
+      synthesis:
+        type: Synthesis
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_builder_finish_synthesis
+        operation: mathformer_synthesis_builder_finish_synthesis
+  emit:
+    inputs:
+      options:
+        type: Options
+      synthesis:
+        type: Synthesis
+    outputs:
+      result:
+        type: Completion
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_builder_emit
+        operation: mathformer_synthesis_builder_emit
+  empty_aspects:
+    inputs: {}
+    outputs:
+      state:
+        type: AspectState
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_builder_empty_aspects
+        operation: mathformer_synthesis_builder_empty_aspects
+  retain_aspects:
+    inputs:
+      state:
+        type: AspectState
+    outputs:
+      state:
+        type: AspectState
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_builder_retain_aspects
+        operation: mathformer_synthesis_builder_retain_aspects
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse_cli
+    arguments:
+      argv:
+        ref: inputs.argv
+  - id: prepare
+    kind: switch
+    cases:
+    - id: synthetic
+      when:
+        ref: steps.parse.outputs.options.self_test
+      body:
+        id: empty
+        kind: call
+        operation: empty_aspects
+        arguments: {}
+    default:
+      kind: sequence
+      steps:
+      - id: load
+        kind: call
+        operation: load_inputs
+        arguments:
+          options:
+            ref: steps.parse.outputs.options
+      - id: attach
+        kind: call
+        operation: attach_results
+        arguments:
+          loaded:
+            ref: steps.load.outputs.loaded
+      - id: approaches
+        kind: call
+        operation: summarize_approaches
+        arguments:
+          report:
+            ref: steps.attach.outputs.report
+      - id: pack
+        kind: call
+        operation: pack_aspects
+        arguments:
+          approaches:
+            ref: steps.approaches.outputs.approaches
+      outputs:
+        report:
+          type: Report
+          value:
+            ref: steps.attach.outputs.report
+        state:
+          type: AspectState
+          value:
+            ref: steps.pack.outputs.state
+    outputs:
+      report:
+        type: Report
+        value:
+          ref: selected.outputs.report
+      state:
+        type: AspectState
+        value:
+          ref: selected.outputs.state
+  - id: aspects
+    kind: loop
+    state_type: AspectState
+    initial:
+      ref: steps.prepare.outputs.state
+    body:
+      kind: switch
+      cases:
+      - id: synthetic
+        when:
+          ref: steps.parse.outputs.options.self_test
+        body:
+          id: retain
+          kind: call
+          operation: retain_aspects
+          arguments:
+            state:
+              ref: loop.state
+      default:
+        kind: call
+        operation: compare_next_aspect
+        arguments:
+          state:
+            ref: loop.state
+      outputs:
+        state:
+          type: AspectState
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Done
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 5
+    on_exhausted: fail
+    description: Exact ASPECTS cardinality; fifth item sets done and returns normally.
+      Exhaustion is unreachable for this source.
+    outputs:
+      state:
+        type: AspectState
+        value:
+          ref: body.outputs.state
+  - id: mode
+    kind: switch
+    cases:
+    - id: synthetic
+      when:
+        ref: steps.parse.outputs.options.self_test
+      body:
+        kind: call
+        operation: self_test
+        arguments:
+          options:
+            ref: steps.parse.outputs.options
+    default:
+      kind: sequence
+      steps:
+      - id: synthesize
+        kind: call
+        operation: finish_synthesis
+        arguments:
+          report:
+            ref: steps.prepare.outputs.report
+          aspects:
+            ref: steps.aspects.outputs.state
+      - id: write
+        kind: call
+        operation: emit
+        arguments:
+          options:
+            ref: steps.parse.outputs.options
+          synthesis:
+            ref: steps.synthesize.outputs.synthesis
+      outputs:
+        result:
+          type: Completion
+          value:
+            ref: steps.write.outputs.result
+    outputs:
+      result:
+        type: Completion
+        value:
+          ref: selected.outputs.result
+  outputs:
+    result:
+      type: Completion
+      value:
+        ref: steps.mode.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/formalphysics_judge_synthesis/
+      - artifacts/workflow_hub/
+      - self_test_temporary_directory
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - read_comparative_evidence
+    - summarize_judge_results
+    - write_synthesis_reports
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+    - execute_pending_judges
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 12
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked report completion establishes no proof, scientific
+    endorsement or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/physics-common/formalphysics-judge-synthesis-reporter/scripts/build_synthesis_report.py
+    selector: main
+    digest: sha256:dacee4e55a52990c28d1f88988c2bebdbc884a1258743e3af912b414d61f0017
+  - path: scripts/mathformer.py
+    selector: build_registry; run_action; run_leaf_action; prepare_leaf_boundary;
+      launch_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/synthesis_builder_tools.py
+    selector: register_synthesis_builder_tools
+    digest: sha256:04659d8b7481b2251ff71bc279959ea1a2179e168a2739b6c1ff1cf0161fddcb
+  - path: scripts/mcp_server.py
+    selector: register_synthesis_builder_tools(mcp, _analysis_write_policy)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Native helper internals remain finite traversals within their source calls. This
+    graph models selected main argv after hub dispatch; hub preflight, dry-run, 300-second
+    subprocess timeout and write audit remain owned by the hub and are not implied
+    by standalone MCP execution.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-lean:formalphysics-judge-synthesis-report
+    owner_skill: skills/physics-common/formalphysics-judge-synthesis-reporter/SKILL.md
+    contract:
+      id: physics-lean:formalphysics-judge-synthesis-report
+      family: physics_lean
+      kind: render
+      safety: writes_artifacts
+      depends_on: []
+      allows_extra_args: true
+      timeout_seconds: 300
+      writes:
+      - artifacts/formalphysics_judge_synthesis/
+  mathformer.native_boundary:
+    execution: scripts/mathformer.py run_action dispatches run_leaf_action; no dependencies,
+      appended override argv, preflight and dry-run before launch, write audit after
+      launch.
+    input_scope: argv is the final selected-main argument vector; hub defaults select
+      hub_selected_examples comparative input/output and --json; direct CLI output
+      defaults to latest.
+    failure_policy: Missing required comparative input exits; uncaught read/synthesis/write
+      errors abort; hub timeout or undeclared writes yield failure, even after outputs
+      exist.
+    limits: 3600 seconds is a descriptor ceiling, not the native 300-second subprocess
+      timeout; 12 calls covers the normal graph, with no retries or refinement.
+    outputs: Report writes are limited to the declared hub root under hub invocation;
+      direct CLI accepts output-dir. Self-test writes/asserts in a temporary directory
+      and returns before comparative input handling.
+    ordered_payloads: Loaded, Report, Approaches, AspectState and Synthesis use native_json
+      envelopes to preserve native dictionary order through canonical transport. Paths
+      resolve from the MCP service working directory, as they do for selected main
+      argv. Native CLI output is emitted on the MCP server diagnostic stream and retained
+      as printed_result.
+    compiler_lowering: Lunar requires exhaustion exits at root scope. The aspect loop
+      is lifted out of the mode branch. The self-test path carries absent state through
+      empty_aspects and retain_aspects; these adapters perform no native work. The
+      self_test operation remains the only substantive self-test work; comparative
+      source calls and their order are unchanged.
+# REUSE-IgnoreEnd

@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from textbook_theory_autoformalization_loop import (
+    BatchSummaryBasis,
+    ChapterQueue,
+    LatexTextbookArchiveSelection,
+    LeanCheckBasis,
+    LeanUnitSet,
+    OrganizedTheory,
+    TextbookDisposition,
+    TheoryCorpus,
+    UnitGateReport,
+    UnitJobSet,
+)
+
+# Extract theorem-like units, proofs, and exact source provenance.
+type ExtractTheoryCorpus = (source: LatexTextbookArchiveSelection) -> Generated[TheoryCorpus]
+
+# Organize source-preserved units into coherent chapter or section bundles.
+type OrganizeTextbookTheory = (source: TheoryCorpus) -> Generated[OrganizedTheory]
+
+# Build an ordered chapter queue retaining proof and source identity.
+type BuildChapterQueue = (source: OrganizedTheory) -> Generated[ChapterQueue]
+
+# Create draft, reuse, proof, and support-only jobs with source packets.
+type PrepareUnitJobs = (source: ChapterQueue) -> Generated[UnitJobSet]
+
+# Run object-level autoformalization jobs and maximize mathlib grounding.
+type AutoformalizeUnits = (source: UnitJobSet) -> Generated[LeanUnitSet]
+
+# Run Lean, compilation, source-drift, and artifact-realness gates.
+type CheckLeanUnits = (source: LeanCheckBasis) -> Generated[UnitGateReport]
+
+# Run unified consistency and aggregate completed, reused, blocked, proof, and support-only unit outcomes.
+type SummarizeTextbookBatch = (source: BatchSummaryBasis) -> Generated[TextbookDisposition]

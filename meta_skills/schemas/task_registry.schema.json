@@ -1,0 +1,85 @@
+{
+  "schema_version": "mathformer.meta_skills.task_registry.schema.v0.1",
+  "required": [
+    "schema_version",
+    "task_id",
+    "title",
+    "visible_workflows",
+    "composed_skills",
+    "controlled_actions",
+    "artifacts",
+    "validators",
+    "generated_skills",
+    "release_boundaries",
+    "risk_controls"
+  ],
+  "fields": {
+    "schema_version": "string",
+    "task_id": "string",
+    "title": "string",
+    "summary": "string",
+    "visible_workflows": "non_empty_list",
+    "composed_skills": "list",
+    "controlled_actions": "non_empty_list",
+    "artifacts": "list",
+    "validators": "non_empty_list",
+    "generated_skills": "list",
+    "release_boundaries": "non_empty_list",
+    "risk_controls": "non_empty_list"
+  },
+  "nested_required": {
+    "visible_workflows": [
+      "workflow_id",
+      "description",
+      "entry_actions",
+      "evidence_gates"
+    ],
+    "composed_skills": [
+      "skill_id",
+      "role"
+    ],
+    "controlled_actions": [
+      "action_id",
+      "role"
+    ],
+    "artifacts": [
+      "path",
+      "state"
+    ],
+    "validators": [
+      "command",
+      "expected_artifact"
+    ],
+    "generated_skills": [
+      "id",
+      "state",
+      "promotion_boundary"
+    ],
+    "release_boundaries": [
+      "boundary",
+      "rule"
+    ],
+    "risk_controls": [
+      "risk",
+      "control"
+    ]
+  },
+  "allowed_generated_skill_states": [
+    "none",
+    "draft",
+    "task_local_validated",
+    "repeated_use_candidate",
+    "promoted",
+    "quarantined",
+    "deprecated"
+  ],
+  "allowed_artifact_states": [
+    "source",
+    "planned",
+    "generated",
+    "validated",
+    "accepted",
+    "blocked",
+    "ignored_external_snapshot"
+  ]
+}

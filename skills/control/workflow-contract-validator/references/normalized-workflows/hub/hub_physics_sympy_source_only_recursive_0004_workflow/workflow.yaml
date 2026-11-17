@@ -1,0 +1,562 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_sympy_source_only_recursive_0004_workflow
+version: 1.0.0
+kind: workflow
+description: One source-only SymPy case; five ordered stage visits, then native final-status
+  selection.
+aliases:
+- physics-sympy:source-only-recursive-0004
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Request:
+    schema:
+      type: object
+      required:
+      - case_id
+      - source_record
+      - output_root
+      - regenerate_initial_artifact
+      properties:
+        case_id:
+          type: string
+          const: formalphysics_0004
+        source_record:
+          type:
+          - string
+          - 'null'
+        output_root:
+          type: string
+        regenerate_initial_artifact:
+          type: boolean
+      additionalProperties: false
+  Prepared:
+    schema:
+      type: object
+      required:
+      - case_id
+      - run_dir
+      - artifact_path
+      - source_packet
+      - initial_draft
+      - stage_specs
+      - stage_order
+      - _native_json
+      properties:
+        case_id:
+          type: string
+        run_dir:
+          type: string
+        artifact_path:
+          type: string
+        source_packet:
+          type: object
+        initial_draft:
+          type: object
+        stage_specs:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        stage_order:
+          type: array
+          minItems: 5
+          maxItems: 5
+          prefixItems:
+          - const: goal_plan
+          - const: design_guard_review
+          - const: repair_expansion_map
+          - const: recursive_repair_control
+          - const: grounded_sample_thoroughness
+        _native_json:
+          type: string
+          description: Integrity-checked JSON preserving native dictionary order across
+            PRISM canonicalization.
+  RunState:
+    schema:
+      type: object
+      required:
+      - prepared
+      - next_stage
+      - workflow_stage_reports
+      - command_metadata
+      - blockers
+      - _native_json
+      properties:
+        prepared:
+          type: object
+          description: Unchanged Prepared payload, including command argv and paths.
+        next_stage:
+          type: integer
+          minimum: 0
+          maximum: 5
+        workflow_stage_reports:
+          type: object
+        command_metadata:
+          type: object
+        blockers:
+          type: array
+          items:
+            type: object
+        _native_json:
+          type: string
+          description: Integrity-checked JSON preserving native dictionary order across
+            PRISM canonicalization.
+  Boolean:
+    schema:
+      type: boolean
+  Assessment:
+    schema:
+      type: object
+      required:
+      - state
+      - loaded_reports
+      - complete
+      - blocked
+      - _native_json
+      properties:
+        state:
+          type: object
+          description: Final RunState payload.
+        loaded_reports:
+          type: object
+        complete:
+          type: boolean
+        blocked:
+          type: boolean
+        _native_json:
+          type: string
+          description: Integrity-checked JSON preserving native dictionary order across
+            PRISM canonicalization.
+  Status:
+    schema:
+      type: string
+      enum:
+      - complete_sympy_physics_derivation
+      - blocked
+      - derivation_partial
+  Report:
+    schema:
+      type: object
+      required:
+      - style
+      - backend
+      - case_id
+      - status
+      - run_dir
+      - workflow_stage_reports
+      - command_metadata
+      - blockers
+      - artifacts
+      properties:
+        style:
+          const: physics_sympy_source_only_recursive_goal_run
+        backend:
+          const: sympy
+        case_id:
+          type: string
+        status:
+          enum:
+          - complete_sympy_physics_derivation
+          - blocked
+          - derivation_partial
+        run_dir:
+          type: string
+        workflow_stage_reports:
+          type: object
+        command_metadata:
+          type: object
+        blockers:
+          type: array
+          items:
+            type: object
+        artifacts:
+          type: object
+          required:
+          - source_record
+          - reasoning_log
+          - run_dir
+          - run_report
+          - summary
+  Context:
+    schema:
+      type: object
+      required:
+      - working_directory
+      - allow_mutating
+      properties:
+        working_directory:
+          type: string
+        allow_mutating:
+          type: boolean
+      additionalProperties: false
+inputs:
+  request:
+    type: Request
+  context:
+    type: Context
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+operations:
+  prepare:
+    inputs:
+      request:
+        type: Request
+      context:
+        type: Context
+    outputs:
+      prepared:
+        type: Prepared
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_sympy_source_only_prepare
+        operation: mathformer_sympy_source_only_prepare
+  pack:
+    inputs:
+      prepared:
+        type: Prepared
+      context:
+        type: Context
+    outputs:
+      state:
+        type: RunState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_sympy_source_only_pack_state
+        operation: mathformer_sympy_source_only_pack_state
+  visit_stage:
+    inputs:
+      state:
+        type: RunState
+      context:
+        type: Context
+    outputs:
+      state:
+        type: RunState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_sympy_source_only_execute_stage
+        operation: mathformer_sympy_source_only_execute_stage
+  assess:
+    inputs:
+      state:
+        type: RunState
+      context:
+        type: Context
+    outputs:
+      assessment:
+        type: Assessment
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_sympy_source_only_assess
+        operation: mathformer_sympy_source_only_assess
+  emit:
+    inputs:
+      assessment:
+        type: Assessment
+      status:
+        type: Status
+      context:
+        type: Context
+    outputs:
+      result:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_sympy_source_only_emit
+        operation: mathformer_sympy_source_only_emit
+flow:
+  kind: sequence
+  steps:
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      request:
+        ref: inputs.request
+      context:
+        ref: inputs.context
+  - id: pack
+    kind: call
+    operation: pack
+    arguments:
+      prepared:
+        ref: steps.prepare.outputs.prepared
+      context:
+        ref: inputs.context
+  - id: stages
+    kind: loop
+    description: Native for-loop over five fixed stages; exits normally on fifth visit,
+      even with blockers.
+    state_type: RunState
+    initial:
+      ref: steps.pack.outputs.state
+    max_iterations: 5
+    on_exhausted: fail
+    body:
+      kind: call
+      operation: visit_stage
+      arguments:
+        state:
+          ref: loop.state
+        context:
+          ref: inputs.context
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RunState
+        value:
+          ref: body.outputs.state
+  - id: assess
+    kind: call
+    operation: assess
+    arguments:
+      state:
+        ref: steps.stages.outputs.state
+      context:
+        ref: inputs.context
+  - id: finish
+    kind: switch
+    cases:
+    - id: complete
+      when:
+        ref: steps.assess.outputs.assessment.complete
+      body:
+        kind: call
+        operation: emit
+        arguments:
+          assessment:
+            ref: steps.assess.outputs.assessment
+          status:
+            literal: complete_sympy_physics_derivation
+          context:
+            ref: inputs.context
+    - id: blocked
+      when:
+        ref: steps.assess.outputs.assessment.blocked
+      body:
+        kind: call
+        operation: emit
+        arguments:
+          assessment:
+            ref: steps.assess.outputs.assessment
+          status:
+            literal: blocked
+          context:
+            ref: inputs.context
+    default:
+      kind: call
+      operation: emit
+      arguments:
+        assessment:
+          ref: steps.assess.outputs.assessment
+        status:
+          literal: derivation_partial
+        context:
+          ref: inputs.context
+    outputs:
+      report:
+        type: Report
+        value:
+          ref: selected.outputs.result
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finish.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - native_output_root
+      - libraries/MathformerPhysicsLib/SymPy/formalphysics_0004/MathformerPhysics.py
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+    - read_dataset_formal_answer
+  limits:
+    wall_time_seconds: 900
+    max_operation_calls: 9
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-only description; completion establishes neither scientific
+    truth nor promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/scripts/run_recursive_goal_case.py
+    selector: build_run
+    digest: sha256:57f4ae1dfcedd73df3c94b809b6d80da968831c94b6f1dd0787fdeaa896e44b9
+  - path: scripts/mathformer.py
+    selector: build_registry/action:physics-sympy:source-only-recursive-0004; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/physics-sympy/physics-sympy-recursive-repair-loop-controller/scripts/control_physics_sympy_recursive_repair.py
+    selector: load_state; compute_guards; choose_branch; finish_plan
+    digest: sha256:83cffe4ea8e2e6dbb33ec63bd18d0576414af8544a32657243a38eb70957149c
+  - path: scripts/sympy_source_only_tools.py
+    selector: register_sympy_source_only_tools; packed; restored
+    digest: sha256:d78b5a09bce8db7ca9782b254dad7733b5c1209ea3cf346961dec163079b4279
+  - path: scripts/mcp_server.py
+    selector: register_sympy_source_only_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: 'inventory: authored source-only 0004 contract'
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/scripts/plan_goal_sample_sympy_autoformalization.py
+    selector: build_plan; main
+    digest: sha256:38455a8768c85c3d9f85dd11f00c4eb5a5e6aaec394171fb16d0cc1e49feb604
+  - path: skills/physics-sympy/physics-sympy-review-refinement-router/scripts/plan_physics_sympy_review_refinement.py
+    selector: build_design_guard_review; main
+    digest: sha256:4a323d615204b9c2cc6326c2f047a2e88b070644c23d7a31bd5fe7fe55ce52d2
+  - path: skills/physics-sympy/physics-sympy-repair-expansion-cartographer/scripts/map_physics_sympy_repair_expansion.py
+    selector: build_map; main
+    digest: sha256:41e47a6f15b19da49f1f1949c711e6d2e95992ebf4c9d619ad9eeedcaf3c0405
+  - path: tests/physics_sympy/run_grounded_sample_thoroughness.py
+    selector: build_report; main
+    digest: sha256:0d1fa4540d356d1ce66b64116a1f9707436c6008750aac0f1a6579db2e67cd47
+  - path: tests/mcp/run_sympy_source_only_workflow_tests.py
+    selector: SourceOnlyTests; artifact; mount
+    digest: sha256:0a903b28c31f937f22c316e26ae190cbaea00d22fbebc8e5663f17d0b63606ea
+  - path: tests/mcp/run_sympy_source_only_0004_workflow_tests.py
+    selector: explicit candidate/installed contract test entrypoint
+    digest: sha256:514dd0c08dea48b6bb81d0ef92472c4913098a033ea012e558a6d5436ee34e29
+  - path: tests/mcp/fixtures/sympy_source_only_server.py
+    selector: scratch mount of real registered service
+    digest: sha256:f89179fdee1ca5bf44061c7b412ea472c56bfdd8d29589a614c2e63bca0fa1f5
+  gaps:
+  - Native payload dictionaries and stage internals remain partial; typed ports do
+    not certify scientific evidence.
+  - Lunar supplies mandatory v1 receipts and digests; native reasoning logs remain
+    optional. The hub CLI/preflight/transport envelope is outside these blocks.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-sympy:source-only-recursive-0004
+    owner_skill: skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/SKILL.md
+    contract:
+      id: physics-sympy:source-only-recursive-0004
+      family: physics_sympy
+      kind: generation
+      safety: writes_artifacts
+      allows_extra_args: true
+      timeout_seconds: 900
+  mathformer.native_boundary:
+    execution: Native build_run projection; hub CLI/preflight/transport envelope remains
+      outside these blocks.
+    registered_inputs:
+      case_id: formalphysics_0004
+      source_record: artifacts/physics_sympy/source_only/formalphysics_0004/source_record.json
+      regenerate_initial_artifact: true
+    defaults:
+      output_root: artifacts/physics_sympy/recursive_goal_runs
+      native_regenerate_initial_artifact: false
+    timing: Hub subprocess timeout is 900 seconds; direct build_run and its stage
+      subprocesses have no explicit timeout or retry. The old 3600-second normalization
+      limit is not native.
+    bound: Fixed five-stage traversal returns normally when done on visit five; exhaustion
+      is unreachable for prepared native order. Controller cap six is decision metadata,
+      not a runner loop bound.
+    cli_exit: main returns 3 for report.status=blocked; otherwise 0. Unhandled exceptions
+      abort.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+  mathformer.operation_semantics:
+    prepare: run_recursive_goal_case.py::prepare_run. Unpack native arguments, create
+      run directory, clear both prior reasoning logs, and generate/regenerate artifact.
+      Existing artifact is skipped only when regeneration is false. Writer unavailable,
+      unregistered case or caught writer failure becomes initial_draft.status=blocked.
+      Load existing source JSON or synthesize from artifact metadata; write rebuilt
+      source and prepare the five ordered commands. Other filesystem/JSON exceptions
+      propagate.
+    pack: run_recursive_goal_case.py::pack_run_state. Pack prepared, next_stage=0,
+      initial-draft stage report, empty command_metadata and blockers. Blocked generation
+      adds initial_draft_generation_blocked without stopping.
+    visit_stage: 'run_recursive_goal_case.py::execute_run_stage/run_json/stage_commands.
+      Run stage_order[next_stage] once, capturing returncode/stdout/stderr and report
+      path. goal_plan runs executable gates -> current_evidence.json; design_guard_review
+      -> design_guard_review.json; repair_expansion_map reads that review -> repair_expansion.json;
+      recursive_repair_control reads that map -> controller_decision.json; then grounded_sample_thoroughness
+      -> thoroughness.json. Other shared case/artifact/file reads remain native. Zero
+      exit loads output file if present, otherwise stdout JSON; nonzero exit returns
+      empty report and adds stage_command_failed. Store status (status or goal_status
+      or command_failed), path/style and command metadata. High/critical/error findings
+      also append blockers; traversal continues. Project mutated state and native
+      boolean after next_stage increments; done iff next_stage equals stage count.
+      Launch/JSON/filesystem exceptions propagate. No stage timeout or retry. Entry
+      beyond the order raises ValueError. Controller helpers load_state/compute_guards/choose_branch/finish_plan
+      use iteration=1, max_iterations=6, no prior maps: first complete/not_required
+      with no outstanding nodes, then non-exhaustive, repeated signature, iteration
+      cap, empty outstanding set, else recurse. Non-exhaustive/repeated/cap branches
+      block; empty completes. Blocked map overrides the decision. This runner never
+      follows the returned frontier.'
+    assess: run_recursive_goal_case.py::assess_run. Load five report files (missing
+      gives empty object; malformed JSON propagates), retain state and reports. complete
+      iff recorded thoroughness status is complete_sympy_physics_derivation and blockers
+      is empty; blocked iff blockers is nonempty.
+    emit: run_recursive_goal_case.py::emit_run. Emit native semantic/status summaries,
+      stage reports, command metadata, blockers and artifact paths to recursive_goal_run.json,
+      then summary.md, optional reasoning event, then copy existing-file aliases.
+      Return report. Alias pairs are current_evidence->goal_plan, repair_expansion->repair_expansion_map,
+      controller_decision->recursive_repair_control, thoroughness->grounded_sample_thoroughness
+      (all .json), reasoning->reasoning_log (.jsonl). Missing alias sources are skipped;
+      other write/log/copy exceptions propagate.
+# REUSE-IgnoreEnd

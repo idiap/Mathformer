@@ -1,0 +1,638 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_lean_formalphysics_judge_synthesis_report_self_test_workflow
+version: 1.0.0
+kind: workflow
+description: Run the synthetic judge-synthesis builder check, accumulating findings
+  without repair.
+aliases:
+- physics-lean:formalphysics-judge-synthesis-report-self-test
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Workspace:
+    schema:
+      type: object
+      properties:
+        root:
+          type: string
+        comparative:
+          type: string
+        results:
+          type: string
+        output:
+          type: string
+      required:
+      - root
+      - comparative
+      - results
+      - output
+      additionalProperties: false
+  BuilderResult:
+    schema:
+      type: object
+      properties:
+        code:
+          type: integer
+        payload: {}
+        stderr:
+          type: string
+      required:
+      - code
+      - payload
+      - stderr
+      additionalProperties: false
+  CheckState:
+    schema:
+      type: object
+      properties:
+        workspace:
+          type: object
+        artifacts:
+          type: object
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                const: high
+              code:
+                type: string
+            required:
+            - severity
+            - code
+        index:
+          type: integer
+          minimum: 0
+          maximum: 7
+        html_text:
+          type: string
+      required:
+      - workspace
+      - artifacts
+      - findings
+      - index
+      - html_text
+      additionalProperties: false
+  Format:
+    schema:
+      type: string
+      enum:
+      - json
+      - html
+  Flag:
+    schema:
+      type: boolean
+  TestReport:
+    schema:
+      type: object
+      properties:
+        schema_version:
+          const: 1
+        ok:
+          type: boolean
+        style:
+          const: formalphysics_judge_synthesis_report_test
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                const: high
+              code:
+                type: string
+            required:
+            - severity
+            - code
+      required:
+      - schema_version
+      - ok
+      - style
+      - findings
+      additionalProperties: false
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+  ScopeContext:
+    schema:
+      type: object
+      properties:
+        session_id:
+          type: string
+      required:
+      - session_id
+      additionalProperties: false
+inputs: {}
+outputs:
+  result:
+    type: TestReport
+    value:
+      ref: flow.outputs.result
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  prepare_fixture:
+    inputs: {}
+    outputs:
+      workspace:
+        type: Workspace
+      context:
+        type: ScopeContext
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_smoke_prepare_fixture
+        operation: mathformer_synthesis_smoke_prepare_fixture
+  invoke_builder:
+    inputs:
+      workspace:
+        type: Workspace
+      context:
+        type: ScopeContext
+    outputs:
+      result:
+        type: BuilderResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_smoke_invoke_builder
+        operation: mathformer_synthesis_smoke_invoke_builder
+  start_checks:
+    inputs:
+      workspace:
+        type: Workspace
+      result:
+        type: BuilderResult
+      context:
+        type: ScopeContext
+    outputs:
+      state:
+        type: CheckState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_smoke_start_checks
+        operation: mathformer_synthesis_smoke_start_checks
+  check_artifact:
+    inputs:
+      state:
+        type: CheckState
+      context:
+        type: ScopeContext
+    outputs:
+      state:
+        type: CheckState
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_smoke_check_artifact
+        operation: mathformer_synthesis_smoke_check_artifact
+  prepare_inspection:
+    inputs:
+      state:
+        type: CheckState
+      format:
+        type: Format
+      context:
+        type: ScopeContext
+    outputs:
+      state:
+        type: CheckState
+      present:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_smoke_prepare_inspection
+        operation: mathformer_synthesis_smoke_prepare_inspection
+  check_json:
+    inputs:
+      state:
+        type: CheckState
+      context:
+        type: ScopeContext
+    outputs:
+      state:
+        type: CheckState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_smoke_check_json
+        operation: mathformer_synthesis_smoke_check_json
+  carry_state:
+    inputs:
+      state:
+        type: CheckState
+      context:
+        type: ScopeContext
+    outputs:
+      state:
+        type: CheckState
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_smoke_carry_state
+        operation: mathformer_synthesis_smoke_carry_state
+  check_marker:
+    inputs:
+      state:
+        type: CheckState
+      context:
+        type: ScopeContext
+    outputs:
+      state:
+        type: CheckState
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_smoke_check_marker
+        operation: mathformer_synthesis_smoke_check_marker
+  finish:
+    inputs:
+      state:
+        type: CheckState
+      context:
+        type: ScopeContext
+    outputs:
+      result:
+        type: TestReport
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_synthesis_smoke_finish
+        operation: mathformer_synthesis_smoke_finish
+flow:
+  kind: sequence
+  steps:
+  - id: fixture
+    kind: call
+    operation: prepare_fixture
+    arguments: {}
+  - id: builder
+    kind: call
+    operation: invoke_builder
+    arguments:
+      workspace:
+        ref: steps.fixture.outputs.workspace
+      context:
+        ref: steps.fixture.outputs.context
+  - id: checks
+    kind: call
+    operation: start_checks
+    arguments:
+      workspace:
+        ref: steps.fixture.outputs.workspace
+      result:
+        ref: steps.builder.outputs.result
+      context:
+        ref: steps.fixture.outputs.context
+  - id: artifacts
+    kind: loop
+    state_type: CheckState
+    initial:
+      ref: steps.checks.outputs.state
+    body:
+      kind: call
+      operation: check_artifact
+      arguments:
+        state:
+          ref: loop.state
+        context:
+          ref: steps.fixture.outputs.context
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 4
+    on_exhausted: fail
+    description: Fixed four-element tuple; done is true after the fourth check, so
+      normal completion at the bound is preserved.
+    outputs:
+      state:
+        type: CheckState
+        value:
+          ref: loop.state
+  - id: json_guard
+    kind: call
+    operation: prepare_inspection
+    arguments:
+      state:
+        ref: steps.artifacts.outputs.state
+      format:
+        literal: json
+      context:
+        ref: steps.fixture.outputs.context
+  - id: json_check
+    kind: switch
+    cases:
+    - id: exists
+      when:
+        ref: steps.json_guard.outputs.present
+      body:
+        kind: call
+        operation: check_json
+        arguments:
+          state:
+            ref: steps.json_guard.outputs.state
+          context:
+            ref: steps.fixture.outputs.context
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: carry_state
+        arguments:
+          state:
+            ref: steps.json_guard.outputs.state
+          context:
+            ref: steps.fixture.outputs.context
+        id: retain
+      outputs:
+        state:
+          type: CheckState
+          value:
+            ref: steps.retain.outputs.state
+    outputs:
+      state:
+        type: CheckState
+        value:
+          ref: selected.outputs.state
+  - id: html_guard
+    kind: call
+    operation: prepare_inspection
+    arguments:
+      state:
+        ref: steps.json_check.outputs.state
+      format:
+        literal: html
+      context:
+        ref: steps.fixture.outputs.context
+  - kind: loop
+    state_type: CheckState
+    initial:
+      ref: steps.html_guard.outputs.state
+    body:
+      kind: switch
+      cases:
+      - id: exists
+        when:
+          ref: steps.html_guard.outputs.present
+        body:
+          kind: call
+          operation: check_marker
+          arguments:
+            state:
+              ref: loop.state
+            context:
+              ref: steps.fixture.outputs.context
+      default:
+        kind: call
+        operation: carry_state
+        arguments:
+          state:
+            ref: loop.state
+          context:
+            ref: steps.fixture.outputs.context
+      outputs:
+        state:
+          type: CheckState
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 7
+    on_exhausted: fail
+    description: Fixed seven-marker tuple; done is true on marker seven. Exhaustion
+      is unreachable for the source fixture.
+    outputs:
+      state:
+        type: CheckState
+        value:
+          ref: loop.state
+    id: html_check
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.html_check.outputs.state
+      context:
+        ref: steps.fixture.outputs.context
+  outputs:
+    result:
+      type: TestReport
+      value:
+        ref: steps.finish.outputs.result
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.finish.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - temporary_workspace
+      write:
+      - temporary_workspace
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    - validate_synthetic_report
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 18
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Synthetic report checks only; completion establishes no scientific
+    truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/physics_lean/run_formalphysics_judge_synthesis_report.py
+    selector: run_check
+    digest: sha256:ebabd6af569653b77f6803e6aeee5d3a55fdd357babcfd181841688ab35aea79
+  - path: tests/physics_lean/run_formalphysics_judge_synthesis_report.py
+    selector: write_comparative_report; write_codex_results; run_report_builder; main
+    digest: sha256:ebabd6af569653b77f6803e6aeee5d3a55fdd357babcfd181841688ab35aea79
+  - path: skills/physics-common/formalphysics-judge-synthesis-reporter/scripts/build_synthesis_report.py
+    selector: main normal CLI path; build_synthesis; write_outputs
+    digest: sha256:dacee4e55a52990c28d1f88988c2bebdbc884a1258743e3af912b414d61f0017
+  - path: scripts/mathformer.py
+    selector: build_registry action physics-lean:formalphysics-judge-synthesis-report-self-test;
+      judge-synthesis intent route
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/judge_synthesis_report_tools.py
+    selector: register_judge_synthesis_report_tools; owned; synthesis_report_lifespan
+    digest: sha256:72bc6d47870eb6b5623057797dfb58d4da37f2e05cbdb374eb397d611539f8df
+  - path: scripts/mcp_server.py
+    selector: MCP registration and lifespan
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory authored judge synthesis self-test contract
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Builder finite helper passes remain within its normal native CLI boundary; native
+    hub preflight and write audit are outside this split run_check graph.
+  - Normal completion and native tool errors clean temporary resources immediately.
+    A host-side interruption (including graph bounds or call budgets) retains the
+    scope until the MCP server lifespan closes; v1 has no finally node.
+  - Lunar supplies required per-call receipts, digests and provenance; the native
+    optional logs are unchanged.
+  - The 3600-second and 18-operation-call limits are normalization budgets, not native
+    bounds. The hub has a 180-second subprocess timeout; the inner builder has no
+    timeout.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-lean:formalphysics-judge-synthesis-report-self-test
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: physics-lean:formalphysics-judge-synthesis-report-self-test
+      summary: Smoke-test the FormalPhysics judge synthesis report builder.
+      family: physics_lean
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/physics_lean/run_formalphysics_judge_synthesis_report.py
+      - --json
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: 180
+      writes:
+      - artifacts/formalphysics_judge_synthesis/
+  mathformer.native_boundary:
+    execution: Shared run_check helpers exposed as registered MCP tools with an owned
+      context, immutable paths/state and ordered stages. Builder normal CLI remains
+      native.
+    failure_policy: Recorded high findings accumulate through later checks; exceptions
+      stop execution and release temporary files.
+    effects_status: Source run_check writes fixtures and all four generated artifacts
+      only in TemporaryDirectory; hub audits repository writes.
+    temporary_outputs:
+    - synthesis_report.json
+    - synthesis_report.md
+    - synthesis_report.html
+    - synthesis_todos.md
+    native_limits: Hub subprocess timeout is 180 seconds; inner builder subprocess
+      has no timeout.
+    lifecycle: Temporary paths are scope-local; cleanup precedes normal report return
+      and occurs immediately on native tool errors. Interrupted graphs are reclaimed
+      at MCP server shutdown.
+    context: Opaque session_id owns the TemporaryDirectory, workspace, builder result
+      and check state; callers cannot replace paths or skip stages.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    modeling: Source run_check ordering; builder internal finite passes are opaque;
+      no retry, repair or convergence loop.
+  mathformer.step_semantics:
+    prepare_fixture: 'Source run_check/write_comparative_report/write_codex_results:
+      initialize findings, enter TemporaryDirectory, write one case with two candidates
+      (accepted/current and blocked/external), 14 metrics each, four pending prompts
+      and two completed result records.'
+    invoke_builder: 'Source run_report_builder and builder main: invoke once via sys.executable
+      with comparative, output, results and --json; capture code/stdout/stderr without
+      inner timeout. Invalid stdout JSON becomes {}; other decoded JSON is unchanged.
+      Normal CLI loads/attaches results, aggregates approaches/five aspects, strengths/weaknesses,
+      disagreements and TODO classifications, then writes JSON/Markdown/HTML/TODO
+      files. Not builder self_test; finite helper passes remain internal.'
+    start_checks: 'Source run_check: carry initially empty findings; independently
+      append high synthesis_builder_failed with stderr if code != 0, then synthesis_builder_not_ok
+      with payload if payload.get(ok) is not True. Pack workspace, payload.get(artifacts,
+      {}), findings, index=0 and empty html_text. Unexpected payload shapes can raise.'
+    check_artifact: 'Source run_check artifact for-loop: inspect tuple (json, html,
+      markdown, todos) at index; append high missing_{key}_artifact with artifacts
+      if path is falsy or Path.exists() is false. Preserve previous findings, advance
+      index and compute done when all four are checked. No early exit on findings.'
+    prepare_inspection: 'Source run_check report_json/html_path guards: compute present
+      from a truthy reported path and Path.exists(), at this point in source order.
+      Pack unchanged findings/artifacts/workspace; for present HTML read UTF-8 html_text
+      and reset marker index to zero. JSON remains unread until check_json.'
+    check_json: 'Source run_check JSON branch: load artifact JSON; independently append
+      high findings for wrong synthesis style, reference role != non_gold_reference_evidence,
+      current accepted_count != 1 or external blocked_count != 1, absent current strengths
+      or external weaknesses, fewer than five aspects, absent synthesis_todos, ingested
+      results != 2, absent agreement_counts, or open_repo_actionable_count != 0. Preserve
+      check order; malformed JSON/uncaught errors terminate.'
+    carry_state: 'Source run_check missing-file branch fall-through: pack and export
+      unchanged findings, artifacts, workspace and cursor; missing-artifact findings
+      were already recorded.'
+    check_marker: 'Source run_check HTML for-loop: in order check FormalPhysics Judge
+      Synthesis, Aspect Comparison, Strengths, Weaknesses, Prompt Readiness, Completed
+      Result Disagreements, Action Register. If absent append high html_marker_missing
+      with marker; advance index and compute done after seven, retaining all prior
+      findings.'
+    finish: Close the owned temporary directory before exposing the native finish
+      report and main exit code (0 or 3). Source and tool exceptions release the scope;
+      graph interruption is reclaimed at MCP server shutdown.
+# REUSE-IgnoreEnd

@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathformerlib_accumulation_loop import (
+    AccumulationCase,
+    CandidateAssessment,
+    DocumentationBasis,
+    LibraryDocumentation,
+    LibraryPlacement,
+    MathformerLibUpdate,
+    MathformerLibraryCandidateSet,
+    PromotionCase,
+    PromotionDecision,
+    PublicationBasis,
+    RegistryUpdate,
+)
+
+# Classify candidates and run realness, compilation, import, and provenance checks.
+type AssessLibraryCandidates = (source: MathformerLibraryCandidateSet) -> Generated[CandidateAssessment]
+
+# Apply the MathformerLib promotion policy to every candidate.
+type DecidePromotions = (source: PromotionCase) -> Generated[PromotionDecision]
+
+# Place accepted modules under domain paths and retain blocked drafts.
+type AccumulateModules = (source: AccumulationCase) -> Generated[LibraryPlacement]
+
+# Rebuild the authoritative MathformerLib registry after placement.
+type RefreshRegistry = (source: LibraryPlacement) -> Generated[RegistryUpdate]
+
+# Generate Markdown library pages and indexes from the refreshed registry.
+type DocumentLibrary = (source: DocumentationBasis) -> Generated[LibraryDocumentation]
+
+# Publish aligned HTML and return the complete MathformerLib update.
+type PublishLibraryUpdate = (source: PublicationBasis) -> Generated[MathformerLibUpdate]

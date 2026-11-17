@@ -1,0 +1,1667 @@
+{
+  "artifact": "workflow-architecture-plan",
+  "schema_version": "1.0",
+  "source_fingerprint": "sha256:3884be8eafb4f914053ef1bdcfa1689be769e9a8ac43dd3e19c6454031d2580f",
+  "type_definitions": [
+    {
+      "description": "Domain-specific source boundary for the named draft_execute_refine_loop Mathformer workflow.",
+      "fields": [
+        {
+          "description": "Source-anchored mathematical claims to formalize in Lean.",
+          "name": "source_claims",
+          "type": "List[String]"
+        },
+        {
+          "description": "Lean module, imports, namespace, and version constraints.",
+          "name": "target_context",
+          "type": "String"
+        },
+        {
+          "description": "Criteria that candidate revisions must satisfy before acceptance.",
+          "name": "acceptance_criteria",
+          "type": "String"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanFormalizationDraftBrief"
+    },
+    {
+      "description": "Domain-specific result of draft.initial within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the draft.initial occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the draft.initial occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical draft.initial contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to draft.initial.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the draft.initial result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Candidate transformation or artifact produced for later checks.",
+          "name": "candidate_content",
+          "type": "String"
+        },
+        {
+          "description": "Obligations that remain before the candidate can be accepted.",
+          "name": "unresolved_obligations",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineDraftInitialArtifact"
+    },
+    {
+      "description": "Domain-specific result of draft.seed within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the draft.seed occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the draft.seed occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical draft.seed contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to draft.seed.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the draft.seed result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Candidate transformation or artifact produced for later checks.",
+          "name": "candidate_content",
+          "type": "String"
+        },
+        {
+          "description": "Obligations that remain before the candidate can be accepted.",
+          "name": "unresolved_obligations",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineDraftSeedArtifact"
+    },
+    {
+      "description": "Domain-specific result of execute.initial within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the execute.initial occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the execute.initial occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical execute.initial contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to execute.initial.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the execute.initial result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Summary of the linked material operation represented by this record.",
+          "name": "operation_summary",
+          "type": "String"
+        },
+        {
+          "description": "References to evidence that a native execution may later produce.",
+          "name": "evidence_references",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineExecuteInitialArtifact"
+    },
+    {
+      "description": "Domain-specific result of check.compile within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the check.compile occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the check.compile occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical check.compile contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to check.compile.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the check.compile result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Named criteria applied by this scoped assessment.",
+          "name": "criteria",
+          "type": "List[String]"
+        },
+        {
+          "description": "Scoped findings with no authority beyond their cited grounds.",
+          "name": "findings",
+          "type": "List[String]"
+        },
+        {
+          "description": "Non-authoritative repairs proposed for identified findings.",
+          "name": "recommended_repairs",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineCheckCompileArtifact"
+    },
+    {
+      "description": "Domain-specific result of postformalization.source_anchor_drift_guard within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the postformalization.source_anchor_drift_guard occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the postformalization.source_anchor_drift_guard occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical postformalization.source_anchor_drift_guard contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to postformalization.source_anchor_drift_guard.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the postformalization.source_anchor_drift_guard result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Candidate transformation or artifact produced for later checks.",
+          "name": "candidate_content",
+          "type": "String"
+        },
+        {
+          "description": "Obligations that remain before the candidate can be accepted.",
+          "name": "unresolved_obligations",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact"
+    },
+    {
+      "description": "Domain-specific result of critique.semantic within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the critique.semantic occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the critique.semantic occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical critique.semantic contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to critique.semantic.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the critique.semantic result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Named criteria applied by this scoped assessment.",
+          "name": "criteria",
+          "type": "List[String]"
+        },
+        {
+          "description": "Scoped findings with no authority beyond their cited grounds.",
+          "name": "findings",
+          "type": "List[String]"
+        },
+        {
+          "description": "Non-authoritative repairs proposed for identified findings.",
+          "name": "recommended_repairs",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineCritiqueSemanticArtifact"
+    },
+    {
+      "description": "Domain-specific result of critique.syntax within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the critique.syntax occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the critique.syntax occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical critique.syntax contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to critique.syntax.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the critique.syntax result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Named criteria applied by this scoped assessment.",
+          "name": "criteria",
+          "type": "List[String]"
+        },
+        {
+          "description": "Scoped findings with no authority beyond their cited grounds.",
+          "name": "findings",
+          "type": "List[String]"
+        },
+        {
+          "description": "Non-authoritative repairs proposed for identified findings.",
+          "name": "recommended_repairs",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineCritiqueSyntaxArtifact"
+    },
+    {
+      "description": "Domain-specific result of critique.semantic_preservation within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the critique.semantic_preservation occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the critique.semantic_preservation occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical critique.semantic_preservation contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to critique.semantic_preservation.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the critique.semantic_preservation result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Named criteria applied by this scoped assessment.",
+          "name": "criteria",
+          "type": "List[String]"
+        },
+        {
+          "description": "Scoped findings with no authority beyond their cited grounds.",
+          "name": "findings",
+          "type": "List[String]"
+        },
+        {
+          "description": "Non-authoritative repairs proposed for identified findings.",
+          "name": "recommended_repairs",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineCritiqueSemanticPreservationArtifact"
+    },
+    {
+      "description": "Domain-specific result of critique.logical_soundness within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the critique.logical_soundness occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the critique.logical_soundness occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical critique.logical_soundness contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to critique.logical_soundness.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the critique.logical_soundness result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Named criteria applied by this scoped assessment.",
+          "name": "criteria",
+          "type": "List[String]"
+        },
+        {
+          "description": "Scoped findings with no authority beyond their cited grounds.",
+          "name": "findings",
+          "type": "List[String]"
+        },
+        {
+          "description": "Non-authoritative repairs proposed for identified findings.",
+          "name": "recommended_repairs",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineCritiqueLogicalSoundnessArtifact"
+    },
+    {
+      "description": "Domain-specific result of critique.mathlib_alignment within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the critique.mathlib_alignment occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the critique.mathlib_alignment occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical critique.mathlib_alignment contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to critique.mathlib_alignment.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the critique.mathlib_alignment result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Named criteria applied by this scoped assessment.",
+          "name": "criteria",
+          "type": "List[String]"
+        },
+        {
+          "description": "Scoped findings with no authority beyond their cited grounds.",
+          "name": "findings",
+          "type": "List[String]"
+        },
+        {
+          "description": "Non-authoritative repairs proposed for identified findings.",
+          "name": "recommended_repairs",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineCritiqueMathlibAlignmentArtifact"
+    },
+    {
+      "description": "Domain-specific result of critique.suite within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the critique.suite occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the critique.suite occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical critique.suite contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to critique.suite.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the critique.suite result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Named criteria applied by this scoped assessment.",
+          "name": "criteria",
+          "type": "List[String]"
+        },
+        {
+          "description": "Scoped findings with no authority beyond their cited grounds.",
+          "name": "findings",
+          "type": "List[String]"
+        },
+        {
+          "description": "Non-authoritative repairs proposed for identified findings.",
+          "name": "recommended_repairs",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineCritiqueSuiteArtifact"
+    },
+    {
+      "description": "Domain-specific result of critique.reference_free_monitor within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the critique.reference_free_monitor occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the critique.reference_free_monitor occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical critique.reference_free_monitor contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to critique.reference_free_monitor.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the critique.reference_free_monitor result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Named criteria applied by this scoped assessment.",
+          "name": "criteria",
+          "type": "List[String]"
+        },
+        {
+          "description": "Scoped findings with no authority beyond their cited grounds.",
+          "name": "findings",
+          "type": "List[String]"
+        },
+        {
+          "description": "Non-authoritative repairs proposed for identified findings.",
+          "name": "recommended_repairs",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact"
+    },
+    {
+      "description": "Domain-specific result of refine.formal within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the refine.formal occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the refine.formal occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical refine.formal contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to refine.formal.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the refine.formal result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Candidate transformation or artifact produced for later checks.",
+          "name": "candidate_content",
+          "type": "String"
+        },
+        {
+          "description": "Obligations that remain before the candidate can be accepted.",
+          "name": "unresolved_obligations",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineRefineFormalArtifact"
+    },
+    {
+      "description": "Domain-specific result of refine.semantic within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the refine.semantic occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the refine.semantic occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical refine.semantic contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to refine.semantic.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the refine.semantic result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Candidate transformation or artifact produced for later checks.",
+          "name": "candidate_content",
+          "type": "String"
+        },
+        {
+          "description": "Obligations that remain before the candidate can be accepted.",
+          "name": "unresolved_obligations",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineRefineSemanticArtifact"
+    },
+    {
+      "description": "Domain-specific result of output.denoise within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the output.denoise occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the output.denoise occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical output.denoise contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to output.denoise.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the output.denoise result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Candidate transformation or artifact produced for later checks.",
+          "name": "candidate_content",
+          "type": "String"
+        },
+        {
+          "description": "Obligations that remain before the candidate can be accepted.",
+          "name": "unresolved_obligations",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineOutputDenoiseArtifact"
+    },
+    {
+      "description": "Domain-specific result of annotate.line_comment_guard within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the annotate.line_comment_guard occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the annotate.line_comment_guard occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical annotate.line_comment_guard contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to annotate.line_comment_guard.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the annotate.line_comment_guard result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Summary of the linked material operation represented by this record.",
+          "name": "operation_summary",
+          "type": "String"
+        },
+        {
+          "description": "References to evidence that a native execution may later produce.",
+          "name": "evidence_references",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "DraftExecuteRefineAnnotateLineCommentGuardArtifact"
+    },
+    {
+      "description": "Domain-specific result of transition.taxonomy within the named draft_execute_refine_loop workflow.",
+      "fields": [
+        {
+          "description": "Exact subject processed by the transition.taxonomy occurrence.",
+          "name": "subject",
+          "type": "String"
+        },
+        {
+          "description": "Source anchors retained by the transition.taxonomy occurrence.",
+          "name": "source_anchors",
+          "type": "List[String]"
+        },
+        {
+          "description": "Artifact labels declared by the canonical transition.taxonomy contract.",
+          "name": "declared_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Disposition under the explicit gate attached to transition.taxonomy.",
+          "name": "gate_disposition",
+          "type": "String"
+        },
+        {
+          "description": "Known limitations that constrain use of the transition.taxonomy result.",
+          "name": "limitations",
+          "type": "List[String]"
+        },
+        {
+          "description": "Summary of the linked material operation represented by this record.",
+          "name": "operation_summary",
+          "type": "String"
+        },
+        {
+          "description": "References to evidence that a native execution may later produce.",
+          "name": "evidence_references",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanRefinementOutcome"
+    },
+    {
+      "description": "Construct one source-anchored Lean candidate while retaining unresolved obligations. This record retains the authority ceiling of a candidate occurrence.",
+      "fields": [
+        {
+          "description": "Candidate artifacts produced for later checks.",
+          "name": "candidate_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Source requirements explicitly retained by the candidate.",
+          "name": "preserved_requirements",
+          "type": "List[String]"
+        },
+        {
+          "description": "Validation obligations that remain open.",
+          "name": "open_obligations",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanDraft"
+    },
+    {
+      "description": "Record compilation and source-anchor evidence for the exact candidate. This record retains the authority ceiling of a evidence occurrence.",
+      "fields": [
+        {
+          "description": "Inspectible references to evidence in the declared scope.",
+          "name": "evidence_refs",
+          "type": "List[String]"
+        },
+        {
+          "description": "Results directly observed by the bounded probe or execution.",
+          "name": "observed_results",
+          "type": "List[String]"
+        },
+        {
+          "description": "Limits on what the evidence can establish.",
+          "name": "limitations",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanExecutionEvidence"
+    },
+    {
+      "description": "Reviewed domain inputs required by AssessLeanSemantics in draft_execute_refine_loop.",
+      "fields": [
+        {
+          "description": "Reviewed draft supplied to AssessLeanSemantics.",
+          "name": "draft",
+          "type": "LeanDraft"
+        },
+        {
+          "description": "Reviewed execution evidence supplied to AssessLeanSemantics.",
+          "name": "execution_evidence",
+          "type": "LeanExecutionEvidence"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanReviewCase"
+    },
+    {
+      "description": "Assess mathematical meaning, preservation, logical soundness, and reference-free drift. This record retains the authority ceiling of a assessment occurrence.",
+      "fields": [
+        {
+          "description": "Named criteria applied by this assessment.",
+          "name": "criteria",
+          "type": "List[String]"
+        },
+        {
+          "description": "Criterion-scoped findings supported by cited inputs.",
+          "name": "findings",
+          "type": "List[String]"
+        },
+        {
+          "description": "Findings that block the named downstream use.",
+          "name": "blockers",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanSemanticAssessment"
+    },
+    {
+      "description": "Reviewed domain inputs required by AssessLeanSyntax in draft_execute_refine_loop.",
+      "fields": [
+        {
+          "description": "Reviewed draft supplied to AssessLeanSyntax.",
+          "name": "draft",
+          "type": "LeanDraft"
+        },
+        {
+          "description": "Reviewed execution evidence supplied to AssessLeanSyntax.",
+          "name": "execution_evidence",
+          "type": "LeanExecutionEvidence"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanFormalReviewCase"
+    },
+    {
+      "description": "Assess syntactic correctness and the combined critique findings. This record retains the authority ceiling of a assessment occurrence.",
+      "fields": [
+        {
+          "description": "Named criteria applied by this assessment.",
+          "name": "criteria",
+          "type": "List[String]"
+        },
+        {
+          "description": "Criterion-scoped findings supported by cited inputs.",
+          "name": "findings",
+          "type": "List[String]"
+        },
+        {
+          "description": "Findings that block the named downstream use.",
+          "name": "blockers",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanFormalAssessment"
+    },
+    {
+      "description": "Reviewed domain inputs required by AssessMathlibAlignment in draft_execute_refine_loop.",
+      "fields": [
+        {
+          "description": "Reviewed draft supplied to AssessMathlibAlignment.",
+          "name": "draft",
+          "type": "LeanDraft"
+        },
+        {
+          "description": "Reviewed execution evidence supplied to AssessMathlibAlignment.",
+          "name": "execution_evidence",
+          "type": "LeanExecutionEvidence"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanLibraryReviewCase"
+    },
+    {
+      "description": "Assess use of applicable mathlib abstractions and imports. This record retains the authority ceiling of a assessment occurrence.",
+      "fields": [
+        {
+          "description": "Named criteria applied by this assessment.",
+          "name": "criteria",
+          "type": "List[String]"
+        },
+        {
+          "description": "Criterion-scoped findings supported by cited inputs.",
+          "name": "findings",
+          "type": "List[String]"
+        },
+        {
+          "description": "Findings that block the named downstream use.",
+          "name": "blockers",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanLibraryAssessment"
+    },
+    {
+      "description": "Reviewed domain inputs required by ReviseLeanDraft in draft_execute_refine_loop.",
+      "fields": [
+        {
+          "description": "Reviewed draft supplied to ReviseLeanDraft.",
+          "name": "draft",
+          "type": "LeanDraft"
+        },
+        {
+          "description": "Reviewed semantic assessment supplied to ReviseLeanDraft.",
+          "name": "semantic_assessment",
+          "type": "LeanSemanticAssessment"
+        },
+        {
+          "description": "Reviewed formal assessment supplied to ReviseLeanDraft.",
+          "name": "formal_assessment",
+          "type": "LeanFormalAssessment"
+        },
+        {
+          "description": "Reviewed library assessment supplied to ReviseLeanDraft.",
+          "name": "library_assessment",
+          "type": "LeanLibraryAssessment"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanRevisionCase"
+    },
+    {
+      "description": "Create a new candidate identity from the criterion-scoped findings. This record retains the authority ceiling of a candidate occurrence.",
+      "fields": [
+        {
+          "description": "Candidate artifacts produced for later checks.",
+          "name": "candidate_artifacts",
+          "type": "List[String]"
+        },
+        {
+          "description": "Source requirements explicitly retained by the candidate.",
+          "name": "preserved_requirements",
+          "type": "List[String]"
+        },
+        {
+          "description": "Validation obligations that remain open.",
+          "name": "open_obligations",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "RevisedLeanDraft"
+    },
+    {
+      "description": "Reviewed domain inputs required by CalibrateRefinementStatus in draft_execute_refine_loop.",
+      "fields": [
+        {
+          "description": "Reviewed revised draft supplied to CalibrateRefinementStatus.",
+          "name": "revised_draft",
+          "type": "RevisedLeanDraft"
+        },
+        {
+          "description": "Reviewed semantic assessment supplied to CalibrateRefinementStatus.",
+          "name": "semantic_assessment",
+          "type": "LeanSemanticAssessment"
+        },
+        {
+          "description": "Reviewed formal assessment supplied to CalibrateRefinementStatus.",
+          "name": "formal_assessment",
+          "type": "LeanFormalAssessment"
+        },
+        {
+          "description": "Reviewed library assessment supplied to CalibrateRefinementStatus.",
+          "name": "library_assessment",
+          "type": "LeanLibraryAssessment"
+        }
+      ],
+      "kind": "record",
+      "name": "RefinementCase"
+    },
+    {
+      "description": "Record the one-pass revision status and the obligations requiring another execution cycle. This record retains the authority ceiling of a decision occurrence.",
+      "fields": [
+        {
+          "description": "Scoped policy status selected by calibration.",
+          "name": "status",
+          "type": "String"
+        },
+        {
+          "description": "Blocking findings retained by the decision.",
+          "name": "blockers",
+          "type": "List[String]"
+        },
+        {
+          "description": "Limits on interpreting or using the decision.",
+          "name": "limitations",
+          "type": "List[String]"
+        }
+      ],
+      "kind": "record",
+      "name": "LeanRefinementDisposition"
+    }
+  ],
+  "workflows": [
+    {
+      "description": "initial draft, seed replay, Lean execution, critique, refinement, denoising, and transition logging.",
+      "epistemic_contract": {
+        "assurance": "computed",
+        "assurance_justification": "Each occurrence preserves its own generated or computed provenance; the final wrapper follows the final occurrence.",
+        "defeater_rationale": "Evidence labels remain capped until native adapters and independent behavioral oracles execute.",
+        "defeaters": [
+          "A structural or fake-handler run does not establish native execution, mathematical correctness, or semantic equivalence."
+        ],
+        "observations": [
+          "The canonical hook registry fixes hook order, owner skills, declared outputs, and gate text."
+        ],
+        "output_meaning": "The final domain-specific artifact produced by the layered draft_execute_refine_loop shell.",
+        "question": "What typed artifacts and dispositions result from the declared draft_execute_refine_loop contract?",
+        "subject": "The exact source artifacts and gates traversed by draft_execute_refine_loop.",
+        "unresolved": []
+      },
+      "id": "draft_execute_refine_loop",
+      "input": {
+        "fixture": {
+          "acceptance_criteria": "fixture:draft_execute_refine_loop:acceptance_criteria",
+          "source_claims": [
+            "fixture:draft_execute_refine_loop:source_claims"
+          ],
+          "target_context": "fixture:draft_execute_refine_loop:target_context"
+        },
+        "name": "workflow_source",
+        "type": "LeanFormalizationDraftBrief"
+      },
+      "output": {
+        "provenance": "computed",
+        "type": "LeanRefinementOutcome"
+      },
+      "reasoning_projection": {
+        "description": "Draft a source-anchored Lean artifact, execute it, combine independent critiques, apply a localized repair, and decide whether another cycle is due.",
+        "input_name": "workflow_source",
+        "input_type": "LeanFormalizationDraftBrief",
+        "name": "RefineLeanDraft",
+        "occurrences": [
+          {
+            "arguments": [
+              {
+                "source": "workflow_source"
+              }
+            ],
+            "id": "draft",
+            "input_type": "LeanFormalizationDraftBrief",
+            "material_steps": [
+              "draft_initial",
+              "draft_seed"
+            ],
+            "method": "ProposeLeanDraft",
+            "output_type": "LeanDraft",
+            "rationale": "Select or replay the seed and construct the first source-anchored Lean draft.",
+            "semantic_kind": "candidate"
+          },
+          {
+            "arguments": [
+              {
+                "source": "draft"
+              }
+            ],
+            "id": "execution_evidence",
+            "input_type": "LeanDraft",
+            "material_steps": [
+              "execute_initial",
+              "check_compile",
+              "postformalization_source_anchor_drift_guard"
+            ],
+            "method": "ExecuteLeanDraft",
+            "output_type": "LeanExecutionEvidence",
+            "rationale": "Execute the exact draft and record compiler and source-anchor evidence.",
+            "relation": "TestLeanDraft",
+            "semantic_kind": "evidence"
+          },
+          {
+            "arguments": [
+              {
+                "field": "draft",
+                "source": "draft"
+              },
+              {
+                "field": "execution_evidence",
+                "source": "execution_evidence"
+              }
+            ],
+            "id": "semantic_assessment",
+            "input_type": "LeanReviewCase",
+            "material_steps": [
+              "critique_semantic",
+              "critique_semantic_preservation",
+              "critique_logical_soundness",
+              "critique_reference_free_monitor"
+            ],
+            "method": "AssessLeanSemantics",
+            "output_type": "LeanSemanticAssessment",
+            "rationale": "Assess mathematical meaning, preservation, logical soundness, and reference-free drift.",
+            "relation": "AssessSemantics",
+            "semantic_kind": "assessment"
+          },
+          {
+            "arguments": [
+              {
+                "field": "draft",
+                "source": "draft"
+              },
+              {
+                "field": "execution_evidence",
+                "source": "execution_evidence"
+              }
+            ],
+            "id": "formal_assessment",
+            "input_type": "LeanFormalReviewCase",
+            "material_steps": [
+              "critique_syntax",
+              "critique_suite"
+            ],
+            "method": "AssessLeanSyntax",
+            "output_type": "LeanFormalAssessment",
+            "rationale": "Assess syntax and consolidate the formal critique findings.",
+            "relation": "AssessFormalSurface",
+            "semantic_kind": "assessment"
+          },
+          {
+            "arguments": [
+              {
+                "field": "draft",
+                "source": "draft"
+              },
+              {
+                "field": "execution_evidence",
+                "source": "execution_evidence"
+              }
+            ],
+            "id": "library_assessment",
+            "input_type": "LeanLibraryReviewCase",
+            "material_steps": [
+              "critique_mathlib_alignment"
+            ],
+            "method": "AssessMathlibAlignment",
+            "output_type": "LeanLibraryAssessment",
+            "rationale": "Assess use of applicable mathlib abstractions and imports.",
+            "relation": "AssessLibraryFit",
+            "semantic_kind": "assessment"
+          },
+          {
+            "arguments": [
+              {
+                "field": "draft",
+                "source": "draft"
+              },
+              {
+                "field": "semantic_assessment",
+                "source": "semantic_assessment"
+              },
+              {
+                "field": "formal_assessment",
+                "source": "formal_assessment"
+              },
+              {
+                "field": "library_assessment",
+                "source": "library_assessment"
+              }
+            ],
+            "id": "revised_draft",
+            "input_type": "LeanRevisionCase",
+            "material_steps": [
+              "refine_formal",
+              "refine_semantic",
+              "output_denoise"
+            ],
+            "method": "ReviseLeanDraft",
+            "output_type": "RevisedLeanDraft",
+            "rationale": "Apply formal and semantic repairs, then denoise the revised candidate.",
+            "relation": "ReviseFromCritiques",
+            "semantic_kind": "candidate"
+          },
+          {
+            "arguments": [
+              {
+                "field": "revised_draft",
+                "source": "revised_draft"
+              },
+              {
+                "field": "semantic_assessment",
+                "source": "semantic_assessment"
+              },
+              {
+                "field": "formal_assessment",
+                "source": "formal_assessment"
+              },
+              {
+                "field": "library_assessment",
+                "source": "library_assessment"
+              }
+            ],
+            "id": "refinement_status",
+            "input_type": "RefinementCase",
+            "material_steps": [
+              "annotate_line_comment_guard",
+              "transition_taxonomy"
+            ],
+            "method": "CalibrateRefinementStatus",
+            "output_type": "LeanRefinementDisposition",
+            "rationale": "Classify the transition and state whether the revised draft is ready or must run again.",
+            "relation": "CalibrateRefinement",
+            "semantic_kind": "decision"
+          }
+        ],
+        "output_occurrence": "refinement_status",
+        "output_type": "LeanRefinementDisposition",
+        "profile_basis": "critic_driven_recursive_repair",
+        "projection_kind": "generative_interpretation",
+        "projection_scope": "one complete draft, execution, critique, and localized repair episode",
+        "review_status": "approved",
+        "topology": [
+          "draft",
+          "execution_evidence",
+          {
+            "parallel": [
+              "semantic_assessment",
+              "formal_assessment",
+              "library_assessment"
+            ]
+          },
+          "revised_draft",
+          "refinement_status"
+        ]
+      },
+      "review_status": "approved",
+      "semantic_mode": "mixed",
+      "steps": [
+        {
+          "description": "Apply the source-defined draft.initial hook while retaining its gate and artifact contract.",
+          "effects": [
+            "AI.Generate",
+            "Context.Disclose"
+          ],
+          "failure_type": "ModelFailure",
+          "granularity_rationale": "The draft.initial result is independently gated or consumed before the next named hook.",
+          "id": "draft_initial",
+          "input_type": "LeanFormalizationDraftBrief",
+          "output_provenance": "generated",
+          "output_type": "DraftExecuteRefineDraftInitialArtifact",
+          "reasoning_rationale": "The draft.initial occurrence makes a defeasible model-dependent commitment that later gates must assess.",
+          "reasoning_type": "DraftInitialOccurrence",
+          "relation_type": "FormalizesDraftInitial",
+          "semantic_role": "epistemic",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for draft.initial.",
+              "path": "skills/lean/lean-autoformalization-drafter",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the draft.initial hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined draft.seed hook while retaining its gate and artifact contract.",
+          "effects": [],
+          "failure_type": "Never",
+          "granularity_rationale": "The draft.seed result is independently gated or consumed before the next named hook.",
+          "id": "draft_seed",
+          "input_type": "DraftExecuteRefineDraftInitialArtifact",
+          "output_provenance": "computed",
+          "output_type": "DraftExecuteRefineDraftSeedArtifact",
+          "semantic_role": "operational",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for draft.seed.",
+              "path": "skills/autoformalization/autoformalization-workflow-orchestrator",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the draft.seed hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined execute.initial hook while retaining its gate and artifact contract.",
+          "effects": [],
+          "failure_type": "Never",
+          "granularity_rationale": "The execute.initial result is independently gated or consumed before the next named hook.",
+          "id": "execute_initial",
+          "input_type": "DraftExecuteRefineDraftSeedArtifact",
+          "output_provenance": "computed",
+          "output_type": "DraftExecuteRefineExecuteInitialArtifact",
+          "semantic_role": "operational",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for execute.initial.",
+              "path": "skills/lean/lean-execution-runner",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the execute.initial hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined check.compile hook while retaining its gate and artifact contract.",
+          "effects": [],
+          "failure_type": "Never",
+          "granularity_rationale": "The check.compile result is independently gated or consumed before the next named hook.",
+          "id": "check_compile",
+          "input_type": "DraftExecuteRefineExecuteInitialArtifact",
+          "output_provenance": "computed",
+          "output_type": "DraftExecuteRefineCheckCompileArtifact",
+          "semantic_role": "operational",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for check.compile.",
+              "path": "skills/lean/lean-compile-checker",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the check.compile hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined postformalization.source_anchor_drift_guard hook while retaining its gate and artifact contract.",
+          "effects": [],
+          "failure_type": "Never",
+          "granularity_rationale": "The postformalization.source_anchor_drift_guard result is independently gated or consumed before the next named hook.",
+          "id": "postformalization_source_anchor_drift_guard",
+          "input_type": "DraftExecuteRefineCheckCompileArtifact",
+          "output_provenance": "computed",
+          "output_type": "DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact",
+          "semantic_role": "operational",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for postformalization.source_anchor_drift_guard.",
+              "path": "skills/autoformalization/source-formalization-drift-guard",
+              "resource_dispositions": {
+                "scripts/validate_source_formalization_alignment.py": "linked"
+              },
+              "role": "Canonical owner for the postformalization.source_anchor_drift_guard hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined critique.semantic hook while retaining its gate and artifact contract.",
+          "effects": [
+            "AI.Generate",
+            "Context.Disclose"
+          ],
+          "failure_type": "ModelFailure",
+          "granularity_rationale": "The critique.semantic result is independently gated or consumed before the next named hook.",
+          "id": "critique_semantic",
+          "input_type": "DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact",
+          "output_provenance": "generated",
+          "output_type": "DraftExecuteRefineCritiqueSemanticArtifact",
+          "reasoning_rationale": "The critique.semantic occurrence makes a defeasible model-dependent commitment that later gates must assess.",
+          "reasoning_type": "CritiqueSemanticOccurrence",
+          "relation_type": "TestsCritiqueSemantic",
+          "semantic_role": "epistemic",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for critique.semantic.",
+              "path": "skills/lean/lean-critique-and-judging",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the critique.semantic hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined critique.syntax hook while retaining its gate and artifact contract.",
+          "effects": [
+            "AI.Generate",
+            "Context.Disclose"
+          ],
+          "failure_type": "ModelFailure",
+          "granularity_rationale": "The critique.syntax result is independently gated or consumed before the next named hook.",
+          "id": "critique_syntax",
+          "input_type": "DraftExecuteRefineCritiqueSemanticArtifact",
+          "output_provenance": "generated",
+          "output_type": "DraftExecuteRefineCritiqueSyntaxArtifact",
+          "reasoning_rationale": "The critique.syntax occurrence makes a defeasible model-dependent commitment that later gates must assess.",
+          "reasoning_type": "CritiqueSyntaxOccurrence",
+          "relation_type": "TestsCritiqueSyntax",
+          "semantic_role": "epistemic",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for critique.syntax.",
+              "path": "skills/lean/lean-syntactic-correctness-critic",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the critique.syntax hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined critique.semantic_preservation hook while retaining its gate and artifact contract.",
+          "effects": [
+            "AI.Generate",
+            "Context.Disclose"
+          ],
+          "failure_type": "ModelFailure",
+          "granularity_rationale": "The critique.semantic_preservation result is independently gated or consumed before the next named hook.",
+          "id": "critique_semantic_preservation",
+          "input_type": "DraftExecuteRefineCritiqueSyntaxArtifact",
+          "output_provenance": "generated",
+          "output_type": "DraftExecuteRefineCritiqueSemanticPreservationArtifact",
+          "reasoning_rationale": "The critique.semantic_preservation occurrence makes a defeasible model-dependent commitment that later gates must assess.",
+          "reasoning_type": "CritiqueSemanticPreservationOccurrence",
+          "relation_type": "TestsCritiqueSemanticPreservation",
+          "semantic_role": "epistemic",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for critique.semantic_preservation.",
+              "path": "skills/lean/lean-semantic-preservation-critic",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the critique.semantic_preservation hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined critique.logical_soundness hook while retaining its gate and artifact contract.",
+          "effects": [
+            "AI.Generate",
+            "Context.Disclose"
+          ],
+          "failure_type": "ModelFailure",
+          "granularity_rationale": "The critique.logical_soundness result is independently gated or consumed before the next named hook.",
+          "id": "critique_logical_soundness",
+          "input_type": "DraftExecuteRefineCritiqueSemanticPreservationArtifact",
+          "output_provenance": "generated",
+          "output_type": "DraftExecuteRefineCritiqueLogicalSoundnessArtifact",
+          "reasoning_rationale": "The critique.logical_soundness occurrence makes a defeasible model-dependent commitment that later gates must assess.",
+          "reasoning_type": "CritiqueLogicalSoundnessOccurrence",
+          "relation_type": "TestsCritiqueLogicalSoundness",
+          "semantic_role": "epistemic",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for critique.logical_soundness.",
+              "path": "skills/lean/lean-logical-soundness-critic",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the critique.logical_soundness hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined critique.mathlib_alignment hook while retaining its gate and artifact contract.",
+          "effects": [
+            "AI.Generate",
+            "Context.Disclose"
+          ],
+          "failure_type": "ModelFailure",
+          "granularity_rationale": "The critique.mathlib_alignment result is independently gated or consumed before the next named hook.",
+          "id": "critique_mathlib_alignment",
+          "input_type": "DraftExecuteRefineCritiqueLogicalSoundnessArtifact",
+          "output_provenance": "generated",
+          "output_type": "DraftExecuteRefineCritiqueMathlibAlignmentArtifact",
+          "reasoning_rationale": "The critique.mathlib_alignment occurrence makes a defeasible model-dependent commitment that later gates must assess.",
+          "reasoning_type": "CritiqueMathlibAlignmentOccurrence",
+          "relation_type": "TestsCritiqueMathlibAlignment",
+          "semantic_role": "epistemic",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for critique.mathlib_alignment.",
+              "path": "skills/lean/lean-mathlib-alignment-critic",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the critique.mathlib_alignment hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined critique.suite hook while retaining its gate and artifact contract.",
+          "effects": [
+            "AI.Generate",
+            "Context.Disclose"
+          ],
+          "failure_type": "ModelFailure",
+          "granularity_rationale": "The critique.suite result is independently gated or consumed before the next named hook.",
+          "id": "critique_suite",
+          "input_type": "DraftExecuteRefineCritiqueMathlibAlignmentArtifact",
+          "output_provenance": "generated",
+          "output_type": "DraftExecuteRefineCritiqueSuiteArtifact",
+          "reasoning_rationale": "The critique.suite occurrence makes a defeasible model-dependent commitment that later gates must assess.",
+          "reasoning_type": "CritiqueSuiteOccurrence",
+          "relation_type": "TestsCritiqueSuite",
+          "semantic_role": "epistemic",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for critique.suite.",
+              "path": "skills/lean/lean-critique-suite-orchestrator",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the critique.suite hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined critique.reference_free_monitor hook while retaining its gate and artifact contract.",
+          "effects": [],
+          "failure_type": "Never",
+          "granularity_rationale": "The critique.reference_free_monitor result is independently gated or consumed before the next named hook.",
+          "id": "critique_reference_free_monitor",
+          "input_type": "DraftExecuteRefineCritiqueSuiteArtifact",
+          "output_provenance": "computed",
+          "output_type": "DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact",
+          "semantic_role": "operational",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for critique.reference_free_monitor.",
+              "path": "skills/rfde/reference-free-critic-monitor",
+              "resource_dispositions": {
+                "scripts/monitor_reference_free_critics.py": "linked"
+              },
+              "role": "Canonical owner for the critique.reference_free_monitor hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined refine.formal hook while retaining its gate and artifact contract.",
+          "effects": [
+            "AI.Generate",
+            "Context.Disclose"
+          ],
+          "failure_type": "ModelFailure",
+          "granularity_rationale": "The refine.formal result is independently gated or consumed before the next named hook.",
+          "id": "refine_formal",
+          "input_type": "DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact",
+          "output_provenance": "generated",
+          "output_type": "DraftExecuteRefineRefineFormalArtifact",
+          "reasoning_rationale": "The refine.formal occurrence makes a defeasible model-dependent commitment that later gates must assess.",
+          "reasoning_type": "RefineFormalOccurrence",
+          "relation_type": "FormalizesRefineFormal",
+          "semantic_role": "epistemic",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for refine.formal.",
+              "path": "skills/lean/lean-formal-refinement",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the refine.formal hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined refine.semantic hook while retaining its gate and artifact contract.",
+          "effects": [
+            "AI.Generate",
+            "Context.Disclose"
+          ],
+          "failure_type": "ModelFailure",
+          "granularity_rationale": "The refine.semantic result is independently gated or consumed before the next named hook.",
+          "id": "refine_semantic",
+          "input_type": "DraftExecuteRefineRefineFormalArtifact",
+          "output_provenance": "generated",
+          "output_type": "DraftExecuteRefineRefineSemanticArtifact",
+          "reasoning_rationale": "The refine.semantic occurrence makes a defeasible model-dependent commitment that later gates must assess.",
+          "reasoning_type": "RefineSemanticOccurrence",
+          "relation_type": "FormalizesRefineSemantic",
+          "semantic_role": "epistemic",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for refine.semantic.",
+              "path": "skills/lean/lean-formal-refinement",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the refine.semantic hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined output.denoise hook while retaining its gate and artifact contract.",
+          "effects": [
+            "AI.Generate",
+            "Context.Disclose"
+          ],
+          "failure_type": "ModelFailure",
+          "granularity_rationale": "The output.denoise result is independently gated or consumed before the next named hook.",
+          "id": "output_denoise",
+          "input_type": "DraftExecuteRefineRefineSemanticArtifact",
+          "output_provenance": "generated",
+          "output_type": "DraftExecuteRefineOutputDenoiseArtifact",
+          "reasoning_rationale": "The output.denoise occurrence makes a defeasible model-dependent commitment that later gates must assess.",
+          "reasoning_type": "OutputDenoiseOccurrence",
+          "relation_type": "FormalizesOutputDenoise",
+          "semantic_role": "epistemic",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for output.denoise.",
+              "path": "skills/lean/lean-output-denoiser",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the output.denoise hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined annotate.line_comment_guard hook while retaining its gate and artifact contract.",
+          "effects": [],
+          "failure_type": "Never",
+          "granularity_rationale": "The annotate.line_comment_guard result is independently gated or consumed before the next named hook.",
+          "id": "annotate_line_comment_guard",
+          "input_type": "DraftExecuteRefineOutputDenoiseArtifact",
+          "output_provenance": "computed",
+          "output_type": "DraftExecuteRefineAnnotateLineCommentGuardArtifact",
+          "semantic_role": "operational",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for annotate.line_comment_guard.",
+              "path": "skills/lean/lean-line-annotation",
+              "resource_dispositions": {
+                "scripts/validate_lean_line_comments.py": "linked"
+              },
+              "role": "Canonical owner for the annotate.line_comment_guard hook contract."
+            }
+          ]
+        },
+        {
+          "description": "Apply the source-defined transition.taxonomy hook while retaining its gate and artifact contract.",
+          "effects": [],
+          "failure_type": "Never",
+          "granularity_rationale": "The transition.taxonomy result is independently gated or consumed before the next named hook.",
+          "id": "transition_taxonomy",
+          "input_type": "DraftExecuteRefineAnnotateLineCommentGuardArtifact",
+          "output_provenance": "computed",
+          "output_type": "LeanRefinementOutcome",
+          "semantic_role": "operational",
+          "skills": [
+            {
+              "contribution": "Supplies the source-defined trigger, artifacts, gate, and limitations for transition.taxonomy.",
+              "path": "skills/lean/lean-refinement-taxonomy",
+              "resource_dispositions": {},
+              "role": "Canonical owner for the transition.taxonomy hook contract."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

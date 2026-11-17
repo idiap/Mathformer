@@ -1,0 +1,453 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_control_reasoning_log_coverage_workflow
+version: 1.0.0
+kind: workflow
+description: 'Selected reasoning-log coverage route: ordered single-action dispatch
+  through native admission, preflight, audit and result accumulation.'
+aliases:
+- control.reasoning.log.coverage
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    representation: value
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    representation: value
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  RouteState:
+    representation: value
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          items:
+            type: object
+          maxItems: 1
+      required:
+      - ok
+      - children
+      additionalProperties: false
+  ActionId:
+    schema:
+      type: string
+      const: control:reasoning-log-coverage
+  Boundary:
+    schema:
+      type: object
+      properties:
+        execute:
+          type: boolean
+        payload:
+          type: object
+        snapshot:
+          type: object
+      required:
+      - execute
+      - payload
+      - snapshot
+      additionalProperties: false
+  Flag:
+    schema:
+      type: boolean
+  Match:
+    schema:
+      type: object
+      required:
+      - route
+      - score
+      - matched_terms
+      properties:
+        route:
+          type: object
+          required:
+          - route_id
+          - action_ids
+          properties:
+            route_id:
+              const: control.reasoning.log.coverage
+            action_ids:
+              const:
+              - control:reasoning-log-coverage
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+  Registry:
+    schema:
+      type: object
+      additionalProperties:
+        type: object
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+inputs:
+  context:
+    type: RunContext
+    required: true
+  match:
+    type: Match
+  registry:
+    type: Registry
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coverage_route_initialize
+        operation: mathformer_coverage_route_initialize
+  select_action:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: Match
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coverage_route_select_action
+        operation: mathformer_coverage_route_select_action
+  prepare_action:
+    inputs:
+      action_id:
+        type: ActionId
+      context:
+        type: RunContext
+      registry:
+        type: Registry
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      boundary:
+        type: Boundary
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coverage_route_prepare_action
+        operation: mathformer_coverage_route_prepare_action
+  execute_audit:
+    inputs:
+      boundary:
+        type: Boundary
+      context:
+        type: RunContext
+      registry:
+        type: Registry
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coverage_route_execute_audit
+        operation: mathformer_coverage_route_execute_audit
+  return_boundary:
+    inputs:
+      boundary:
+        type: Boundary
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coverage_route_return_boundary
+        operation: mathformer_coverage_route_return_boundary
+  advance:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+    outputs:
+      state:
+        type: RouteState
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coverage_route_advance
+        operation: mathformer_coverage_route_advance
+  finish:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: Match
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coverage_route_finish
+        operation: mathformer_coverage_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: dispatch
+    kind: loop
+    state_type: RouteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    description: Exactly one registered route action. advance.done is true after its
+      only child, even on failure or keep_going; normal completion occurs at the bound.
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select_action
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: prepare
+        kind: call
+        operation: prepare_action
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          context:
+            ref: inputs.context
+          registry:
+            ref: inputs.registry
+          repository_root:
+            ref: inputs.repository_root
+      - id: action_result
+        kind: switch
+        cases:
+        - id: launch
+          when:
+            ref: steps.prepare.outputs.boundary.execute
+          body:
+            kind: call
+            operation: execute_audit
+            arguments:
+              boundary:
+                ref: steps.prepare.outputs.boundary
+              context:
+                ref: inputs.context
+              registry:
+                ref: inputs.registry
+              repository_root:
+                ref: inputs.repository_root
+        default:
+          kind: call
+          operation: return_boundary
+          arguments:
+            boundary:
+              ref: steps.prepare.outputs.boundary
+        outputs:
+          child:
+            type: HubResult
+            value:
+              ref: selected.outputs.child
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.action_result.outputs.child
+          context:
+            ref: inputs.context
+      outputs:
+        state:
+          type: RouteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RouteState
+        value:
+          ref: loop.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.dispatch.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 6
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked control specification; completion establishes neither
+    scientific truth nor runtime qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes; build_registry; initialize_intent_state; select_intent_action;
+      advance_intent_state; finish_intent_state; run_action; prepare_action; run_leaf_action;
+      prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/control/reasoning-log-schema-guardian/scripts/audit_skill_reasoning_log_coverage.py
+    selector: main; audit; prepare_scan; open_skill; inspect_script; commit_skill;
+      aggregate_scan
+    digest: sha256:f51c8ec2139f4bff8baca8a90fd68942b11afb2279a8891ecd2f1a4bd14890d2
+  - path: scripts/mcp_server.py
+    selector: mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/reasoning_log_coverage_route_tools.py
+    selector: register_reasoning_log_coverage_route_tools
+    digest: sha256:bfb2fc21fe49662644f828341fcaad805500b7717e6508fffb8c1948cc9e45f0
+  - path: scripts/workflow_write_audit.py
+    selector: FileState; snapshot_repository; audit_snapshots
+    digest: sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: reasoning_log_coverage_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Auditor finite scan loops and classifications remain inside the native execute_audit
+    subprocess; every discovered skill and immediate Python script is visited without
+    retries or scan caps.
+  - The 3600-second Lunar budget is a normalization limit; the native action subprocess
+    timeout remains unset. Six operation calls bound this graph, not auditor file
+    visits.
+  - Lunar receipts and provenance supplement source-owned captured stdout, stderr
+    and write audits; optional native logging is unchanged.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: control.reasoning.log.coverage
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: control.reasoning.log.coverage
+      title: Audit reasoning-log coverage for skills
+      action_ids:
+      - control:reasoning-log-coverage
+      skill_routes:
+      - reasoning-log-schema-guardian
+      operator_note: Read-only coverage audit over skills and scripts.
+  mathformer.native_boundary:
+    execution: Registered MCP tools share native route and leaf steps; Lunar compiles
+      and executes the typed graph.
+    effects_status: partial_native_declarations
+    failure_policy: Business failure remains payload data for sticky aggregation;
+      unexpected exceptions terminate execution.
+    scientific_payloads: HubResult is a transport envelope; the audit JSON remains
+      in captured stdout.
+    repository_mount: Use the native repository root, including caller-supplied repository_root
+      when present.
+  mathformer.composition:
+    ordered_actions:
+    - control:reasoning-log-coverage
+    action_workflows:
+    - hub_control_reasoning_log_coverage_workflow
+    keep_going_semantics: Failure stays sticky; one child always completes this route,
+      so keep_going adds no work.
+    selection: Already selected native route; NL scoring and ambiguity resolution
+      remain native.
+# REUSE-IgnoreEnd

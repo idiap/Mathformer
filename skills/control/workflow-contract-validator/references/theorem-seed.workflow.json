@@ -1,0 +1,839 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_kb_generate_seeds_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Source-main projection: parse selections, scan the fixed 13 seeds once in order, write generated candidates as JSONL, report, and return 0.",
+  "aliases": [
+    "kb:generate-seeds"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Arguments": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "representation": "value"
+    },
+    "Options": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "families": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "group",
+                "relation",
+                "set"
+              ]
+            }
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "axiom",
+                "theorem"
+              ]
+            }
+          },
+          "output": {
+            "type": "string"
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "families",
+          "kinds",
+          "output",
+          "json"
+        ],
+        "additionalProperties": false
+      },
+      "representation": "value"
+    },
+    "ScanState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 13
+          },
+          "entries": {
+            "type": "array",
+            "maxItems": 13,
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "index",
+          "entries"
+        ],
+        "additionalProperties": false
+      },
+      "representation": "value"
+    },
+    "Seed": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "id",
+          "family",
+          "kind",
+          "domain_tags",
+          "informal",
+          "latex",
+          "formal",
+          "symbols"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "family": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "axiom",
+              "theorem"
+            ]
+          },
+          "domain_tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "informal": {
+            "type": "string"
+          },
+          "latex": {
+            "type": "string"
+          },
+          "formal": {
+            "type": "string"
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "representation": "value"
+    },
+    "Bool": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Report": {
+      "schema": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "output": {
+                "type": "string"
+              },
+              "entry_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 13
+              },
+              "families": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "kinds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "entry_ids": {
+                "type": "array",
+                "maxItems": 13,
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "ok",
+              "output",
+              "entry_count",
+              "families",
+              "kinds",
+              "entry_ids"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "const": 0,
+        "type": "integer"
+      }
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "extra_args": {
+      "type": "Arguments"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    },
+    "stdout": {
+      "type": "Text",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "parse_initialize": {
+      "inputs": {
+        "extra_args": {
+          "type": "Arguments"
+        }
+      },
+      "outputs": {
+        "options": {
+          "type": "Options"
+        },
+        "state": {
+          "type": "ScanState"
+        },
+        "halted": {
+          "type": "Bool"
+        },
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theorem_seed_parse",
+          "operation": "mathformer_theorem_seed_parse"
+        }
+      }
+    },
+    "inspect_seed": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "state": {
+          "type": "ScanState"
+        }
+      },
+      "outputs": {
+        "seed": {
+          "type": "Seed"
+        },
+        "matches": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theorem_seed_inspect",
+          "operation": "mathformer_theorem_seed_inspect"
+        }
+      }
+    },
+    "retain_advance": {
+      "inputs": {
+        "state": {
+          "type": "ScanState"
+        },
+        "seed": {
+          "type": "Seed"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "ScanState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theorem_seed_retain",
+          "operation": "mathformer_theorem_seed_retain"
+        }
+      }
+    },
+    "skip_advance": {
+      "inputs": {
+        "state": {
+          "type": "ScanState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "ScanState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theorem_seed_skip",
+          "operation": "mathformer_theorem_seed_skip"
+        }
+      }
+    },
+    "scan_done": {
+      "inputs": {
+        "state": {
+          "type": "ScanState"
+        }
+      },
+      "outputs": {
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theorem_seed_done",
+          "operation": "mathformer_theorem_seed_done"
+        }
+      }
+    },
+    "write_report": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "state": {
+          "type": "ScanState"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theorem_seed_write",
+          "operation": "mathformer_theorem_seed_write"
+        }
+      }
+    },
+    "help_report": {
+      "inputs": {
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theorem_seed_help",
+          "operation": "mathformer_theorem_seed_help"
+        }
+      }
+    },
+    "halt_scan": {
+      "inputs": {
+        "state": {
+          "type": "ScanState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "ScanState"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theorem_seed_halt",
+          "operation": "mathformer_theorem_seed_halt"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "parse",
+        "kind": "call",
+        "operation": "parse_initialize",
+        "arguments": {
+          "extra_args": {
+            "ref": "inputs.extra_args"
+          }
+        }
+      },
+      {
+        "id": "scan",
+        "kind": "loop",
+        "description": "One source-ordered traversal of all 13 seeds, unless argparse help terminates before scanning. The help branch carries state without visiting seeds.",
+        "state_type": "ScanState",
+        "initial": {
+          "ref": "steps.parse.outputs.state"
+        },
+        "max_iterations": 13,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "halted",
+              "when": {
+                "ref": "steps.parse.outputs.halted"
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "halt",
+                    "kind": "call",
+                    "operation": "halt_scan",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "state": {
+                    "type": "ScanState",
+                    "value": {
+                      "ref": "steps.halt.outputs.state"
+                    }
+                  },
+                  "done": {
+                    "type": "Bool",
+                    "value": {
+                      "ref": "steps.halt.outputs.done"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "sequence",
+            "steps": [
+              {
+                "id": "inspect",
+                "kind": "call",
+                "operation": "inspect_seed",
+                "arguments": {
+                  "options": {
+                    "ref": "steps.parse.outputs.options"
+                  },
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              },
+              {
+                "id": "select",
+                "kind": "switch",
+                "cases": [
+                  {
+                    "id": "matching",
+                    "when": {
+                      "ref": "steps.inspect.outputs.matches"
+                    },
+                    "body": {
+                      "id": "retain",
+                      "kind": "call",
+                      "operation": "retain_advance",
+                      "arguments": {
+                        "state": {
+                          "ref": "loop.state"
+                        },
+                        "seed": {
+                          "ref": "steps.inspect.outputs.seed"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "default": {
+                  "id": "skip",
+                  "kind": "call",
+                  "operation": "skip_advance",
+                  "arguments": {
+                    "state": {
+                      "ref": "loop.state"
+                    }
+                  }
+                },
+                "outputs": {
+                  "state": {
+                    "type": "ScanState",
+                    "value": {
+                      "ref": "selected.outputs.state"
+                    }
+                  }
+                }
+              },
+              {
+                "id": "done",
+                "kind": "call",
+                "operation": "scan_done",
+                "arguments": {
+                  "state": {
+                    "ref": "steps.select.outputs.state"
+                  }
+                }
+              }
+            ],
+            "outputs": {
+              "state": {
+                "type": "ScanState",
+                "value": {
+                  "ref": "steps.select.outputs.state"
+                }
+              },
+              "done": {
+                "type": "Bool",
+                "value": {
+                  "ref": "steps.done.outputs.done"
+                }
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "ScanState",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Bool",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "ScanState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "help",
+            "when": {
+              "ref": "steps.parse.outputs.halted"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "help_report",
+              "arguments": {
+                "stdout": {
+                  "ref": "steps.parse.outputs.stdout"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "id": "finish",
+          "kind": "call",
+          "operation": "write_report",
+          "arguments": {
+            "options": {
+              "ref": "steps.parse.outputs.options"
+            },
+            "state": {
+              "ref": "steps.scan.outputs.state"
+            }
+          }
+        },
+        "outputs": {
+          "report": {
+            "type": "Report",
+            "value": {
+              "ref": "selected.outputs.report"
+            }
+          },
+          "exit_code": {
+            "type": "ExitCode",
+            "value": {
+              "ref": "selected.outputs.exit_code"
+            }
+          },
+          "stdout": {
+            "type": "Text",
+            "value": {
+              "ref": "selected.outputs.stdout"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.dispatch.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.dispatch.outputs.exit_code"
+        }
+      },
+      "stdout": {
+        "type": "Text",
+        "value": {
+          "ref": "steps.dispatch.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository"
+        ],
+        "write": [
+          "selected_output_path",
+          "artifacts/kb/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "generate_candidates",
+        "write_seed_jsonl"
+      ],
+      "forbidden": [
+        "promote_to_proved",
+        "infer_scientific_truth_from_completion",
+        "bypass_native_controls"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 41
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Generated candidates only; completion establishes neither proof nor promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/premise-kb/premise-kb-theorem-seed-generator/scripts/generate_theorem_axiom_seed_list.py",
+        "selector": "main",
+        "digest": "sha256:a8f9ed08ea6736dd8c82413aeca493a29d5cede5b3a628c9b4f3e54e3cb1f9b7"
+      },
+      {
+        "path": "skills/premise-kb/premise-kb-theorem-seed-generator/scripts/generate_theorem_axiom_seed_list.py",
+        "selector": "make_entry; SEEDS",
+        "digest": "sha256:a8f9ed08ea6736dd8c82413aeca493a29d5cede5b3a628c9b4f3e54e3cb1f9b7"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:kb:generate-seeds; run_action; run_leaf_action; prepare_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/kb/run_premise_kb_skill_scripts.py",
+        "selector": "direct generator invocation",
+        "digest": "sha256:212fdd7cd9ea118bd1f91dfd483c5b8f0212e0d1cc6e25329c5084d2981397ec"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "tests/mcp/run_theorem_seed_workflow_tests.py",
+        "digest": "sha256:fde07f156f2f8d3abc1eaa56d57216fdaf4e507d3763dce8fd3cf6603ef2489b"
+      },
+      {
+        "path": "tests/mcp/fixtures/theorem_seed_original.py.txt",
+        "digest": "sha256:a172e4c8720398c95236502788eed1aa3931a31ca199122ba74ab91790da7c2d"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "digest": "sha256:1c0f7096d5344d9b224f509f53c743b1f9ca57705c4850cb31ab65f06892d7bb"
+      },
+      {
+        "path": "scripts/theorem_seed_tools.py",
+        "digest": "sha256:b052fa10e859e08fbf073c47372b6821fdd393571699a257f88c47f31af2009c"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "The graph projects direct main execution. Hub preflight, subprocess capture and write audits remain in the native controller boundary, outside this projection.",
+      "KB payload helpers remain native calls. Lunar enforces workflow budgets and receipts; the native CLI has no timeout."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "kb:generate-seeds",
+      "owner_skill": "skills/premise-kb/premise-kb-theorem-seed-generator/SKILL.md",
+      "contract": {
+        "id": "kb:generate-seeds",
+        "family": "kb",
+        "kind": "generation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "skills/premise-kb/premise-kb-theorem-seed-generator/scripts/generate_theorem_axiom_seed_list.py"
+        ],
+        "depends_on": [],
+        "writes": [
+          "artifacts/kb/"
+        ],
+        "allows_extra_args": true,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "scripts/mathformer.py run_action -> run_leaf_action launches one subprocess with extra_args unchanged, captures stdout/stderr/returncode, then audits writes.",
+      "prelaunch": "Failed preflight or dry_run returns before launch; action has no dependencies.",
+      "failure_policy": "Nonzero subprocess status means failure; undeclared writes set ok=false and status=undeclared_writes even after returncode 0. Preserve hub envelope when using the native controller.",
+      "effects_status": "Direct main accepts arbitrary --output paths and overwrites them; selected_output_path records that behavior, not hub authorization. Hub audits against artifacts/kb/ after launch.",
+      "timeout_seconds": null,
+      "scope": "Workflow ports describe main's CLI arguments, payload and exit code; hub RunContext and HubResult remain outside this projection."
+    }
+  }
+}

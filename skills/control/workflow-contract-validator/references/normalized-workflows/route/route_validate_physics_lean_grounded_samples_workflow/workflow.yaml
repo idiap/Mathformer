@@ -1,0 +1,463 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_validate_physics_lean_grounded_samples_workflow
+version: 1.0.0
+kind: workflow
+description: Audit a resolved finite selection of grounded Lean physics samples and
+  write its aggregate report.
+aliases:
+- validate.physics.lean.grounded_samples
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Selection:
+    representation: value
+    schema:
+      type:
+      - array
+      - 'null'
+      items:
+        type: string
+      maxItems: 15
+      description: Null or empty selects all 15 curated cases; explicit arguments
+        are capped at 15 in this specialization.
+  RepositoryRoot:
+    schema:
+      type: string
+      minLength: 1
+  Done:
+    schema:
+      type: boolean
+  SuiteState:
+    representation: value
+    schema:
+      type: object
+      required:
+      - pending
+      - completed
+      additionalProperties: false
+      properties:
+        pending:
+          type: array
+          maxItems: 15
+          items:
+            type: object
+            required:
+            - case_id
+            - spec
+            additionalProperties: false
+            properties:
+              case_id:
+                type: string
+              spec:
+                type: object
+                required:
+                - required_terms
+                - minimum_proof_steps
+                - minimum_bridge_declarations
+                properties:
+                  required_terms:
+                    type: array
+                    items:
+                      type: string
+                  minimum_proof_steps:
+                    type: integer
+                  minimum_bridge_declarations:
+                    type: integer
+                  minimum_deep_grounding_signals:
+                    type: integer
+                  required_terms_surface:
+                    enum:
+                    - text
+                    - code
+                  source_features:
+                    type: object
+                    additionalProperties:
+                      type: boolean
+        completed:
+          type: array
+          maxItems: 15
+          items:
+            type: object
+            required:
+            - case_id
+            - ok
+            properties:
+              case_id:
+                type: string
+              ok:
+                type: boolean
+  AuditResult:
+    representation: value
+    schema:
+      type: object
+      required:
+      - case_id
+      - ok
+      - checks
+      - metrics
+      - deep_grounding_signals
+      - missing_terms
+      - forbidden_hits
+      - status
+      - lean_path
+      properties:
+        case_id:
+          type: string
+        ok:
+          type: boolean
+        checks:
+          type: object
+          additionalProperties:
+            type: boolean
+        metrics:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+        deep_grounding_signals:
+          type: array
+          items:
+            type: string
+        missing_terms:
+          type: array
+          items:
+            type: string
+        forbidden_hits:
+          type: array
+          items:
+            type: string
+        status:
+          type:
+          - string
+          - 'null'
+        lean_path:
+          type: string
+  SuiteReport:
+    representation: value
+    schema:
+      type: object
+      required:
+      - schema_version
+      - style
+      - ok
+      - case_count
+      - cases
+      - policy
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: physics_lean_grounded_sample_thoroughness_report
+        ok:
+          type: boolean
+        case_count:
+          type: integer
+          minimum: 1
+          maximum: 15
+        cases:
+          type: array
+          minItems: 1
+          maxItems: 15
+          items:
+            type: object
+            required:
+            - case_id
+            - ok
+            - checks
+            - metrics
+            properties:
+              case_id:
+                type: string
+              ok:
+                type: boolean
+              checks:
+                type: object
+                additionalProperties:
+                  type: boolean
+              metrics:
+                type: object
+                additionalProperties:
+                  type: integer
+        policy:
+          type: object
+inputs:
+  case_ids:
+    type: Selection
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  report:
+    type: SuiteReport
+    value:
+      ref: flow.outputs.report
+operations:
+  initialize_suite:
+    inputs:
+      case_ids:
+        type: Selection
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      state:
+        type: SuiteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_grounded_sample_initialize_suite
+        operation: mathformer_grounded_sample_initialize_suite
+  audit_next:
+    inputs:
+      state:
+        type: SuiteState
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      result:
+        type: AuditResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_grounded_sample_audit_next
+        operation: mathformer_grounded_sample_audit_next
+  append_guard:
+    inputs:
+      state:
+        type: SuiteState
+      result:
+        type: AuditResult
+    outputs:
+      state:
+        type: SuiteState
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_grounded_sample_append_guard
+        operation: mathformer_grounded_sample_append_guard
+  finalize_suite:
+    inputs:
+      state:
+        type: SuiteState
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      report:
+        type: SuiteReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_grounded_sample_finalize_suite
+        operation: mathformer_grounded_sample_finalize_suite
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize_suite
+    arguments:
+      case_ids:
+        ref: inputs.case_ids
+      repository_root:
+        ref: inputs.repository_root
+  - id: traverse
+    kind: loop
+    description: Successful selection contains 1-15 unique cases; advance exactly
+      once per case, including failed audits.
+    state_type: SuiteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 15
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: audit
+        kind: call
+        operation: audit_next
+        arguments:
+          state:
+            ref: loop.state
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: append_guard
+        arguments:
+          state:
+            ref: loop.state
+          result:
+            ref: steps.audit.outputs.result
+      outputs:
+        state:
+          type: SuiteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Done
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: SuiteState
+        value:
+          ref: loop.state
+  - id: finalize
+    kind: call
+    operation: finalize_suite
+    arguments:
+      state:
+        ref: steps.traverse.outputs.state
+      repository_root:
+        ref: inputs.repository_root
+  outputs:
+    report:
+      type: SuiteReport
+      value:
+        ref: steps.finalize.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/physics_lean/grounded_sample_thoroughness/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - audit_grounded_samples
+    - write_audit_report
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+    - promote_theorems
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 32
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked audit results; acceptance does not establish Lean compilation
+    or scientific truth.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/physics_lean/run_grounded_sample_thoroughness.py
+    selector: run_suite
+    digest: sha256:4c2910e1a78b95a7215146cbe03f33b122efb68137cb4c00dcec5937516b7271
+  - path: tests/physics_lean/run_grounded_sample_thoroughness.py
+    selector: initialize_suite; selected_case_specs; audit_next; audit_case; checker_report;
+      run_json; append_guard; finalize_suite
+    digest: sha256:4c2910e1a78b95a7215146cbe03f33b122efb68137cb4c00dcec5937516b7271
+  - path: scripts/mathformer.py
+    selector: build_intent_routes/route:validate.physics.lean.grounded_samples; run_intent_match;
+      run_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/grounded_sample_tools.py
+    selector: register_grounded_sample_tools
+    digest: sha256:97e139f2e564b5dbad07f9011fb92441ff38ec96a7068049f1399ac15bf50991
+  - path: scripts/mcp_server.py
+    selector: register_grounded_sample_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: grounded_samples_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Explicit case arguments are restricted to at most 15; the native suite has no
+    case cap or subprocess timeout.
+  - The 3600-second and 32-call limits are descriptor budgets, not native execution
+    bounds.
+  - Mandatory v1 receipts/digests are host requirements; this projection does not
+    upgrade native reporting.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: validate.physics.lean.grounded_samples
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: validate.physics.lean.grounded_samples
+      title: Validate grounded Lean physics samples
+  mathformer.composition:
+    ordered_actions:
+    - physics-lean:grounded-sample-thoroughness
+    action_workflows:
+    - hub_physics_lean_grounded_sample_thoroughness_workflow
+    selection: Already-selected route; this graph expands its run_suite execution
+      source.
+    route_state: run_intent_match accumulates children and sticky ok; keep_going cannot
+      change traversal with one action.
+  mathformer.native_boundary:
+    execution: CLI ask and MCP mathformer_run_workflow retain the existing route controller.
+      This graph executes its selected run_suite via registered native helper ports.
+    suite_return: A completed report with ok false is returned normally; it is not
+      an operation failure.
+    cli_envelope: main subsequently calls emit_report, optionally writes another output,
+      prints the report and exits 0 iff report.ok, otherwise 1.
+    bound_behavior: With admitted inputs done is true by iteration 15, so native normal
+      finalization is preserved at the bound; exhaustion is unreachable.
+    iteration: No repair, retry or convergence loop; traversal stops when pending
+      is empty.
+    paths: Preserve source paths literally; audit_case reads MathformerPhysicsLib/Lean
+      while checker_report passes libraries/MathformerPhysicsLib/Lean.
+  mathformer.operation_semantics:
+    initialize_suite: Source initialize_suite/selected_case_specs resolves all cases
+      before auditing, packs ordered pending case/spec pairs and empty completed results.
+      Empty selection uses CASE_SPECS; dictionary assignment deduplicates IDs in order.
+      Explicit IDs use curated specs or an existing source record; unknown IDs abort.
+      Generated specs require proof/declaration minima 4/8 for operator cues, else
+      2/4; deep-signal minimum is 2 for operator/calculus cues, else 1, with terms
+      checked on code. Successful initialization is nonempty.
+    audit_next: 'Source audit_next/audit_case reads the first pending Lean file, then
+      invokes checker_report with --recursive-frontier-count 0 --expect-complete and
+      optional source record. All checks must pass: complete_autoformalization with
+      ok true, zero blocked obligations and reported frontier, recursive grounding
+      header, required terms, no FORBIDDEN_SHORTCUTS, spec proof/declaration depth,
+      at least four generative probes, empty repair frontier, sufficient deep signals
+      and no shallow operator wrapper. Check failures return ok false; unhandled file/JSON/subprocess
+      errors abort. run_json accepts a nonzero subprocess exit with JSON-object stdout
+      for auditing. This operation does not compile Lean.'
+    append_guard: Source append_guard removes the first pending item, appends result
+      to completed, returns the packed state and done = not pending. Failed audits
+      remain recorded and do not stop traversal.
+    finalize_suite: Source finalize_suite computes ok = all completed results' ok,
+      case_count and policy, then writes artifacts/physics_lean/grounded_sample_thoroughness/report.json
+      under repository_root and returns the payload, including when ok is false. Write
+      errors abort.
+# REUSE-IgnoreEnd

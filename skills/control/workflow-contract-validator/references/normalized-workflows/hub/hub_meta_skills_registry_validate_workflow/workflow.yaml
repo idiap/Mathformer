@@ -1,0 +1,378 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_meta_skills_registry_validate_workflow
+version: 1.0.0
+kind: workflow
+description: Validate sorted task registries using the native shared initialization,
+  validation/accumulation and report steps. Admits at most 10000 discovered registries.
+aliases:
+- meta-skills:registry-validate
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  SourceDomain:
+    schema:
+      type: object
+      required:
+      - discovered_registry_count
+      properties:
+        discovered_registry_count:
+          type: integer
+          minimum: 0
+          maximum: 10000
+      additionalProperties: false
+      description: 'Admission constraint: discovered_registry_count equals actual
+        sorted native discovery in repository_root. The MCP adapter verifies equality
+        and the 10000-file ceiling; this is not a native CLI argument.'
+  Boolean:
+    schema:
+      type: boolean
+  RegistryState:
+    schema:
+      type: object
+      required:
+      - schema
+      - actions
+      - registry_paths
+      - cursor
+      - results
+      - all_findings
+      - repository_root
+      - output_path
+      - has_work
+      properties:
+        schema:
+          type: object
+        actions:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        registry_paths:
+          type: array
+          items:
+            type: string
+          maxItems: 10000
+        cursor:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        results:
+          type: array
+          items:
+            type: object
+        all_findings:
+          type: array
+          items:
+            type: object
+        repository_root:
+          type: string
+        output_path:
+          type: string
+        has_work:
+          type: boolean
+      additionalProperties: false
+      description: Schema/action IDs and sorted paths are fixed; cursor represents
+        native iterator position. Results and all_findings carry across visits; findings
+        are local to validate_registry.
+  ValidationReport:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - style
+      - ok
+      - registry_count
+      - results
+      - findings
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: mathformer_meta_task_registry_validation
+        ok:
+          type: boolean
+        registry_count:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        results:
+          type: array
+          items:
+            type: object
+            required:
+            - path
+            - ok
+            - findings
+            properties:
+              path:
+                type: string
+              ok:
+                type: boolean
+              findings:
+                type: array
+                items:
+                  type: object
+            additionalProperties: false
+        findings:
+          type: array
+          items:
+            type: object
+      additionalProperties: false
+  RepositoryRoot:
+    schema:
+      type: string
+      description: Repository context inside the service repository. Empty string
+        selects the service repository. Standard native paths are resolved underneath
+        this root.
+inputs:
+  domain:
+    type: SourceDomain
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  result:
+    type: ValidationReport
+    value:
+      ref: steps.report.outputs.result
+operations:
+  initialize:
+    inputs:
+      domain:
+        type: SourceDomain
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      state:
+        type: RegistryState
+      has_work:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_task_registry_initialize
+        operation: mathformer_task_registry_initialize
+  validate_accumulate:
+    inputs:
+      state:
+        type: RegistryState
+    outputs:
+      state:
+        type: RegistryState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_task_registry_validate_accumulate
+        operation: mathformer_task_registry_validate_accumulate
+  empty_state:
+    inputs:
+      state:
+        type: RegistryState
+    outputs:
+      state:
+        type: RegistryState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_task_registry_empty_state
+        operation: mathformer_task_registry_empty_state
+  write_report:
+    inputs:
+      state:
+        type: RegistryState
+    outputs:
+      result:
+        type: ValidationReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_task_registry_write_report
+        operation: mathformer_task_registry_write_report
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments:
+      domain:
+        ref: inputs.domain
+      repository_root:
+        ref: inputs.repository_root
+  - kind: loop
+    state_type: RegistryState
+    initial:
+      ref: steps.initialize.outputs.state
+    body:
+      kind: switch
+      cases:
+      - id: nonempty
+        when:
+          ref: loop.state.has_work
+        body:
+          kind: call
+          operation: validate_accumulate
+          arguments:
+            state:
+              ref: loop.state
+      default:
+        kind: call
+        operation: empty_state
+        arguments:
+          state:
+            ref: loop.state
+      outputs:
+        state:
+          type: RegistryState
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 10000
+    on_exhausted: fail
+    outputs:
+      state:
+        type: RegistryState
+        value:
+          ref: body.outputs.state
+    description: One visit per sorted path; empty discovery forwards state once through
+      empty_state. The shared switch inside the loop preserves native zero validation
+      calls for empty discovery and lets Lunar scope exhaustion at the sequence boundary.
+    id: traverse
+  - id: report
+    kind: call
+    operation: write_report
+    arguments:
+      state:
+        ref: steps.traverse.outputs.state
+  outputs:
+    result:
+      type: ValidationReport
+      value:
+        ref: steps.report.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      write:
+      - artifacts/meta_skills/task_registry_validation.json
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - inspect_task_registries
+    - write_validation_report
+    forbidden:
+    - execute_declared_validator_commands
+    - promote_generated_skills
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 10002
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Registry validation only. A returned ok=false report is a normal
+    run() return; exceptions abort. No scientific validity or promotion is established.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: meta_skills/scripts/validate_task_registries.py
+    digest: sha256:e94f0239dcf7f05a2696b32e27993378a9371e19a25fa2ec1abf45b6776c8960
+    selector: run; initialize; validate_accumulate; validate_registry; write_report;
+      main
+  - path: scripts/mathformer.py
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/meta_skills/run_meta_skill_suite.py
+    digest: sha256:06c35f2abb57248a44871776621cfe6612c81e24ad802517780d88a29a8e9fab
+  - path: scripts/task_registry_tools.py
+    digest: sha256:8d38acf8558097ef519eba4bbd18d8ad1cccd85cc7747aad8daca8ce66992099
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Native run has no explicit iteration/time budget. This specialization admits at
+    most 10000 discovered files; the adapter verifies count equality. Lunar enforces
+    the authored time and operation ceilings. Native helper collection loops retain
+    their actual collection bounds.
+  - Selected graph models run(), not CLI or hub transport. main prints JSON or PASS/FAIL
+    and exits 0/1. Hub preflight/dry-run and write audit remain outside this graph.
+  - Helper internals remain native; coverage is partial. Lunar provides execution
+    receipts and provenance; the native source owns report serialization and findings.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: meta-skills:registry-validate
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: meta-skills:registry-validate
+      family: meta_skills
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - meta_skills/scripts/validate_task_registries.py
+      - --json
+      depends_on: []
+      required_paths:
+      - meta_skills/schemas/task_registry.schema.json
+      - meta_skills/scripts/validate_task_registries.py
+      writes:
+      - artifacts/meta_skills/task_registry_validation.json
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Existing dependency-free hub action runs this script through run_action
+      -> run_leaf_action; the test suite also invokes the script directly.
+    failure_policy: Preflight errors or dry-run skip launch. Otherwise launch once
+      without configured timeout, retain CLI exit status, then audit writes; audit
+      failure forces hub ok=false. Uncaught native errors are not retried.
+    effects_status: source-inspected local validation/report writes
+    scientific_payloads: ValidationReport is run()'s payload, not the HubResult transport
+      envelope.
+# REUSE-IgnoreEnd

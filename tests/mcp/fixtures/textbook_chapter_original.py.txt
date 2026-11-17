@@ -1,0 +1,1341 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+#
+# Intent:
+#   Tell coding agents what context to load, what invariants to preserve, and how to validate their work.
+#
+# Function:
+#   Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Build and optionally run chapter-by-chapter textbook autoformalization plans."""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+import zipfile
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+EXTRACT_SCRIPT = (
+    REPO_ROOT
+    / "skills/latex-textbook/latex-archive-theory-extractor/scripts/extract_latex_theory.py"
+)
+ORGANIZE_SCRIPT = (
+    REPO_ROOT
+    / "skills/latex-textbook/textbook-theory-tex-organizer/scripts/organize_theory_tex.py"
+)
+BATCH_SCRIPT = (
+    REPO_ROOT
+    / "skills/latex-textbook/textbook-autoformalization-batch-orchestrator/scripts/build_textbook_autoformalization_batch.py"
+)
+RUN_BATCH_SCRIPT = (
+    REPO_ROOT
+    / "skills/latex-textbook/textbook-autoformalization-batch-orchestrator/scripts/run_textbook_autoformalization_batch.py"
+)
+
+ALL_MATH_OBJECT_KINDS: Set[str] = {
+    "definition",
+    "theorem",
+    "lemma",
+    "corollary",
+    "proposition",
+    "assumption",
+    "notation",
+    "claim",
+    "condition",
+    "construction",
+    "criterion",
+    "conclusion",
+    "axiom",
+    "conjecture",
+    "case",
+    "example",
+    "exercise",
+    "problem",
+    "remark",
+    "summary",
+}
+
+PROSE_CUE_RE = re.compile(
+    r"(?m)^(?P<cue>"
+    r"(?:Lemma|Theorem|Corollary|Proposition|Definition|Claim|Axiom|Conjecture|Assumption|Remark|Example|Problem|Exercise)"
+    r"(?:\s+[A-Za-z0-9().-]+)?(?:[.:)]|\s+[A-Z(])"
+    r"|The\s+[A-Z][^\n]{0,90}?(?:Theorem|Lemma|Corollary|Proposition|Principle|CBT)(?:\d+)?"
+    r")(?P<rest>[^\n]*)"
+)
+PROOF_CUE_RE = re.compile(r"(?m)^Proof(?P<title>\s*\([^)]*\))?\s*:")
+SECTION_NUMBER_RE = re.compile(r"^\d+(?:\.\d+)*$")
+LATEX_CHAPTER_RE = re.compile(r"\\chapter\*?\{([^{}]+)\}")
+LATEX_SECTION_RE = re.compile(r"\\section\*?\{([^{}]+)\}")
+
+
+def utc_now() -> str:
+    """Document the responsibility of ``utc_now``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``utc_now`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return datetime.now(timezone.utc).isoformat()
+
+
+def slugify(value: str, default: str = "chapter") -> str:
+    """Document the responsibility of ``slugify``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``slugify`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", value).strip("-").lower()
+    return slug[:96] or default
+
+
+def load_json(path: Path) -> Dict[str, Any]:
+    """Document the responsibility of ``load_json``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Load data from the declared source while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_json(path: Path, value: Dict[str, Any]) -> None:
+    """Document the responsibility of ``write_json``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def archive_stem(path: Path) -> str:
+    """Document the responsibility of ``archive_stem``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``archive_stem`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    name = path.name
+    for suffix in (".tar.gz", ".tgz", ".zip", ".tar"):
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return path.stem
+
+
+def read_text(path: Path) -> str:
+    """Document the responsibility of ``read_text``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Load data from the declared source while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    for encoding in ("utf-8", "latin-1"):
+        try:
+            return path.read_text(encoding=encoding)
+        except UnicodeDecodeError:
+            continue
+    return path.read_text(errors="replace")
+
+
+def line_number_at(text: str, pos: int) -> int:
+    """Document the responsibility of ``line_number_at``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``line_number_at`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return text.count("\n", 0, pos) + 1
+
+
+def line_offsets(text: str) -> List[int]:
+    """Document the responsibility of ``line_offsets``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``line_offsets`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    offsets = [0]
+    for match in re.finditer(r"\n", text):
+        offsets.append(match.end())
+    return offsets
+
+
+def offset_for_line(offsets: Sequence[int], line_no: int) -> int:
+    """Document the responsibility of ``offset_for_line``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``offset_for_line`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if line_no <= 1:
+        return 0
+    if line_no - 1 >= len(offsets):
+        return offsets[-1]
+    return offsets[line_no - 1]
+
+
+def clean_title(value: str) -> str:
+    """Document the responsibility of ``clean_title``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``clean_title`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    text = re.sub(r"\\[A-Za-z]+\*?(?:\[[^\]]*\])?\{([^{}]*)\}", r"\1", value)
+    text = text.replace("{", "").replace("}", "")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def prose_kind(cue: str) -> str:
+    """Document the responsibility of ``prose_kind``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``prose_kind`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    low = cue.lower()
+    for key, kind in (
+        ("lemma", "lemma"),
+        ("theorem", "theorem"),
+        ("corollary", "corollary"),
+        ("proposition", "proposition"),
+        ("definition", "definition"),
+        ("claim", "claim"),
+        ("axiom", "axiom"),
+        ("conjecture", "conjecture"),
+        ("assumption", "assumption"),
+        ("remark", "remark"),
+        ("example", "example"),
+        ("problem", "problem"),
+        ("exercise", "exercise"),
+        ("principle", "definition"),
+    ):
+        if key in low:
+            return kind
+    return "theorem"
+
+
+def is_false_positive_prose_cue(text: str) -> bool:
+    """Document the responsibility of ``is_false_positive_prose_cue``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``is_false_positive_prose_cue`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    low = text.lower().strip()
+    false_starts = (
+        "theorem in ",
+        "lemma in ",
+        "corollary in ",
+        "proposition in ",
+        "definition in ",
+    )
+    if low.startswith(false_starts):
+        return True
+    historical_phrases = (
+        " theorem was asserted",
+        " theorem was proved",
+        " theorem was used",
+        " theorem makes use",
+        " theorem in the proof",
+        " theorem and remarked",
+        " lemma is applicable",
+        " lemma and ",
+        " proof of ",
+    )
+    return any(phrase in low for phrase in historical_phrases)
+
+
+def chapter_title_from_text(path: Path, text: str) -> str:
+    """Document the responsibility of ``chapter_title_from_text``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``chapter_title_from_text`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    match = LATEX_CHAPTER_RE.search(text)
+    if match:
+        return clean_title(match.group(1))
+    return path.stem.replace("_", " ").title()
+
+
+def section_contexts(text: str) -> List[Tuple[int, str]]:
+    """Document the responsibility of ``section_contexts``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``section_contexts`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    contexts: List[Tuple[int, str]] = []
+    for match in LATEX_SECTION_RE.finditer(text):
+        contexts.append((match.start(), clean_title(match.group(1))))
+    lines = text.splitlines()
+    offsets = line_offsets(text)
+    for idx, line in enumerate(lines[:-1], start=1):
+        stripped = line.strip()
+        if SECTION_NUMBER_RE.match(stripped):
+            title = clean_title(lines[idx].strip())
+            if title and not title.startswith("\\"):
+                contexts.append((offset_for_line(offsets, idx), f"{stripped} {title}"))
+    return sorted(contexts)
+
+
+def context_at(contexts: Sequence[Tuple[int, str]], pos: int) -> Optional[str]:
+    """Document the responsibility of ``context_at``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``context_at`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    section: Optional[str] = None
+    for section_pos, title in contexts:
+        if section_pos > pos:
+            break
+        section = title
+    return section
+
+
+def source_ordered_chapter_files(source_root: Path) -> List[Path]:
+    """Document the responsibility of ``source_ordered_chapter_files``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``source_ordered_chapter_files`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    chapters_dir = source_root / "chapters"
+    if chapters_dir.exists():
+        return sorted(chapters_dir.glob("*.tex"))
+    return sorted(source_root.rglob("*.tex"))
+
+
+def build_prose_theory_report(
+    source_root: Path, output_dir: Path
+) -> Optional[Dict[str, Any]]:
+    """Document the responsibility of ``build_prose_theory_report``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Build the local data structure or artifact used by the next workflow stage.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    chapter_files = source_ordered_chapter_files(source_root)
+    if not chapter_files:
+        return None
+
+    units: List[Dict[str, Any]] = []
+    next_index = 1
+    for path in chapter_files:
+        text = read_text(path)
+        chapter = chapter_title_from_text(path, text)
+        contexts = section_contexts(text)
+        events: List[Tuple[int, str, re.Match[str]]] = []
+        events.extend(
+            (match.start(), "statement", match) for match in PROSE_CUE_RE.finditer(text)
+        )
+        events.extend(
+            (match.start(), "proof", match) for match in PROOF_CUE_RE.finditer(text)
+        )
+        events.sort(key=lambda item: item[0])
+        if not events:
+            continue
+        for idx, (start, event_kind, match) in enumerate(events):
+            end = events[idx + 1][0] if idx + 1 < len(events) else len(text)
+            block = text[start:end].strip()
+            if not block:
+                continue
+            line_start = line_number_at(text, start)
+            line_end = line_number_at(text, end)
+            if event_kind == "proof":
+                title = f"Proof near {chapter}"
+                kind = "proof"
+                env = "prose-proof"
+            else:
+                cue = clean_title(match.group("cue") + (match.group("rest") or ""))
+                if is_false_positive_prose_cue(cue):
+                    continue
+                title = cue[:160] or "Prose mathematical statement"
+                kind = prose_kind(match.group("cue"))
+                env = "prose-statement"
+            unit_id = f"prose-unit-{next_index:05d}-{slugify(title, default=kind)}"
+            next_index += 1
+            units.append(
+                {
+                    "id": unit_id,
+                    "kind": kind,
+                    "env": env,
+                    "title": title,
+                    "label": None,
+                    "labels": [],
+                    "file": path.relative_to(source_root).as_posix(),
+                    "line_start": line_start,
+                    "line_end": line_end,
+                    "chapter": chapter,
+                    "section": context_at(contexts, start),
+                    "subsection": None,
+                    "subsubsection": None,
+                    "latex": block,
+                    "body": block,
+                    "references": [],
+                    "citations": [],
+                    "proof_for_unit_id": None,
+                    "proof_for_label": None,
+                    "paired_proof_unit_ids": [],
+                    "source_order": len(units) + 1,
+                    "extraction_mode": "prose_cue_fallback",
+                }
+            )
+
+    pair_prose_proofs(units)
+    kind_counts = Counter(unit["kind"] for unit in units)
+    proof_count = kind_counts.get("proof", 0)
+    paired_proof_count = sum(
+        1 for unit in units if unit["kind"] == "proof" and unit.get("proof_for_unit_id")
+    )
+    report = {
+        "schema_version": 1,
+        "created_at": utc_now(),
+        "archive": None,
+        "source_root": str(source_root),
+        "output_dir": str(output_dir),
+        "extraction_mode": "prose_cue_fallback",
+        "summary": {
+            "tex_file_count": len(chapter_files),
+            "unit_count": len(units),
+            "proof_count": proof_count,
+            "paired_proof_count": paired_proof_count,
+            "unpaired_proof_count": proof_count - paired_proof_count,
+            "kind_counts": dict(sorted(kind_counts.items())),
+        },
+        "tex_files": [
+            path.relative_to(source_root).as_posix() for path in chapter_files
+        ],
+        "units": units,
+    }
+    return report
+
+
+def pair_prose_proofs(units: List[Dict[str, Any]]) -> None:
+    """Document the responsibility of ``pair_prose_proofs``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``pair_prose_proofs`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    previous_statement_by_chapter: Dict[str, Dict[str, Any]] = {}
+    for unit in sorted(units, key=lambda item: item.get("source_order", 10**9)):
+        if unit["kind"] == "proof":
+            target = previous_statement_by_chapter.get(unit.get("chapter") or "")
+            if target is not None:
+                unit["proof_for_unit_id"] = target["id"]
+                target.setdefault("paired_proof_unit_ids", []).append(unit["id"])
+            continue
+        if unit["kind"] not in {"remark", "example", "exercise", "problem", "summary"}:
+            previous_statement_by_chapter[unit.get("chapter") or ""] = unit
+
+
+def run_command(cmd: Sequence[str], *, timeout_sec: int = 600) -> Dict[str, Any]:
+    """Document the responsibility of ``run_command``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    proc = subprocess.run(
+        list(cmd),
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        timeout=timeout_sec,
+    )
+    return {
+        "cmd": list(cmd),
+        "ok": proc.returncode == 0,
+        "returncode": proc.returncode,
+        "stdout": proc.stdout[-8000:],
+        "stderr": proc.stderr[-8000:],
+    }
+
+
+def run_required(cmd: Sequence[str], *, timeout_sec: int = 600) -> Dict[str, Any]:
+    """Document the responsibility of ``run_required``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    result = run_command(cmd, timeout_sec=timeout_sec)
+    if not result["ok"]:
+        raise RuntimeError(
+            "command failed:\n"
+            + " ".join(result["cmd"])
+            + "\nSTDOUT:\n"
+            + result["stdout"]
+            + "\nSTDERR:\n"
+            + result["stderr"]
+        )
+    return result
+
+
+def chapter_title(unit: Dict[str, Any]) -> str:
+    """Document the responsibility of ``chapter_title``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``chapter_title`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return (
+        unit.get("chapter")
+        or Path(unit.get("file", "front-matter")).stem
+        or "front-matter"
+    )
+
+
+def chapter_inventory(units: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``chapter_inventory``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``chapter_inventory`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for unit in units:
+        grouped[chapter_title(unit)].append(unit)
+
+    chapters: List[Dict[str, Any]] = []
+    for index, (title, chapter_units) in enumerate(
+        sorted(
+            grouped.items(),
+            key=lambda item: min(unit.get("source_order", 10**9) for unit in item[1]),
+        ),
+        start=1,
+    ):
+        kind_counts = Counter(unit.get("kind") for unit in chapter_units)
+        proof_count = kind_counts.get("proof", 0)
+        paired_proof_count = sum(
+            1
+            for unit in chapter_units
+            if unit.get("kind") == "proof" and unit.get("proof_for_unit_id")
+        )
+        chapters.append(
+            {
+                "chapter_index": index,
+                "chapter_title": title,
+                "chapter_id": f"chapter-{index:03d}-{slugify(title)}",
+                "first_source_order": min(
+                    unit.get("source_order", 10**9) for unit in chapter_units
+                ),
+                "unit_count": len(chapter_units),
+                "proof_count": proof_count,
+                "paired_proof_count": paired_proof_count,
+                "unpaired_proof_count": proof_count - paired_proof_count,
+                "kind_counts": dict(sorted(kind_counts.items())),
+            }
+        )
+    return chapters
+
+
+def select_chapters(
+    chapters: Sequence[Dict[str, Any]],
+    *,
+    chapter_id: Optional[str],
+    chapter_index: Optional[int],
+    max_chapters: Optional[int],
+) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``select_chapters``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``select_chapters`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    selected = list(chapters)
+    if chapter_id:
+        needle = chapter_id.lower()
+        selected = [
+            chapter
+            for chapter in selected
+            if chapter["chapter_id"].lower() == needle
+            or needle in chapter["chapter_title"].lower()
+        ]
+        if not selected:
+            raise ValueError(f"no chapter matched {chapter_id!r}")
+    if chapter_index is not None:
+        selected = [
+            chapter for chapter in selected if chapter["chapter_index"] == chapter_index
+        ]
+        if not selected:
+            raise ValueError(f"no chapter index {chapter_index}")
+    if max_chapters is not None:
+        selected = selected[:max_chapters]
+    return selected
+
+
+def chapter_units(
+    report: Dict[str, Any], chapter: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``chapter_units``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``chapter_units`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    units = report.get("units", [])
+    selected_ids: Set[str] = {
+        unit["id"] for unit in units if chapter_title(unit) == chapter["chapter_title"]
+    }
+    # Keep paired targets/proofs together even when extraction context is imperfect.
+    changed = True
+    by_id = {unit["id"]: unit for unit in units}
+    while changed:
+        changed = False
+        for unit in units:
+            if unit["id"] in selected_ids:
+                target_id = unit.get("proof_for_unit_id")
+                if target_id and target_id in by_id and target_id not in selected_ids:
+                    selected_ids.add(target_id)
+                    changed = True
+                for proof_id in unit.get("paired_proof_unit_ids", []):
+                    if proof_id in by_id and proof_id not in selected_ids:
+                        selected_ids.add(proof_id)
+                        changed = True
+    return [unit for unit in units if unit["id"] in selected_ids]
+
+
+def write_chapter_theory_report(
+    full_report: Dict[str, Any],
+    chapter: Dict[str, Any],
+    output_dir: Path,
+) -> Path:
+    """Document the responsibility of ``write_chapter_theory_report``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    units = chapter_units(full_report, chapter)
+    kind_counts = Counter(unit.get("kind") for unit in units)
+    report = {
+        "schema_version": full_report.get("schema_version", 1),
+        "created_at": utc_now(),
+        "source_root": full_report.get("source_root"),
+        "archive": full_report.get("archive"),
+        "chapter": chapter,
+        "summary": {
+            "unit_count": len(units),
+            "proof_count": kind_counts.get("proof", 0),
+            "paired_proof_count": sum(
+                1
+                for unit in units
+                if unit.get("kind") == "proof" and unit.get("proof_for_unit_id")
+            ),
+            "kind_counts": dict(sorted(kind_counts.items())),
+        },
+        "units": units,
+    }
+    path = output_dir / chapter["chapter_id"] / "theory_units.json"
+    write_json(path, report)
+    return path
+
+
+def parse_json_from_stdout(stdout: str) -> Dict[str, Any]:
+    """Document the responsibility of ``parse_json_from_stdout``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    stripped = stdout.strip()
+    if not stripped:
+        return {}
+    return json.loads(stripped)
+
+
+def ensure_theory_units(
+    args: argparse.Namespace, output_dir: Path
+) -> Tuple[Path, Dict[str, Any], List[Dict[str, Any]]]:
+    """Document the responsibility of ``ensure_theory_units``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``ensure_theory_units`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    commands: List[Dict[str, Any]] = []
+    if args.theory_units_json:
+        theory_path = args.theory_units_json.resolve()
+        report = load_json(theory_path)
+        if report.get("summary", {}).get("unit_count", 0) == 0 and report.get(
+            "source_root"
+        ):
+            fallback = build_prose_theory_report(
+                Path(report["source_root"]), theory_path.parent
+            )
+            if fallback and fallback.get("summary", {}).get("unit_count", 0) > 0:
+                fallback["archive"] = report.get("archive")
+                fallback_path = theory_path.parent / "theory_units.prose_fallback.json"
+                write_json(fallback_path, fallback)
+                return fallback_path, fallback, commands
+        return theory_path, report, commands
+
+    extraction_dir = output_dir / "extraction"
+    cmd = [
+        sys.executable,
+        str(EXTRACT_SCRIPT),
+        "--output-dir",
+        str(extraction_dir),
+        "--json",
+    ]
+    if args.archive:
+        cmd.extend(["--archive", str(args.archive.resolve())])
+    elif args.source_dir:
+        cmd.extend(["--source-dir", str(args.source_dir.resolve())])
+    else:
+        raise ValueError("provide --archive, --source-dir, or --theory-units-json")
+    result = run_required(cmd, timeout_sec=args.timeout_sec)
+    commands.append(result)
+    summary = parse_json_from_stdout(result["stdout"])
+    theory_path = Path(
+        summary.get("report_file") or extraction_dir / "theory_units.json"
+    ).resolve()
+    report = load_json(theory_path)
+    if report.get("summary", {}).get("unit_count", 0) == 0 and report.get(
+        "source_root"
+    ):
+        fallback = build_prose_theory_report(
+            Path(report["source_root"]), extraction_dir
+        )
+        if fallback and fallback.get("summary", {}).get("unit_count", 0) > 0:
+            fallback["archive"] = report.get("archive")
+            fallback_path = extraction_dir / "theory_units.prose_fallback.json"
+            write_json(fallback_path, fallback)
+            return fallback_path, fallback, commands
+    return theory_path, report, commands
+
+
+def build_chapter_plan(
+    *,
+    args: argparse.Namespace,
+    output_dir: Path,
+    theory_path: Path,
+    full_report: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Document the responsibility of ``build_chapter_plan``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Build the local data structure or artifact used by the next workflow stage.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    chapters = chapter_inventory(full_report.get("units", []))
+    selected = select_chapters(
+        chapters,
+        chapter_id=args.chapter_id,
+        chapter_index=args.chapter_index,
+        max_chapters=args.max_chapters,
+    )
+    chapter_entries: List[Dict[str, Any]] = []
+    commands: List[Dict[str, Any]] = []
+
+    for chapter in selected:
+        chapter_dir = output_dir / "chapters" / chapter["chapter_id"]
+        theory_report_path = write_chapter_theory_report(
+            full_report, chapter, output_dir / "chapters"
+        )
+
+        organized_dir = chapter_dir / "organized"
+        organize_result = run_required(
+            [
+                sys.executable,
+                str(ORGANIZE_SCRIPT),
+                "--theory-units-json",
+                str(theory_report_path),
+                "--output-dir",
+                str(organized_dir),
+                "--group-by",
+                "section",
+                "--json",
+            ],
+            timeout_sec=args.timeout_sec,
+        )
+        commands.append(organize_result)
+        organize_summary = parse_json_from_stdout(organize_result["stdout"])
+        organized_manifest = Path(organize_summary["manifest_file"]).resolve()
+
+        batch_dir = chapter_dir / "autoformalization_batch"
+        batch_cmd = [
+            sys.executable,
+            str(BATCH_SCRIPT),
+            "--theory-units-json",
+            str(theory_report_path),
+            "--organized-manifest",
+            str(organized_manifest),
+            "--output-dir",
+            str(batch_dir),
+            "--json",
+        ]
+        for kind in sorted(ALL_MATH_OBJECT_KINDS):
+            batch_cmd.extend(["--include-kind", kind])
+        if args.max_jobs_per_chapter:
+            batch_cmd.extend(["--max-jobs", str(args.max_jobs_per_chapter)])
+        if args.no_proof_jobs:
+            batch_cmd.append("--no-proof-jobs")
+        batch_result = run_required(batch_cmd, timeout_sec=args.timeout_sec)
+        commands.append(batch_result)
+        batch_summary = parse_json_from_stdout(batch_result["stdout"])
+        batch_manifest = Path(batch_summary["manifest_file"]).resolve()
+
+        entry = {
+            **chapter,
+            "theory_units_json": str(theory_report_path),
+            "organized_manifest": str(organized_manifest),
+            "batch_manifest": str(batch_manifest),
+            "batch_summary": {
+                key: value for key, value in batch_summary.items() if key != "ok"
+            },
+            "run_manifest": None,
+        }
+
+        should_run = (
+            args.run_chapter_index is not None
+            and args.run_chapter_index == chapter["chapter_index"]
+        ) or (
+            args.run_chapter_id
+            and (
+                args.run_chapter_id.lower() == chapter["chapter_id"].lower()
+                or args.run_chapter_id.lower() in chapter["chapter_title"].lower()
+            )
+        )
+        if should_run:
+            run_dir = chapter_dir / "object_runs"
+            run_cmd = [
+                sys.executable,
+                str(RUN_BATCH_SCRIPT),
+                "--batch-manifest",
+                str(batch_manifest),
+                "--output-dir",
+                str(run_dir),
+                "--provider",
+                args.provider,
+                "--json",
+            ]
+            if args.model:
+                run_cmd.extend(["--model", args.model])
+            if args.max_run_jobs:
+                run_cmd.extend(["--max-jobs", str(args.max_run_jobs)])
+            if args.start_at:
+                run_cmd.extend(["--start-at", str(args.start_at)])
+            if args.skip_lean_check:
+                run_cmd.append("--skip-lean-check")
+            if args.force:
+                run_cmd.append("--force")
+            run_result = run_required(run_cmd, timeout_sec=args.run_timeout_sec)
+            commands.append(run_result)
+            run_summary = parse_json_from_stdout(run_result["stdout"])
+            entry["run_manifest"] = run_summary.get("run_manifest_file") or str(
+                run_dir / "run_manifest.json"
+            )
+            entry["run_summary"] = run_summary
+        chapter_entries.append(entry)
+
+    manifest = {
+        "schema_version": 1,
+        "created_at": utc_now(),
+        "skill": "textbook-chapter-autoformalization-orchestrator",
+        "hook_id": "draft.textbook_chapter_autoformalization",
+        "source": {
+            "archive": str(args.archive.resolve()) if args.archive else None,
+            "source_dir": str(args.source_dir.resolve()) if args.source_dir else None,
+            "theory_units_json": str(theory_path),
+        },
+        "output_dir": str(output_dir),
+        "selection": {
+            "chapter_id": args.chapter_id,
+            "chapter_index": args.chapter_index,
+            "max_chapters": args.max_chapters,
+            "run_chapter_id": args.run_chapter_id,
+            "run_chapter_index": args.run_chapter_index,
+        },
+        "summary": {
+            "chapter_count": len(chapters),
+            "selected_chapter_count": len(chapter_entries),
+            "total_unit_count": sum(chapter["unit_count"] for chapter in chapters),
+            "selected_unit_count": sum(
+                chapter["unit_count"] for chapter in chapter_entries
+            ),
+            "selected_job_count": sum(
+                chapter.get("batch_summary", {}).get("job_count", 0)
+                for chapter in chapter_entries
+            ),
+        },
+        "chapters": chapter_entries,
+        "all_chapters": chapters,
+        "commands": commands,
+    }
+    manifest_file = output_dir / "chapter_plan.json"
+    manifest["manifest_file"] = str(manifest_file)
+    write_json(manifest_file, manifest)
+    return manifest
+
+
+def run_self_test() -> Dict[str, Any]:
+    """Document the responsibility of ``run_self_test``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        source = tmp_path / "book"
+        source.mkdir()
+        (source / "main.tex").write_text(
+            "\\newtheorem{theorem}{Theorem}\n"
+            "\\newtheorem{definition}{Definition}\n"
+            "\\input{chapter1}\n"
+            "\\input{chapter2}\n",
+            encoding="utf-8",
+        )
+        (source / "chapter1.tex").write_text(
+            "\\chapter{Foundations}\n"
+            "\\section{Objects}\n"
+            "\\begin{definition}\\label{def:a}An object $A$.\\end{definition}\n"
+            "\\begin{theorem}\\label{thm:a}Object $A$ exists.\\end{theorem}\n"
+            "\\begin{proof}Use the definition.\\end{proof}\n",
+            encoding="utf-8",
+        )
+        (source / "chapter2.tex").write_text(
+            "\\chapter{Applications}\n"
+            "\\begin{theorem}\\label{thm:b}Object $B$ exists.\\end{theorem}\n"
+            "\\begin{proof}Reduce to Chapter 1.\\end{proof}\n",
+            encoding="utf-8",
+        )
+        archive = tmp_path / "book.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            for path in source.rglob("*"):
+                zf.write(path, path.relative_to(source))
+        ns = argparse.Namespace(
+            archive=archive,
+            source_dir=None,
+            theory_units_json=None,
+            output_dir=tmp_path / "out",
+            chapter_id=None,
+            chapter_index=None,
+            max_chapters=1,
+            max_jobs_per_chapter=None,
+            no_proof_jobs=False,
+            run_chapter_id=None,
+            run_chapter_index=None,
+            provider="none",
+            model=None,
+            max_run_jobs=None,
+            start_at=1,
+            skip_lean_check=True,
+            force=False,
+            timeout_sec=120,
+            run_timeout_sec=120,
+        )
+        output_dir = ns.output_dir
+        theory_path, report, commands = ensure_theory_units(ns, output_dir)
+        manifest = build_chapter_plan(
+            args=ns, output_dir=output_dir, theory_path=theory_path, full_report=report
+        )
+        manifest["commands"] = commands + manifest["commands"]
+        assert manifest["summary"]["chapter_count"] == 2, manifest["summary"]
+        assert manifest["summary"]["selected_chapter_count"] == 1, manifest["summary"]
+        assert (
+            manifest["chapters"][0]["batch_summary"]["target_kind_counts"]["proof"] == 1
+        ), manifest["chapters"][0]
+        return {
+            "ok": True,
+            "summary": manifest["summary"],
+            "manifest_file": manifest["manifest_file"],
+        }
+
+
+def parse_args() -> argparse.Namespace:
+    """Document the responsibility of ``parse_args``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument(
+        "--archive", type=Path, help="LaTeX source archive (.zip, .tar, .tar.gz, .tgz)"
+    )
+    source.add_argument(
+        "--source-dir", type=Path, help="Already-unpacked LaTeX source directory"
+    )
+    source.add_argument(
+        "--theory-units-json",
+        type=Path,
+        help="Existing theory_units.json from latex-archive-theory-extractor",
+    )
+    parser.add_argument(
+        "--output-dir", type=Path, help="Output directory for chapter plans"
+    )
+    parser.add_argument(
+        "--chapter-id", help="Only build chapters matching this id or title substring"
+    )
+    parser.add_argument(
+        "--chapter-index", type=int, help="Only build this 1-based chapter index"
+    )
+    parser.add_argument(
+        "--max-chapters", type=int, help="Only build the first N selected chapters"
+    )
+    parser.add_argument(
+        "--max-jobs-per-chapter",
+        type=int,
+        help="Limit emitted jobs in each chapter queue",
+    )
+    parser.add_argument(
+        "--no-proof-jobs",
+        action="store_true",
+        help="Attach proofs to statement jobs but skip separate proof-obligation jobs",
+    )
+    parser.add_argument(
+        "--run-chapter-id",
+        help="Execute exactly the chapter matching this id or title substring",
+    )
+    parser.add_argument(
+        "--run-chapter-index",
+        type=int,
+        help="Execute exactly this 1-based chapter index",
+    )
+    parser.add_argument("--provider", choices=("codex-cli", "none"), default="none")
+    parser.add_argument("--model")
+    parser.add_argument(
+        "--max-run-jobs",
+        type=int,
+        help="Maximum object-run jobs for the selected run chapter",
+    )
+    parser.add_argument(
+        "--start-at", type=int, default=1, help="1-based object-run offset"
+    )
+    parser.add_argument("--skip-lean-check", action="store_true")
+    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--timeout-sec", type=int, default=600)
+    parser.add_argument("--run-timeout-sec", type=int, default=1800)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    args = parse_args()
+    if args.self_test:
+        print(json.dumps(run_self_test(), indent=2, sort_keys=True))
+        return 0
+    if args.run_chapter_id and args.run_chapter_index is not None:
+        raise SystemExit("use only one of --run-chapter-id or --run-chapter-index")
+    if args.output_dir:
+        output_dir = args.output_dir.resolve()
+    elif args.archive:
+        output_dir = (
+            REPO_ROOT / "artifacts/textbook_chapters" / archive_stem(args.archive)
+        )
+    elif args.source_dir:
+        output_dir = (
+            REPO_ROOT / "artifacts/textbook_chapters" / args.source_dir.resolve().name
+        )
+    elif args.theory_units_json:
+        output_dir = (
+            args.theory_units_json.resolve().parent / "chapter_autoformalization"
+        )
+    else:
+        raise SystemExit("provide --archive, --source-dir, or --theory-units-json")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    theory_path, report, commands = ensure_theory_units(args, output_dir)
+    manifest = build_chapter_plan(
+        args=args, output_dir=output_dir, theory_path=theory_path, full_report=report
+    )
+    manifest["commands"] = commands + manifest["commands"]
+    write_json(Path(manifest["manifest_file"]), manifest)
+    summary = {
+        "ok": True,
+        "manifest_file": manifest["manifest_file"],
+        **manifest["summary"],
+    }
+    print(json.dumps(summary, indent=2 if args.json else None, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

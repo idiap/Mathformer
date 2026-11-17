@@ -1,0 +1,709 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_skills_link_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "All-repo specialization of main; publish skills in target-major order.",
+  "aliases": [
+    "skills:link"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Options": {
+      "schema": {
+        "type": "object",
+        "description": "Source discovery must yield 1..1024 skills; the bound is a descriptor admission constraint.",
+        "properties": {
+          "source": {
+            "type": "string",
+            "const": "skills/"
+          },
+          "profile": {
+            "type": "string",
+            "const": "all-repo"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "symlink",
+              "copy"
+            ]
+          },
+          "replace": {
+            "type": "boolean"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "json": {
+            "type": "boolean"
+          },
+          "max_discovered_skills": {
+            "type": "integer",
+            "const": 1024
+          }
+        },
+        "required": [
+          "source",
+          "profile",
+          "mode",
+          "replace",
+          "dry_run",
+          "json",
+          "max_discovered_skills"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Skills": {
+      "schema": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 1024,
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "skills": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1024,
+            "items": {
+              "type": "string"
+            }
+          },
+          "targets": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "string"
+            }
+          },
+          "target_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "skill_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1024
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "skill": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "auto",
+                    "symlink",
+                    "copy"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "created",
+                    "unchanged",
+                    "skipped"
+                  ]
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "skill",
+                "source",
+                "target",
+                "mode",
+                "status",
+                "detail"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "skills",
+          "targets",
+          "target_index",
+          "skill_index",
+          "results"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Results": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "skill": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "symlink",
+                "copy"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "created",
+                "unchanged",
+                "skipped"
+              ]
+            },
+            "detail": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "skill",
+            "source",
+            "target",
+            "mode",
+            "status",
+            "detail"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "const": 0
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "options": {
+      "type": "Options"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "results": {
+      "type": "Results",
+      "value": {
+        "ref": "flow.outputs.results"
+      }
+    },
+    "returncode": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.returncode"
+      }
+    },
+    "stdout": {
+      "type": "Text",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "discover": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "skills": {
+          "type": "Skills"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_skills_publication_discover",
+          "operation": "mathformer_skills_publication_discover"
+        }
+      }
+    },
+    "resolve_and_pack": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "skills": {
+          "type": "Skills"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_skills_publication_resolve_and_pack",
+          "operation": "mathformer_skills_publication_resolve_and_pack"
+        }
+      }
+    },
+    "prepare_target": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "options": {
+          "type": "Options"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_skills_publication_prepare_target",
+          "operation": "mathformer_skills_publication_prepare_target"
+        }
+      }
+    },
+    "publish_and_advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "options": {
+          "type": "Options"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_skills_publication_publish_and_advance",
+          "operation": "mathformer_skills_publication_publish_and_advance"
+        }
+      }
+    },
+    "advance_target": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_skills_publication_advance_target",
+          "operation": "mathformer_skills_publication_advance_target"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "options": {
+          "type": "Options"
+        }
+      },
+      "outputs": {
+        "returncode": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_skills_publication_finish",
+          "operation": "mathformer_skills_publication_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "discover",
+        "kind": "call",
+        "operation": "discover",
+        "arguments": {
+          "options": {
+            "ref": "inputs.options"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "resolve_and_pack",
+        "arguments": {
+          "options": {
+            "ref": "inputs.options"
+          },
+          "skills": {
+            "ref": "steps.discover.outputs.skills"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "id": "targets",
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 3,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "prepare",
+              "kind": "call",
+              "operation": "prepare_target",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "options": {
+                  "ref": "inputs.options"
+                }
+              }
+            },
+            {
+              "id": "skills",
+              "kind": "loop",
+              "state_type": "State",
+              "initial": {
+                "ref": "steps.prepare.outputs.state"
+              },
+              "max_iterations": 1024,
+              "on_exhausted": "fail",
+              "body": {
+                "kind": "call",
+                "operation": "publish_and_advance",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  },
+                  "options": {
+                    "ref": "inputs.options"
+                  }
+                }
+              },
+              "next_state": {
+                "ref": "body.outputs.state"
+              },
+              "until": {
+                "ref": "body.outputs.done"
+              },
+              "outputs": {
+                "state": {
+                  "type": "State",
+                  "value": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance_target",
+              "arguments": {
+                "state": {
+                  "ref": "steps.skills.outputs.state"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.targets.outputs.state"
+          },
+          "options": {
+            "ref": "inputs.options"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "results": {
+        "type": "Results",
+        "value": {
+          "ref": "steps.targets.outputs.state.results"
+        }
+      },
+      "returncode": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.finish.outputs.returncode"
+        }
+      },
+      "stdout": {
+        "type": "Text",
+        "value": {
+          "ref": "steps.finish.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          ".agents/skills/",
+          ".claude/skills/",
+          ".opencode/skills/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "publish_agent_skills"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 3081
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Publication results only; no scientific validation or runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/link_agent_skills.py",
+        "selector": "main",
+        "digest": "sha256:08a84f91c2339912930ca5fd3329ac45c7eb10afb25dd1cffa135582e6700c8b"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:skills:link; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/skills_publication_tools.py",
+        "selector": "register_skills_publication_tools",
+        "digest": "sha256:71db1972266c1bfb56ac4ff229a64955f8dbf74260f728d7d909c8e9103bebe7"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_skills_publication_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "skills_publication_descriptor",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Admission specializes inputs to all-repo and 1..1024 discovered skills. The adapter rejects overflow before target preparation; native CLI discovery remains unbounded. Both loops accept done=true on the final permitted iteration.",
+      "Wall-time and operation-call limits are Lunar descriptor ceilings, not native global budgets. Native execution has no timeout, retry, checkpoint or convergence loop.",
+      "Hub transport admission, subprocess capture and post-execution write auditing remain caller-owned. These tools model the selected main entrypoint, not the broader skills.link route.",
+      "MCP carries native completion text in stdout and emits it to server stderr to preserve protocol framing. CLI SystemExit admission errors become failed MCP calls. Lunar owns workflow receipts and digests."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "skills:link",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "skills:link",
+        "family": "skills",
+        "kind": "setup",
+        "safety": "writes_environment",
+        "command": [
+          "{python}",
+          "scripts/link_agent_skills.py",
+          "--profile",
+          "all-repo",
+          "--mode",
+          "auto",
+          "--replace"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "scripts/link_agent_skills.py",
+          "skills/"
+        ],
+        "writes": [
+          ".agents/skills/",
+          ".claude/skills/",
+          ".opencode/skills/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Graph models main with all-repo targets. Hub fixes mode=auto, replace=true, direct-script dry_run=false and json=false; other option values describe direct main calls. Hub preflight rejects extra arguments, missing required paths or unauthorized mutation. Preflight rejection or hub dry-run returns before subprocess launch. run_action has no dependencies here and delegates through run_leaf_action. After subprocess completion, write auditing can override returncode=0 with ok=false. Script errors stop publication without rollback; the hub captures nonzero exit/output.",
+      "caller_distinction": "The broader skills.link NL route runs skills:link then skills:client-discovery. It carries children and sticky aggregate ok, stopping after two actions or first failure unless keep_going. Client discovery is not part of this action."
+    }
+  }
+}

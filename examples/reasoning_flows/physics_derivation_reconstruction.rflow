@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Canonical epistemic projection; not an execution trace.
+erfl 0.3
+reasoning physics_derivation_reconstruction {
+  goal "produce a scoped physically assessed derivation" -> physics_status
+  steps
+    o:O[source::Context->observations::Evidence] -decompose> ...
+    s:S[observations::Evidence->equation_structure::Model] -model> ...
+    m:M[equation_structure::Model->physics_context::Model] -constrain> ...
+    a:A[physics_context::Model->hypothesis::Claim] -ground> ...
+    g:G[
+      hypothesis::Claim,
+      physics_context::Model
+      -> alignment::Evidence
+    ] -derive> ...
+    d:D[
+      hypothesis::Claim,
+      alignment::Evidence
+      -> derived_claim::Claim
+    ] -test> ...
+    p:P[
+      derived_claim::Claim,
+      physics_context::Model
+      -> probe_evidence::Evidence
+    ] -assess> ...
+    r:R[
+      derived_claim::Claim,
+      probe_evidence::Evidence
+      -> assessment::Assessment
+    ] -calibrate> ...
+    e:E[
+      derived_claim::Claim,
+      assessment::Assessment
+      -> physics_status::Decision
+    ]
+  on e.accepted_for_scope => accept
+  on e.reconstruction_gap => stop
+  on e.refuted => stop
+}

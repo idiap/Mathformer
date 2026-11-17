@@ -1,0 +1,53 @@
+import tempfile
+import ast, dataclasses, json, pathlib, re, subprocess, sys, types
+root=pathlib.Path(__file__).resolve().parents[5]
+path=root/'scripts/mathformer.py'
+def oldfile(p): return subprocess.check_output(['git','show','HEAD:'+p],cwd=root,text=True)
+def module(name,src):
+ m=types.ModuleType(name); m.__file__=str(path);sys.modules[name]=m;exec(compile(src,str(path),'exec'),m.__dict__);return m
+oldsrc=oldfile('scripts/mathformer.py');newsrc=path.read_text(); old=module('baseline_mathformer',oldsrc);new=module('candidate_mathformer',newsrc)
+oreg=old.build_registry();nreg=new.build_registry();oroutes={r.route_id:r for r in old.build_intent_routes()}; nroutes={r.route_id:r for r in new.build_intent_routes()}
+report={'baseline':'git HEAD','head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()}
+report['actions']={'baseline_count':len(oreg),'candidate_count':len(nreg),'removed':sorted(set(oreg)-set(nreg)),'added':sorted(set(nreg)-set(oreg)),'modified':[k for k,v in oreg.items() if k in nreg and dataclasses.asdict(v)!=dataclasses.asdict(nreg[k])]}
+report['routes']={'baseline_count':len(oroutes),'candidate_count':len(nroutes),'removed':sorted(set(oroutes)-set(nroutes)),'added':sorted(set(nroutes)-set(oroutes)),'modified':[k for k,v in oroutes.items() if k in nroutes and dataclasses.asdict(v)!=dataclasses.asdict(nroutes[k])]}
+# Runtime algorithm AST comparison independently of inserted registration entries.
+def fnmap(src):return {n.name:ast.dump(n,include_attributes=False) for n in ast.parse(src).body if isinstance(n,(ast.FunctionDef,ast.ClassDef))}
+of=fnmap(oldsrc);nf=fnmap(newsrc);report['implementation_ast']={'modified':[k for k,v in of.items() if nf.get(k)!=v],'removed':sorted(set(of)-set(nf)),'added':sorted(set(nf)-set(of))}
+queries={}
+for r in oroutes.values():
+ for kind in ('examples','positive_terms'):
+  for q in getattr(r,kind):queries.setdefault(q,[]).append(r.route_id+':'+kind)
+# Collect all single- and double-quoted ask requests from tracked baseline markdown documents.
+tracked=subprocess.check_output(['git','ls-tree','-r','--name-only','HEAD'],cwd=root,text=True).splitlines()
+md=[p for p in tracked if p.endswith('.md') and (p.startswith(('docs/','skills/')) or p in ['README.md','AGENTS.md'])]
+for p in md:
+ src=oldfile(p)
+ for match in re.finditer(r'mathformer\.py\s+ask\s+([\"\'])(.*?)\1',src,re.DOTALL):
+  q=match.group(2)
+  if '\n' not in q:queries.setdefault(q,[]).append('document:'+p)
+def matches(m,reg,q,family):return [(r.route.route_id,r.score,list(r.matched_terms),list(r.route.action_ids)) for r in m.resolve_intent(q,reg,limit=10000,family=family)]
+families=[None]+sorted({a.family for a in oreg.values()});changes=[];oldrelativechanges=[];topchanges=[];count=0
+for q,sources in sorted(queries.items()):
+ for family in families:
+  a=matches(old,oreg,q,family);b=matches(new,nreg,q,family);count+=1
+  if a!=b:
+   item={'query':q,'family':family,'sources':sources,'baseline':a,'candidate':b};changes.append(item)
+   if a[:1]!=b[:1]:topchanges.append(item)
+   if a!=[x for x in b if x[0] in oroutes]:oldrelativechanges.append(item)
+report['resolution']={'unique_queries':len(queries),'query_sources':queries,'families':families,'comparisons':count,'ranked_candidate_changes':changes,'top_selection_changes':topchanges,'old_relative_order_or_score_changes':oldrelativechanges}
+om=json.loads(oldfile('tests/test_matrix.json'));nm=json.loads((root/'tests/test_matrix.json').read_text());key=next(k for k,v in om.items() if isinstance(v,list) and v and isinstance(v[0],dict) and 'id' in v[0]);oi={x['id']:x for x in om[key]};ni={x['id']:x for x in nm[key]}
+report['test_matrix']={'entries_key':key,'baseline_count':len(oi),'candidate_count':len(ni),'removed':sorted(set(oi)-set(ni)),'added':sorted(set(ni)-set(oi)),'modified':[k for k,v in oi.items() if ni.get(k)!=v],'metadata_unchanged':{k:v for k,v in om.items() if k!=key}=={k:v for k,v in nm.items() if k!=key}}
+report['ownership_sources']={p:oldfile(p)==(root/p).read_text() for p in ['skills/SKILL_HOOKS.yaml','scripts/link_agent_skills.py']}
+skills=sorted(p for p in tracked if p.startswith('skills/') and p.endswith('/SKILL.md'))
+actual=sorted(str(p.relative_to(root)) for p in (root/'skills').rglob('SKILL.md'))
+report['canonical_skills']={'baseline_count':len(skills),'candidate_count':len(actual),'removed':sorted(set(skills)-set(actual)),'added':sorted(set(actual)-set(skills))}
+report['host_projections']={}
+for host in ['.agents','.claude','.opencode']:
+ entries=[]
+ for p in skills:
+  src=root/p;target=root/host/'skills'/src.parent.name
+  entries.append({'name':src.parent.name,'exists':target.exists(),'is_symlink':target.is_symlink(),'canonical_target':target.resolve()==src.parent.resolve()})
+ report['host_projections'][host]={'checked':len(entries),'failures':[x for x in entries if not x['exists'] or not x['canonical_target']]}
+report['pass']=not any(report[k][f] for k in ['actions','routes','test_matrix'] for f in ['removed','modified']) and not changes and all(report['ownership_sources'].values()) and not any(x['failures'] for x in report['host_projections'].values())
+out=pathlib.Path(tempfile.gettempdir()) / 'mathformer-route-regression-review.json';out.write_text(json.dumps(report,indent=2)+'\n')
+print(json.dumps({k:v for k,v in report.items() if k!='resolution'},indent=2));print(json.dumps({k:v for k,v in report['resolution'].items() if k!='query_sources'},indent=2));print(out)

@@ -1,0 +1,65 @@
+% SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+% SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+% SPDX-License-Identifier: MIT
+% Neuro-symbolic AI Group
+% File Documentation
+%
+% Motivation:
+%   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+%
+% Intent:
+%   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+%
+% Function:
+%   Contains executable tests, fixtures, and manifests used for local and CI validation.
+%
+% Maintenance Notes:
+%   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+% mathformer-case-id: wiki_monotone_composition
+% expected-lean-name: WikiLevelGold.wiki_monotone_comp
+% controlled-suite: wiki_level_latex_to_lean
+% difficulty: easy
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+
+\newtheorem{theorem}{Theorem}
+
+\title{Composition of Monotone Functions}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Controlled Origin Annotation}
+This is a synthetic controlled case written in a Wikipedia-style exposition.
+It is intended to test whether ordered structures are introduced at the right
+level of generality and whether the target uses mathlib's \texttt{Monotone}.
+
+\section*{Statement and Proof}
+
+\begin{theorem}[Composition of monotone functions]
+Let $A$, $B$, and $C$ be preordered sets. Let $f : A \to B$ and
+$g : B \to C$ be monotone functions. Then $g \circ f : A \to C$ is monotone.
+\end{theorem}
+
+\begin{proof}
+Let $x,y \in A$ and assume $x \le y$. Since $f$ is monotone, we have
+$f(x) \le f(y)$. Since $g$ is monotone, applying $g$ to this inequality gives
+$g(f(x)) \le g(f(y))$. This is exactly the statement that $g \circ f$ is
+monotone.
+\end{proof}
+
+\section*{Lean Target}
+Formalize the theorem for arbitrary types $\alpha$, $\beta$, and $\gamma$ with
+\texttt{Preorder} instances, functions $f : \alpha \to \beta$ and
+$g : \beta \to \gamma$, and hypotheses \texttt{Monotone f} and
+\texttt{Monotone g}. The expected Lean theorem is
+\texttt{WikiLevelGold.wiki\_monotone\_comp}.
+
+\end{document}

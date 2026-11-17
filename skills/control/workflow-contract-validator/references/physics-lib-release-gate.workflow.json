@@ -1,0 +1,756 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lib_release_gate_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Ordered projection of the native PhysicsLib release gate run(output).",
+  "aliases": [
+    "physics-lib:release-gate"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "OutputPath": {
+      "schema": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "Check": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "command",
+          "returncode",
+          "ok",
+          "stdout",
+          "stderr",
+          "diagnostic_sha256"
+        ],
+        "properties": {
+          "command": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "returncode": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "diagnostic_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "timeout": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Imports": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Release": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "status_schema_version",
+          "workflow_executed",
+          "checks_passed",
+          "artifact_status",
+          "library_status",
+          "release_ok",
+          "blockers",
+          "terminal_states"
+        ],
+        "properties": {
+          "status_schema_version": {
+            "const": 1
+          },
+          "workflow_executed": {
+            "const": true
+          },
+          "checks_passed": {
+            "type": "boolean"
+          },
+          "artifact_status": {
+            "enum": [
+              "promoted",
+              "blocked"
+            ]
+          },
+          "library_status": {
+            "enum": [
+              "accepted",
+              "blocked"
+            ]
+          },
+          "release_ok": {
+            "type": "boolean"
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "terminal_states": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "compile_failed",
+                "blocked"
+              ]
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Report": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "style",
+          "generated_at_utc",
+          "status_schema_version",
+          "workflow_executed",
+          "checks_passed",
+          "artifact_status",
+          "library_status",
+          "release_ok",
+          "blockers",
+          "terminal_states",
+          "public_root",
+          "public_root_sha256",
+          "imported_modules",
+          "lean_version",
+          "lake_manifest_sha256",
+          "build",
+          "coherence"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "style": {
+            "const": "mathformerphysicslib_release_gate"
+          },
+          "generated_at_utc": {
+            "type": "string"
+          },
+          "status_schema_version": {
+            "const": 1
+          },
+          "workflow_executed": {
+            "const": true
+          },
+          "checks_passed": {
+            "type": "boolean"
+          },
+          "artifact_status": {
+            "enum": [
+              "promoted",
+              "blocked"
+            ]
+          },
+          "library_status": {
+            "enum": [
+              "accepted",
+              "blocked"
+            ]
+          },
+          "release_ok": {
+            "type": "boolean"
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "terminal_states": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "public_root": {
+            "const": "libraries/MathformerPhysicsLib.lean"
+          },
+          "public_root_sha256": {
+            "type": "string"
+          },
+          "imported_modules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "path",
+                "sha256"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "lean_version": {
+            "type": "object",
+            "required": [
+              "command",
+              "returncode",
+              "ok",
+              "stdout",
+              "stderr",
+              "diagnostic_sha256"
+            ],
+            "properties": {
+              "command": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "returncode": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "diagnostic_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "timeout": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "lake_manifest_sha256": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "build": {
+            "type": "object",
+            "required": [
+              "command",
+              "returncode",
+              "ok",
+              "stdout",
+              "stderr",
+              "diagnostic_sha256"
+            ],
+            "properties": {
+              "command": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "returncode": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "diagnostic_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "timeout": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "coherence": {
+            "type": "object",
+            "required": [
+              "command",
+              "returncode",
+              "ok",
+              "stdout",
+              "stderr",
+              "diagnostic_sha256"
+            ],
+            "properties": {
+              "command": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "returncode": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "diagnostic_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "timeout": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "output": {
+      "type": "OutputPath"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    }
+  },
+  "operations": {
+    "build_public_root": {
+      "inputs": {},
+      "outputs": {
+        "result": {
+          "type": "Check"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_release_build",
+          "operation": "mathformer_physics_release_build"
+        }
+      }
+    },
+    "check_coherence": {
+      "inputs": {},
+      "outputs": {
+        "result": {
+          "type": "Check"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_release_coherence",
+          "operation": "mathformer_physics_release_coherence"
+        }
+      }
+    },
+    "check_lean_version": {
+      "inputs": {},
+      "outputs": {
+        "result": {
+          "type": "Check"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_release_lean_version",
+          "operation": "mathformer_physics_release_lean_version"
+        }
+      }
+    },
+    "imported_files": {
+      "inputs": {},
+      "outputs": {
+        "imports": {
+          "type": "Imports"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_release_scan_imports",
+          "operation": "mathformer_physics_release_scan_imports"
+        }
+      }
+    },
+    "assess_release": {
+      "inputs": {
+        "build": {
+          "type": "Check"
+        },
+        "coherence": {
+          "type": "Check"
+        },
+        "lean_version": {
+          "type": "Check"
+        }
+      },
+      "outputs": {
+        "release": {
+          "type": "Release"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_release_assess",
+          "operation": "mathformer_physics_release_assess"
+        }
+      }
+    },
+    "write_report": {
+      "inputs": {
+        "output": {
+          "type": "OutputPath"
+        },
+        "imports": {
+          "type": "Imports"
+        },
+        "build": {
+          "type": "Check"
+        },
+        "coherence": {
+          "type": "Check"
+        },
+        "lean_version": {
+          "type": "Check"
+        },
+        "release": {
+          "type": "Release"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_release_write_report",
+          "operation": "mathformer_physics_release_write_report"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "description": "Failed check values continue; unexpected launch, read or write exceptions stop the sequence.",
+    "steps": [
+      {
+        "id": "build",
+        "kind": "call",
+        "operation": "build_public_root",
+        "arguments": {},
+        "description": "Run lake build MathformerPhysicsLib at repository root; timeout 900 seconds."
+      },
+      {
+        "id": "coherence",
+        "kind": "call",
+        "operation": "check_coherence",
+        "arguments": {},
+        "description": "Run gate_coherence.py with sys.executable, --require-release --json; timeout 180 seconds."
+      },
+      {
+        "id": "version",
+        "kind": "call",
+        "operation": "check_lean_version",
+        "arguments": {},
+        "description": "Run lake env lean --version; timeout 30 seconds."
+      },
+      {
+        "id": "imports",
+        "kind": "call",
+        "operation": "imported_files",
+        "arguments": {},
+        "description": "Scan public-root lines then import tokens in order; accumulate existing direct-import paths, preserving duplicates."
+      },
+      {
+        "id": "assess",
+        "kind": "call",
+        "operation": "assess_release",
+        "arguments": {
+          "build": {
+            "ref": "steps.build.outputs.result"
+          },
+          "coherence": {
+            "ref": "steps.coherence.outputs.result"
+          },
+          "lean_version": {
+            "ref": "steps.version.outputs.result"
+          }
+        },
+        "description": "All checks must pass for release; build and coherence alone determine library acceptance."
+      },
+      {
+        "id": "report",
+        "kind": "call",
+        "operation": "write_report",
+        "arguments": {
+          "output": {
+            "ref": "inputs.output"
+          },
+          "imports": {
+            "ref": "steps.imports.outputs.imports"
+          },
+          "build": {
+            "ref": "steps.build.outputs.result"
+          },
+          "coherence": {
+            "ref": "steps.coherence.outputs.result"
+          },
+          "lean_version": {
+            "ref": "steps.version.outputs.result"
+          },
+          "release": {
+            "ref": "steps.assess.outputs.release"
+          }
+        },
+        "description": "Hash sources, include diagnostics, create parent directory, write sorted indented JSON with newline, return payload."
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.report.outputs.report"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          ".lake/",
+          "artifacts/physics_lean/release_gate/",
+          "artifacts/workflow_hub/",
+          "selected_output_path"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 6
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked description only; completion does not establish scientific truth or runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/physics_lean/run_mathformerphysicslib_release_gate.py",
+        "selector": "run",
+        "digest": "sha256:c16b8923a0030fe7d184061217e9123fc207f959cc2f5f1ab2c4b1b70185797a"
+      },
+      {
+        "path": "libraries/MathformerPhysicsLib/release_status.py",
+        "selector": "build_release_status",
+        "digest": "sha256:d10f70157f9b44923ad8ed3fda743b70133ea890ace3d1c509638704dfc81d59"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry; prepare_action; run_action; run_leaf_action; preflight",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/physics_release_gate_tools.py",
+        "selector": "register_physics_release_gate_tools",
+        "digest": "sha256:ace3e01e758ae852c8243a78ae81d0b25262949cfe8eb5022174860f8d385222"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_physics_release_gate_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-coherence-gate/scripts/gate_coherence.py",
+        "selector": "main",
+        "digest": "sha256:abc851b8d1344a842bdbf72e800ba0b5570d0fa9f42f8dabf2d6fa9a4940ad0d"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "mcp.physics_lib_release_gate.workflow",
+        "digest": "sha256:f9cd794400674d61825839b01b624256661171b36bea93da96b26967e9e7788e"
+      },
+      {
+        "path": "tests/mcp/run_physics_lib_release_gate_workflow_tests.py",
+        "selector": "PhysicsLibReleaseTests",
+        "digest": "sha256:d3be488a64636f33b5b498b6d15ea9a6cd945743d294470bc2533d879e1228b9"
+      },
+      {
+        "path": "tests/mcp/run_physics_release_gate_workflow_tests.py",
+        "selector": "ReleaseTests",
+        "digest": "sha256:3bd445e1f5bcb4e482d756650a87004324d5afa0d01a8251795a4729334ebc73"
+      },
+      {
+        "path": "tests/mcp/fixtures/physics_release_server.py",
+        "selector": "stdio fixture",
+        "digest": "sha256:24345730124095eadae8ccdec11d144de49f7428f3314663620f6dd9ddadbaf7"
+      },
+      {
+        "path": "tests/mcp/fixtures/physics_release_boundary.py",
+        "selector": "boundaries; prepare",
+        "digest": "sha256:14af7ea76255a3f664d8e1cc1b883f0b0bfd70e4cb90c43bbfe88139005d45de"
+      }
+    ],
+    "gaps": [
+      "This graph models the selected run(output), not the surrounding hub traversal, admission, dry-run, 1200-second subprocess wrapper or write audit. Native CLI and mathformer_run_workflow retain those controls.",
+      "Network and external-write capability names require native qualification; runtime receipts describe execution, not scientific truth or artifact promotion authority.",
+      "The 3600-second contract ceiling is a runtime bound, not a native global timeout; native command timeouts remain 900, 180 and 30 seconds. Six operation calls bound this projection only."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lib:release-gate",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md"
+    },
+    "mathformer.native_boundary": {
+      "execution": "physics-lib:release-gate is a commandless sequence with one child mathformerphysicslib:release-gate; CLI and MCP dispatch the native controller.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report"
+      ],
+      "controls": "Unknown actions, cycles and sequence extra arguments are rejected; preflight failure or dry-run prevents launch.",
+      "traversal": "Carries index, children, cumulative dependencies_ok and ancestry; failure is sticky and stops traversal unless keep_going; this alias has no later command.",
+      "leaf_timeout_seconds": 1200,
+      "post_execution": "Write auditing can fail the hub result even after a successful release report.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true
+    },
+    "mathformer.run_semantics": {
+      "check_failures": "Nonzero exits and captured timeouts return ok=false with captured diagnostics and SHA256; later checks still run.",
+      "release_branches": "All three checks passing yields promoted/accepted; otherwise artifact_status=blocked. Build or coherence failure blocks library acceptance; version-only failure leaves it accepted.",
+      "terminal_states": "Build failure selects compile_failed; other failures select blocked; success selects an empty list. build_release_status adds terminal-state blockers and derives release_ok.",
+      "imports": "Only existing files named by direct imports are collected; no recursive closure, deduplication, retry or convergence loop.",
+      "report": "Includes UTC timestamp, release fields, all check results, public-root and imported-module hashes; absent lake-manifest.json yields a null hash.",
+      "exceptions": "Unexpected launch, source read, hash, directory creation or report write exceptions propagate without a report return.",
+      "cli": "main defaults output to artifacts/physics_lean/release_gate/report.json; prints JSON with --json or release_ok status, then exits 0 for release_ok else 1."
+    }
+  }
+}

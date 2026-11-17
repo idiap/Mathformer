@@ -1,0 +1,819 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-FileContributor: Danilo Gusicuma <danilo.gusicuma@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Actual native MathformerLib runner processes, MCP bindings and Lunar/PRISM execution.
+
+Only external compiler/provider processes are substituted. Temporary repositories
+contain unchanged runner/audit sources and synthetic matrix inputs. No
+production workflows, installed compilers, credentials or providers are used.
+"""
+
+import os
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+LUNAR = Path(os.environ["LUNAR_PLATFORM_ROOT"])
+python = LUNAR / ".venv/bin/python"
+if python.exists() and Path(sys.prefix).resolve() != (LUNAR / ".venv").resolve():
+    os.execv(str(python), [str(python), str(Path(__file__).resolve()), *sys.argv[1:]])
+sys.dont_write_bytecode = True
+os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
+FIXTURES = ROOT / "tests/mcp/fixtures"
+sys.path[:0] = [
+    str(LUNAR / "app/backend"),
+    str(ROOT / "scripts"),
+    str(ROOT),
+    str(FIXTURES),
+]
+SITES = [str(p) for p in (ROOT / ".venv/lib").glob("python*/site-packages")]
+sys.path.extend(SITES)
+
+import asyncio
+from copy import deepcopy
+from dataclasses import replace
+import hashlib
+import importlib.util
+import json
+import shutil
+import subprocess
+import tempfile
+from types import SimpleNamespace
+import unittest
+from unittest.mock import patch
+import yaml
+
+import mathformer as hub
+from mathformerlib_accumulation_route_tools import (
+    ACTION,
+    ROUTE,
+    selected_match,
+    checked_registry,
+    check_state,
+    register_mathformerlib_accumulation_route_tools,
+)
+from mathformerlib_accumulation_route_boundary import install_external
+from mcp_connections.client import SessionManager
+from mcp_connections.models import StdioConfig
+from mcp_connections.contracts import workflow_documents
+from mcp_connections.workflow_compiler import compile_workflow
+from mcp_connections.execution import execute
+
+DESCRIPTOR = "skills/control/workflow-contract-validator/references/normalized-workflows/route/route_mathformerlib_accumulation_workflow/workflow.yaml"
+SCHEMA = "skills/control/workflow-contract-validator/references/normalized-workflows/hub-interface.schema.json"
+AUTHORED = "skills/control/workflow-contract-validator/references/mathformerlib-accumulation-route.workflow.json"
+CONTRACT = Path(os.environ["WORKFLOW_CONTRACT_PATH"])
+MATCH = {
+    "route": {"route_id": ROUTE, "action_ids": [ACTION]},
+    "score": 17,
+    "matched_terms": ["mathformerlib", "validate"],
+}
+REGISTRY = {ACTION: hub.action_to_dict(hub.build_registry()[ACTION])}
+ORDER = ["initialize", "select", "run_child", "advance", "finish"]
+CANONICAL = {
+    "schema_version": 2,
+    "tests": [
+        row
+        for row in json.loads((ROOT / "tests/test_matrix.json").read_text())["tests"]
+        if row["module_family"] == "mathformerlib"
+    ],
+}
+
+
+def load(path, name):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def original():
+    scope = dict(vars(hub))
+    exec(
+        (FIXTURES / "mathformerlib_accumulation_route_original.py.txt").read_text(),
+        scope,
+    )
+    return SimpleNamespace(**scope)
+
+
+def matrix(modes):
+    rows = []
+    for index, mode in enumerate(modes):
+        rows.append(
+            dict(
+                id=f"fixture.{index}",
+                module_family="mathformerlib",
+                command=["fixture-accumulation-compiler", mode],
+                owner_skill="fixture",
+                hook_id="test.fixture",
+                fixture_ids=["external-compiler"],
+                test_kind="regression",
+                risk_level="low",
+                timeout_seconds=30 + index,
+                expected_exit=0,
+                write_set=["artifacts/"] if mode == "artifact" else [],
+                **(
+                    {"optional_dependency": "fixture_missing_provider"}
+                    if mode == "missing"
+                    else {}
+                ),
+            )
+        )
+    return {"schema_version": 2, "tests": rows}
+
+
+def populate(root):
+    for name in [
+        "tests/test_program/run_comprehensive_tests.py",
+        "scripts/workflow_write_audit.py",
+    ]:
+        target = root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / name, target)
+        assert target.read_bytes() == (ROOT / name).read_bytes()
+    if not (root / "tests/test_matrix.json").exists():
+        (root / "tests/test_matrix.json").write_text(json.dumps(matrix(["pass"])))
+
+
+def reset(root):
+    shutil.rmtree(root / "artifacts", ignore_errors=True)
+    (root / "undeclared.txt").unlink(missing_ok=True)
+    (root.parent / "compiler.jsonl").unlink(missing_ok=True)
+
+
+def clean_env():
+    return {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPATH": os.pathsep.join(
+            [str(FIXTURES / "accumulation_route_startup"), str(FIXTURES)]
+        ),
+    }
+
+
+def stable(value):
+    """Only native nondeterministic time fields differ between real processes."""
+    if isinstance(value, list):
+        return [stable(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: stable(item)
+            for key, item in value.items()
+            if key not in {"duration_seconds", "run_id"}
+        }
+    return value
+
+
+def stable_route(value):
+    value = deepcopy(value)
+    child = value["children"][0]
+    if child.get("stdout"):
+        child["stdout"] = stable(json.loads(child["stdout"]))
+    return value
+
+
+def snapshot(document):
+    values = {
+        row["path"]: (ROOT / row["path"]).read_text()
+        for row in document["provenance"]["sources"]
+    }
+    values[SCHEMA] = (ROOT / SCHEMA).read_text()
+    values[DESCRIPTOR] = json.dumps(document)
+    return [
+        dict(
+            path=path,
+            content=content,
+            encoding="text",
+            sha256=hashlib.sha256(content.encode()).hexdigest(),
+        )
+        for path, content in values.items()
+    ]
+
+
+class AccumulationRouteTests(unittest.TestCase):
+    maxDiff = None
+
+    def test_identity_generator_provenance_and_native_state(self):
+        document = yaml.safe_load(CONTRACT.read_text())
+        generator = load(
+            ROOT
+            / "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+            "accumulation_normalizer",
+        )
+        self.assertEqual(
+            generator.mathformerlib_accumulation_route_descriptor(), document
+        )
+        rendered, _ = generator.render_descriptors(
+            [generator.mathformerlib_accumulation_route_descriptor()]
+        )
+        relative = Path("route") / document["id"] / "workflow.yaml"
+        self.assertEqual(yaml.safe_load(rendered[relative]), document)
+        self.assertEqual(document, json.loads((ROOT / AUTHORED).read_text()))
+        self.assertEqual(document["id"], "route_mathformerlib_accumulation_workflow")
+        self.assertEqual(document["aliases"], [ROUTE])
+        self.assertEqual(document["lifecycle"], "active")
+        self.assertEqual(
+            document["policy"]["limits"],
+            {"wall_time_seconds": 3600, "max_operation_calls": 5},
+        )
+        self.assertEqual(
+            document["policy"]["failure"],
+            {"default": "fail", "retry": {"max_attempts": 1, "retryable_codes": []}},
+        )
+        self.assertEqual(list(document["operations"]), ORDER)
+        for row in document["provenance"]["sources"]:
+            self.assertEqual(
+                row["digest"],
+                "sha256:"
+                + hashlib.sha256((ROOT / row["path"]).read_bytes()).hexdigest(),
+            )
+        self.assertTrue(
+            any(
+                row["path"] == "scripts/mathformer.py"
+                and row["selector"] == "run_intent_match"
+                for row in document["provenance"]["sources"]
+            )
+        )
+        item = checked_registry(REGISTRY)[ACTION]
+        full_registry = hub.build_registry()
+        self.assertEqual(
+            checked_registry(
+                {key: hub.action_to_dict(value) for key, value in full_registry.items()}
+            ),
+            full_registry,
+        )
+        self.assertEqual(
+            item.command,
+            (
+                "{python}",
+                "tests/test_program/run_comprehensive_tests.py",
+                "--module-family",
+                "mathformerlib",
+                "--json",
+            ),
+        )
+        self.assertEqual(item.timeout_seconds, 900)
+        self.assertEqual(
+            [row["id"] for row in CANONICAL["tests"]],
+            [
+                "mathformerlib.registry_manager.help",
+                "mathformerlib.promotion_gate.help",
+            ],
+        )
+        self.assertEqual(
+            [row["timeout_seconds"] for row in CANONICAL["tests"]], [120, 120]
+        )
+        self.assertTrue(
+            all(row["command"][-1] == "--help" for row in CANONICAL["tests"])
+        )
+        oracle, match, native = (
+            original(),
+            selected_match(MATCH),
+            checked_registry(REGISTRY),
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            for ready in [False, True]:
+                if ready:
+                    populate(root)
+                for keep in [False, True]:
+                    context = hub.RunContext(dry_run=True, keep_going=keep)
+                    result = hub.run_intent_match(
+                        match, native, context, repository_root=root
+                    )
+                    self.assertEqual(
+                        result,
+                        oracle.run_intent_match(
+                            match, native, context, repository_root=root
+                        ),
+                    )
+                    self.assertEqual(result["ok"], ready)
+                    self.assertEqual(len(result["children"]), 1)
+                    state = hub.initialize_intent_state()
+                    before = deepcopy(state)
+                    child = {"ok": ready, "status": "fixture"}
+                    updated, done = hub.advance_intent_state(state, child, context, 1)
+                    self.assertEqual(state, before)
+                    self.assertTrue(done)
+                    self.assertEqual(updated, {"ok": ready, "children": [child]})
+                self.assertFalse((root / "artifacts").exists())
+            # Native sticky failure generalizes beyond this one-action route.
+            state, done = hub.advance_intent_state(
+                {"ok": False, "children": [{"ok": False}]},
+                {"ok": True},
+                hub.RunContext(keep_going=True),
+                2,
+            )
+            self.assertFalse(state["ok"])
+            self.assertTrue(done)
+        for keep in [False, True]:
+            for child in [{"ok": False}, {}]:
+                updated, done = hub.advance_intent_state(
+                    hub.initialize_intent_state(),
+                    child,
+                    hub.RunContext(keep_going=keep),
+                    1,
+                )
+                self.assertTrue(done)
+                self.assertFalse(updated["ok"])
+                check_state(updated)
+                with self.assertRaisesRegex(ValueError, "cursor"):
+                    check_state(updated, selecting=True)
+            # The same source predicate stops early only without keep_going
+            # for routes that still have actions; this route has no such tail.
+            _, done = hub.advance_intent_state(
+                hub.initialize_intent_state(),
+                {"ok": False},
+                hub.RunContext(keep_going=keep),
+                2,
+            )
+            self.assertEqual(done, not keep)
+        with self.assertRaisesRegex(ValueError, "inconsistent"):
+            check_state({"ok": True, "children": [{"ok": False}]})
+
+    def test_native_runner_cursor_and_external_failure_boundaries(self):
+        # Exercise the actual delegated cursor without changing its algorithm.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            populate(root)
+            data = matrix(["fail", "missing", "timeout", "pass"])
+            (root / "tests/test_matrix.json").write_text(json.dumps(data))
+            runner = load(
+                root / "tests/test_program/run_comprehensive_tests.py",
+                "accumulation_cursor_test",
+            )
+            old_run, old_which = subprocess.run, shutil.which
+            with patch.dict(os.environ, {}, clear=True):
+                install_external()
+                try:
+                    args = runner.parse_args(["--module-family", "mathformerlib"])
+                    self.assertFalse(runner.enter_checks(args))
+                    state = runner.prepare_checks(args)
+                    self.assertEqual(state["matrix"], state["selected"])
+                    self.assertEqual(state["families"], ["mathformerlib"])
+                    with self.assertRaisesRegex(ValueError, "unconsumed"):
+                        runner.finalize_checks(state, args)
+                    for index in range(4):
+                        before = deepcopy(state)
+                        self.assertTrue(runner.checks_pending(state))
+                        state = runner.advance_check(state, args)
+                        self.assertEqual(state["index"], index + 1)
+                        self.assertEqual(state["results"][:-1], before["results"])
+                        self.assertEqual(before["index"], index)
+                    self.assertFalse(runner.checks_pending(state))
+                    self.assertEqual(
+                        [r["status"] for r in state["results"]],
+                        ["fail", "skip", "fail", "pass"],
+                    )
+                    with self.assertRaisesRegex(ValueError, "exhausted"):
+                        runner.advance_check(state, args)
+                    report = runner.finalize_checks(state, args)
+                    self.assertFalse(report["ok"])
+                    self.assertEqual(report["summary"]["total"], 4)
+                    self.assertEqual(
+                        runner.run_check(data["tests"][1], True)["status"], "fail"
+                    )
+                    # Native launch timeout capture and unexpected-error path,
+                    # substituting an external compiler command only.
+                    item = replace(
+                        hub.build_registry()[ACTION],
+                        command=("fixture-accumulation-compiler", "timeout"),
+                        timeout_seconds=900,
+                        required_paths=(),
+                    )
+                    timed = hub.run_leaf_action(
+                        item, hub.RunContext(), [], repository_root=root
+                    )
+                    self.assertEqual(timed["status"], "timeout")
+                    self.assertEqual(timed["timeout_seconds"], 900)
+                    self.assertEqual(timed["stdout"], b"partial")
+                    self.assertFalse(timed["ok"])
+                    with self.assertRaisesRegex(OSError, "compiler launch failed"):
+                        hub.run_leaf_action(
+                            replace(
+                                item, command=("fixture-accumulation-compiler", "crash")
+                            ),
+                            hub.RunContext(),
+                            [],
+                            repository_root=root,
+                        )
+                finally:
+                    subprocess.run, shutil.which = old_run, old_which
+
+    def test_registered_policy_admission(self):
+        asyncio.run(self.policy())
+
+    async def policy(self):
+        from mcp.server.fastmcp import FastMCP
+
+        for authorize, allowed, message in [
+            (
+                lambda: (_ for _ in ()).throw(PermissionError("readonly")),
+                lambda p: True,
+                "readonly",
+            ),
+            (lambda: None, lambda p: False, "service roots"),
+        ]:
+            mcp = FastMCP("accumulation-policy")
+            register_mathformerlib_accumulation_route_tools(mcp, authorize, allowed)
+            with tempfile.TemporaryDirectory() as directory:
+                kwargs = dict(
+                    action_id=ACTION,
+                    registry=REGISTRY,
+                    repository_root=directory,
+                    context=vars(hub.RunContext()),
+                )
+                with self.assertRaisesRegex(Exception, message):
+                    await mcp.call_tool(
+                        "mathformer_accumulation_route_run_child", kwargs
+                    )
+                kwargs["context"]["dry_run"] = True
+                await mcp.call_tool("mathformer_accumulation_route_run_child", kwargs)
+
+    def test_registered_lunar_prism_execution(self):
+        asyncio.run(self.scenario())
+
+    async def scenario(self):
+        document = yaml.safe_load(CONTRACT.read_text())
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve() / "repo"
+            populate(root)
+            server = (
+                "import sys;sys.dont_write_bytecode=True;sys.path[:0]="
+                + repr([str(ROOT / "scripts"), str(FIXTURES), str(ROOT), *SITES])
+                + ";from mathformerlib_accumulation_route_boundary import serve;serve("
+                + repr(str(root))
+                + ","
+                + repr(str(FIXTURES))
+                + ")"
+            )
+            manager, failure = SessionManager(), None
+            async with manager.open(
+                "accumulation-route",
+                StdioConfig(command=sys.executable, args=["-c", server], cwd=str(ROOT)),
+                {},
+            ) as remote:
+                try:
+                    tools = [
+                        t.model_dump(by_alias=True, exclude_none=True)
+                        for t in await remote.tools()
+                    ]
+
+                    def compiled(doc, inventory=None):
+                        assets = snapshot(doc)
+                        documents = workflow_documents([DESCRIPTOR], assets)
+                        self.assertEqual(len(documents), 1)
+                        self.assertTrue(
+                            documents[0]["validation"]["valid"],
+                            documents[0]["validation"],
+                        )
+                        bound = compile_workflow(
+                            "mcp:accumulation-route",
+                            documents[0],
+                            tools if inventory is None else inventory,
+                        )
+                        return bound, assets
+
+                    workflow, assets = compiled(document)
+                    self.assertTrue(workflow["runnable"], workflow["diagnostics"])
+                    self.assertTrue(workflow["prism_source"])
+                    self.assertTrue(workflow["runtime_source"])
+                    self.assertEqual(set(workflow["bindings"]), set(ORDER))
+                    self.assertFalse(compiled(document, [])[0]["runnable"])
+                    broken = deepcopy(document)
+                    broken["operations"]["run_child"]["execution"]["binding"][
+                        "target"
+                    ] = "absent_accumulation_tool"
+                    self.assertFalse(compiled(broken)[0]["runnable"])
+
+                    async def authorize():
+                        pass
+
+                    base = dict(
+                        match=MATCH,
+                        registry=REGISTRY,
+                        context=vars(hub.RunContext()),
+                        repository_root=str(root),
+                    )
+
+                    async def run(inputs=base, doc=document):
+                        bound, received = compiled(doc)
+                        self.assertTrue(bound["runnable"], bound["diagnostics"])
+                        return await execute(bound, received, inputs, remote, authorize)
+
+                    empty_selection = matrix(["crash"])
+                    empty_selection["tests"][0]["module_family"] = "atp"
+                    cases = [
+                        matrix(["pass", "artifact"]),
+                        matrix(["fail", "timeout", "write", "pass"]),
+                        matrix(["missing"]),
+                        empty_selection,
+                        matrix(["large", "fail", "pass"]),
+                    ]
+                    cases[-1]["tests"][1]["expected_exit"] = 7
+                    del cases[-1]["tests"][2]["timeout_seconds"]
+                    filtered = matrix(["pass", "crash", "pass"])
+                    filtered["tests"][1]["module_family"] = "atp"
+                    cases.extend([filtered, CANONICAL, matrix(["fail"] + ["pass"] * 6)])
+                    (root.parent / "modes.json").write_text(
+                        json.dumps(["pass", "pass"])
+                    )
+                    for data in cases:
+                        reset(root)
+                        (root / "tests/test_matrix.json").write_text(json.dumps(data))
+                        result = await run()
+                        self.assertEqual(result["status"], "accepted", result)
+                        route = result["outputs"]["result"]
+                        child = route["children"][0]
+                        self.assertEqual(
+                            [c["operation"] for c in result["calls"]], ORDER
+                        )
+                        self.assertEqual(
+                            [c["tool"] for c in result["calls"]],
+                            ["mathformer_accumulation_route_" + op for op in ORDER],
+                        )
+                        self.assertEqual(len(route["children"]), 1)
+                        self.assertEqual(route["route"]["score"], MATCH["score"])
+                        self.assertEqual(
+                            route["route"]["matched_terms"], MATCH["matched_terms"]
+                        )
+                        self.assertEqual(
+                            child["argv"],
+                            [
+                                sys.executable,
+                                "tests/test_program/run_comprehensive_tests.py",
+                                "--module-family",
+                                "mathformerlib",
+                                "--json",
+                            ],
+                        )
+                        self.assertTrue(child["stdout"], child)
+                        report = json.loads(child["stdout"])
+                        rows = [
+                            r
+                            for r in data["tests"]
+                            if r["module_family"] in {"mathformerlib"}
+                        ]
+                        self.assertEqual(report["families"], ["mathformerlib"])
+                        self.assertEqual(report["summary"]["total"], len(rows))
+                        self.assertEqual(
+                            [r["check_id"] for r in report["results"]],
+                            [r["id"] for r in rows],
+                        )
+                        self.assertEqual(report["schema_errors"], [])
+                        self.assertEqual(child["returncode"], 0 if report["ok"] else 3)
+                        self.assertEqual(route["ok"], report["ok"])
+                        self.assertEqual(
+                            route["status"],
+                            (
+                                "intent_run_completed"
+                                if route["ok"]
+                                else "intent_run_failed"
+                            ),
+                        )
+                        report_root = root / "artifacts/test_program"
+                        self.assertEqual(
+                            json.loads(
+                                (report_root / "deterministic_tests.json").read_text()
+                            ),
+                            report,
+                        )
+                        self.assertFalse(
+                            (report_root / "deterministic_tests.jsonl").exists()
+                        )
+                        self.assertFalse(
+                            (report_root / "deterministic_tests.xml").exists()
+                        )
+                        self.assertTrue((report_root / "dependency_map.json").exists())
+                        ledger = root.parent / "compiler.jsonl"
+                        self.assertEqual(
+                            (
+                                [json.loads(s) for s in ledger.read_text().splitlines()]
+                                if ledger.exists()
+                                else []
+                            ),
+                            [
+                                dict(
+                                    command=[
+                                        sys.executable if part == "{python}" else part
+                                        for part in r["command"]
+                                    ],
+                                    timeout=r.get("timeout_seconds", 120),
+                                )
+                                for r in rows
+                                if not r.get("optional_dependency")
+                            ],
+                        )
+                        if any(r["command"][1] == "write" for r in rows):
+                            self.assertEqual(
+                                [r["status"] for r in report["results"]],
+                                ["fail", "fail", "fail", "pass"],
+                            )
+                            self.assertEqual(report["results"][1]["stdout"], "partial")
+                            self.assertEqual(
+                                report["results"][1]["stderr"], "timeout after 31s"
+                            )
+                            self.assertEqual(child["status"], "undeclared_writes")
+                            self.assertEqual(
+                                child["write_audit"]["unexpected_paths"],
+                                ["undeclared.txt"],
+                            )
+                        if rows and rows[0]["command"][1] == "missing":
+                            self.assertEqual(report["results"][0]["status"], "skip")
+                            self.assertTrue(report["ok"])
+                        self.assertTrue(result["runtime"]["effect_records"])
+                        self.assertTrue(result["runtime"]["provenance"])
+                        self.assertTrue(result["replay_artifacts"])
+                        # Same real subprocess/delegate/report/audit path through
+                        # the frozen entrypoint; compare all non-time output data.
+                        reset(root)
+                        with patch.dict(os.environ, clean_env(), clear=True):
+                            expected = original().run_intent_match(
+                                selected_match(MATCH),
+                                checked_registry(REGISTRY),
+                                hub.RunContext(),
+                                repository_root=root,
+                            )
+                        self.assertEqual(stable_route(route), stable_route(expected))
+                    # One failed route action always completes this one-item
+                    # route. The delegate still executes every selected check.
+                    for keep in [False, True]:
+                        reset(root)
+                        (root / "tests/test_matrix.json").write_text(
+                            json.dumps(CANONICAL)
+                        )
+                        (root.parent / "modes.json").write_text(
+                            json.dumps(["fail", "pass"])
+                        )
+                        inputs = deepcopy(base)
+                        inputs["context"]["keep_going"] = keep
+                        result = await run(inputs)
+                        self.assertEqual(result["status"], "accepted", result)
+                        route = result["outputs"]["result"]
+                        self.assertFalse(route["ok"])
+                        self.assertEqual(
+                            [c["operation"] for c in result["calls"]], ORDER
+                        )
+                        self.assertEqual(len(route["children"]), 1)
+                        child = route["children"][0]
+                        self.assertEqual(child["returncode"], 3)
+                        report = json.loads(child["stdout"])
+                        self.assertEqual(
+                            [r["status"] for r in report["results"]], ["fail", "pass"]
+                        )
+                        self.assertEqual(
+                            len(
+                                (root.parent / "compiler.jsonl")
+                                .read_text()
+                                .splitlines()
+                            ),
+                            2,
+                        )
+                        self.assertEqual(report["results"][0]["returncode"], 7)
+                    # Preflight and dry-run do not launch the delegate.
+                    reset(root)
+                    (root / "tests/test_program/run_comprehensive_tests.py").unlink()
+                    for dry in [False, True]:
+                        for keep in [False, True]:
+                            inputs = deepcopy(base)
+                            inputs["context"].update(dry_run=dry, keep_going=keep)
+                            result = await run(inputs)
+                            expected = hub.run_intent_match(
+                                selected_match(MATCH),
+                                checked_registry(REGISTRY),
+                                hub.RunContext(**inputs["context"]),
+                                repository_root=root,
+                            )
+                            self.assertEqual(result["outputs"], {"result": expected})
+                            self.assertEqual(len(result["calls"]), 5)
+                            self.assertFalse(expected["ok"])
+                            self.assertFalse((root / "artifacts").exists())
+                    populate(root)
+                    inputs = deepcopy(base)
+                    inputs["context"]["dry_run"] = True
+                    result = await run(inputs)
+                    self.assertTrue(result["outputs"]["result"]["ok"])
+                    self.assertEqual(
+                        result["outputs"]["result"]["children"][0]["status"], "dry_run"
+                    )
+                    # Empty mount preserves the default repository with no run.
+                    inputs["repository_root"] = None
+                    result = await run(inputs)
+                    self.assertEqual(
+                        result["outputs"],
+                        {
+                            "result": hub.run_intent_match(
+                                selected_match(MATCH),
+                                checked_registry(REGISTRY),
+                                hub.RunContext(dry_run=True),
+                            )
+                        },
+                    )
+                    # Real inner unexpected launch failure becomes a nonzero
+                    # native delegate exit, preserved as negative child data.
+                    reset(root)
+                    (root / "tests/test_matrix.json").write_text(
+                        json.dumps(matrix(["crash", "pass"]))
+                    )
+                    result = await run()
+                    self.assertEqual(result["status"], "accepted", result)
+                    child = result["outputs"]["result"]["children"][0]
+                    self.assertFalse(child["ok"])
+                    self.assertIn("fixture compiler launch failed", child["stderr"])
+                    self.assertEqual(
+                        len((root.parent / "compiler.jsonl").read_text().splitlines()),
+                        1,
+                    )
+                    reset(root)
+                    (root / "tests/test_matrix.json").write_text(json.dumps(matrix([])))
+                    result = await run()
+                    self.assertEqual(result["status"], "accepted", result)
+                    child = result["outputs"]["result"]["children"][0]
+                    self.assertFalse(child["ok"])
+                    self.assertIn("at least one executable test row", child["stderr"])
+                    self.assertFalse((root.parent / "compiler.jsonl").exists())
+                    # Missing registry metadata propagates at finish, after the
+                    # native unknown_action observation has been accumulated.
+                    inputs = deepcopy(base)
+                    inputs["registry"] = {}
+                    result = await run(inputs)
+                    self.assertEqual(result["status"], "failed", result)
+                    self.assertIsNone(result["outputs"])
+                    self.assertEqual([c["operation"] for c in result["calls"]], ORDER)
+                    # Reject forged commands and route metadata at their bound
+                    # operation, without any retry or downstream completion.
+                    for port in ["registry", "match"]:
+                        inputs = deepcopy(base)
+                        if port == "registry":
+                            inputs[port][ACTION]["command"] = ["arbitrary-command"]
+                        else:
+                            inputs[port]["route"]["title"] = "forged title"
+                        result = await run(inputs)
+                        self.assertEqual(result["status"], "failed", result)
+                        self.assertIsNone(result["outputs"])
+                        self.assertEqual(
+                            len(result["calls"]), 3 if port == "registry" else 2
+                        )
+                    # All budgets/exhaustion are enforced by the real PRISM
+                    # runtime; force exhaustion only in a changed test graph.
+                    inputs = deepcopy(base)
+                    inputs["context"]["dry_run"] = True
+                    for budget in [1, 4]:
+                        changed = deepcopy(document)
+                        changed["policy"]["limits"]["max_operation_calls"] = budget
+                        result = await run(inputs, changed)
+                        self.assertEqual(result["status"], "failed", result)
+                        self.assertIsNone(result["outputs"])
+                        self.assertEqual(
+                            sum(
+                                bool(c.get("transport_call_performed"))
+                                for c in result["calls"]
+                            ),
+                            budget,
+                        )
+                    changed = deepcopy(document)
+                    changed["flow"]["steps"][1]["until"] = {"literal": False}
+                    result = await run(inputs, changed)
+                    self.assertEqual(result["status"], "failed", result)
+                    self.assertEqual(
+                        [c["operation"] for c in result["calls"]], ORDER[:-1]
+                    )
+                    self.assertIsNone(result["outputs"])
+                    changed = deepcopy(document)
+                    changed["flow"]["steps"][1]["body"]["steps"][0]["arguments"][
+                        "state"
+                    ] = {"literal": {"ok": True, "children": [{"ok": True}]}}
+                    result = await run(inputs, changed)
+                    self.assertEqual(result["status"], "failed", result)
+                    self.assertEqual(len(result["calls"]), 2)
+                    # The service mount check precedes any native process.
+                    inputs["context"]["dry_run"] = False
+                    inputs["repository_root"] = str(root.parent / "outside")
+                    result = await run(inputs)
+                    self.assertEqual(result["status"], "failed", result)
+                    self.assertEqual(len(result["calls"]), 3)
+                    timed = deepcopy(document)
+                    timed["policy"]["limits"]["wall_time_seconds"] = 1
+                    bound, received = compiled(timed)
+
+                    async def waiting_authority():
+                        await asyncio.Event().wait()
+
+                    with self.assertRaises(TimeoutError):
+                        await execute(bound, received, base, remote, waiting_authority)
+                except Exception as error:
+                    failure = error
+            self.assertFalse(manager.active)
+            if failure:
+                raise failure
+
+
+if __name__ == "__main__":
+    program = unittest.main(verbosity=2, exit=False)
+    result = program.result
+    raise SystemExit(
+        0 if result.wasSuccessful() and result.testsRun > len(result.skipped) else 1
+    )

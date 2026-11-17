@@ -1,0 +1,404 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_paper_workflow_catalog_workflow
+version: 1.0.0
+kind: workflow
+description: Read an existing workflow graph and produce JSON, Markdown and LaTeX
+  catalogue artifacts without executing represented workflows.
+aliases:
+- paper:workflow-catalog
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type: array
+      items:
+        type: string
+  Path:
+    schema:
+      type: string
+  Flag:
+    schema:
+      type: boolean
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+  Paths:
+    schema:
+      type: object
+      required:
+      - graph
+      - output
+      - json
+      properties:
+        graph:
+          type: string
+        output:
+          type: string
+        json:
+          type: boolean
+  Graph:
+    schema:
+      type: string
+      description: Native graph JSON text preserving stack insertion order through
+        canonicalizing transports.
+  Catalogue:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - source_graph
+      - source_html
+      - summary
+      - core_workflow_count
+      - support_workflow_count
+      - workflows
+      properties:
+        schema_version:
+          const: 1
+        source_graph:
+          type: string
+        source_html:
+          type: string
+        summary:
+          type: object
+        core_workflow_count:
+          type: integer
+          minimum: 0
+        support_workflow_count:
+          type: integer
+          minimum: 0
+        workflows:
+          type: array
+          items:
+            type: object
+  WriteResult:
+    schema:
+      type: object
+      required:
+      - ok
+      - json_output
+      - markdown_output
+      - latex_output
+      - workflow_count
+      - core_workflow_count
+      - support_workflow_count
+      properties:
+        ok:
+          const: true
+        json_output:
+          type: string
+        markdown_output:
+          type: string
+        latex_output:
+          type: string
+        workflow_count:
+          type: integer
+          minimum: 0
+        core_workflow_count:
+          type: integer
+          minimum: 0
+        support_workflow_count:
+          type: integer
+          minimum: 0
+  Context:
+    representation: value
+    schema:
+      type: object
+      required:
+      - repository_root
+      properties:
+        repository_root:
+          type: string
+      additionalProperties: false
+inputs:
+  argv:
+    type: Argv
+  context:
+    type: Context
+outputs:
+  catalogue:
+    type: Catalogue
+    value:
+      ref: flow.outputs.catalogue
+  result:
+    type: WriteResult
+    value:
+      ref: flow.outputs.result
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  parse_paths:
+    inputs:
+      argv:
+        type: Argv
+      context:
+        type: Context
+    outputs:
+      paths:
+        type: Paths
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_paper_catalog_parse_paths
+        operation: mathformer_paper_catalog_parse_paths
+  load_model:
+    inputs:
+      paths:
+        type: Paths
+    outputs:
+      model:
+        type: Graph
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_paper_catalog_load_graph
+        operation: mathformer_paper_catalog_load_graph
+  catalogue:
+    inputs:
+      model:
+        type: Graph
+    outputs:
+      packet:
+        type: Catalogue
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_paper_catalog_catalogue
+        operation: mathformer_paper_catalog_catalogue
+  write_outputs:
+    inputs:
+      packet:
+        type: Catalogue
+      paths:
+        type: Paths
+      context:
+        type: Context
+    outputs:
+      result:
+        type: WriteResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_paper_catalog_write_outputs
+        operation: mathformer_paper_catalog_write_outputs
+  emit_result:
+    inputs:
+      result:
+        type: WriteResult
+      json_output:
+        type: Flag
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_paper_catalog_emit_result
+        operation: mathformer_paper_catalog_emit_result
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse_paths
+    arguments:
+      argv:
+        ref: inputs.argv
+      context:
+        ref: inputs.context
+  - id: load
+    kind: call
+    operation: load_model
+    arguments:
+      paths:
+        ref: steps.parse.outputs.paths
+  - id: collect
+    kind: call
+    operation: catalogue
+    arguments:
+      model:
+        ref: steps.load.outputs.model
+  - id: write
+    kind: call
+    operation: write_outputs
+    arguments:
+      packet:
+        ref: steps.collect.outputs.packet
+      paths:
+        ref: steps.parse.outputs.paths
+      context:
+        ref: inputs.context
+  - id: emit
+    kind: call
+    operation: emit_result
+    arguments:
+      result:
+        ref: steps.write.outputs.result
+      json_output:
+        ref: steps.parse.outputs.paths.json
+  outputs:
+    catalogue:
+      type: Catalogue
+      value:
+        ref: steps.collect.outputs.packet
+    result:
+      type: WriteResult
+      value:
+        ref: steps.write.outputs.result
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.emit.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - selected_graph
+      write:
+      - selected_output_parent
+      - selected_output_json
+      - selected_output_markdown
+      - selected_output_latex
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - read_existing_workflow_graph
+    - write_catalogue_artifacts
+    forbidden:
+    - execute_represented_workflows
+    - regenerate_workflow_graph
+    - infer_scientific_truth_from_completion
+    - bypass_native_controls
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Descriptive catalogue of existing graph evidence; no scientific validation
+    or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: paper_skills/framework-repository-cartographer/scripts/collect_workflow_catalog_for_paper.py
+    digest: sha256:c7daab1278e9a9d45e1af7163a5f56580701ea89b85c8bf319ab7c191b9d4cc8
+    selector: main; parse_paths; load_model; catalogue; write_outputs; emit_result
+  - path: scripts/paper_workflow_catalog_tools.py
+    digest: sha256:9c0d098e0fdc0914e322ff028b43b4cba63da55dfdcc7b472ce43d461c3f77d1
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: scripts/mathformer.py
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Helper traversal, ordered first-match selection and rendering remain inside source-owned
+    operations; all main composition steps are bound.
+  - Native CLI has no deadline; Lunar imposes the authored 3600-second and five-call
+    host budgets without capping source collection sizes.
+  - Required receipts, digests and provenance are host obligations. Hub preflight,
+    dry-run and post-run auditing surround the selected main entrypoint.
+  - MCP converts argparse process exits to terminal tool errors and routes native
+    emission to diagnostics; service mount and output guards narrow filesystem authority.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: paper:workflow-catalog
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: paper:workflow-catalog
+      summary: Collect workflow graph evidence into paper-ready catalogue artifacts.
+      family: paper
+      kind: generation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - paper_skills/framework-repository-cartographer/scripts/collect_workflow_catalog_for_paper.py
+      - --json
+      depends_on: []
+      writes:
+      - artifacts/paper_skills/
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Dependency-free registered leaf under scripts/mathformer.py; paper.workflow
+      intent includes it; MCP tools delegate to the same functions.
+    launch: Hub preflight failure or dry-run prevents launch; post-run write auditing
+      can mark failure.
+    defaults:
+      graph: artifacts/workflow_graphs/workflow_graphs.json
+      output: artifacts/paper_skills/workflow_catalog_for_paper.json
+    argv: Supply [] for native CLI defaults or [--json] for registered leaf emission;
+      library adapter input represents process argv.
+    failure: Parse, malformed-input, read, render, write or emission errors terminate
+      without recovery. Writes are sequential and nontransactional.
+    timing: No native global deadline, retry, convergence, resumable state or checkpoint
+      support.
+  mathformer.catalogue_semantics:
+    carried_state: Workflows starts empty; exactly one row appended per input stack
+      in insertion order. Final counts scan the completed list; summary is copied.
+    relation_first_match:
+    - 'ID contains preformalization or textbook: intake and expand'
+    - 'ID contains mathlib: ground'
+    - 'ID contains draft-execute-refine: draft, execute and repair'
+    - 'ID contains artifact-acceptance or consistency: consistency'
+    - 'ID contains physics: physics, plus symbolic only if ID also contains sympy'
+    - 'ID contains premise: premise and atp'
+    - 'ID contains sympy: symbolic'
+    - 'ID contains workflow-graph: observe and reflect'
+    - 'ID contains reflection: reflect'
+    - 'family.lower() contains control: control'
+    - 'otherwise: support'
+    iteration: All stack and rendering traversals stop on input exhaustion with normal
+      return; no stack-count cap. Only first_hooks extraction is capped at five; hook_count
+      covers all hooks.
+    granularity: Main composition is explicit; native helper loops and nested branch
+      selection remain within catalogue and write_outputs, avoiding an invented literal
+      traversal bound.
+  mathformer.transport:
+    graph_model: JSON text preserves native stacks insertion order through Lunar canonicalization.
+      Catalogue workflow records remain an ordered array.
+    context: repository_root supplies the native mount; the independent service requires
+      its configured repository mount and guards each output with its write policy.
+    emission: Native print output is emitted to MCP stderr; CLI stdout is unchanged.
+# REUSE-IgnoreEnd

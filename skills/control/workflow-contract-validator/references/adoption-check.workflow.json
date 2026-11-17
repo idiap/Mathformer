@@ -1,0 +1,761 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_adoption_check_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Ordered portable adoption checks through the Python hub.",
+  "aliases": [
+    "adoption:check"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Strings": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Admission": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "accepted",
+          "status",
+          "ancestry"
+        ],
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "accepted",
+              "unknown_action",
+              "dependency_cycle",
+              "extra_args_for_sequence"
+            ]
+          },
+          "ancestry": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "ChildState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "index",
+          "children",
+          "dependencies_ok",
+          "ancestry"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object"
+            }
+          },
+          "dependencies_ok": {
+            "type": "boolean"
+          },
+          "ancestry": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "extra_args": {
+      "type": "Strings"
+    },
+    "seen": {
+      "type": "Strings"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "admit": {
+      "inputs": {
+        "extra_args": {
+          "type": "Strings"
+        },
+        "seen": {
+          "type": "Strings"
+        }
+      },
+      "outputs": {
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_admit",
+          "operation": "mathformer_adoption_admit"
+        }
+      }
+    },
+    "reject": {
+      "inputs": {
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_reject",
+          "operation": "mathformer_adoption_reject"
+        }
+      }
+    },
+    "initialize": {
+      "inputs": {
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "ChildState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_initialize",
+          "operation": "mathformer_adoption_initialize"
+        }
+      }
+    },
+    "visit_child": {
+      "inputs": {
+        "state": {
+          "type": "ChildState"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_visit_child",
+          "operation": "mathformer_adoption_visit_child"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "ChildState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "ChildState"
+        },
+        "done": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_advance",
+          "operation": "mathformer_adoption_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "ChildState"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_finish",
+          "operation": "mathformer_adoption_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "admission",
+        "kind": "call",
+        "operation": "admit",
+        "arguments": {
+          "extra_args": {
+            "ref": "inputs.extra_args"
+          },
+          "seen": {
+            "ref": "inputs.seen"
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "accepted",
+            "when": {
+              "ref": "steps.admission.outputs.admission.accepted"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "initialize",
+                  "kind": "call",
+                  "operation": "initialize",
+                  "arguments": {
+                    "admission": {
+                      "ref": "steps.admission.outputs.admission"
+                    }
+                  }
+                },
+                {
+                  "id": "child_0",
+                  "kind": "call",
+                  "operation": "visit_child",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.initialize.outputs.state"
+                    },
+                    "context": {
+                      "ref": "inputs.context"
+                    }
+                  }
+                },
+                {
+                  "id": "advance_0",
+                  "kind": "call",
+                  "operation": "advance",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.initialize.outputs.state"
+                    },
+                    "child": {
+                      "ref": "steps.child_0.outputs.result"
+                    },
+                    "context": {
+                      "ref": "inputs.context"
+                    }
+                  }
+                },
+                {
+                  "id": "remaining_0",
+                  "kind": "switch",
+                  "cases": [
+                    {
+                      "id": "continue",
+                      "when": {
+                        "not": {
+                          "ref": "steps.advance_0.outputs.done"
+                        }
+                      },
+                      "body": {
+                        "kind": "sequence",
+                        "steps": [
+                          {
+                            "id": "child_1",
+                            "kind": "call",
+                            "operation": "visit_child",
+                            "arguments": {
+                              "state": {
+                                "ref": "steps.advance_0.outputs.state"
+                              },
+                              "context": {
+                                "ref": "inputs.context"
+                              }
+                            }
+                          },
+                          {
+                            "id": "advance_1",
+                            "kind": "call",
+                            "operation": "advance",
+                            "arguments": {
+                              "state": {
+                                "ref": "steps.advance_0.outputs.state"
+                              },
+                              "child": {
+                                "ref": "steps.child_1.outputs.result"
+                              },
+                              "context": {
+                                "ref": "inputs.context"
+                              }
+                            }
+                          },
+                          {
+                            "id": "remaining_1",
+                            "kind": "switch",
+                            "cases": [
+                              {
+                                "id": "continue",
+                                "when": {
+                                  "not": {
+                                    "ref": "steps.advance_1.outputs.done"
+                                  }
+                                },
+                                "body": {
+                                  "kind": "sequence",
+                                  "steps": [
+                                    {
+                                      "id": "child_2",
+                                      "kind": "call",
+                                      "operation": "visit_child",
+                                      "arguments": {
+                                        "state": {
+                                          "ref": "steps.advance_1.outputs.state"
+                                        },
+                                        "context": {
+                                          "ref": "inputs.context"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "advance_2",
+                                      "kind": "call",
+                                      "operation": "advance",
+                                      "arguments": {
+                                        "state": {
+                                          "ref": "steps.advance_1.outputs.state"
+                                        },
+                                        "child": {
+                                          "ref": "steps.child_2.outputs.result"
+                                        },
+                                        "context": {
+                                          "ref": "inputs.context"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "remaining_2",
+                                      "kind": "switch",
+                                      "cases": [
+                                        {
+                                          "id": "continue",
+                                          "when": {
+                                            "not": {
+                                              "ref": "steps.advance_2.outputs.done"
+                                            }
+                                          },
+                                          "body": {
+                                            "kind": "sequence",
+                                            "steps": [
+                                              {
+                                                "id": "child_3",
+                                                "kind": "call",
+                                                "operation": "visit_child",
+                                                "arguments": {
+                                                  "state": {
+                                                    "ref": "steps.advance_2.outputs.state"
+                                                  },
+                                                  "context": {
+                                                    "ref": "inputs.context"
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "id": "advance_3",
+                                                "kind": "call",
+                                                "operation": "advance",
+                                                "arguments": {
+                                                  "state": {
+                                                    "ref": "steps.advance_2.outputs.state"
+                                                  },
+                                                  "child": {
+                                                    "ref": "steps.child_3.outputs.result"
+                                                  },
+                                                  "context": {
+                                                    "ref": "inputs.context"
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "kind": "call",
+                                                "operation": "finish",
+                                                "arguments": {
+                                                  "state": {
+                                                    "ref": "steps.advance_3.outputs.state"
+                                                  }
+                                                },
+                                                "id": "finish"
+                                              }
+                                            ],
+                                            "outputs": {
+                                              "result": {
+                                                "type": "HubResult",
+                                                "value": {
+                                                  "ref": "steps.finish.outputs.result"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      ],
+                                      "default": {
+                                        "kind": "call",
+                                        "operation": "finish",
+                                        "arguments": {
+                                          "state": {
+                                            "ref": "steps.advance_2.outputs.state"
+                                          }
+                                        }
+                                      },
+                                      "outputs": {
+                                        "result": {
+                                          "type": "HubResult",
+                                          "value": {
+                                            "ref": "selected.outputs.result"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "outputs": {
+                                    "result": {
+                                      "type": "HubResult",
+                                      "value": {
+                                        "ref": "steps.remaining_2.outputs.result"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ],
+                            "default": {
+                              "kind": "call",
+                              "operation": "finish",
+                              "arguments": {
+                                "state": {
+                                  "ref": "steps.advance_1.outputs.state"
+                                }
+                              }
+                            },
+                            "outputs": {
+                              "result": {
+                                "type": "HubResult",
+                                "value": {
+                                  "ref": "selected.outputs.result"
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        "outputs": {
+                          "result": {
+                            "type": "HubResult",
+                            "value": {
+                              "ref": "steps.remaining_1.outputs.result"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "default": {
+                    "kind": "call",
+                    "operation": "finish",
+                    "arguments": {
+                      "state": {
+                        "ref": "steps.advance_0.outputs.state"
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "result": {
+                      "type": "HubResult",
+                      "value": {
+                        "ref": "selected.outputs.result"
+                      }
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "result": {
+                  "type": "HubResult",
+                  "value": {
+                    "ref": "steps.remaining_0.outputs.result"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "reject",
+          "arguments": {
+            "admission": {
+              "ref": "steps.admission.outputs.admission"
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "HubResult",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.dispatch.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 11
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked control-flow description; no scientific validity or runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_action; admit_action; reject_action; initialize_dependencies; visit_dependency; advance_dependencies; finish_dependencies; run_leaf_action; build_registry adoption:check",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/adoption_check_tools.py",
+        "selector": "register_adoption_check_tools",
+        "digest": "sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_adoption_check_tools(mcp)",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "generate adoption:check authored contract selection",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "service_coverage_report advertised tools",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "tests/mcp/run_adoption_check_workflow_tests.py",
+        "selector": "AdoptionTests",
+        "digest": "sha256:b380e234004eba0a808c37a717cd059478245782d37b1887f0d8806a774b2471"
+      },
+      {
+        "path": "tests/mcp/fixtures/adoption_compiler.py",
+        "selector": "deterministic external compiler fixture",
+        "digest": "sha256:64ca90cb1ccc2ca6091403ccf6a5e2dd65e6265b17ed1d43990da5c134cbc407"
+      },
+      {
+        "path": "tests/mcp/fixtures/adoption_run_action_original.py.txt",
+        "selector": "immutable original run_action test oracle",
+        "digest": "sha256:fd8a3303d9b829bd357d69f8762951689bd72dbe3a33a4949fe1c1f6bcdca757"
+      }
+    ],
+    "gaps": [
+      "Leaf helper internals remain owned by visit_child; payload schemas type hub envelopes.",
+      "The 3600-second limit is normalization metadata; native execution has no overall deadline or configured child timeout.",
+      "Required receipts/events are contract metadata; optional native logs are not upgraded.",
+      "Network and external effects require native qualification; labels confer no grants."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "adoption:check",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "adoption:check",
+        "family": "control",
+        "kind": "sequence",
+        "safety": "read_only",
+        "command": [],
+        "writes": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Python hub and MCP step tools share entry guards, dependency state transitions, recursive visits and sequence finalization. Lunar executes the typed composition.",
+      "callers": [
+        "main direct run branch",
+        "run_intent_match via repository.portable-adoption"
+      ],
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report"
+      ],
+      "failure_policy": "Return native failure payloads unchanged; unexpected exceptions propagate.",
+      "ancestry": "Copied recursion ancestry only; never a global completed-action cache.",
+      "runtime_qualification": "Registered MCP interfaces and real Lunar PRISM parser/checker/compiler/runtime tested deterministically, using native dry-run and recursion guard failures; no production adoption subprocesses were launched."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [
+        "adoption:validate",
+        "adoption:catalog-check",
+        "adoption:test-contracts",
+        "adoption:test-provenance"
+      ],
+      "child_commands": [
+        "portable_adoption.py validate",
+        "portable_adoption.py catalog --check",
+        "tests/control/test_portable_adoption.py",
+        "tests/control/test_adoption_provenance.py"
+      ],
+      "command_after_dependencies": false,
+      "bounds": "Exactly four registered children; each attempted at most once, with no retry or convergence loop.",
+      "exhaustion": "Four guarded visits unroll the fixed native for-loop. advance marks done after the fourth child or the first failure without keep_going; later guards skip calls. No fifth visit, retry or convergence is possible. The prior loop on_exhausted path was unreachable with this registry.",
+      "compiler_lowering": "Four guarded visits preserve the fixed registry loop without a branch-local loop, which Lunar currently cannot compile."
+    }
+  }
+}

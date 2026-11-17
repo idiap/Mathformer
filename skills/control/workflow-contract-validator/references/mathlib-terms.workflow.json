@@ -1,0 +1,630 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_mathlib_term_annotations_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Fixed --self-test --json path; exhaust all five fixtures, write results, print JSON, and return status.",
+  "aliases": [
+    "mathlib:term-annotations"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "FixtureState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "index",
+          "results"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "results": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Fixture": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "expect_concept": {
+            "type": "string"
+          },
+          "expect_any": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "forbid_first": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "AnnotationReport": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "annotation_count",
+          "annotations",
+          "gap_ledger"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "annotation_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "annotations": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "gap_ledger": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "SelfTestReport": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "style",
+          "ok",
+          "results"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "style": {
+            "const": "mathlib_term_annotation_self_test"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "results": {
+            "type": "array",
+            "minItems": 5,
+            "maxItems": 5,
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          1
+        ]
+      }
+    },
+    "OutputPath": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "Stdout": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "output": {
+      "type": "OutputPath",
+      "required": true
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "SelfTestReport",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    },
+    "stdout": {
+      "type": "Stdout",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "FixtureState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_terms_initialize",
+          "operation": "mathformer_terms_initialize"
+        }
+      }
+    },
+    "select_fixture": {
+      "inputs": {
+        "state": {
+          "type": "FixtureState"
+        }
+      },
+      "outputs": {
+        "fixture": {
+          "type": "Fixture"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_terms_select_fixture",
+          "operation": "mathformer_terms_select_fixture"
+        }
+      }
+    },
+    "annotate": {
+      "inputs": {
+        "fixture": {
+          "type": "Fixture"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "AnnotationReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_terms_annotate",
+          "operation": "mathformer_terms_annotate"
+        }
+      }
+    },
+    "check_append": {
+      "inputs": {
+        "state": {
+          "type": "FixtureState"
+        },
+        "fixture": {
+          "type": "Fixture"
+        },
+        "report": {
+          "type": "AnnotationReport"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "FixtureState"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_terms_check_append",
+          "operation": "mathformer_terms_check_append"
+        }
+      }
+    },
+    "write_report": {
+      "inputs": {
+        "state": {
+          "type": "FixtureState"
+        },
+        "output": {
+          "type": "OutputPath"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "SelfTestReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_terms_write_report",
+          "operation": "mathformer_terms_write_report"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "report": {
+          "type": "SelfTestReport"
+        },
+        "code": {
+          "type": "ExitCode"
+        }
+      },
+      "outputs": {
+        "code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Stdout"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_terms_emit",
+          "operation": "mathformer_terms_emit"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "fixtures",
+        "kind": "loop",
+        "state_type": "FixtureState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 5,
+        "on_exhausted": "fail",
+        "description": "Exactly five source fixtures; done is true on iteration five, so normal completion occurs at the bound.",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select_fixture",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                }
+              }
+            },
+            {
+              "id": "annotate",
+              "kind": "call",
+              "operation": "annotate",
+              "arguments": {
+                "fixture": {
+                  "ref": "steps.select.outputs.fixture"
+                }
+              }
+            },
+            {
+              "id": "append",
+              "kind": "call",
+              "operation": "check_append",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "fixture": {
+                  "ref": "steps.select.outputs.fixture"
+                },
+                "report": {
+                  "ref": "steps.annotate.outputs.report"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "FixtureState",
+              "value": {
+                "ref": "steps.append.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.append.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "FixtureState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "write",
+        "kind": "call",
+        "operation": "write_report",
+        "arguments": {
+          "state": {
+            "ref": "steps.fixtures.outputs.state"
+          },
+          "output": {
+            "ref": "inputs.output"
+          }
+        }
+      },
+      {
+        "id": "status",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "passed",
+            "when": {
+              "ref": "steps.write.outputs.report.ok"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "emit",
+              "arguments": {
+                "report": {
+                  "ref": "steps.write.outputs.report"
+                },
+                "code": {
+                  "literal": 0
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "emit",
+          "arguments": {
+            "report": {
+              "ref": "steps.write.outputs.report"
+            },
+            "code": {
+              "literal": 1
+            }
+          }
+        },
+        "outputs": {
+          "code": {
+            "type": "ExitCode",
+            "value": {
+              "ref": "selected.outputs.code"
+            }
+          },
+          "stdout": {
+            "type": "Stdout",
+            "value": {
+              "ref": "selected.outputs.stdout"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "SelfTestReport",
+        "value": {
+          "ref": "steps.write.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.status.outputs.code"
+        }
+      },
+      "stdout": {
+        "type": "Stdout",
+        "value": {
+          "ref": "steps.status.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/mathlib_index/term_annotation_self_test.json",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 18
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked description; annotations remain unverified and self-test success proves no theorem."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/mathlib/mathlib-term-expansion-annotator/scripts/annotate_mathlib_terms.py",
+        "digest": "sha256:c335c71785ef7bca93222f6ab1da9a26f813530bb10415b1d20df7e84e5d4bc9",
+        "selector": "main \u2192 self_test \u2192 annotate_text"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathlib_term_tools.py",
+        "digest": "sha256:1ce504a359afccac32e0be1d08394770084af0726a3b232c786da69761306911"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "skills/mathlib/mathlib-concept-ontology-manager/scripts/ontology.py",
+        "digest": "sha256:bfc6ccc9c90b3c75f7089c983eb2332f54c9a53ee40f4d76a32e05cabe27b3c8"
+      },
+      {
+        "path": "skills/mathlib/mathlib-concept-ontology-manager/references/core.yaml",
+        "digest": "sha256:fa0a5060477bb9dca4abe490401b45f4db54187e3f2e268d15a609f79f2cfdd6"
+      }
+    ],
+    "gaps": [
+      "Hub admission, preflight, dry-run, subprocess launch and write audit are outside the selected CLI-body projection; annotation iterations remain inside the real annotate_text call. Native source has no global timeout; Lunar enforces descriptor ceilings."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "mathlib:term-annotations",
+      "owner_skill": "skills/mathlib/mathlib-term-expansion-annotator/SKILL.md",
+      "contract": {
+        "id": "mathlib:term-annotations",
+        "family": "mathlib",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "skills/mathlib/mathlib-term-expansion-annotator/scripts/annotate_mathlib_terms.py",
+          "--self-test",
+          "--json"
+        ],
+        "depends_on": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null,
+        "writes": [
+          "artifacts/mathlib_index/term_annotation_self_test.json"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Existing controller admits and preflights, returns without launch on rejection or dry-run, otherwise launches once then audits writes.",
+      "failure_policy": "Exceptions propagate in the CLI; failed fixture rows do not stop iteration; exit 1 or a failed write audit leaves hub ok=false.",
+      "scientific_payloads": "SelfTestReport is the CLI payload; the hub wraps stdout, returncode and audit in its native envelope."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "command_after_dependencies": false
+    }
+  }
+}

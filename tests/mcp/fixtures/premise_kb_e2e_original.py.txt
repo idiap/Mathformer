@@ -1,0 +1,216 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+#
+# Intent:
+#   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+#
+# Function:
+#   Contains executable tests, fixtures, and manifests used for local and CI validation.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""End-to-end regression for the standalone premise KB."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import argparse
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = REPO_ROOT / "scripts" / "manage_premise_kb.py"
+
+
+def run_cli(*args: str) -> dict[str, Any]:
+    """Document the responsibility of ``run_cli``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "--json", *args],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"command failed: {' '.join(args)}\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+        )
+    return json.loads(completed.stdout)
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--kb-root",
+        type=Path,
+        default=Path("artifacts/kb/premise_kb_e2e_test"),
+    )
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+
+    kb_root = args.kb_root
+    absolute_root = kb_root if kb_root.is_absolute() else REPO_ROOT / kb_root
+    if absolute_root.exists():
+        shutil.rmtree(absolute_root)
+
+    init = run_cli("--kb-root", str(kb_root), "init")
+    seeds = run_cli("--kb-root", str(kb_root), "ingest-seeds")
+    vampire = run_cli(
+        "--kb-root",
+        str(kb_root),
+        "ingest-vampire",
+        "--artifact-root",
+        "artifacts/vampire_atp",
+        "--limit",
+        "12",
+    )
+    bloom = run_cli("--kb-root", str(kb_root), "build-bloom")
+    embeddings = run_cli(
+        "--kb-root", str(kb_root), "build-embeddings", "--dimension", "256"
+    )
+    membership = run_cli(
+        "--kb-root",
+        str(kb_root),
+        "has",
+        "--statement",
+        "In a group, the inverse of a product is the product of the inverses in reverse order.",
+    )
+    absent = run_cli(
+        "--kb-root",
+        str(kb_root),
+        "has",
+        "--statement",
+        "Every compact operator theorem about Banach spaces is currently absent from this tiny test KB.",
+    )
+    search = run_cli(
+        "--kb-root",
+        str(kb_root),
+        "search",
+        "--query",
+        "inverse of a triple product in a group reverses order",
+        "--domain-tag",
+        "group",
+        "--k",
+        "5",
+    )
+    distance = run_cli(
+        "--kb-root",
+        str(kb_root),
+        "distance",
+        "--query",
+        "inverse of a triple product in a group reverses order",
+        "--entry-id",
+        "group.inverse_triple_product_reverse_order",
+    )
+    promote = run_cli(
+        "--kb-root",
+        str(kb_root),
+        "promote",
+        "--entry-id",
+        "group.inverse_product_reverse_order",
+        "--status",
+        "reviewed_informal",
+        "--notes",
+        "reviewed by e2e regression",
+    )
+    reject = run_cli(
+        "--kb-root",
+        str(kb_root),
+        "reject",
+        "--entry-id",
+        "group.right_identity",
+        "--notes",
+        "e2e rejection path only",
+    )
+    report = run_cli("--kb-root", str(kb_root), "report")
+
+    hit_ids = [hit["entry"]["id"] for hit in search["hits"]]
+    assertions = {
+        "init_ok": init["ok"],
+        "seeds_added": seeds["entry_count"] >= 8,
+        "vampire_import_seen": vampire["candidate_count"] >= 1,
+        "bloom_manifest_written": Path(bloom["paths"]["manifest"]).is_file(),
+        "embedding_index_written": Path(embeddings["embedding_index"]).is_file(),
+        "exact_membership_resolves": membership["membership"]["probably_present"]
+        and "group.inverse_product_reverse_order"
+        in membership["membership"]["resolved_entry_ids"],
+        "absent_is_definitely_absent": not absent["membership"]["probably_present"],
+        "semantic_search_finds_group_fact": any(
+            hit_id
+            in {
+                "group.inverse_triple_product_reverse_order",
+                "vampire.group_inverse_of_triple_product_reverses_order",
+                "group.inverse_product_reverse_order",
+            }
+            for hit_id in hit_ids
+        ),
+        "search_reports_distance": all(
+            "cosine_distance" in hit for hit in search["hits"]
+        ),
+        "geometric_distance_is_bounded": 0
+        <= distance["distance"]["cosine_distance"]
+        <= 1,
+        "promote_updates_status": promote["entry"]["status"] == "reviewed_informal",
+        "reject_updates_status": reject["entry"]["status"] == "rejected",
+        "report_counts_entries": report["entry_count"] >= 7
+        and report["rejected_count"] >= 1,
+    }
+    payload = {
+        "ok": all(assertions.values()),
+        "kb_root": str(absolute_root),
+        "assertions": assertions,
+        "top_hit_ids": hit_ids,
+        "distance": distance["distance"],
+        "report": report,
+    }
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"ok: {payload['ok']}")
+        print(f"kb_root: {payload['kb_root']}")
+        print(f"top_hit_ids: {', '.join(hit_ids)}")
+    return 0 if payload["ok"] else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

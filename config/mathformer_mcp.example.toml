@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-FileContributor: Danilo Gusicuma <danilo.gusicuma@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Example configuration for an independent Mathformer MCP service deployment.
+# Copy to config/mathformer_mcp.local.toml and fill values locally.
+
+[service]
+name = "mathformer-mcp"
+transport = "streamable-http"
+host = "127.0.0.1"
+port = 8765
+readonly = true
+rate_limit_per_minute = 60
+default_timeout_seconds = 600
+call_log_path = "artifacts/mcp_server/calls.jsonl"
+
+[security]
+# Prefer a secret value in the local file. Do not commit real tokens.
+mcp_bearer_token = ""
+require_auth_for_http = true
+
+[paths]
+repo_root = "."
+artifacts_dir = "artifacts"
+venv_python = ".venv/bin/python"
+
+[dependencies]
+profile = "mcp-service"
+include_lean = true
+include_atp_kb = true
+include_sympy = true
+include_benchmarks = true
+include_paper_extraction = true
+include_mcp = true
+
+[external_api_keys]
+# Fill only in ignored local config. These names are intentionally service
+# config keys, not skill environment variables.
+openai_api_key = ""
+anthropic_api_key = ""
+google_api_key = ""
+huggingface_token = ""
+
+[providers]
+default_llm_provider = ""
+default_llm_model = ""
+agentc_aspect_description = "Preserve the mathematical meaning of the informal statement."
+default_embedding_provider = ""
+allow_network_tools = false
+
+[lean]
+lake_bin = "lake"
+# Existing Lake project containing Mathlib.
+workdir = ""
+lean_timeout_seconds = 600
+
+[atp]
+vampire_bin = ""
+vampire_timeout_seconds = 60

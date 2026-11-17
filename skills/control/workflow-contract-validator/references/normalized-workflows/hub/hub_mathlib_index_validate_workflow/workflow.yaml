@@ -1,0 +1,366 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_mathlib_index_validate_workflow
+version: 1.0.0
+kind: workflow
+description: Validate the existing index using only Lean version and Mathlib Git revision.
+aliases:
+- mathlib:index-validate
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Boolean:
+    schema:
+      type: boolean
+  ValidationResult:
+    schema:
+      type: object
+      required:
+      - ok
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+        mathlib_root:
+          type: string
+        output:
+          type: string
+        style:
+          const: mathlib_index_validation
+        stale:
+          type: boolean
+        version_stamp: {}
+      additionalProperties: false
+  Index:
+    schema:
+      type: string
+      description: Lossless JSON transport of the native loaded index, with no shape
+        validation.
+  PathContext:
+    schema:
+      type: string
+      description: Native read path; empty string selects the source parser default.
+inputs:
+  mathlib_root:
+    type: PathContext
+  output:
+    type: PathContext
+outputs:
+  result:
+    type: ValidationResult
+    value:
+      ref: flow.outputs.result
+operations:
+  root_exists:
+    inputs:
+      mathlib_root:
+        type: PathContext
+    outputs:
+      exists:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathlib_index_root_exists
+        operation: mathformer_mathlib_index_root_exists
+  missing_root:
+    inputs:
+      mathlib_root:
+        type: PathContext
+    outputs:
+      result:
+        type: ValidationResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathlib_index_missing_root
+        operation: mathformer_mathlib_index_missing_root
+  index_exists:
+    inputs:
+      output:
+        type: PathContext
+    outputs:
+      exists:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathlib_index_index_exists
+        operation: mathformer_mathlib_index_index_exists
+  missing_index:
+    inputs:
+      output:
+        type: PathContext
+    outputs:
+      result:
+        type: ValidationResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathlib_index_missing_index
+        operation: mathformer_mathlib_index_missing_index
+  load_index:
+    inputs:
+      output:
+        type: PathContext
+    outputs:
+      index:
+        type: Index
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathlib_index_load_index
+        operation: mathformer_mathlib_index_load_index
+  compare_and_return:
+    inputs:
+      index:
+        type: Index
+      mathlib_root:
+        type: PathContext
+      output:
+        type: PathContext
+    outputs:
+      result:
+        type: ValidationResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathlib_index_compare_and_return
+        operation: mathformer_mathlib_index_compare_and_return
+flow:
+  kind: sequence
+  steps:
+  - id: check_root
+    kind: call
+    operation: root_exists
+    arguments:
+      mathlib_root:
+        ref: inputs.mathlib_root
+  - id: root_branch
+    kind: switch
+    cases:
+    - id: root_missing
+      when:
+        not:
+          ref: steps.check_root.outputs.exists
+      body:
+        kind: sequence
+        steps:
+        - id: return_root_error
+          kind: call
+          operation: missing_root
+          arguments:
+            mathlib_root:
+              ref: inputs.mathlib_root
+        outputs:
+          result:
+            type: ValidationResult
+            value:
+              ref: steps.return_root_error.outputs.result
+    default:
+      kind: sequence
+      steps:
+      - id: check_index
+        kind: call
+        operation: index_exists
+        arguments:
+          output:
+            ref: inputs.output
+      - id: index_branch
+        kind: switch
+        cases:
+        - id: index_missing
+          when:
+            not:
+              ref: steps.check_index.outputs.exists
+          body:
+            kind: sequence
+            steps:
+            - id: return_index_error
+              kind: call
+              operation: missing_index
+              arguments:
+                output:
+                  ref: inputs.output
+            outputs:
+              result:
+                type: ValidationResult
+                value:
+                  ref: steps.return_index_error.outputs.result
+        default:
+          kind: sequence
+          steps:
+          - id: read
+            kind: call
+            operation: load_index
+            arguments:
+              output:
+                ref: inputs.output
+          - id: validate
+            kind: call
+            operation: compare_and_return
+            arguments:
+              index:
+                ref: steps.read.outputs.index
+              mathlib_root:
+                ref: inputs.mathlib_root
+              output:
+                ref: inputs.output
+          outputs:
+            result:
+              type: ValidationResult
+              value:
+                ref: steps.validate.outputs.result
+        outputs:
+          result:
+            type: ValidationResult
+            value:
+              ref: selected.outputs.result
+      outputs:
+        result:
+          type: ValidationResult
+          value:
+            ref: steps.index_branch.outputs.result
+    outputs:
+      result:
+        type: ValidationResult
+        value:
+          ref: selected.outputs.result
+  outputs:
+    result:
+      type: ValidationResult
+      value:
+        ref: steps.root_branch.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 4
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Stamp equality only; no index-content or scientific correctness claim.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/mathlib/mathlib-index-builder/scripts/build_mathlib_index.py
+    selector: build
+    digest: sha256:e77536c55db29ba00645456e9d32cb703da94f0261f32aea89d371b33e9ae0f8
+  - path: skills/mathlib/mathlib-index-builder/scripts/mathlib_index_common.py
+    selector: load_index; current_stamp_matches; version_stamp; run_version
+    digest: sha256:44738cf5a4672123d90bb15aec6afce18b35f0d560f3d81e3c01cc5feb02eae7
+  - path: scripts/mathformer.py
+    selector: build_registry/action:mathlib:index-validate; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/mathlib/run_indexing_control_suite.py
+    selector: validation command invocation
+    digest: sha256:8f50e8fbb5a445ce89f221f712d537e4e47fee6d676cd73695c3eeb297baa69c
+  - path: scripts/mathlib_index_validation_tools.py
+    selector: register_mathlib_index_validation_tools
+    digest: sha256:fb0ca4726f2e8650f2ec8ba2a0179554c0e5d2449d053eb8bbb5b68b6a51954c
+  - path: scripts/mcp_server.py
+    selector: register_mathlib_index_validation_tools(mcp)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: 'inventory: mathlib:index-validate authored contract'
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Flow specializes build to validation; the alternative index/cache build branch
+    is unreachable.
+  - Hub admission, subprocess transport, filesystem audit and main JSON/exit handling
+    remain native boundary metadata. The graph exports build payloads.
+  - Lunar enforces the contract budget and receipts; the native hub action has no
+    overall timeout.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: mathlib:index-validate
+    owner_skill: skills/mathlib/mathlib-index-builder/SKILL.md
+    contract:
+      id: mathlib:index-validate
+      family: mathlib
+      kind: validation
+      safety: read_only
+      depends_on: []
+      required_paths:
+      - skills/mathlib/mathlib-index-builder/scripts/build_mathlib_index.py
+      - artifacts/mathlib_index/index.json
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    specialization: Validation-only graph; empty read-path context selects parser
+      defaults for the registered --validate-existing --json command.
+    inputs: Explicit mathlib_root and output read-path context corresponds to source
+      argparse options. The native hub action still admits no extra arguments.
+    execution: run_action dispatches the dependency-free action through run_leaf_action.
+      Preflight checks required paths and rejects extra arguments; preflight errors
+      or dry-run return without launch. Otherwise one subprocess runs, followed by
+      a filesystem audit; undeclared writes set hub ok=false and status=undeclared_writes.
+    output: Graph exports build's payload. main prints JSON and exits 0 iff payload.ok,
+      otherwise 1. Hub captures stdout/stderr/returncode in its separate result envelope;
+      a false validation payload returns normally but makes the CLI fail. Uncaught
+      index read/JSON or shape errors terminate the child nonzero.
+    timeouts: No overall hub timeout; each version subprocess has a 20-second timeout.
+    comparison: current_stamp_matches obtains the current stamp and compares only
+      lean_version and mathlib_git_revision to the stored stamp. No timestamp, file-count,
+      declaration-count or index-content comparison occurs. version_stamp looks up
+      Git revision first only if the Mathlib repository .git exists, otherwise uses
+      unknown, then obtains Lean version. run_version catches OSError and timeout
+      as unavailable:<exception-class> strings; those strings use ordinary equality.
+    effects: Validation returns before parsing Mathlib or writing index/cache artifacts.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: Acyclic validation branch; no retries, carried state, loops or convergence.
+# REUSE-IgnoreEnd

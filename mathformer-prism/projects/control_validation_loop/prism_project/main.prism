@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import converted_reasoning
+from reasoning import ValidateMathformerControl
+from control_validation_loop import MathformerControlSurfaceSnapshot, ControlDisposition
+
+def main(
+    model_access: ModelGenerate,
+    disclosure: ContextDisclose,
+) -> Result[Generated[ControlDisposition], ModelFailure] ! {AI.Generate, Context.Disclose}:
+    workflow_source = MathformerControlSurfaceSnapshot(
+        hook_registry_digest = "fixture:control_validation_loop:hook_registry_digest",
+        routing_registry_digest = "fixture:control_validation_loop:routing_registry_digest",
+        requested_checks = ["fixture:control_validation_loop:requested_checks"],
+    )
+    flow = converted_reasoning(workflow_source)
+    return solve ValidateMathformerControl(workflow_source) using flow

@@ -1,0 +1,443 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_control_reasoning_log_summary_workflow
+version: 1.0.0
+kind: workflow
+description: Load, validate, audit and summarize reasoning-log events. Specialization
+  restricted to logs yielding at most 10000 loaded events; native summarize is uncapped.
+aliases:
+- control:reasoning-log-summary
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  LogFile:
+    schema:
+      type: string
+      minLength: 1
+      description: 'Input domain: this path must yield 0..10000 events through load_events.
+        Larger logs are excluded, never truncated.'
+  Path:
+    schema:
+      type: string
+      minLength: 1
+  Events:
+    schema:
+      type: array
+      items:
+        type: object
+      maxItems: 10000
+  Validation:
+    schema:
+      type: object
+      description: Native validation result including ok and summary.
+  Quality:
+    schema:
+      type: object
+      description: Native quality result including ok, quality_scores and consumer_readiness.
+  Bool:
+    schema:
+      type: boolean
+  State:
+    schema:
+      type: object
+      required:
+      - cursor
+      - skills
+      - hooks
+      - run_ids
+      - timeline
+      - decisions
+      - risks
+      - next_actions
+      - artifacts
+      properties:
+        cursor:
+          type: integer
+          minimum: 0
+        skills:
+          type: array
+        hooks:
+          type: array
+        run_ids:
+          type: array
+        timeline:
+          type: array
+        decisions:
+          type: array
+        risks:
+          type: array
+        next_actions:
+          type: array
+        artifacts:
+          type: object
+      additionalProperties: false
+  Summary:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - style
+      - ok
+      - run_id
+      - run_ids
+      - log_file
+      - event_count
+      - skills
+      - hooks
+      - timeline
+      - decisions
+      - risks
+      - next_actions
+      - artifacts
+      - validation
+      - quality
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: reasoning_log_consumer_summary
+        ok:
+          type: boolean
+        run_id:
+          type:
+          - string
+          - 'null'
+        event_count:
+          type: integer
+          minimum: 0
+        log_file:
+          type: string
+        run_ids:
+          type: array
+        skills:
+          type: array
+        hooks:
+          type: array
+        timeline:
+          type: array
+        decisions:
+          type: array
+        risks:
+          type: array
+        next_actions:
+          type: array
+        artifacts:
+          type: object
+        validation:
+          type: object
+        quality:
+          type: object
+inputs:
+  log_file:
+    type: LogFile
+  hooks_file:
+    type: Path
+outputs:
+  summary:
+    type: Summary
+    value:
+      ref: flow.outputs.summary
+operations:
+  load:
+    inputs:
+      log_file:
+        type: LogFile
+    outputs:
+      events:
+        type: Events
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_summary_load
+        operation: mathformer_reasoning_summary_load
+  validate:
+    inputs:
+      log_file:
+        type: LogFile
+      hooks_file:
+        type: Path
+    outputs:
+      validation:
+        type: Validation
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_summary_validate
+        operation: mathformer_reasoning_summary_validate
+  audit:
+    inputs:
+      log_file:
+        type: LogFile
+      hooks_file:
+        type: Path
+    outputs:
+      quality:
+        type: Quality
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_summary_audit
+        operation: mathformer_reasoning_summary_audit
+  initialize:
+    inputs:
+      events:
+        type: Events
+    outputs:
+      state:
+        type: State
+      empty:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_summary_initialize
+        operation: mathformer_reasoning_summary_initialize
+  advance:
+    inputs:
+      events:
+        type: Events
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_summary_advance
+        operation: mathformer_reasoning_summary_advance
+  finish:
+    inputs:
+      log_file:
+        type: LogFile
+      events:
+        type: Events
+      validation:
+        type: Validation
+      quality:
+        type: Quality
+      state:
+        type: State
+    outputs:
+      summary:
+        type: Summary
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_summary_finish
+        operation: mathformer_reasoning_summary_finish
+flow:
+  kind: sequence
+  steps:
+  - id: load
+    kind: call
+    operation: load
+    arguments:
+      log_file:
+        ref: inputs.log_file
+  - id: validate
+    kind: call
+    operation: validate
+    arguments:
+      log_file:
+        ref: inputs.log_file
+      hooks_file:
+        ref: inputs.hooks_file
+  - id: audit
+    kind: call
+    operation: audit
+    arguments:
+      log_file:
+        ref: inputs.log_file
+      hooks_file:
+        ref: inputs.hooks_file
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments:
+      events:
+        ref: steps.load.outputs.events
+  - id: events
+    kind: loop
+    description: One iteration per loaded event, with no status-dependent break or
+      retry. Empty input uses a no-event exhaustion adapter. Exactly 10000 events
+      completes normally; larger inputs are rejected at load.
+    state_type: State
+    initial:
+      ref: steps.initialize.outputs.state
+    body:
+      kind: call
+      operation: advance
+      arguments:
+        events:
+          ref: steps.load.outputs.events
+        state:
+          ref: loop.state
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 10000
+    on_exhausted: fail
+    outputs:
+      state:
+        type: State
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      log_file:
+        ref: inputs.log_file
+      events:
+        ref: steps.load.outputs.events
+      validation:
+        ref: steps.validate.outputs.validation
+      quality:
+        ref: steps.audit.outputs.quality
+      state:
+        ref: steps.events.outputs.state
+  outputs:
+    summary:
+      type: Summary
+      value:
+        ref: steps.finish.outputs.summary
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write: []
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - read_reasoning_logs
+    - compute_consumer_summary
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 10005
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Consumer summary only; ok requires native validation and quality
+    success. No proof, promotion or runtime qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/control/reasoning-log-schema-guardian/scripts/summarize_reasoning_log.py
+    selector: summarize
+    digest: sha256:51b7a8aa7efcdd65ec6d83500877aa3235dc26e0009ac8657d2e1322c932e971
+  - path: skills/control/reasoning-log-schema-guardian/scripts/render_reasoning_log.py
+    selector: load_events; event_skill_application
+    digest: sha256:1297df1c949220796f1b8404b660f4ed1c9dffac136e023a9e260a0ea6fafe66
+  - path: skills/control/reasoning-log-schema-guardian/scripts/summarize_reasoning_log.py
+    selector: main; default_log_file
+    digest: sha256:51b7a8aa7efcdd65ec6d83500877aa3235dc26e0009ac8657d2e1322c932e971
+  - path: scripts/mathformer.py
+    selector: build_registry/action:control:reasoning-log-summary; run_action; run_leaf_action;
+      prepare_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/mcp/run_reasoning_summary_workflow_tests.py
+    selector: SummaryTests
+    digest: sha256:c8b09f09855558dc4f13c9dc69bcdbe214cf76a94b9783cec5f3da927aa3780d
+  - path: tests/test_matrix.json
+    selector: mcp.reasoning_summary.workflow
+    digest: sha256:cf3ac5a7a0d9eca696ff0a8612b4de93e524631afbfc65a987224dc8263be220
+  - path: scripts/reasoning_summary_tools.py
+    selector: register_reasoning_summary_tools
+    digest: sha256:3ac1bbdc209cbc4a465c3c085e1fcead73f8ccebf83819599b9ffc82415e5335
+  - path: scripts/mcp_server.py
+    selector: register_reasoning_summary_tools(mcp)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: mcp_tools
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: hub_contracts authored summary descriptor
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Empty input uses a no-event advance adapter because Lunar cannot compile branch-local
+    loop exhaustion. It returns unchanged state and done=true without calling the
+    native event body.
+  - Only summarize is expanded. CLI and hub boundaries are retained in extension metadata.
+    Direct indexer and consumer callers bypass those wrappers.
+  - The adapter admits at most 10000 loaded events, rejecting larger inputs without
+    truncation. Native summarize remains uncapped.
+  - 3600 seconds and 10005 operation calls are Lunar descriptor limits, not native
+    budgets; the hub action has timeout_seconds=null.
+  - Mandatory receipts and digests are host requirements, not native emissions. Exceptions
+    abort; no retry or checkpoint support is added.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: control:reasoning-log-summary
+    owner_skill: skills/control/reasoning-log-schema-guardian/SKILL.md
+    contract:
+      id: control:reasoning-log-summary
+      family: control
+      kind: inspection
+      safety: read_only
+      depends_on: []
+      writes: []
+      allows_extra_args: true
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: run_action → run_leaf_action launches the registered script once with
+      --json after preflight. Preflight failure or dry-run prevents launch. Capture
+      stdout/stderr and audit writes; undeclared writes fail the hub result. No subprocess
+      timeout.
+    cli: 'main uses --log-file or the first existing default: default_good_fixture(),
+      artifacts/physics_sympy/recursive_goal_runs/formalphysics_0000/reasoning.jsonl,
+      artifacts/wiki_level_suite/reasoning.jsonl; if none exists, select default_good_fixture().
+      Generate self-test fixtures when the selected path is that missing fixture.
+      Call summarize; render sorted indented JSON with ensure_ascii=False. Optionally
+      mkdir/write --output-file with a trailing newline. Print when --json or no output
+      file. Return 0 if summary.ok, otherwise 3. Uncaught exceptions abort.'
+    direct_callers: Indexer and consumer-contract tests call summarize directly. This
+      graph returns Summary from the function boundary rather than a HubResult envelope.
+    effects_scope: Core effects describe summarize only. Fixture generation and optional
+      output writes belong to the CLI wrapper and may violate the hub action's declared
+      writes=[] when launched there.
+# REUSE-IgnoreEnd

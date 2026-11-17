@@ -1,0 +1,446 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Automate repository maintenance tasks that would be error-prone if performed by hand.
+#
+# Intent:
+#   Expose command-line entry points for setup, generation, indexing, auditing, and proof execution.
+#
+# Function:
+#   Implements operational glue used by tests, skills, docs, and developer workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Publish repository skills into agent-client discovery directories.
+
+The canonical Mathformer skill sources live under
+``skills/<theme>/<skill-name>/``. Agent clients discover a flat set of skill
+names from their own conventional directories, so this helper publishes each
+nested canonical skill without duplicating repository sources.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Iterable
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_SOURCE = REPO_ROOT / "skills"
+
+PROFILE_TARGETS = {
+    "codex-repo": [REPO_ROOT / ".agents" / "skills"],
+    "claude-repo": [REPO_ROOT / ".claude" / "skills"],
+    "opencode-repo": [REPO_ROOT / ".opencode" / "skills"],
+    "all-repo": [
+        REPO_ROOT / ".agents" / "skills",
+        REPO_ROOT / ".claude" / "skills",
+        REPO_ROOT / ".opencode" / "skills",
+    ],
+}
+
+
+@dataclass
+class LinkResult:
+    """Document the responsibility of ``LinkResult``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the scripts workflow through a clear object boundary.
+
+    Function:
+        Implements operational glue used by tests, skills, docs, and developer workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    skill: str
+    source: str
+    target: str
+    mode: str
+    status: str
+    detail: str = ""
+
+
+def parse_args() -> argparse.Namespace:
+    """Document the responsibility of ``parse_args``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(
+        description=(
+            "Link or copy Mathformer skills into Codex, Claude Code, and "
+            "OpenCode discovery folders."
+        )
+    )
+    parser.add_argument(
+        "--source",
+        type=Path,
+        default=DEFAULT_SOURCE,
+        help="Directory containing one subdirectory per skill. Default: skills/",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=sorted(PROFILE_TARGETS),
+        default="all-repo",
+        help="Known target profile. Ignored when --target is provided.",
+    )
+    parser.add_argument(
+        "--target",
+        type=Path,
+        action="append",
+        help=(
+            "Explicit target directory. May be repeated. When omitted, the "
+            "selected --profile is used."
+        ),
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["auto", "symlink", "copy"],
+        default="auto",
+        help=(
+            "auto tries symlink first and falls back to copy. copy is safest "
+            "on Windows without Developer Mode."
+        ),
+    )
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="Replace existing generated skill folders or symlinks at the target.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report planned actions without changing the filesystem.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print machine-readable JSON instead of a text summary.",
+    )
+    return parser.parse_args()
+
+
+def discover_skills(source_root: Path) -> list[Path]:
+    """Document the responsibility of ``discover_skills``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``discover_skills`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if not source_root.exists():
+        raise SystemExit(f"source directory does not exist: {source_root}")
+
+    skills = sorted(path.parent for path in source_root.glob("*/*/SKILL.md"))
+    if not skills:
+        raise SystemExit(f"no skills found under {source_root}")
+    return skills
+
+
+def resolve_targets(args: argparse.Namespace) -> list[Path]:
+    """Document the responsibility of ``resolve_targets``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``resolve_targets`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    raw_targets = args.target or PROFILE_TARGETS[args.profile]
+    return [path.expanduser().resolve() for path in raw_targets]
+
+
+def is_same_symlink(destination: Path, source: Path) -> bool:
+    """Document the responsibility of ``is_same_symlink``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``is_same_symlink`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if not destination.is_symlink():
+        return False
+    try:
+        return destination.resolve() == source.resolve()
+    except OSError:
+        return False
+
+
+def remove_existing(destination: Path, dry_run: bool) -> None:
+    """Document the responsibility of ``remove_existing``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``remove_existing`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if dry_run:
+        return
+    if destination.is_symlink() or destination.is_file():
+        destination.unlink()
+        return
+    if destination.is_dir():
+        shutil.rmtree(destination)
+
+
+def copy_skill(source: Path, destination: Path, dry_run: bool) -> str:
+    """Document the responsibility of ``copy_skill``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``copy_skill`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if dry_run:
+        return "copy"
+    shutil.copytree(source, destination)
+    return "copy"
+
+
+def symlink_skill(source: Path, destination: Path, dry_run: bool) -> str:
+    """Document the responsibility of ``symlink_skill``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``symlink_skill`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if dry_run:
+        return "symlink"
+    os.symlink(source, destination, target_is_directory=True)
+    return "symlink"
+
+
+def publish_one(
+    source: Path,
+    target_root: Path,
+    mode: str,
+    replace: bool,
+    dry_run: bool,
+) -> LinkResult:
+    """Document the responsibility of ``publish_one``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``publish_one`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    destination = target_root / source.name
+
+    if destination.exists() or destination.is_symlink():
+        if is_same_symlink(destination, source):
+            return LinkResult(
+                skill=source.name,
+                source=str(source),
+                target=str(destination),
+                mode="symlink",
+                status="unchanged",
+            )
+        if not replace:
+            return LinkResult(
+                skill=source.name,
+                source=str(source),
+                target=str(destination),
+                mode=mode,
+                status="skipped",
+                detail="target exists; rerun with --replace to overwrite",
+            )
+        remove_existing(destination, dry_run)
+
+    if not dry_run:
+        target_root.mkdir(parents=True, exist_ok=True)
+
+    if mode == "copy":
+        actual_mode = copy_skill(source, destination, dry_run)
+        return LinkResult(
+            source.name, str(source), str(destination), actual_mode, "created"
+        )
+
+    if mode == "symlink":
+        actual_mode = symlink_skill(source, destination, dry_run)
+        return LinkResult(
+            source.name, str(source), str(destination), actual_mode, "created"
+        )
+
+    try:
+        actual_mode = symlink_skill(source, destination, dry_run)
+        return LinkResult(
+            source.name, str(source), str(destination), actual_mode, "created"
+        )
+    except OSError as exc:
+        if destination.exists() or destination.is_symlink():
+            remove_existing(destination, dry_run)
+        actual_mode = copy_skill(source, destination, dry_run)
+        return LinkResult(
+            source.name,
+            str(source),
+            str(destination),
+            actual_mode,
+            "created",
+            detail=f"symlink failed, copied instead: {exc}",
+        )
+
+
+def publish_skills(
+    skills: Iterable[Path],
+    targets: Iterable[Path],
+    mode: str,
+    replace: bool,
+    dry_run: bool,
+) -> list[LinkResult]:
+    """Document the responsibility of ``publish_skills``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``publish_skills`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    results: list[LinkResult] = []
+    for target_root in targets:
+        if dry_run:
+            target_root = target_root.resolve()
+        else:
+            target_root.mkdir(parents=True, exist_ok=True)
+        for skill in skills:
+            results.append(
+                publish_one(skill.resolve(), target_root, mode, replace, dry_run)
+            )
+    return results
+
+
+def print_text(results: list[LinkResult]) -> None:
+    """Document the responsibility of ``print_text``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``print_text`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    created = sum(1 for result in results if result.status == "created")
+    skipped = sum(1 for result in results if result.status == "skipped")
+    unchanged = sum(1 for result in results if result.status == "unchanged")
+    print(
+        f"skills processed: {len(results)} "
+        f"(created={created}, unchanged={unchanged}, skipped={skipped})"
+    )
+    for result in results:
+        suffix = f" ({result.detail})" if result.detail else ""
+        print(f"{result.status:9} {result.mode:7} {result.target}{suffix}")
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    args = parse_args()
+    source_root = args.source.expanduser().resolve()
+    skills = discover_skills(source_root)
+    targets = resolve_targets(args)
+    results = publish_skills(skills, targets, args.mode, args.replace, args.dry_run)
+
+    if args.json:
+        print(json.dumps([asdict(result) for result in results], indent=2))
+    else:
+        print_text(results)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

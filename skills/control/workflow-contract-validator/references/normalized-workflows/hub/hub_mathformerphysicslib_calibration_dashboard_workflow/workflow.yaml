@@ -1,0 +1,437 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_mathformerphysicslib_calibration_dashboard_workflow
+version: 1.0.0
+kind: workflow
+description: Run four ordered calibration suites, score 11 labeled fixtures, and write
+  the dashboard.
+aliases:
+- mathformerphysicslib:calibration-dashboard
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Arguments:
+    schema:
+      type: array
+      items:
+        type: string
+  Options:
+    schema:
+      type: object
+      required:
+      - output
+      - json
+      properties:
+        output:
+          type: string
+        json:
+          type: boolean
+      additionalProperties: false
+  State:
+    schema:
+      type: object
+      required:
+      - runs
+      - rows
+      properties:
+        runs:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+            required:
+            - suite
+            - wall_seconds
+            properties:
+              suite:
+                type: string
+              wall_seconds:
+                type: number
+                minimum: 0
+        rows:
+          type: object
+          maxProperties: 4
+          propertyNames:
+            enum:
+            - target_restatement
+            - source_drift_or_trivial_grounding
+            - duplicate_ownership
+            - unit_mismatch
+          additionalProperties:
+            type: array
+            maxItems: 3
+            items:
+              type: array
+              minItems: 2
+              maxItems: 2
+              items:
+                type: boolean
+      additionalProperties: false
+  Dashboard:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - style
+      - ok
+      - evaluation_sets
+      - metrics
+      - execution
+      - limitations
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: physics_critic_calibration_dashboard
+        ok:
+          type: boolean
+        evaluation_sets:
+          type: object
+          properties:
+            curated_regressions:
+              const: 11
+            held_out_source_cases:
+              const: 1
+            adversarial_mutations:
+              const: 6
+            genuine_new_formalizations:
+              const: 0
+        metrics:
+          type: object
+          minProperties: 4
+          maxProperties: 4
+          propertyNames:
+            enum:
+            - source_drift_or_trivial_grounding
+            - target_restatement
+            - duplicate_ownership
+            - unit_mismatch
+          additionalProperties:
+            type: object
+            required:
+            - samples
+            - true_positive
+            - true_negative
+            - false_positive
+            - false_negative
+            - false_positive_rate
+            - false_negative_rate
+            - accuracy
+            properties:
+              samples:
+                type: integer
+                minimum: 0
+              true_positive:
+                type: integer
+                minimum: 0
+              true_negative:
+                type: integer
+                minimum: 0
+              false_positive:
+                type: integer
+                minimum: 0
+              false_negative:
+                type: integer
+                minimum: 0
+              false_positive_rate:
+                type: number
+                minimum: 0
+                maximum: 1
+              false_negative_rate:
+                type: number
+                minimum: 0
+                maximum: 1
+              accuracy:
+                type: number
+                minimum: 0
+                maximum: 1
+        execution:
+          type: object
+        limitations:
+          type: array
+          items:
+            type: string
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 1
+  Text:
+    schema:
+      type: string
+inputs:
+  argv:
+    type: Arguments
+outputs:
+  dashboard:
+    type: Dashboard
+    value:
+      ref: flow.outputs.dashboard
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  stdout:
+    type: Text
+    value:
+      ref: flow.outputs.stdout
+operations:
+  initialize:
+    inputs:
+      argv:
+        type: Arguments
+    outputs:
+      options:
+        type: Options
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_calibration_initialize
+        operation: mathformer_calibration_initialize
+  derivation:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_calibration_derivation
+        operation: mathformer_calibration_derivation
+  grounding:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_calibration_grounding
+        operation: mathformer_calibration_grounding
+  redefinition:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_calibration_redefinition
+        operation: mathformer_calibration_redefinition
+  units:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_calibration_units
+        operation: mathformer_calibration_units
+  summarize:
+    inputs:
+      state:
+        type: State
+    outputs:
+      dashboard:
+        type: Dashboard
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_calibration_summarize
+        operation: mathformer_calibration_summarize
+  publish:
+    inputs:
+      options:
+        type: Options
+      dashboard:
+        type: Dashboard
+    outputs:
+      exit_code:
+        type: ExitCode
+      stdout:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_calibration_publish
+        operation: mathformer_calibration_publish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments:
+      argv:
+        ref: inputs.argv
+  - id: derivation
+    kind: call
+    operation: derivation
+    arguments:
+      state:
+        ref: steps.initialize.outputs.state
+  - id: grounding
+    kind: call
+    operation: grounding
+    arguments:
+      state:
+        ref: steps.derivation.outputs.state
+  - id: redefinition
+    kind: call
+    operation: redefinition
+    arguments:
+      state:
+        ref: steps.grounding.outputs.state
+  - id: units
+    kind: call
+    operation: units
+    arguments:
+      state:
+        ref: steps.redefinition.outputs.state
+  - id: summarize
+    kind: call
+    operation: summarize
+    arguments:
+      state:
+        ref: steps.units.outputs.state
+  - id: publish
+    kind: call
+    operation: publish
+    arguments:
+      options:
+        ref: steps.initialize.outputs.options
+      dashboard:
+        ref: steps.summarize.outputs.dashboard
+  outputs:
+    dashboard:
+      type: Dashboard
+      value:
+        ref: steps.summarize.outputs.dashboard
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.publish.outputs.exit_code
+    stdout:
+      type: Text
+      value:
+        ref: steps.publish.outputs.stdout
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - requested_output_path
+      - artifacts/physics_lean/calibration/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 7
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Small-fixture calibration evidence only; no population accuracy or
+    scientific promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/physics_lean/run_critic_calibration_dashboard.py
+    selector: initialize; derivation; grounding; redefinition; units; summarize; publish;
+      main; run_json; confusion
+    digest: sha256:8e57bca59e2385e757763de0f9b0f8e3998861fb3b1747197bddaf979cded0e1
+  - path: scripts/calibration_dashboard_tools.py
+    selector: register_calibration_dashboard_tools
+    digest: sha256:2fbe7820ab04e9ee034c649ee655c9baf77702a3a05a13bd81818cab9689763f
+  - path: scripts/mcp_server.py
+    selector: register_calibration_dashboard_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer.py
+    selector: build_registry; preflight; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Suite internals and their effects remain native; the seven callable ports cover
+    the dashboard orchestration.
+  - Required receipts, digests, and contract budgets are supplied by the Lunar execution
+    boundary; the standalone CLI retains native timing without timeout.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: mathformerphysicslib:calibration-dashboard
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+  mathformer.native_boundary:
+    execution: Registered by build_registry, dispatched through run_action then run_leaf_action;
+      test matrix also calls the script.
+    preflight: Hub rejects preflight errors, skips execution for dry-run, then audits
+      declared writes after execution.
+    dependencies: []
+    native_timeout_seconds: null
+    comprehensive_test_timeout_seconds: 120
+    failure_policy: Nonzero child exit raises RuntimeError immediately; malformed
+      JSON or missing required fields abort before output.
+    iteration: Fixed fixture and category collections only; no adaptive search, retry,
+      convergence, or resume state.
+    subprocess_behavior: run_json captures stdout/stderr in repository cwd, parses
+      JSON, and measures elapsed time without timeout.
+# REUSE-IgnoreEnd

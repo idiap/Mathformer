@@ -1,0 +1,629 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_formalize_lean_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected formalize.lean route through its single native lean:build action.",
+  "aliases": [
+    "formalize.lean"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../lean-build-interface.schema.json#/$defs/HubResult"
+    },
+    "Match": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "properties": {
+              "route_id": {
+                "type": "string",
+                "const": "formalize.lean"
+              },
+              "action_ids": {
+                "type": "array",
+                "const": [
+                  "lean:build"
+                ]
+              }
+            }
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "lean:build"
+        ],
+        "properties": {
+          "lean:build": {
+            "type": "object",
+            "required": [
+              "command",
+              "depends_on",
+              "writes",
+              "timeout_seconds",
+              "required_paths",
+              "required_tools"
+            ],
+            "properties": {
+              "command": {
+                "type": "array",
+                "const": [
+                  "lake",
+                  "build"
+                ]
+              },
+              "depends_on": {
+                "type": "array",
+                "const": []
+              },
+              "writes": {
+                "type": "array",
+                "const": [
+                  ".lake/"
+                ]
+              },
+              "timeout_seconds": {
+                "type": "integer",
+                "const": 1200
+              },
+              "required_paths": {
+                "type": "array",
+                "const": [
+                  "lakefile.toml",
+                  "lean-toolchain"
+                ]
+              },
+              "required_tools": {
+                "type": "array",
+                "const": [
+                  "lake"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "ok"
+              ],
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "lean:build"
+      }
+    },
+    "ActionCount": {
+      "schema": {
+        "type": "integer",
+        "const": 1
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "inputs": {
+    "match": {
+      "type": "Match"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "context": {
+      "type": "RunContext"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot",
+      "required": false
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_lean_route_initialize",
+          "operation": "mathformer_lean_route_initialize"
+        }
+      }
+    },
+    "select": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "match": {
+          "type": "Match"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_lean_route_select",
+          "operation": "mathformer_lean_route_select"
+        }
+      }
+    },
+    "run_action": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot",
+          "required": false
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_lean_route_run",
+          "operation": "mathformer_lean_route_run"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "action_count": {
+          "type": "ActionCount"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_lean_route_advance",
+          "operation": "mathformer_lean_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "match": {
+          "type": "Match"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_lean_route_finish",
+          "operation": "mathformer_lean_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "execute",
+              "kind": "call",
+              "operation": "run_action",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.execute.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "action_count": {
+                  "literal": 1
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Boolean",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          ".lake/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Route completion establishes neither scientific truth nor proof promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; build_registry; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_ask; mathformer_run_workflow",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/lean_route_tools.py",
+        "selector": "register_lean_route_tools; selected_match; checked_registry; check_state; state_wire",
+        "digest": "sha256:d4064d10283f28f005f7c22b342fd59b5cdcc0d06e32209c960e67b96e619097"
+      },
+      {
+        "path": "scripts/lean_build_tools.py",
+        "selector": "wire (lossless timeout byte-stream transport)",
+        "digest": "sha256:bdc748dab378dfe9b5702883044cf2f88c33cb830e7604eef71ddf618d6f0356"
+      },
+      {
+        "path": "scripts/workflow_write_audit.py",
+        "selector": "snapshot_repository; audit_snapshots",
+        "digest": "sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1"
+      },
+      {
+        "path": "scripts/adoption_check_tools.py",
+        "selector": "Context",
+        "digest": "sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/references/normalized-workflows/lean-build-interface.schema.json",
+        "selector": "HubResult",
+        "digest": "sha256:493ed8631134c0e2da59a1abcfcd998a4a8eaf340bd996e7cc6fcfe22d97d878"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "lean_route_descriptor; descriptors",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_lean_route_workflow_tests.py",
+        "selector": "LeanRouteTests (native parity, real registered MCP and Lunar/PRISM)",
+        "digest": "sha256:84141842f709fe60719d8e81836aa6246790b26dc4027eb5043d2b078b964bb5"
+      },
+      {
+        "path": "tests/mcp/fixtures/lean_route_compiler.py",
+        "selector": "install; populate; serve (test-only Lake boundary)",
+        "digest": "sha256:5e5d9a3c18b3de3d8a2fcc69f5820ca3f2fd83341f05be8be6a2aae823e78603"
+      },
+      {
+        "path": "tests/mcp/fixtures/lean_route_original.py.txt",
+        "selector": "frozen original run_intent_match and shared state helpers",
+        "digest": "sha256:acc5f8fb8b905618d30840720864e17c5d068d24e5e93f54d844752fc36194a5"
+      }
+    ],
+    "gaps": [
+      "Native leaf internals remain inside run_action; network and external effects require qualification.",
+      "The 3600-second global limit is a normalization declaration, not a native route-wide timer.",
+      "Mandatory v1 receipts and digests do not upgrade native optional logging or caller-owned reports."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "formalize.lean",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "formalize.lean",
+        "title": "Work on Lean or mathlib formalization",
+        "action_ids": [
+          "lean:build"
+        ],
+        "skill_routes": [
+          "lean-autoformalization-drafter",
+          "lean-execution-runner"
+        ],
+        "operator_note": "Writes Lean build cache under .lake/."
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "scripts/mathformer.py::run_intent_match and the registered MCP tools share the native initialize/select/run_action/advance/finish implementation.",
+      "inputs": "Match and registry are projections of the selected native IntentMatch and source-owned registry, retaining metadata.",
+      "mount": "Optional repository_root is forwarded unchanged; omission preserves REPO_ROOT.",
+      "callers": "main ask --run; MCP mathformer_ask and mathformer_run_workflow check service write roots before dispatch.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "reports": "artifacts/workflow_hub/ is caller-owned; lean:build declares only .lake/.",
+      "wire": "Native timeout stdout/stderr bytes use lossless {base64: string} envelopes, decoded before native accumulation and finishing; other data is unchanged."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "lean:build"
+      ],
+      "action_workflows": [
+        "hub_lean_build_workflow"
+      ],
+      "selection": "Already selected formalize.lean; scoring and ambiguity resolution remain outside this graph.",
+      "keep_going_semantics": "Sticky failure; no further action exists even when keep_going is true.",
+      "bound": "One native iteration returns normally even for child failure; exhaustion is unreachable for source-conforming inputs.",
+      "invocation_bound": "At most one run_action invocation and one subprocess launch; no retries or proof-repair iteration.",
+      "drafting_skills": "Routing metadata only; this implementation does not invoke them."
+    }
+  }
+}

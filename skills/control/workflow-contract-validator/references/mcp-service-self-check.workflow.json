@@ -1,0 +1,770 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_mcp_service_self_check_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Ordered startup diagnostics from self_check(config_path), with main's self-check output and exit branch; no server startup.",
+  "aliases": [
+    "mcp:service-self-check"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "ConfigPath": {
+      "schema": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "Config": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "data",
+          "source_kind",
+          "ok",
+          "errors",
+          "warnings",
+          "source_path"
+        ],
+        "properties": {
+          "data": {
+            "type": "object"
+          },
+          "source_kind": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "array"
+          },
+          "warnings": {
+            "type": "array"
+          },
+          "source_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "description": "Value projection of ServiceConfig; carries source_path and get/runtime settings semantics."
+      }
+    },
+    "Dependencies": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "ready",
+          "status",
+          "python_packages",
+          "external_tools",
+          "missing_required",
+          "optional_blockers"
+        ],
+        "properties": {
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "blocked"
+            ]
+          },
+          "python_packages": {
+            "type": "array",
+            "minItems": 10,
+            "maxItems": 10
+          },
+          "external_tools": {
+            "type": "array",
+            "minItems": 6,
+            "maxItems": 6
+          },
+          "missing_required": {
+            "type": "array"
+          },
+          "optional_blockers": {
+            "type": "array"
+          }
+        }
+      }
+    },
+    "Diagnostic": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "Findings": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "path",
+            "line",
+            "kind"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "line": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "kind": {
+              "const": "secret_like_value"
+            }
+          }
+        }
+      }
+    },
+    "Coverage": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "config_path",
+          "config_requirements",
+          "mcp_tools",
+          "normalized_workflows",
+          "families"
+        ]
+      }
+    },
+    "Auth": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "transport",
+          "require_auth_for_http",
+          "has_token"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "transport": {
+            "type": "string"
+          },
+          "require_auth_for_http": {
+            "type": "boolean"
+          },
+          "has_token": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "style",
+          "ok",
+          "config",
+          "provider_env_keys",
+          "dependencies",
+          "router_coverage",
+          "hub_audit",
+          "auth_policy",
+          "secret_scan_findings",
+          "service_coverage",
+          "redacted_config"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "style": {
+            "const": "mathformer_mcp_service_self_check"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          1
+        ]
+      }
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "config_path": {
+      "type": "ConfigPath"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    },
+    "stdout": {
+      "type": "Text",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "load_config": {
+      "inputs": {
+        "config_path": {
+          "type": "ConfigPath"
+        }
+      },
+      "outputs": {
+        "config": {
+          "type": "Config"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_self_check_load_config",
+          "operation": "mathformer_self_check_load_config"
+        }
+      }
+    },
+    "probe_dependencies": {
+      "inputs": {},
+      "outputs": {
+        "dependencies": {
+          "type": "Dependencies"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_self_check_probe_dependencies",
+          "operation": "mathformer_self_check_probe_dependencies"
+        }
+      }
+    },
+    "router_coverage": {
+      "inputs": {},
+      "outputs": {
+        "router": {
+          "type": "Diagnostic"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_self_check_router_coverage",
+          "operation": "mathformer_self_check_router_coverage"
+        }
+      }
+    },
+    "audit_hub": {
+      "inputs": {},
+      "outputs": {
+        "audit": {
+          "type": "Diagnostic"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_self_check_audit_hub",
+          "operation": "mathformer_self_check_audit_hub"
+        }
+      }
+    },
+    "scan_secrets": {
+      "inputs": {},
+      "outputs": {
+        "findings": {
+          "type": "Findings"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_self_check_scan_secrets",
+          "operation": "mathformer_self_check_scan_secrets"
+        }
+      }
+    },
+    "build_coverage": {
+      "inputs": {
+        "config_path": {
+          "type": "ConfigPath"
+        },
+        "config": {
+          "type": "Config"
+        }
+      },
+      "outputs": {
+        "coverage": {
+          "type": "Coverage"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_self_check_build_coverage",
+          "operation": "mathformer_self_check_build_coverage"
+        }
+      }
+    },
+    "evaluate_auth": {
+      "inputs": {
+        "config": {
+          "type": "Config"
+        }
+      },
+      "outputs": {
+        "auth": {
+          "type": "Auth"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_self_check_evaluate_auth",
+          "operation": "mathformer_self_check_evaluate_auth"
+        }
+      }
+    },
+    "assemble_report": {
+      "inputs": {
+        "config": {
+          "type": "Config"
+        },
+        "dependencies": {
+          "type": "Dependencies"
+        },
+        "router": {
+          "type": "Diagnostic"
+        },
+        "audit": {
+          "type": "Diagnostic"
+        },
+        "findings": {
+          "type": "Findings"
+        },
+        "coverage": {
+          "type": "Coverage"
+        },
+        "auth": {
+          "type": "Auth"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_self_check_assemble_report",
+          "operation": "mathformer_self_check_assemble_report"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "report": {
+          "type": "Report"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_self_check_emit",
+          "operation": "mathformer_self_check_emit"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "config",
+        "kind": "call",
+        "operation": "load_config",
+        "arguments": {
+          "config_path": {
+            "ref": "inputs.config_path"
+          }
+        }
+      },
+      {
+        "id": "dependencies",
+        "kind": "call",
+        "operation": "probe_dependencies",
+        "arguments": {}
+      },
+      {
+        "id": "router",
+        "kind": "call",
+        "operation": "router_coverage",
+        "arguments": {}
+      },
+      {
+        "id": "audit",
+        "kind": "call",
+        "operation": "audit_hub",
+        "arguments": {}
+      },
+      {
+        "id": "secrets",
+        "kind": "call",
+        "operation": "scan_secrets",
+        "arguments": {}
+      },
+      {
+        "id": "coverage",
+        "kind": "call",
+        "operation": "build_coverage",
+        "arguments": {
+          "config_path": {
+            "ref": "inputs.config_path"
+          },
+          "config": {
+            "ref": "steps.config.outputs.config"
+          }
+        }
+      },
+      {
+        "id": "auth",
+        "kind": "call",
+        "operation": "evaluate_auth",
+        "arguments": {
+          "config": {
+            "ref": "steps.config.outputs.config"
+          }
+        }
+      },
+      {
+        "id": "report",
+        "kind": "call",
+        "operation": "assemble_report",
+        "arguments": {
+          "config": {
+            "ref": "steps.config.outputs.config"
+          },
+          "dependencies": {
+            "ref": "steps.dependencies.outputs.dependencies"
+          },
+          "router": {
+            "ref": "steps.router.outputs.router"
+          },
+          "audit": {
+            "ref": "steps.audit.outputs.audit"
+          },
+          "findings": {
+            "ref": "steps.secrets.outputs.findings"
+          },
+          "coverage": {
+            "ref": "steps.coverage.outputs.coverage"
+          },
+          "auth": {
+            "ref": "steps.auth.outputs.auth"
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "success",
+            "when": {
+              "ref": "steps.report.outputs.report.ok"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "emit",
+              "arguments": {
+                "report": {
+                  "ref": "steps.report.outputs.report"
+                },
+                "exit_code": {
+                  "literal": 0
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "emit",
+          "arguments": {
+            "report": {
+              "ref": "steps.report.outputs.report"
+            },
+            "exit_code": {
+              "literal": 1
+            }
+          }
+        },
+        "outputs": {
+          "exit_code": {
+            "type": "ExitCode",
+            "value": {
+              "ref": "selected.outputs.exit_code"
+            }
+          },
+          "stdout": {
+            "type": "Text",
+            "value": {
+              "ref": "selected.outputs.stdout"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.report.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.finish.outputs.exit_code"
+        }
+      },
+      "stdout": {
+        "type": "Text",
+        "value": {
+          "ref": "steps.finish.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "inspect_service_readiness"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion",
+        "start_server",
+        "execute_scientific_workflows"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 9
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Diagnostics only. Ordinary false checks still produce the complete report and exit 1; unexpected exceptions terminate and propagate. No scientific result or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "self_check",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "main; dependency_probe; build_local_router_coverage; service_coverage_report",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "scripts/probe_mcp_service_dependencies.py",
+        "selector": "build_dependency_report; initialize_scans; scan_next; assemble_report",
+        "digest": "sha256:54ee4f50aaae21297a9269d0280d0b700dd62161886c62663a07dbd847fcd0cc"
+      },
+      {
+        "path": "scripts/mcp_service_config.py",
+        "selector": "load_service_config; tracked_service_files; scan_paths_for_secrets; service_config_report; redacted_config",
+        "digest": "sha256:f3fd43cb362c774ca6d29e3de3895a109ae8fed7062589ac9b37f555ac2e10a2"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:mcp:service-self-check; preflight; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_run_workflow",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/service_self_check_tools.py",
+        "selector": "register_service_self_check_tools",
+        "digest": "sha256:e0978aedf1748e2ab28ceaf99f778043fa31bc8ac94ea1b80474cee81f634c70"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_service_self_check_workflow_tests.py",
+        "selector": "SelfCheckTests",
+        "digest": "sha256:9a68b48569e47e7f4f19dc3a5419c7e2523530831b2e939b5c379d454d75e020"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "mcp.service_self_check.workflow",
+        "digest": "sha256:1025c39cc17c4f9c2ceee3c8df9a97edcfb5226e8cb68b4ffae7f7d7036d7e2e"
+      },
+      {
+        "path": "tests/mcp/fixtures/self_check_original.py.txt",
+        "selector": "frozen original self_check and main",
+        "digest": "sha256:f67fe947806d2dd68de8ca5bcaa650a23ab1bc910057b2f1a0f5c8c8e0d205dd"
+      }
+    ],
+    "gaps": [
+      "Helper scans remain inside their owning operations; finite source collection sizes govern termination, with no invented graph loop bounds or exhaustion behavior.",
+      "The 3600-second/9-call limits are descriptor budgets, not native bounds; registry timeout is null and native execution has no retries.",
+      "Mandatory receipts/provenance are enforced by Lunar; the native CLI retains its own stdout and optional hub report behavior."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "mcp:service-self-check",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "mcp:service-self-check",
+        "family": "mcp",
+        "kind": "validation",
+        "safety": "read_only",
+        "command": [
+          "{python}",
+          "scripts/mathformer_mcp_service.py",
+          "--config",
+          "config/mathformer_mcp.example.toml",
+          "--self-check",
+          "--json"
+        ],
+        "depends_on": [],
+        "writes": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "The decomposed MCP tools share the self_check helpers; mathformer_run_workflow continues to dispatch the native hub action.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report"
+      ],
+      "failure_policy": "Dependency-free leaf: hub preflight failure or dry-run returns without launching; otherwise one subprocess. Nonzero exit and post-run write-audit failures fail the action. Unexpected exceptions propagate.",
+      "output_boundary": "Graph exports self_check report and main exit code. Native hub wraps stdout/stderr/returncode in HubResult; optional write_report writes under artifacts/workflow_hub/.",
+      "config_path": "self_check accepts a config path; native action fixes it to config/mathformer_mcp.example.toml.",
+      "effects_status": "Self-check reads only and prints; only the enclosing hub may write its optional report."
+    }
+  }
+}

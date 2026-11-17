@@ -1,0 +1,448 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_mathformerphysicslib_all_candidate_compile_workflow
+version: 1.0.0
+kind: workflow
+description: Sequential native Lean candidate compilation and report creation, with
+  explicit discovery-count admission.
+aliases:
+- mathformerphysicslib:all-candidate-compile
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Request:
+    schema:
+      type: object
+      description: 'Admission specialization: candidate_count must equal the number
+        of files discovered in this repository snapshot, at most 1024. It is an input
+        assertion, not a native CLI argument or a request to truncate discovery. Timeout
+        defaults to 180 in main.'
+      properties:
+        output:
+          type: string
+          minLength: 1
+        timeout_seconds:
+          type: integer
+        candidate_count:
+          type: integer
+          minimum: 0
+          maximum: 1024
+        repository_root:
+          type: string
+          minLength: 1
+      required:
+      - output
+      - timeout_seconds
+      - candidate_count
+      - repository_root
+      additionalProperties: false
+  Flag:
+    schema:
+      type: boolean
+  State:
+    schema:
+      type: object
+      properties:
+        cases:
+          type: array
+          maxItems: 1024
+          items:
+            type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 1024
+        results:
+          type: array
+          maxItems: 1024
+          items:
+            type: object
+      required:
+      - cases
+      - index
+      - results
+      additionalProperties: false
+  Entry:
+    schema:
+      type: object
+      properties:
+        case_id:
+          type: string
+        path:
+          type: string
+        source_sha256:
+          type: string
+        diagnostic_sha256:
+          type: string
+        command:
+          type: array
+          items:
+            type: string
+        returncode:
+          type:
+          - integer
+          - 'null'
+        stdout:
+          type: string
+        stderr:
+          type: string
+        compiled:
+          type: boolean
+        timeout:
+          const: true
+      required:
+      - case_id
+      - path
+      - source_sha256
+      - diagnostic_sha256
+      - command
+      - returncode
+      - stdout
+      - stderr
+      - compiled
+      additionalProperties: false
+  Report:
+    schema:
+      type: object
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: mathformerphysicslib_all_candidate_compile
+        generated_at_utc:
+          type: string
+        workflow_executed:
+          const: true
+        checks_passed:
+          type: boolean
+        artifact_status:
+          const: candidate
+        library_status:
+          enum:
+          - accepted
+          - blocked
+        release_ok:
+          const: false
+        case_count:
+          type: integer
+          minimum: 0
+        compiled_count:
+          type: integer
+          minimum: 0
+        lean_version:
+          type: object
+        lake_manifest_sha256:
+          type:
+          - string
+          - 'null'
+        results:
+          type: array
+          items:
+            type: object
+        blockers:
+          type: array
+          items:
+            enum:
+            - candidate_compile_failure
+        terminal_states:
+          type: array
+          items:
+            enum:
+            - compile_failed
+      required:
+      - schema_version
+      - style
+      - generated_at_utc
+      - workflow_executed
+      - checks_passed
+      - artifact_status
+      - library_status
+      - release_ok
+      - case_count
+      - compiled_count
+      - lean_version
+      - lake_manifest_sha256
+      - results
+      - blockers
+      - terminal_states
+      additionalProperties: false
+inputs:
+  request:
+    type: Request
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+operations:
+  discover:
+    inputs:
+      request:
+        type: Request
+    outputs:
+      state:
+        type: State
+      has_cases:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_candidates_discover
+        operation: mathformer_physics_candidates_discover
+  compile:
+    inputs:
+      state:
+        type: State
+      request:
+        type: Request
+    outputs:
+      entry:
+        type: Entry
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_candidates_compile
+        operation: mathformer_physics_candidates_compile
+  advance:
+    inputs:
+      state:
+        type: State
+      entry:
+        type: Entry
+    outputs:
+      state:
+        type: State
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_candidates_advance
+        operation: mathformer_physics_candidates_advance
+  finish:
+    inputs:
+      state:
+        type: State
+      request:
+        type: Request
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_candidates_finish
+        operation: mathformer_physics_candidates_finish
+  empty:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_candidates_empty
+        operation: mathformer_physics_candidates_empty
+flow:
+  kind: sequence
+  steps:
+  - id: discover
+    kind: call
+    operation: discover
+    arguments:
+      request:
+        ref: inputs.request
+  - id: compile_all
+    kind: loop
+    state_type: State
+    initial:
+      ref: steps.discover.outputs.state
+    max_iterations: 1024
+    on_exhausted: fail
+    body:
+      kind: switch
+      cases:
+      - id: nonempty
+        when:
+          ref: steps.discover.outputs.has_cases
+        body:
+          kind: sequence
+          steps:
+          - id: compile_one
+            kind: call
+            operation: compile
+            arguments:
+              state:
+                ref: loop.state
+              request:
+                ref: inputs.request
+          - id: accumulate
+            kind: call
+            operation: advance
+            arguments:
+              state:
+                ref: loop.state
+              entry:
+                ref: steps.compile_one.outputs.entry
+          outputs:
+            state:
+              type: State
+              value:
+                ref: steps.accumulate.outputs.state
+            done:
+              type: Flag
+              value:
+                ref: steps.accumulate.outputs.done
+      default:
+        kind: call
+        operation: empty
+        arguments:
+          state:
+            ref: loop.state
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: State
+        value:
+          ref: loop.state
+  - id: write_report
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.compile_all.outputs.state
+      request:
+        ref: inputs.request
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.write_report.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - .lake/
+      - requested_output
+      - artifacts/physics_lean/all_candidate_compile/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - compile_candidates
+    - produce_candidate_report
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+    - promote_candidate
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 2050
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Compilation evidence only; candidate status never authorizes release
+    or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/physics_lean/run_mathformerphysicslib_all_candidate_compile.py
+    selector: run; discover_cases; finish_report
+    digest: sha256:c7f343376de5c1641290eb446d39ea03012f81cb9494dc10d828b52d05fefc8e
+  - path: tests/physics_lean/run_mathformerphysicslib_all_candidate_compile.py
+    selector: compile_case; command_version; main
+    digest: sha256:c7f343376de5c1641290eb446d39ea03012f81cb9494dc10d828b52d05fefc8e
+  - path: scripts/mathformer.py
+    selector: build_registry; preflight; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/physics_candidate_compile_tools.py
+    digest: sha256:d2947ef955a09fa53173cd735797a4feadd97aabc747dee7ed06ff0b03280884
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: tests/physics_lean/test_candidate_compile_workflow_runtime.py
+    digest: sha256:e688825b08051c85597b49c6d6ad854d4c9955a560ffccd5c1f11513db2f6b40
+  - path: tests/test_matrix.json
+    digest: sha256:75a2d9633069d3bf3f464a2ebac45a8b2e7d795eabe0f19025b5c9af65a2fbef
+  gaps:
+  - Source discovery is finite but uncapped; this admission specialization accepts
+    only matching counts from 0 through 1024, never truncating discovery.
+  - At 1024 candidates done is true on the final iteration; exhaustion is unreachable
+    for admitted inputs.
+  - 3600 seconds is a descriptor budget, not a native timeout; version querying has
+    no native timeout. The hub wrapper has a separate 1800-second timeout and write
+    audit.
+  - Unexpected exceptions propagate and can prevent report creation; there is no retry
+    or checkpoint.
+  - Nested result and version schemas are compact projections. Native diagnostics
+    and report are preserved; runtime receipts do not certify scientific validity.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: mathformerphysicslib:all-candidate-compile
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+  mathformer.native_boundary:
+    execution: run(output, timeout_seconds); main supplies default output and timeout_seconds=180.
+    default_output: artifacts/physics_lean/all_candidate_compile/report.json
+    main_exit: Print payload or counts; exit 0 iff checks_passed, otherwise 1, after
+      report creation.
+    hub: Registry dispatches script with --json through run_action/run_leaf_action.
+      Preflight checks paths, lake and argument policy; dry-run skips execution. Separate
+      subprocess timeout is 1800 seconds; post-execution write audit may fail the
+      action.
+    alias: physics-lib:all-candidate-compile has one dependency on the canonical native
+      action.
+    context: repository_root is the explicit native filesystem/cwd context; the original
+      CLI continues to use REPO_ROOT. Count admission is checked before compilation.
+# REUSE-IgnoreEnd

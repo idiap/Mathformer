@@ -1,0 +1,213 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Domain-specific source boundary for the named control_validation_loop Mathformer workflow.
+type MathformerControlSurfaceSnapshot:
+    # Digest of the canonical hook and loop-contract registry.
+    hook_registry_digest: String
+    # Digest of the controlled natural-language routing registry.
+    routing_registry_digest: String
+    # Ordered control checks requested for this validation run.
+    requested_checks: List[String]
+
+# Domain-specific result of control.workflow_contract within the named control_validation_loop workflow.
+type ControlValidationControlWorkflowContractArtifact:
+    # Exact subject processed by the control.workflow_contract occurrence.
+    subject: String
+    # Source anchors retained by the control.workflow_contract occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical control.workflow_contract contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to control.workflow_contract.
+    gate_disposition: String
+    # Known limitations that constrain use of the control.workflow_contract result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of control.workflow_router within the named control_validation_loop workflow.
+type ControlValidationControlWorkflowRouterArtifact:
+    # Exact subject processed by the control.workflow_router occurrence.
+    subject: String
+    # Source anchors retained by the control.workflow_router occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical control.workflow_router contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to control.workflow_router.
+    gate_disposition: String
+    # Known limitations that constrain use of the control.workflow_router result.
+    limitations: List[String]
+    # Dispositions considered by the named workflow gate.
+    considered_dispositions: List[String]
+    # Policy-selected disposition without creating object-level evidence.
+    selected_disposition: String
+    # Scope-bounded rationale for the selected operational disposition.
+    rationale: String
+
+# Domain-specific result of control.reasoning_flow_language within the named control_validation_loop workflow.
+type ControlValidationControlReasoningFlowLanguageArtifact:
+    # Exact subject processed by the control.reasoning_flow_language occurrence.
+    subject: String
+    # Source anchors retained by the control.reasoning_flow_language occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical control.reasoning_flow_language contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to control.reasoning_flow_language.
+    gate_disposition: String
+    # Known limitations that constrain use of the control.reasoning_flow_language result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of control.skill_hook_coverage within the named control_validation_loop workflow.
+type ControlValidationControlSkillHookCoverageArtifact:
+    # Exact subject processed by the control.skill_hook_coverage occurrence.
+    subject: String
+    # Source anchors retained by the control.skill_hook_coverage occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical control.skill_hook_coverage contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to control.skill_hook_coverage.
+    gate_disposition: String
+    # Known limitations that constrain use of the control.skill_hook_coverage result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of control.reasoning_log_schema within the named control_validation_loop workflow.
+type ControlValidationControlReasoningLogSchemaArtifact:
+    # Exact subject processed by the control.reasoning_log_schema occurrence.
+    subject: String
+    # Source anchors retained by the control.reasoning_log_schema occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical control.reasoning_log_schema contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to control.reasoning_log_schema.
+    gate_disposition: String
+    # Known limitations that constrain use of the control.reasoning_log_schema result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of control.gate_policy within the named control_validation_loop workflow.
+type MathformerControlValidationDecision:
+    # Exact subject processed by the control.gate_policy occurrence.
+    subject: String
+    # Source anchors retained by the control.gate_policy occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical control.gate_policy contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to control.gate_policy.
+    gate_disposition: String
+    # Known limitations that constrain use of the control.gate_policy result.
+    limitations: List[String]
+    # Dispositions considered by the named workflow gate.
+    considered_dispositions: List[String]
+    # Policy-selected disposition without creating object-level evidence.
+    selected_disposition: String
+    # Scope-bounded rationale for the selected operational disposition.
+    rationale: String
+
+# Assess hook, owner, routing, and shared-runtime integrity against the canonical contract. This record retains the authority ceiling of a assessment occurrence.
+type ContractCheck:
+    # Named criteria applied by this assessment.
+    criteria: List[String]
+    # Criterion-scoped findings supported by cited inputs.
+    findings: List[String]
+    # Findings that block the named downstream use.
+    blockers: List[String]
+
+# Reviewed domain inputs required by CheckWorkflowRoutes in control_validation_loop.
+type RoutingCheckBasis:
+    # Reviewed workflow source supplied to CheckWorkflowRoutes.
+    workflow_source: MathformerControlSurfaceSnapshot
+    # Reviewed contract check supplied to CheckWorkflowRoutes.
+    contract_check: ContractCheck
+
+# Assess whether every controlled workflow family remains reachable from natural language. This record retains the authority ceiling of a assessment occurrence.
+type RouteCheck:
+    # Named criteria applied by this assessment.
+    criteria: List[String]
+    # Criterion-scoped findings supported by cited inputs.
+    findings: List[String]
+    # Findings that block the named downstream use.
+    blockers: List[String]
+
+# Reviewed domain inputs required by CheckReasoningFlows in control_validation_loop.
+type FlowCheckBasis:
+    # Reviewed workflow source supplied to CheckReasoningFlows.
+    workflow_source: MathformerControlSurfaceSnapshot
+    # Reviewed contract check supplied to CheckReasoningFlows.
+    contract_check: ContractCheck
+
+# Assess typed handles, licensed relations, calibrated endpoints, and registry alignment. This record retains the authority ceiling of a assessment occurrence.
+type FlowCheck:
+    # Named criteria applied by this assessment.
+    criteria: List[String]
+    # Criterion-scoped findings supported by cited inputs.
+    findings: List[String]
+    # Findings that block the named downstream use.
+    blockers: List[String]
+
+# Reviewed domain inputs required by CheckSkillCoverage in control_validation_loop.
+type CoverageCheckBasis:
+    # Reviewed workflow source supplied to CheckSkillCoverage.
+    workflow_source: MathformerControlSurfaceSnapshot
+    # Reviewed contract check supplied to CheckSkillCoverage.
+    contract_check: ContractCheck
+
+# Assess whether skills, hooks, owners, and named loops remain fully connected. This record retains the authority ceiling of a assessment occurrence.
+type CoverageCheck:
+    # Named criteria applied by this assessment.
+    criteria: List[String]
+    # Criterion-scoped findings supported by cited inputs.
+    findings: List[String]
+    # Findings that block the named downstream use.
+    blockers: List[String]
+
+# Reviewed domain inputs required by CheckReasoningLogs in control_validation_loop.
+type LogCheckBasis:
+    # Reviewed workflow source supplied to CheckReasoningLogs.
+    workflow_source: MathformerControlSurfaceSnapshot
+    # Reviewed contract check supplied to CheckReasoningLogs.
+    contract_check: ContractCheck
+
+# Assess reasoning-log structure, event identity, skill attribution, and hook identity. This record retains the authority ceiling of a assessment occurrence.
+type LogCheck:
+    # Named criteria applied by this assessment.
+    criteria: List[String]
+    # Criterion-scoped findings supported by cited inputs.
+    findings: List[String]
+    # Findings that block the named downstream use.
+    blockers: List[String]
+
+# Reviewed domain inputs required by CalibrateControlStatus in control_validation_loop.
+type ControlCase:
+    # Reviewed contract check supplied to CalibrateControlStatus.
+    contract_check: ContractCheck
+    # Reviewed route check supplied to CalibrateControlStatus.
+    route_check: RouteCheck
+    # Reviewed flow check supplied to CalibrateControlStatus.
+    flow_check: FlowCheck
+    # Reviewed coverage check supplied to CalibrateControlStatus.
+    coverage_check: CoverageCheck
+    # Reviewed log check supplied to CalibrateControlStatus.
+    log_check: LogCheck
+
+# Apply blocking and waiver policy without turning validation results into new evidence. This record retains the authority ceiling of a decision occurrence.
+type ControlDisposition:
+    # Scoped policy status selected by calibration.
+    status: String
+    # Blocking findings retained by the decision.
+    blockers: List[String]
+    # Limits on interpreting or using the decision.
+    limitations: List[String]

@@ -1,0 +1,615 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+"""Resolve existing capability contracts and record explicit additive invocations.
+
+Authored metadata owns classification; existing implementations own behavior.
+Discovery and rendering never invoke operations. Only the explicit invoke command
+uses the bounded adapters below, with optional public-result provenance.
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+from dataclasses import asdict
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[4]
+METADATA = (
+    ROOT
+    / "skills/control/workflow-contract-validator/references/portable-adoption.json"
+)
+CATALOG = ROOT / "docs/migrations/portable-repository-adoption/catalog.md"
+LOG_SCRIPTS = ROOT / "skills/control/reasoning-log-schema-guardian/scripts"
+# These contracts must match the explicit dispatcher in invoke(). An existing
+# but different callable is not a compatible binding for a recorded operation.
+ADAPTER_BINDINGS = {
+    "router:resolve": (
+        "skills/control/mathformer-workflow-router",
+        {
+            "kind": "python_function",
+            "path": "scripts/mathformer.py",
+            "symbol": "resolve_intent",
+        },
+    ),
+    "control:workflow-contract": (
+        "skills/control/workflow-contract-validator",
+        {
+            "kind": "hub_action",
+            "path": "skills/control/workflow-contract-validator/scripts/validate_skill_hooks.py",
+            "action_id": "control:workflow-contract",
+            "symbol": "main",
+        },
+    ),
+    "control:reasoning-log-summary": (
+        "skills/control/reasoning-log-schema-guardian",
+        {
+            "kind": "hub_action",
+            "path": "skills/control/reasoning-log-schema-guardian/scripts/summarize_reasoning_log.py",
+            "action_id": "control:reasoning-log-summary",
+            "symbol": "main",
+        },
+    ),
+    "reasoning-log:validate": (
+        "skills/control/reasoning-log-schema-guardian",
+        {
+            "kind": "python_function",
+            "path": "skills/control/reasoning-log-schema-guardian/scripts/validate_reasoning_log.py",
+            "symbol": "validate_reasoning_log",
+        },
+    ),
+    "artifact_acceptance_loop:public": (
+        "mathformer-prism/projects/artifact_acceptance_loop/prism_project",
+        {
+            "kind": "prism_entrypoint",
+            "path": "mathformer-prism/projects/artifact_acceptance_loop/prism_project/main.prism",
+            "symbol": "main",
+        },
+    ),
+    "artifact_acceptance_loop:material": (
+        "mathformer-prism/projects/artifact_acceptance_loop/prism_project",
+        {
+            "kind": "prism_entrypoint",
+            "path": "mathformer-prism/projects/artifact_acceptance_loop/prism_project/material_main.prism",
+            "symbol": "main",
+        },
+    ),
+}
+sys.path.insert(0, str(LOG_SCRIPTS))
+from adoption_provenance import (
+    canonical_digest,
+    invoke_recorded,
+)
+
+
+def module_at(path: Path):
+    """Load a known repository implementation without executing its CLI."""
+    name = "_adoption_" + hashlib.sha256(str(path).encode()).hexdigest()[:16]
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load repository module: {path}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+    return sys.modules[name]
+
+
+def local_path(value: str, root: Path = ROOT) -> Path:
+    """Require a real owned path; metadata cannot escape its repository."""
+    if not isinstance(value, str) or Path(value).is_absolute():
+        raise ValueError("binding/source path must be repository relative")
+    path = (root / value).resolve()
+    if not path.is_relative_to(root.resolve()) or not path.exists():
+        raise ValueError("unresolved or escaping path: " + value)
+    return path
+
+
+def validate_metadata(data: dict, root: Path = ROOT) -> dict:
+    """Reject ambiguous identities, stale bindings and incomplete operation types."""
+    # Interpret only the small, explicit JSON Schema vocabulary used by our local
+    # versioned contract. No optional jsonschema/PyYAML package is needed at runtime.
+    schema = json.loads(
+        (
+            root
+            / "skills/control/workflow-contract-validator/references/portable-adoption.schema.json"
+        ).read_text()
+    )
+
+    def check(value, rule, location="$"):
+        if "$ref" in rule:
+            target = schema
+            for part in rule["$ref"].removeprefix("#/").split("/"):
+                target = target[part]
+            check(value, target, location)
+            return
+        if "oneOf" in rule:
+            matched = 0
+            for candidate in rule["oneOf"]:
+                try:
+                    check(value, candidate, location)
+                    matched += 1
+                except ValueError:
+                    pass
+            if matched != 1:
+                raise ValueError(location + ": unsupported binding structure")
+            return
+        expected = rule.get("type")
+        types = {"object": dict, "array": list, "string": str, "integer": int}
+        if expected and type(value) is not types[expected]:
+            raise ValueError(location + ": expected " + expected)
+        if "const" in rule and (
+            type(value) is not type(rule["const"]) or value != rule["const"]
+        ):
+            raise ValueError(location + ": unsupported constant")
+        if "enum" in rule and value not in rule["enum"]:
+            raise ValueError(location + ": unknown taxonomy or I/O value")
+        if expected == "object":
+            if not set(rule["required"]) <= set(value):
+                raise ValueError(location + ": missing required fields")
+            if rule.get("additionalProperties") is False and set(value) - set(
+                rule["properties"]
+            ):
+                raise ValueError(location + ": unknown fields")
+            for key, child in value.items():
+                check(child, rule["properties"][key], location + "." + key)
+        if expected == "array":
+            if len(value) < rule.get("minItems", 0):
+                raise ValueError(location + ": insufficient items")
+            if rule.get("uniqueItems") and len(
+                {canonical_digest(item) for item in value}
+            ) != len(value):
+                raise ValueError(location + ": duplicate items")
+            for index, child in enumerate(value):
+                check(child, rule["items"], location + "[" + str(index) + "]")
+        if expected == "string" and len(value.strip()) < rule.get("minLength", 0):
+            raise ValueError(location + ": empty text")
+
+    check(data, schema)
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        raise ValueError("unsupported metadata schema")
+    if set(data) != {
+        "schema_version",
+        "canonical_roots",
+        "taxonomy_sources",
+        "surfaces",
+    }:
+        raise ValueError("unknown or missing metadata fields")
+    if data["canonical_roots"] != ["skills/*/*/SKILL.md", "proj_skills/*/SKILL.md"]:
+        raise ValueError("canonical discovery roots changed")
+    for source in data["taxonomy_sources"].values():
+        local_path(source, root)
+    identities, operations, aliases = set(), {}, {}
+    hub = module_at(root / "scripts/mathformer.py")
+    registry = hub.build_registry()
+    for surface in data["surfaces"]:
+        identity = surface["id"]
+        if identity in identities:
+            raise ValueError("duplicate surface: " + identity)
+        identities.add(identity)
+        owner = local_path(surface["owner"], root)
+        if surface["kind"] not in {"skill", "workflow"}:
+            raise ValueError("invalid surface kind")
+        if surface["scope"] != (
+            "project_support" if surface["kind"] == "skill" else "project_workflow"
+        ):
+            raise ValueError("surface scope does not match its declared kind")
+        if surface["kind"] == "skill" and (
+            owner.name != identity or not (owner / "SKILL.md").is_file()
+        ):
+            raise ValueError("noncanonical skill owner")
+        if not surface["operations"]:
+            raise ValueError("surface has no operations")
+        for operation in surface["operations"]:
+            oid = operation["id"]
+            if oid in operations:
+                raise ValueError("duplicate operation: " + oid)
+            operations[oid] = (surface, operation)
+            for alias in operation["aliases"]:
+                if alias in aliases:
+                    raise ValueError("duplicate alias: " + alias)
+                aliases[alias] = oid
+            binding = operation["binding"]
+            if (
+                oid in ADAPTER_BINDINGS
+                and (surface["owner"], binding) != ADAPTER_BINDINGS[oid]
+            ):
+                raise ValueError("binding disagrees with explicit adapter: " + oid)
+            path = local_path(binding["path"], root)
+            if operation["typing"]["invocation_mechanism"] != binding["kind"]:
+                raise ValueError("invocation mechanism does not match binding")
+            if not path.is_file() or (binding["kind"] == "prism_entrypoint") != (
+                path.suffix == ".prism"
+            ):
+                raise ValueError("binding kind does not match its implementation file")
+            if binding["kind"] == "hub_action":
+                action = registry.get(binding["action_id"])
+                if action is None or binding["path"] not in action.command:
+                    raise ValueError("unresolved hub binding: " + oid)
+            elif binding["kind"] not in {"python_function", "prism_entrypoint"}:
+                raise ValueError("unsupported binding kind")
+            if path.suffix == ".py":
+                tree = ast.parse(path.read_text())
+                if binding.get("symbol") not in {
+                    n.name
+                    for n in tree.body
+                    if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                }:
+                    raise ValueError("unresolved callable: " + oid)
+            elif (
+                path.suffix != ".prism"
+                or binding["symbol"] != "main"
+                or "def main(" not in path.read_text()
+            ):
+                raise ValueError("unresolved PRISM entrypoint")
+            required = {
+                "execution_posture",
+                "invocation_mechanism",
+                "generation_boundary",
+                "output_authority",
+                "specification_styles",
+                "composition_role",
+                "effect_profiles",
+                "authority_profile",
+                "output_type",
+                "reasoning_method",
+            }
+            if not required <= operation["typing"].keys() or any(
+                operation["typing"][k] is None for k in required
+            ):
+                raise ValueError("incomplete operation typing")
+            sources = operation["typing"]["sources"]
+            for source in sources.values():
+                local_path(source.split("#", 1)[0], root)
+            reasoning_path, separator, fragment = sources["reasoning_method"].partition(
+                "#"
+            )
+            method = operation["typing"]["reasoning_method"]
+            reasoning_text = local_path(reasoning_path, root).read_text()
+            if (
+                reasoning_path != data["taxonomy_sources"]["reasoning_types"]
+                or not separator
+            ):
+                raise ValueError(
+                    "reasoning mapping must name its canonical source and fragment"
+                )
+            if surface["kind"] == "skill":
+                expected_fragment = "skill_bindings." + identity
+                declared = "\n  " + identity + ":\n    primary: " + method + "\n"
+                if (
+                    fragment != expected_fragment
+                    or declared
+                    not in reasoning_text.split("\nskill_bindings:\n", 1)[-1]
+                ):
+                    raise ValueError(
+                        "reasoning mapping disagrees with declared skill binding"
+                    )
+            elif (
+                fragment != method or "\n  - id: " + method + "\n" not in reasoning_text
+            ):
+                raise ValueError("unresolved workflow reasoning mapping")
+            for field in ("inputs", "outputs"):
+                if not operation[field].get("type") or not operation[field].get(
+                    "description"
+                ):
+                    raise ValueError("missing I/O contract")
+            if (
+                operation["outputs"]["authority"]
+                != operation["typing"]["output_authority"]
+            ):
+                raise ValueError("inconsistent output authority")
+            if binding["kind"] == "prism_entrypoint":
+                result_type = operation["outputs"]["type"]
+                if "-> " + result_type not in path.read_text():
+                    raise ValueError(
+                        "PRISM output contract disagrees with authored entrypoint"
+                    )
+                if "Generated[" in result_type and (
+                    operation["typing"]["execution_posture"] != "generative"
+                    or operation["typing"]["authority_profile"] != "proposal_producer"
+                    or operation["typing"]["output_type"] != "candidate_artifact"
+                    or "AI.Generate" not in operation["typing"]["generation_boundary"]
+                ):
+                    raise ValueError(
+                        "generated PRISM output cannot acquire checked authority"
+                    )
+                if "Computed[" in result_type and (
+                    operation["typing"]["authority_profile"] != "decision_authority"
+                    or operation["typing"]["output_type"] != "decision_record"
+                    or "not_executed_by_structural_fixture"
+                    not in operation["outputs"]["authority"]
+                ):
+                    raise ValueError(
+                        "material fixture cannot claim native backend execution"
+                    )
+            if operation["outputs"]["writes"] and operation["typing"][
+                "effect_profiles"
+            ] == ["read_only"]:
+                raise ValueError("declared writes contradict read-only effects")
+            if not operation["evidence_limits"] or not isinstance(
+                operation["availability"]["requires"], list
+            ):
+                raise ValueError("missing evidence/availability contract")
+    # Aliases only target canonical operations. This forbids chains and cycles by construction.
+    if set(aliases) & (set(operations) | identities):
+        raise ValueError(
+            "alias collides with canonical identity (cycles/chains forbidden)"
+        )
+    return {"operations": operations, "aliases": aliases}
+
+
+def load_contract(path: Path = METADATA):
+    data = json.loads(path.read_text())
+    return data, validate_metadata(data)
+
+
+def resolve(identity: str, data: dict | None = None):
+    if data is None:
+        data = load_contract()[0]
+    assert data is not None
+    index = validate_metadata(data)
+    canonical = index["aliases"].get(identity, identity)
+    if canonical not in index["operations"]:
+        raise ValueError("unknown operation: " + identity)
+    return index["operations"][canonical]
+
+
+def catalog_text(data: dict) -> str:
+    """Generate discovery from one authored metadata source, without invocation."""
+    validate_metadata(data)
+    lines = [
+        "# Portable adoption pilot catalog",
+        "",
+        "Generated by `python3 scripts/mathformer.py run adoption:catalog --allow-mutating --json`.",
+        "Source: `skills/control/workflow-contract-validator/references/portable-adoption.json`.",
+        "Declared dependencies are requirements, not a live availability attestation.",
+        "",
+        "| Operation / aliases | Owner | Mechanism / execution | Result authority |",
+        "| --- | --- | --- | --- |",
+    ]
+    for surface in data["surfaces"]:
+        for op in surface["operations"]:
+            cells = [
+                op["id"] + " / " + ", ".join(op["aliases"]),
+                surface["owner"],
+                op["typing"]["invocation_mechanism"]
+                + " / "
+                + op["typing"]["execution_posture"],
+                op["typing"]["output_authority"],
+            ]
+            lines.append(
+                "| "
+                + " | ".join(c.replace("|", "\\|").replace("\n", " ") for c in cells)
+                + " |"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def snapshot(surface: dict, operation: dict, data: dict) -> dict:
+    """Freeze identity and canonical metadata digest for public provenance."""
+    return {
+        "skill_id": surface["id"],
+        "operation_id": operation["id"],
+        "schema_version": 1,
+        "metadata_version": 1,
+        "source_digest": hashlib.sha256(METADATA.read_bytes()).hexdigest(),
+        "contract_digest": canonical_digest(data),
+        "result_authority": operation["typing"]["output_authority"],
+        "invocation_mechanism": operation["typing"]["invocation_mechanism"],
+        "generation_boundary": operation["typing"]["generation_boundary"],
+        "skill_label": surface["id"].replace("-", " "),
+        "capability": {
+            "role": operation["role"],
+            "scope": surface["scope"],
+            "inputs": operation["inputs"],
+            "outputs": operation["outputs"],
+        },
+        "reasoning_mapping": operation["typing"],
+        "mapping_sources": {
+            key: {
+                "path": value,
+                "sha256": hashlib.sha256(local_path(value).read_bytes()).hexdigest(),
+            }
+            for key, value in data["taxonomy_sources"].items()
+        },
+    }
+
+
+def invoke(identity: str, inputs: dict, output_dir: Path | None = None):
+    """Invoke a bounded adapter; arbitrary metadata cannot authorize execution."""
+    data, _ = load_contract()
+    surface, operation = resolve(identity, data)
+    oid = operation["id"]
+    if not isinstance(inputs, dict):
+        raise ValueError("adapter inputs must be an object")
+    allowed = {
+        "router:resolve": {"request", "limit", "family"},
+        "control:workflow-contract": set(),
+        "control:reasoning-log-summary": {"log_file"},
+        "reasoning-log:validate": {"log_file"},
+        "artifact_acceptance_loop:public": set(),
+        "artifact_acceptance_loop:material": set(),
+    }
+    if oid not in allowed:
+        raise ValueError("use the documented native binding for this operation")
+    if set(inputs) - allowed[oid]:
+        raise ValueError("unknown adapter inputs")
+    meta = snapshot(surface, operation, data)
+
+    def perform():
+        if oid == "router:resolve":
+            if not isinstance(inputs.get("request"), str):
+                raise ValueError("request must be a string")
+            hub = module_at(ROOT / "scripts/mathformer.py")
+            return json.loads(
+                json.dumps(
+                    [
+                        asdict(item)
+                        for item in hub.resolve_intent(
+                            inputs["request"],
+                            hub.build_registry(),
+                            limit=inputs.get("limit", 5),
+                            family=inputs.get("family"),
+                        )
+                    ],
+                    allow_nan=False,
+                )
+            )
+        if oid == "control:workflow-contract":
+            hub = module_at(ROOT / "scripts/mathformer.py")
+            # The already registered leaf owns invocation, preflight and write checks.
+            return hub.run_action(
+                oid,
+                hub.build_registry(),
+                hub.RunContext(json_output=True),
+                extra_args=(),
+            )
+        if oid in {"control:reasoning-log-summary", "reasoning-log:validate"}:
+            if not isinstance(inputs.get("log_file"), str):
+                raise ValueError("log_file must be a path string")
+            log_file = Path(inputs["log_file"])
+            if oid == "control:reasoning-log-summary":
+                return module_at(LOG_SCRIPTS / "summarize_reasoning_log.py").summarize(
+                    log_file, hooks_file=ROOT / "skills/SKILL_HOOKS.yaml"
+                )
+            return module_at(
+                LOG_SCRIPTS / "validate_reasoning_log.py"
+            ).validate_reasoning_log(
+                log_file, hooks_file=ROOT / "skills/SKILL_HOOKS.yaml"
+            )
+        project = ROOT / surface["owner"]
+        prism_bin = ROOT.parent / "to_prism/.venv/bin/prism"
+        if not prism_bin.is_file():
+            raise FileNotFoundError("existing adjacent PRISM executable unavailable")
+        with tempfile.TemporaryDirectory(
+            prefix="mathformer-adoption-prism-"
+        ) as temporary:
+            result = Path(temporary) / "result.json"
+            env = dict(os.environ, PRISM_BIN=str(prism_bin))
+            command = [
+                str(project / "prism"),
+                "run",
+                Path(operation["binding"]["path"]).name,
+                "--handler",
+                "fake",
+                "--output",
+                str(result),
+            ]
+            run = subprocess.run(
+                command, cwd=project, env=env, capture_output=True, text=True
+            )
+            if run.returncode:
+                raise RuntimeError(
+                    "PRISM fixture invocation failed (exit %d)" % run.returncode
+                )
+            checked = subprocess.run(
+                [
+                    str(project / "prism"),
+                    "verify-run",
+                    str(result),
+                    "--mode",
+                    "offline",
+                ],
+                cwd=project,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            if checked.returncode:
+                raise RuntimeError("PRISM offline trace verification failed")
+            return {
+                "fixture": True,
+                "handler": "fake",
+                "backend_verified": False,
+                "authority": operation["typing"]["output_authority"],
+                "result": json.loads(result.read_text()),
+            }
+
+    if oid.startswith("artifact_acceptance_loop:"):
+        meta.update(fixture=True, execution_mode="fake_handler")
+    return invoke_recorded(perform, meta, output_dir)
+
+
+def catalog_is_stale(generated: str, catalog: Path = CATALOG) -> bool:
+    """Keep the CLI's missing-file short circuit and exact text comparison."""
+    return not catalog.exists() or catalog.read_text() != generated
+
+
+def stale_catalog_error():
+    raise ValueError("generated pilot catalog is stale")
+
+
+def catalog_result(checked: bool, catalog: Path = CATALOG) -> dict:
+    return {"ok": True, "path": str(catalog.relative_to(ROOT)), "checked": checked}
+
+
+def error_result(error: Exception) -> dict:
+    return {"ok": False, "error": str(error)}
+
+
+def emit_completion(result: dict, returncode: int = 0) -> dict:
+    """Native stdout plus a typed envelope for non-CLI callers."""
+    if returncode:
+        print(json.dumps(result))
+    else:
+        print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
+    return {"returncode": returncode, "json": result}
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("validate")
+    cat = sub.add_parser("catalog")
+    cat.add_argument("--check", action="store_true")
+    desc = sub.add_parser("describe")
+    desc.add_argument("identity")
+    run = sub.add_parser("invoke")
+    run.add_argument("identity")
+    run.add_argument("--inputs", default="{}")
+    run.add_argument("--output-dir", type=Path, default=ROOT / "artifacts/adoption")
+    args = parser.parse_args(argv)
+    try:
+        data, index = load_contract()
+        if args.command == "validate":
+            result = {
+                "ok": True,
+                "surface_count": len(data["surfaces"]),
+                "operation_count": len(index["operations"]),
+            }
+        elif args.command == "catalog":
+            generated = catalog_text(data)
+            if args.check:
+                if catalog_is_stale(generated, CATALOG):
+                    stale_catalog_error()
+            else:
+                CATALOG.write_text(generated)
+            result = catalog_result(args.check, CATALOG)
+        elif args.command == "describe":
+            surface, operation = resolve(args.identity, data)
+            result = {"surface": surface["id"], "operation": operation}
+        else:
+            # Controlled action declares this sole new artifact root.
+            if not args.output_dir.resolve().is_relative_to(
+                (ROOT / "artifacts/adoption").resolve()
+            ):
+                raise ValueError("CLI output-dir must be under artifacts/adoption")
+            result = invoke(args.identity, json.loads(args.inputs), args.output_dir)
+        return emit_completion(result)["returncode"]
+    except (ValueError, KeyError, TypeError, FileNotFoundError) as error:
+        return emit_completion(error_result(error), 2)["returncode"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

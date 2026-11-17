@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import SympyEquationalTraceLoop
+from sympy_equational_trace_loop import SympyEquationFormalizationRequest, SympyEquationalTraceAssessment
+
+def main(
+    model_access: ModelGenerate,
+    disclosure: ContextDisclose,
+) -> Result[Computed[SympyEquationalTraceAssessment], ModelFailure] ! {AI.Generate, Context.Disclose}:
+    workflow_source = SympyEquationFormalizationRequest(
+        equations = ["fixture:sympy_equational_trace_loop:equations"],
+        symbol_assumptions = ["fixture:sympy_equational_trace_loop:symbol_assumptions"],
+        target_identity = "fixture:sympy_equational_trace_loop:target_identity",
+    )
+    return solve SympyEquationalTraceLoop(workflow_source)

@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from reflection_testing_loop import (
+    ImprovementCase,
+    MathformerWorkflowTrajectoryEvidence,
+    ProcessDisposition,
+    RevisionBasis,
+    RevisionTestCase,
+)
+import occurrences as steps
+import relations as links
+
+# Compare a Mathformer run with its accepted trajectory, propose one localized
+# process revision, test it against prior successes, and decide whether to adopt it.
+reasoning RefineMathformerWorkflow(
+    evidence: MathformerWorkflowTrajectoryEvidence,
+) -> Generated[ProcessDisposition]:
+    sequence:
+        # Build the reference-free trajectory and identify concrete regressions,
+        # plateaus, costly loops, and bounded improvement opportunities.
+        [trajectory_assessment: steps.AssessWorkflowTrajectory(evidence)]
+        # Produce one immutable prompt, skill, hook, or test revision with explicit
+        # preservation obligations; do not apply it yet.
+        [workflow_revision: steps.ProposeMonotoneRevision(RevisionBasis(
+            workflow_source = evidence,
+            trajectory_assessment = trajectory_assessment.value,
+        ))] by links.ReviseFromTrajectory
+        # Run deterministic and content-skill probes against both the candidate
+        # revision and every previously successful baseline case.
+        [revision_evidence: steps.TestRevisionAgainstBaseline(RevisionTestCase(
+            workflow_source = evidence,
+            workflow_revision = workflow_revision.value,
+        ))] by links.TestRevision
+        # Confirm workflow-contract and hook coverage, then adopt, retain as
+        # experimental, reject, or block the candidate revision.
+        [improvement_status: steps.DecideRevisionAdoption(ImprovementCase(
+            trajectory_assessment = trajectory_assessment.value,
+            workflow_revision = workflow_revision.value,
+            revision_evidence = revision_evidence.value,
+        ))] by links.CalibrateImprovement
+    return improvement_status

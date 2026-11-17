@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Build or validate the complete MathformerPhysicsLib artifact registry."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import platform
+import subprocess
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+LIB_ROOT = REPO_ROOT / "MathformerPhysicsLib"
+MANIFEST = LIB_ROOT / "MANIFEST.json"
+README = LIB_ROOT / "README.md"
+BACKEND_FILES = {
+    "Lean": ("MathformerPhysics.lean", "consistency_report.json"),
+    "Isabelle": ("MathformerPhysics.thy", "consistency_report.json"),
+    "SymPy": ("MathformerPhysics.py", "summary.json"),
+}
+PROMOTED = {
+    "Lean": {
+        "formalphysics_0000",
+        "formalphysics_0020",
+        "formalphysics_0026",
+        "formalphysics_0054",
+        "formalphysics_0059",
+        "formalphysics_0066",
+        "formalphysics_0119",
+        "formalphysics_0172",
+        "formalphysics_0176",
+        "formalphysics_0191",
+    },
+    "Isabelle": {"formalphysics_0000", "formalphysics_0020"},
+    "SymPy": {
+        "formalphysics_0000",
+        "formalphysics_0020",
+        "formalphysics_0026",
+        "formalphysics_0054",
+        "formalphysics_0059",
+        "formalphysics_0066",
+        "formalphysics_0119",
+        "formalphysics_0172",
+        "formalphysics_0176",
+        "formalphysics_0191",
+    },
+}
+
+
+def digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def rel(path: Path) -> str:
+    return path.relative_to(REPO_ROOT).as_posix()
+
+
+def git_revision() -> str | None:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True, capture_output=True
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def source_for(case_id: str) -> Path | None:
+    candidates = sorted((REPO_ROOT / "data").rglob(f"*{case_id}*"))
+    return next((path for path in candidates if path.is_file()), None)
+
+
+def entry(backend: str, case_dir: Path, revision: str | None) -> dict[str, Any]:
+    artifact_name, report_name = BACKEND_FILES[backend]
+    artifact = case_dir / artifact_name
+    report = case_dir / report_name
+    case_id = case_dir.name
+    source = source_for(case_id)
+    promoted = case_id in PROMOTED[backend]
+    status = "promoted" if promoted else "candidate"
+    provenance_blockers = []
+    if source is None:
+        provenance_blockers.append("source_record_not_repository_addressable")
+    if not report.exists():
+        provenance_blockers.append("decisive_report_missing")
+    return {
+        "case_id": case_id,
+        "backend": backend,
+        "status": status,
+        "public_root_imported": backend == "Lean" and promoted,
+        "artifact_path": rel(artifact),
+        "artifact_sha256": digest(artifact),
+        "source_location": rel(source) if source else None,
+        "source_sha256": digest(source) if source else None,
+        "generator_action_id": {
+            "Lean": "physics-lean:source-only-top10",
+            "Isabelle": "physics-isabelle:original-two",
+            "SymPy": "physics-sympy:formalphysics-top10",
+        }[backend],
+        "generator_revision": revision,
+        "decisive_report_path": rel(report) if report.exists() else None,
+        "decisive_report_sha256": digest(report) if report.exists() else None,
+        "provenance_status": "complete" if not provenance_blockers else "incomplete",
+        "provenance_blockers": provenance_blockers,
+    }
+
+
+def build_registry() -> list[dict[str, Any]]:
+    revision = git_revision()
+    rows: list[dict[str, Any]] = []
+    for backend, (artifact_name, _) in BACKEND_FILES.items():
+        root = LIB_ROOT / backend
+        for case_dir in sorted(root.glob("formalphysics_*")):
+            if case_dir.is_dir() and (case_dir / artifact_name).exists():
+                rows.append(entry(backend, case_dir, revision))
+    return rows
+
+
+def render_coverage(rows: list[dict[str, Any]]) -> str:
+    lines = [
+        "<!-- BEGIN GENERATED PHYSICS COVERAGE -->",
+        "## Generated Artifact Coverage",
+        "",
+        "| Backend | Promoted | Candidate | Total |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for backend in BACKEND_FILES:
+        backend_rows = [row for row in rows if row["backend"] == backend]
+        promoted = sum(row["status"] == "promoted" for row in backend_rows)
+        candidates = sum(row["status"] == "candidate" for row in backend_rows)
+        lines.append(f"| {backend} | {promoted} | {candidates} | {len(backend_rows)} |")
+    lines.extend(
+        [
+            "",
+            "Every tracked case is registered in `MANIFEST.json`. Candidate cases are",
+            "compiled or executed by backend validation but are not exported by the Lean",
+            "public root or represented as cross-backend promotion evidence.",
+            "<!-- END GENERATED PHYSICS COVERAGE -->",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def update_readme(rows: list[dict[str, Any]]) -> None:
+    generated = render_coverage(rows)
+    text = README.read_text(encoding="utf-8")
+    start = "<!-- BEGIN GENERATED PHYSICS COVERAGE -->"
+    end = "<!-- END GENERATED PHYSICS COVERAGE -->"
+    if start in text and end in text:
+        prefix, remainder = text.split(start, 1)
+        _, suffix = remainder.split(end, 1)
+        text = prefix.rstrip() + "\n\n" + generated + suffix
+    else:
+        text = text.rstrip() + "\n\n" + generated + "\n"
+    README.write_text(text, encoding="utf-8")
+
+
+def write_registry(rows: list[dict[str, Any]]) -> None:
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    manifest["schema_version"] = 2
+    manifest["public_root"] = "libraries/MathformerPhysicsLib.lean"
+    manifest["registry_environment"] = {
+        "python_abi": platform.python_implementation()
+        + "-"
+        + platform.python_version(),
+        "lean_toolchain": (REPO_ROOT / "lean-toolchain")
+        .read_text(encoding="utf-8")
+        .strip(),
+    }
+    manifest["artifact_registry"] = rows
+    for backend in BACKEND_FILES:
+        backend_rows = [row for row in rows if row["backend"] == backend]
+        manifest["backends"][backend]["cases"] = [
+            row["case_id"] for row in backend_rows
+        ]
+        manifest["backends"][backend]["status_by_case"] = {
+            row["case_id"]: row["status"] for row in backend_rows
+        }
+    MANIFEST.write_text(
+        json.dumps(manifest, indent=2, sort_keys=False) + "\n", encoding="utf-8"
+    )
+    update_readme(rows)
+
+
+def validate_registry(rows: list[dict[str, Any]]) -> list[str]:
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    registered = manifest.get("artifact_registry") or []
+    errors: list[str] = []
+    expected_paths = {row["artifact_path"] for row in rows}
+    registered_paths = {
+        str(row.get("artifact_path")) for row in registered if isinstance(row, dict)
+    }
+    for path in sorted(expected_paths - registered_paths):
+        errors.append(f"unregistered artifact: {path}")
+    for path in sorted(registered_paths - expected_paths):
+        errors.append(f"registered artifact missing from filesystem: {path}")
+    registered_by_path = {
+        str(row.get("artifact_path")): row
+        for row in registered
+        if isinstance(row, dict)
+    }
+    for row in rows:
+        current = registered_by_path.get(row["artifact_path"])
+        if current and current.get("artifact_sha256") != row["artifact_sha256"]:
+            errors.append(f"artifact hash mismatch: {row['artifact_path']}")
+        if (
+            current
+            and current.get("decisive_report_sha256") != row["decisive_report_sha256"]
+        ):
+            errors.append(f"decisive report hash mismatch: {row['artifact_path']}")
+    return errors
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--write", action="store_true")
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    rows = build_registry()
+    if args.write:
+        write_registry(rows)
+    errors = validate_registry(rows) if args.check or not args.write else []
+    payload = {
+        "schema_version": 1,
+        "style": "physics_artifact_registry",
+        "ok": not errors,
+        "case_count": len(rows),
+        "counts": {
+            backend: len([row for row in rows if row["backend"] == backend])
+            for backend in BACKEND_FILES
+        },
+        "errors": errors,
+        "manifest": rel(MANIFEST),
+        "readme": rel(README),
+    }
+    print(
+        json.dumps(payload, indent=2, sort_keys=True)
+        if args.json
+        else ("PASS" if payload["ok"] else "FAIL")
+    )
+    return 0 if payload["ok"] else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

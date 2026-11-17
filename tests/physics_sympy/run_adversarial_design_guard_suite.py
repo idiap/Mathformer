@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Run adversarial fixtures against the SymPy design guard and thoroughness gate."""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ROUTER = (
+    REPO_ROOT
+    / "skills"
+    / "physics-sympy"
+    / "physics-sympy-review-refinement-router"
+    / "scripts"
+    / "plan_physics_sympy_review_refinement.py"
+)
+
+
+def load_router() -> Any:
+    """Load the design-guard router module."""
+    spec = importlib.util.spec_from_file_location(
+        "physics_sympy_review_refinement_router", ROUTER
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load router: {ROUTER}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def fixture_source(name: str) -> str:
+    """Return a tiny importable SymPy-physics-like adversarial fixture."""
+    no_projection = name in {"scalar_erasure", "missing_projection_bridge"}
+    target_leakage = name == "target_leakage"
+    missing_frame = name == "missing_frame_or_regime"
+    placeholder_grounding = name == "placeholder_library_grounding"
+    numeric_hole = name == "numeric_domain_hole"
+    silent_assumption = name == "silent_assumption_strengthening"
+    undocumented_generated = name == "undocumented_generated_support"
+    if silent_assumption:
+        assumption = {
+            "id": "assumption_generated",
+            "text": "small velocity approximation",
+            "support": "generated_support",
+        }
+    elif missing_frame:
+        assumption = {
+            "id": "assumption_source",
+            "text": "take the component from the source equation",
+            "support": "source_backed",
+            "source_anchor": "src_L0001",
+        }
+    else:
+        assumption = {
+            "id": "assumption_frame",
+            "text": "fixed Cartesian coordinate frame",
+            "support": "source_backed",
+            "source_anchor": "src_L0001",
+        }
+    frame_context = {} if missing_frame else {"frame": "Cartesian", "component": "x"}
+    bridges = (
+        []
+        if no_projection
+        else [
+            {
+                "id": "bridge",
+                "kind": "coordinate_component_bridge",
+                "status": "provided",
+            }
+        ]
+    )
+    grounding = "placeholder" if placeholder_grounding else "high"
+    numeric = (
+        {"passed": False, "counterexamples": ["bad domain"]}
+        if numeric_hole
+        else {
+            "passed": True,
+            "domain": "bounded nonzero deterministic sample",
+            "counterexamples": [],
+        }
+    )
+    derivation_step = (
+        {"id": "generated_step", "generated": True, "expression": "Fx"}
+        if undocumented_generated
+        else {
+            "id": "generated_step",
+            "generated": True,
+            "source": "generated gap",
+            "expression": "Fx",
+        }
+    )
+    return f'''
+"""Adversarial fixture: {name}
+
+Original informal statement:
+derive the x component of a force law.
+
+Informal derivation commentary:
+the source uses a component-level vector-to-scalar projection.
+
+SymPy alignment:
+the generated support is intentionally minimal for this adversarial case.
+"""
+
+COMMENTARY_HEADER = """Original informal statement:
+derive the x component of a force law.
+
+Informal derivation commentary:
+the source uses a component-level vector-to-scalar projection.
+
+SymPy alignment:
+the generated support is intentionally minimal for this adversarial case."""
+
+CLAIM = {{
+    "statement_nl": "derive the x component of a force law",
+    "statement_latex": "F_x = q E_x",
+    "source_anchors": ["src_L0001"],
+    "commentary_header": COMMENTARY_HEADER,
+}}
+ASSUMPTION_CONTEXT = {{"status": "pass", "CONTEXT_ASSUMPTIONS": [{assumption!r}]}}
+PROJECTION_BRIDGES = {bridges!r}
+DERIVATION_STEPS = [{derivation_step!r}]
+SYMPY_LIBRARY_GROUNDING = {{"grounding_level": {grounding!r}}}
+EQUATION_SURFACE = {{
+    "EQUATION_GRAPH": {{"nodes": [{{"role": "source", "support": "source_backed"}}], "frame_context": {frame_context!r}}},
+    "QUANTITY_SURFACE": [{{"symbol": "B", "role": "vector_or_field", "support": "source_backed"}}],
+}}
+
+def validate_no_hidden_target():
+    return {{"passed": {not target_leakage!r}, "target_like_sources": ["copied target"] if {target_leakage!r} else []}}
+
+def validate_numeric_samples():
+    return {numeric!r}
+'''
+
+
+FIXTURES = {
+    "scalar_erasure": {
+        "expected_code": "projection_bridge_missing",
+        "repair_surface": "projection_bridge",
+    },
+    "target_leakage": {
+        "expected_code": "target_nonleakage_not_proven",
+        "repair_surface": "target_nonleakage",
+    },
+    "missing_frame_or_regime": {
+        "expected_code": "missing_frame_or_regime_context",
+        "repair_surface": "frame_regime",
+    },
+    "placeholder_library_grounding": {
+        "expected_code": "installed_library_grounding_not_high",
+        "repair_surface": "sympy_library_grounding",
+    },
+    "missing_projection_bridge": {
+        "expected_code": "projection_bridge_missing",
+        "repair_surface": "projection_bridge",
+    },
+    "numeric_domain_hole": {
+        "expected_code": "numeric_domain_hole",
+        "repair_surface": "numeric_domain",
+    },
+    "silent_assumption_strengthening": {
+        "expected_code": "silent_assumption_strengthening",
+        "repair_surface": "assumption_context",
+    },
+    "undocumented_generated_support": {
+        "expected_code": "generated_support_label_missing",
+        "repair_surface": "transformation_step",
+    },
+}
+
+
+def initialize_suite() -> tuple[Any, Any, dict[str, Any]]:
+    """Load the router before opening the native temporary fixture context."""
+    router = load_router()
+    results: list[dict[str, Any]] = []
+    temporary = tempfile.TemporaryDirectory()
+    return router, temporary, {"cursor": 0, "results": results}
+
+
+def materialize_fixture(tmp: Path, state: dict[str, Any]) -> dict[str, Any]:
+    """Select the next insertion-ordered native fixture and write its module."""
+    name, expected = list(FIXTURES.items())[state["cursor"]]
+    path = tmp / f"{name}.py"
+    path.write_text(fixture_source(name), encoding="utf-8")
+    return {"name": name, "path": str(path), **expected}
+
+
+def review_fixture(router: Any, fixture: dict[str, Any]) -> dict[str, Any]:
+    """Keep the original reviewer, case id, Path argument and absent log."""
+    return router.build_design_guard_review(
+        "formalphysics_0000", Path(fixture["path"]), None
+    )
+
+
+def append_fixture_result(
+    state: dict[str, Any], fixture: dict[str, Any], report: dict[str, Any]
+) -> tuple[dict[str, Any], bool]:
+    """Append one native observation without fail-fast or repair."""
+    name, expected = fixture["name"], fixture
+    results = list(state["results"])
+    codes = {
+        item.get("code")
+        for item in report.get("findings", [])
+        if isinstance(item, dict) and item.get("severity") in {"high", "critical"}
+    }
+    surfaces = {
+        item.get("repair_surface")
+        for item in report.get("findings", [])
+        if isinstance(item, dict) and item.get("severity") in {"high", "critical"}
+    }
+    results.append(
+        {
+            "id": name,
+            "status": report.get("status"),
+            "expected_code": expected["expected_code"],
+            "expected_repair_surface": expected["repair_surface"],
+            "observed_codes": sorted(code for code in codes if code),
+            "observed_repair_surfaces": sorted(
+                surface for surface in surfaces if surface
+            ),
+            "blocked": report.get("status") == "fail",
+            "expected_code_present": expected["expected_code"] in codes,
+            "expected_surface_present": expected["repair_surface"] in surfaces,
+        }
+    )
+    next_state = {"cursor": state["cursor"] + 1, "results": results}
+    return next_state, next_state["cursor"] == len(FIXTURES)
+
+
+def finish_suite(state: dict[str, Any]) -> dict[str, Any]:
+    """Aggregate expectations after the temporary context has been closed."""
+    results = state["results"]
+    findings = [
+        {
+            "severity": "high",
+            "code": "fixture_did_not_fail_with_expected_route",
+            "fixture": result["id"],
+            "expected_code": result["expected_code"],
+            "observed_codes": result["observed_codes"],
+            "expected_repair_surface": result["expected_repair_surface"],
+            "observed_repair_surfaces": result["observed_repair_surfaces"],
+        }
+        for result in results
+        if not (
+            result["blocked"]
+            and result["expected_code_present"]
+            and result["expected_surface_present"]
+        )
+    ]
+    return {
+        "schema_version": 1,
+        "ok": not findings,
+        "style": "physics_sympy_adversarial_design_guard_suite",
+        "case_id": "formalphysics_0000",
+        "fixture_count": len(results),
+        "results": results,
+        "findings": findings,
+    }
+
+
+def run_suite() -> dict[str, Any]:
+    """Run each adversarial fixture through the shared native steps."""
+    router, temporary, state = initialize_suite()
+    try:
+        for _ in FIXTURES:
+            fixture = materialize_fixture(Path(temporary.name), state)
+            report = review_fixture(router, fixture)
+            state, _ = append_fixture_result(state, fixture, report)
+    finally:
+        temporary.cleanup()
+    return finish_suite(state)
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the adversarial design-guard suite."""
+    args = parse_args(argv)
+    report = run_suite()
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
+    else:
+        print(f"ok: {report['ok']}")
+        print(f"fixture_count: {report['fixture_count']}")
+    return 0 if report["ok"] else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

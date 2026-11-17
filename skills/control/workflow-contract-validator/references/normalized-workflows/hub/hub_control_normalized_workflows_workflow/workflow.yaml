@@ -1,0 +1,308 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_control_normalized_workflows_workflow
+version: 1.0.0
+kind: workflow
+description: Check normalized descriptor coverage, drift, schema, dataflow and provenance.
+aliases:
+- control:normalized-workflows
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Descriptors:
+    schema:
+      type: array
+      items:
+        type: string
+      description: Ordered JSON descriptor strings preserve source dictionary insertion
+        order across transports for native YAML serialization.
+  CheckResult:
+    representation: value
+    schema:
+      type: object
+      required:
+      - ok
+      - counts
+      - descriptor_count
+      - schema_and_dataflow_validated
+      - execution_migrated
+      - runtime_bindings_qualified
+      - errors
+      properties:
+        ok:
+          type: boolean
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+        descriptor_count:
+          type: integer
+          minimum: 0
+        schema_and_dataflow_validated:
+          type: boolean
+        execution_migrated:
+          const: false
+        runtime_bindings_qualified:
+          const: false
+        errors:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 1
+  JsonOutput:
+    schema:
+      type: string
+  Rendered:
+    schema:
+      type: object
+      required:
+      - files
+      - catalog
+      - file_order
+      properties:
+        files:
+          type: object
+          additionalProperties:
+            type: string
+        catalog:
+          type: object
+        file_order:
+          type: array
+          items:
+            type: string
+      description: Relative path-to-content mapping and catalog with records, hashes
+        and counts.
+  OutputDirectory:
+    schema:
+      type: string
+      description: Repository-relative output directory in the declared write roots;
+        empty uses native OUTPUT.
+inputs:
+  output_directory:
+    type: OutputDirectory
+outputs:
+  result:
+    type: CheckResult
+    value:
+      ref: flow.outputs.result
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  stdout:
+    type: JsonOutput
+    value:
+      ref: flow.outputs.stdout
+operations:
+  inventory:
+    inputs: {}
+    outputs:
+      descriptors:
+        type: Descriptors
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_normalize_inventory
+        operation: mathformer_normalize_inventory
+  render:
+    inputs:
+      descriptors:
+        type: Descriptors
+    outputs:
+      rendered:
+        type: Rendered
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_normalize_render
+        operation: mathformer_normalize_render
+  check:
+    inputs:
+      rendered:
+        type: Rendered
+      output_directory:
+        type: OutputDirectory
+    outputs:
+      result:
+        type: CheckResult
+      result_json:
+        type: JsonOutput
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_normalized_check
+        operation: mathformer_normalized_check
+  finish:
+    inputs:
+      result_json:
+        type: JsonOutput
+    outputs:
+      exit_code:
+        type: ExitCode
+      stdout:
+        type: JsonOutput
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_normalized_finish
+        operation: mathformer_normalized_finish
+flow:
+  kind: sequence
+  steps:
+  - id: inventory_sources
+    kind: call
+    operation: inventory
+    arguments: {}
+  - id: render_expected
+    kind: call
+    operation: render
+    arguments:
+      descriptors:
+        ref: steps.inventory_sources.outputs.descriptors
+  - id: check_disk
+    kind: call
+    operation: check
+    arguments:
+      rendered:
+        ref: steps.render_expected.outputs.rendered
+      output_directory:
+        ref: inputs.output_directory
+  - id: emit_result
+    kind: call
+    operation: finish
+    arguments:
+      result_json:
+        ref: steps.check_disk.outputs.result_json
+  outputs:
+    result:
+      type: CheckResult
+      value:
+        ref: steps.check_disk.outputs.result
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.emit_result.outputs.exit_code
+    stdout:
+      type: JsonOutput
+      value:
+        ref: steps.emit_result.outputs.stdout
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      write: []
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - read_workflow_sources
+    - validate_descriptors
+    - emit_check_result
+    forbidden:
+    - execute_scientific_workflows
+    - write_generated_descriptors
+    - promote_claims
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 4
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Descriptor checks establish neither scientific truth nor runtime
+    qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: main (delegates to check → render/inventory/render_descriptors → check_rendered)
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: scripts/mathformer.py
+    selector: build_registry/control:normalized-workflows; run_action; run_leaf_action;
+      preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/normalize_workflows_tools.py
+    selector: register_normalize_workflows_tools
+    digest: sha256:5fb4bb9955d5cc9c28cc7001823b4d0b5249da2829ea17b41f9bb082b290b423
+  - path: scripts/mcp_server.py
+    selector: register_normalize_workflows_tools(mcp, _analysis_write_policy)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  gaps:
+  - Helper traversals and branches remain within their native bound operations.
+  - Descriptor internals and completion JSON cross transport as ordered JSON strings;
+    rendered file_order and catalog.json preserve native traversal and output order.
+  - Lunar owns required receipts, events and enforcement of the retained host budgets;
+    the native CLI has no global budget.
+  - Native JSON completion is returned as stdout and emitted on MCP stderr to preserve
+    framing.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: control:normalized-workflows
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: control:normalized-workflows
+      family: control
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+      - --check
+      - --json
+      depends_on: []
+      allows_extra_args: false
+      writes: []
+      timeout_seconds: null
+  mathformer.native_boundary:
+    selection: Only the registered --check --json invocation is represented.
+    caller: Preflight failure or dry-run prevents subprocess execution in the hub.
+    routes: NL validate.normalized_workflows and MCP mathformer_run_workflow reach
+      the same action.
+    execution: Registered MCP tools call shared native inventory, render_descriptors,
+      check_rendered and finish directly. No scientific workflow is invoked.
+    limits: Native traversals exhaust finite input collections; Lunar enforces the
+      retained 3600-second/four-call host budgets.
+    stopping: Finite source traversals exhaust normally; no retry, refinement or checkpoint
+      loop.
+    context_fields:
+    - 'output_directory: empty selects native OUTPUT; otherwise constrained to native
+      OUTPUT or artifacts/workflow_hub for isolated read-only checks.'
+# REUSE-IgnoreEnd

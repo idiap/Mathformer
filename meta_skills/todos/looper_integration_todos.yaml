@@ -1,0 +1,401 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+schema_version: mathformer.meta_skills.todo.v0.1
+source_project:
+  name: looper
+  archive: artifacts/external/looper/looper-repo-content-20260707-033817.zip
+  extracted_path: artifacts/external/looper/looper-repo-content-20260707-033817/looper
+  source_inventory: meta_skills/sources/looper_project_inventory.md
+integration_plan: meta_skills/looper_mathformer_integration_plan.md
+todo_policy:
+  status_values:
+    - pending
+    - in_progress
+    - complete
+    - blocked
+  completion_rule: >
+    A TODO is complete only when every acceptance_evidence item exists and every
+    validation_command succeeds or has an explicit skip/waiver artifact.
+  self_contained_rule: >
+    Each TODO must name the source Looper pattern, Mathformer target paths,
+    implementation steps, acceptance evidence, validation commands, and risks.
+
+todos:
+  - id: META-LOOPER-001
+    status: complete
+    title: Define Mathformer meta-skill task registry schema
+    source_looper_pattern:
+      - registry/tasks/oncology-evidence-to-workflow/task_registry.json
+      - agentic/scripts/validate_task_skill_registry.py
+    rationale: >
+      Mathformer has many controlled workflows, but users need workflow-visible
+      task objects that name composed skills, actions, artifacts, validators,
+      and promotion boundaries.
+    target_paths:
+      - meta_skills/schemas/task_registry.schema.json
+      - meta_skills/registry/tasks/_template/task_registry.json
+      - meta_skills/scripts/validate_task_registries.py
+      - tests/test_program/run_comprehensive_tests.py
+    implementation_steps:
+      - Create a JSON schema for visible workflow task registries.
+      - Include fields for task_id, visible_workflows, composed_skills,
+        controlled_actions, artifacts, validators, generated_skills,
+        release_boundaries, and risk_controls.
+      - Add a template task registry that documents every required field.
+      - Implement a standard-library validator that checks path existence,
+        action ids against `scripts/mathformer.py`, and skill ids against
+        `skills/`.
+      - Add a `meta_skills` or `skills` family check to the comprehensive test
+        matrix.
+    acceptance_evidence:
+      - meta_skills/schemas/task_registry.schema.json
+      - meta_skills/registry/tasks/_template/task_registry.json
+      - meta_skills/scripts/validate_task_registries.py
+      - artifacts/meta_skills/task_registry_validation.json
+    validation_commands:
+      - python meta_skills/scripts/validate_task_registries.py --json
+      - python tests/test_program/run_comprehensive_tests.py --module-family skills --json
+      - python scripts/mathformer.py audit --strict --json
+    risks:
+      - Registry fields become a second undocumented router.
+      - Path checks pass while workflow semantics remain weak.
+    controls:
+      - Keep `scripts/mathformer.py` as the authoritative action registry.
+      - Require validators and release boundaries for every visible workflow.
+
+  - id: META-LOOPER-002
+    status: complete
+    title: Seed MathformerPhysicsLib task registries
+    source_looper_pattern:
+      - registry/tasks/oncology-evidence-to-workflow/task_registry.json
+      - registry/tasks/oncology-evidence-to-workflow/generated_workflows/workflow_evolution.json
+    rationale: >
+      MathformerPhysicsLib foundations and coherence are mature enough to be
+      exposed as workflow-visible task objects with evidence, validators, and
+      promotion boundaries.
+    target_paths:
+      - meta_skills/registry/tasks/mathformerphysicslib-foundations/task_registry.json
+      - meta_skills/registry/tasks/mathformerphysicslib-coherence/task_registry.json
+      - artifacts/mathformerphysicslib/foundations/
+      - artifacts/mathformerphysicslib/coherence/
+    implementation_steps:
+      - Create a visible workflow registry for the foundations workflow.
+      - Create a visible workflow registry for the coherence and grounding loop.
+      - List composed skills, controlled actions, artifacts, validators, and
+        blockers for each workflow.
+      - Mark generated foundation surfaces as library support artifacts, not
+        promoted general skills.
+      - Validate both registries with `validate_task_registries.py`.
+    acceptance_evidence:
+      - meta_skills/registry/tasks/mathformerphysicslib-foundations/task_registry.json
+      - meta_skills/registry/tasks/mathformerphysicslib-coherence/task_registry.json
+      - artifacts/meta_skills/task_registry_validation.json
+    validation_commands:
+      - python meta_skills/scripts/validate_task_registries.py --json
+      - python scripts/mathformer.py ask "audit MathformerPhysicsLib coherence and grounding" --run --json
+      - python scripts/mathformer.py ask "run MathformerPhysicsLib foundations workflow" --run --json
+    risks:
+      - Registries drift from actual hub actions.
+      - Generated foundation modules are overpromoted.
+    controls:
+      - Validate action ids against the hub.
+      - Require explicit `release_boundary` fields.
+
+  - id: META-LOOPER-003
+    status: complete
+    title: Add skill quality card schema and first Mathformer cards
+    source_looper_pattern:
+      - agentic/registries/skill_quality_registry.yaml
+      - agentic/scripts/validate_skill_quality.py
+    rationale: >
+      Mathformer distinguishes deterministic and generative skills in tests, but
+      it needs explicit per-skill epistemic contracts for high-risk generative
+      and meta-level capabilities.
+    target_paths:
+      - meta_skills/schemas/skill_quality_card.schema.json
+      - meta_skills/quality_cards/
+      - meta_skills/scripts/validate_skill_quality_cards.py
+      - tests/test_program/run_comprehensive_tests.py
+    implementation_steps:
+      - Define required fields: deterministic_boundary, generative_boundary,
+        epistemic_risks, necessary_conditions, sufficiency_claim,
+        representation_contract, validation_oracles, failure_modes,
+        promotion_gate.
+      - Write initial cards for `mathformerphysicslib-generative-coherence-critic`,
+        `physics-lean-generative-repair-orchestrator`,
+        `mathformer-workflow-router`, and the future task registry manager.
+      - Validate that every card references existing skill paths and commands.
+      - Add the validator to the comprehensive test matrix.
+    acceptance_evidence:
+      - meta_skills/schemas/skill_quality_card.schema.json
+      - meta_skills/quality_cards/mathformerphysicslib-generative-coherence-critic.yaml
+      - meta_skills/quality_cards/physics-lean-generative-repair-orchestrator.yaml
+      - meta_skills/quality_cards/mathformer-workflow-router.yaml
+      - artifacts/meta_skills/skill_quality_card_validation.json
+    validation_commands:
+      - python meta_skills/scripts/validate_skill_quality_cards.py --json
+      - python tests/test_program/run_comprehensive_tests.py --module-family skills --json
+    risks:
+      - Cards become stale prose.
+      - Generative quality claims exceed evidence.
+    controls:
+      - Validate referenced commands and artifacts.
+      - Require cards to name failure modes and promotion blockers.
+
+  - id: META-LOOPER-004
+    status: complete
+    title: Normalize runtime skill-application trace artifacts
+    source_looper_pattern:
+      - agentic/scripts/skill_application_log.py
+      - agentic/scripts/validate_skill_application_logs.py
+      - agentic/scripts/collect_agent_dynamics.py
+    rationale: >
+      Mathformer has reasoning-log utilities, but workflow evolution and
+      meta-skill improvement require run-level traces that connect route,
+      skill, action, evidence, gate, and outcome.
+    target_paths:
+      - meta_skills/schemas/runtime_skill_application.schema.json
+      - meta_skills/scripts/record_skill_application.py
+      - meta_skills/scripts/validate_runtime_traces.py
+      - artifacts/meta_skills/runtime/
+      - skills/control/reasoning-log-schema-guardian/scripts/
+    implementation_steps:
+      - Define a runtime trace schema aligned with `skills/SKILL_HOOKS.yaml`
+        required payload fields.
+      - Implement a standard-library trace writer and validator.
+      - Pilot trace emission for `mathformerphysicslib.coherence` via an
+        optional wrapper or report-generation step.
+      - Render a human-readable trace report.
+    acceptance_evidence:
+      - meta_skills/schemas/runtime_skill_application.schema.json
+      - meta_skills/scripts/record_skill_application.py
+      - meta_skills/scripts/validate_runtime_traces.py
+      - artifacts/meta_skills/runtime/mathformerphysicslib_coherence.jsonl
+      - artifacts/meta_skills/runtime/mathformerphysicslib_coherence.md
+    validation_commands:
+      - python meta_skills/scripts/validate_runtime_traces.py --json
+      - python scripts/mathformer.py ask "audit MathformerPhysicsLib coherence and grounding" --run --json
+    risks:
+      - Runtime traces duplicate reasoning logs without adding diagnostic value.
+      - Trace writing changes workflow behavior.
+    controls:
+      - Make trace emission observational at first.
+      - Require trace fields to include evidence and gate outcome.
+
+  - id: META-LOOPER-005
+    status: complete
+    title: Add workflow evolution graph for recursive Lean physics repair
+    source_looper_pattern:
+      - registry/tasks/oncology-evidence-to-workflow/generated_workflows/workflow_evolution.json
+      - agentic/scripts/run_workflow_evolution_evals.py
+    rationale: >
+      The Lean physics recursive repair loop already has monitor reports,
+      object detection, workbench planning, repair plans, generative repair,
+      expansion maps, and recursion control. It needs a visible evolution graph
+      that explains current state and next deltas.
+    target_paths:
+      - meta_skills/registry/tasks/lean-physics-recursive-repair/workflow_evolution.json
+      - meta_skills/scripts/validate_workflow_evolution.py
+      - artifacts/physics_lean/backend_suite/
+    implementation_steps:
+      - Define workflow evolution schema fields for states, transitions, gates,
+        evidence, reflective questions, and next_delta.
+      - Generate a first evolution graph from the existing backend suite report.
+      - Validate that every state path exists and every transition has evidence.
+      - Add negative fixtures for prose-only evolution and missing transition
+        evidence.
+    acceptance_evidence:
+      - meta_skills/registry/tasks/lean-physics-recursive-repair/workflow_evolution.json
+      - meta_skills/scripts/validate_workflow_evolution.py
+      - artifacts/meta_skills/workflow_evolution_validation.json
+    validation_commands:
+      - python tests/physics_lean/run_lean_physics_backend_suite.py --json
+      - python meta_skills/scripts/validate_workflow_evolution.py --json
+    risks:
+      - Evolution graph becomes decorative.
+      - Recursive loop blockers are hidden in prose.
+    controls:
+      - Require transition evidence and next_delta for every state.
+      - Validate blocker propagation from recursion control output.
+
+  - id: META-LOOPER-006
+    status: complete
+    title: Add taxonomy-first workflow navigation for meta-skills
+    source_looper_pattern:
+      - registry/taxonomy/workflow_taxonomy.json
+      - registry/skill_projections/skill_projections.json
+      - registry/strategy/taxonomic_skill_navigation_strategy.md
+    rationale: >
+      Mathformer has many skills and workflows. A meta-skill router should
+      select workflow candidates by typed coordinates before broad prose search
+      or generative interpretation.
+    target_paths:
+      - meta_skills/taxonomy/workflow_taxonomy.json
+      - meta_skills/taxonomy/skill_projection_cards.json
+      - meta_skills/scripts/build_skill_projections.py
+      - meta_skills/scripts/navigate_workflow_taxonomy.py
+      - skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py
+    implementation_steps:
+      - Define Mathformer-specific reasoning types, backend families,
+        formal-system targets, object domains, and risk classes.
+      - Generate projection cards for existing skills from manifests and hook
+        ownership.
+      - Implement a candidate selector that returns workflow candidates with
+        route evidence and rejected alternatives.
+      - Add positive and negative fixtures for overlapping routes.
+    acceptance_evidence:
+      - meta_skills/taxonomy/workflow_taxonomy.json
+      - meta_skills/taxonomy/skill_projection_cards.json
+      - artifacts/meta_skills/taxonomic_navigation_report.json
+    validation_commands:
+      - python meta_skills/scripts/build_skill_projections.py --json
+      - python meta_skills/scripts/navigate_workflow_taxonomy.py --self-test --json
+      - python skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py --audit-coverage --json
+    risks:
+      - Taxonomy overfits current route names.
+      - Route ranking becomes less transparent.
+    controls:
+      - Include rejected alternatives and matched coordinates.
+      - Add adversarial route fixtures for similar workflows.
+
+  - id: META-LOOPER-007
+    status: complete
+    title: Define generated skill lifecycle and promotion gate
+    source_looper_pattern:
+      - registry/tasks/oncology-evidence-to-workflow/generated_skills/
+      - registry/tasks/oncology-evidence-to-workflow/generated_workflows/generated_skill_refinement_report.md
+      - registry/tasks/oncology-evidence-to-workflow/generated_workflows/reuse_decision_packet.json
+    rationale: >
+      Mathformer can generate task-local skills, probes, support modules, and
+      repair workflows. They need a lifecycle that prevents premature promotion
+      from one successful run.
+    target_paths:
+      - meta_skills/schemas/generated_skill_lifecycle.schema.json
+      - meta_skills/scripts/validate_generated_skill_lifecycle.py
+      - meta_skills/registry/generated_skills/
+      - artifacts/meta_skills/generated_skill_lifecycle_validation.json
+    implementation_steps:
+      - Define lifecycle states: draft, task_local_validated,
+        repeated_use_candidate, promoted, quarantined, deprecated.
+      - Require SKILL.md, quality card, eval fixture, evolution log, run trace,
+        seeded-defect result, and promotion boundary for task-local validation.
+      - Pilot the lifecycle on one generated task-local Mathformer skill or
+        repair probe, without promoting it.
+      - Add a promotion gate that checks repeated-use evidence before promotion.
+    acceptance_evidence:
+      - meta_skills/schemas/generated_skill_lifecycle.schema.json
+      - meta_skills/scripts/validate_generated_skill_lifecycle.py
+      - meta_skills/registry/generated_skills/_template/
+      - artifacts/meta_skills/generated_skill_lifecycle_validation.json
+    validation_commands:
+      - python meta_skills/scripts/validate_generated_skill_lifecycle.py --json
+    risks:
+      - Lifecycle blocks useful local experimentation.
+      - Task-local generated artifacts pollute promoted skill discovery.
+    controls:
+      - Keep task-local drafts outside canonical `skills/` until promoted.
+      - Add explicit promotion and quarantine states.
+
+  - id: META-LOOPER-008
+    status: complete
+    title: Integrate meta-skills with workflow-level MCP service boundary
+    source_looper_pattern:
+      - agentic/reports/workflow_access/action_hub_plan.md
+      - agentic/registries/workflow_actions.yaml
+    rationale: >
+      Mathformer is becoming independently deployable as an MCP service. The
+      meta-skill layer should expose workflow-level registry and navigation
+      tools, not one tool per skill.
+    target_paths:
+      - scripts/mathformer_mcp_service.py
+      - scripts/mcp_service_config.py
+      - config/
+      - docs/architecture/MCP_SERVER.md
+      - meta_skills/registry/workflow_actions.yaml
+    implementation_steps:
+      - Add meta-skill registry read actions to the workflow action catalog.
+      - Expose only workflow-level MCP tools for task registry lookup,
+        workflow candidate selection, and validation status.
+      - Ensure external API keys remain configured through `config/`, not skill
+        environment variables.
+      - Add MCP self-tests for meta-skill actions.
+    acceptance_evidence:
+      - meta_skills/registry/workflow_actions.yaml
+      - artifacts/mcp/meta_skill_service_self_test.json
+    validation_commands:
+      - python tests/mcp/run_mcp_service_config_test.py
+      - python scripts/mathformer.py audit --strict --json
+    risks:
+      - MCP service exposes unstable draft skills.
+      - Configuration bypasses the central config folder.
+    controls:
+      - Expose registries and workflow actions only.
+      - Validate config references and deny draft skill execution.
+
+  - id: META-LOOPER-009
+    status: complete
+    title: Add meta-skills documentation and natural-language help route
+    source_looper_pattern:
+      - docs/demo/looper_framework_demo_narrative.md
+      - agentic/reports/workflow_hub/latest.md
+    rationale: >
+      Users should be able to ask what meta-skills do, which workflows are
+      visible, and how generated skills are governed.
+    target_paths:
+      - docs/architecture/META_SKILLS.md
+      - scripts/mathformer.py
+      - skills/control/mathformer-workflow-router/
+      - meta_skills/README.md
+    implementation_steps:
+      - Write an architecture doc explaining meta-skills and Looper-derived
+        governance.
+      - Add a natural-language route such as "show meta-skill workflows" or
+        "explain generated skill promotion".
+      - Ensure the router help output lists meta-skill workflow registry,
+        quality cards, runtime traces, taxonomy navigation, and promotion gate.
+      - Add route fixtures or audit coverage.
+    acceptance_evidence:
+      - docs/architecture/META_SKILLS.md
+      - artifacts/workflow_hub/meta_skill_help_route.json
+    validation_commands:
+      - python scripts/mathformer.py ask "show meta-skill workflows" --json
+      - python skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py --audit-coverage --json
+    risks:
+      - Help route describes features not yet implemented.
+    controls:
+      - Mark planned versus implemented surfaces explicitly.
+
+  - id: META-LOOPER-010
+    status: complete
+    title: Add compact meta-skill validation family
+    source_looper_pattern:
+      - agentic/scripts/agentic_check.py
+    rationale: >
+      Looper's `agentic_check.py` is too broad to copy directly, but Mathformer
+      needs a compact validation family that composes meta-skill validators.
+    target_paths:
+      - tests/meta_skills/run_meta_skill_suite.py
+      - tests/test_program/run_comprehensive_tests.py
+      - scripts/mathformer.py
+    implementation_steps:
+      - Create a meta-skill suite that runs task registry, quality card,
+        runtime trace, workflow evolution, taxonomy navigation, generated skill
+        lifecycle, and MCP-boundary checks.
+      - Add `meta_skills` as a comprehensive test module family or attach the
+        suite to `skills` if a new family is not desired.
+      - Add a controlled hub action and natural-language route for the suite.
+    acceptance_evidence:
+      - tests/meta_skills/run_meta_skill_suite.py
+      - artifacts/meta_skills/meta_skill_suite.json
+    validation_commands:
+      - python tests/meta_skills/run_meta_skill_suite.py --json
+      - python scripts/mathformer.py ask "validate meta-skills" --run --json
+      - python tests/test_program/run_comprehensive_tests.py --module-family meta_skills --json
+    risks:
+      - Validation family becomes expensive or redundant.
+      - New module family breaks changed-files routing.
+    controls:
+      - Keep the suite standard-library and read-mostly.
+      - Add path-family hints and audit coverage together.

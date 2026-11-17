@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import TextbookTheoryAutoformalizationLoop
+from textbook_theory_autoformalization_loop import LatexTextbookArchiveSelection, TextbookAutoformalizationAcceptanceSummary
+
+def main(
+    model_access: ModelGenerate,
+    disclosure: ContextDisclose,
+) -> Result[Computed[TextbookAutoformalizationAcceptanceSummary], ModelFailure] ! {AI.Generate, Context.Disclose}:
+    request = LatexTextbookArchiveSelection(
+        archive_paths = ["fixture:textbook_theory_autoformalization_loop:archive_paths"],
+        target_chapters = ["fixture:textbook_theory_autoformalization_loop:target_chapters"],
+        target_backend = "fixture:textbook_theory_autoformalization_loop:target_backend",
+    )
+    return solve TextbookTheoryAutoformalizationLoop(request)

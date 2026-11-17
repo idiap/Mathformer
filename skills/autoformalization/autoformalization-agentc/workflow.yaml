@@ -1,0 +1,525 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: loop_draft_execute_refine_loop_workflow
+version: 1.0.0
+kind: workflow
+description: Draft or reuse Lean code, critique it, and carry bounded refinement state
+  through formal or semantic repair until early stop or the default cap.
+aliases:
+- draft_execute_refine_loop
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Text:
+    representation: value
+    schema:
+      type: string
+  OptionalText:
+    representation: value
+    schema:
+      type:
+      - string
+      - 'null'
+  PairExamples:
+    representation: value
+    schema:
+      type: array
+      items:
+        type: array
+        items:
+          type: string
+  DefaultIterationCap:
+    representation: value
+    schema:
+      type: integer
+      const: 4
+  RefinementHistory:
+    representation: value
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          round_index:
+            type: integer
+            minimum: 0
+          code:
+            type: string
+          hard_feedback:
+            type: string
+          soft_feedback:
+            type: string
+          agent_name:
+            type: string
+          trigger_reason:
+            type: string
+          step_timings_ms:
+            type: object
+            additionalProperties:
+              type: number
+          refinement_analysis:
+            type: object
+        required:
+        - round_index
+        - code
+        - hard_feedback
+        - soft_feedback
+        - agent_name
+        - trigger_reason
+        - step_timings_ms
+        - refinement_analysis
+        additionalProperties: false
+  LoopState:
+    representation: value
+    schema:
+      type: object
+      properties:
+        round_index:
+          type: integer
+          minimum: 0
+          maximum: 4
+        code:
+          type: string
+        correctness:
+          type: string
+        error_details:
+          type: string
+        semantic_judgement:
+          type: string
+        prior_hard_feedback:
+          type: string
+        prior_soft_feedback:
+          type: string
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              round_index:
+                type: integer
+                minimum: 0
+              code:
+                type: string
+              hard_feedback:
+                type: string
+              soft_feedback:
+                type: string
+              agent_name:
+                type: string
+              trigger_reason:
+                type: string
+              step_timings_ms:
+                type: object
+                additionalProperties:
+                  type: number
+              refinement_analysis:
+                type: object
+            required:
+            - round_index
+            - code
+            - hard_feedback
+            - soft_feedback
+            - agent_name
+            - trigger_reason
+            - step_timings_ms
+            - refinement_analysis
+            additionalProperties: false
+      required:
+      - round_index
+      - code
+      - correctness
+      - error_details
+      - semantic_judgement
+      - prior_hard_feedback
+      - prior_soft_feedback
+      - history
+      additionalProperties: false
+  IterationGuard:
+    representation: value
+    schema:
+      type: object
+      properties:
+        route:
+          enum:
+          - early_stop
+          - formal_repair
+          - semantic_repair
+      required:
+      - route
+      additionalProperties: false
+  StopFlag:
+    representation: value
+    schema:
+      type: boolean
+inputs:
+  informal_statement:
+    type: Text
+    required: true
+  informal_formal_pairs:
+    type: PairExamples
+    required: false
+  file_prefix:
+    type: Text
+    required: true
+  dependency_context:
+    type: OptionalText
+    required: true
+  alignment_hints:
+    type: OptionalText
+    required: true
+  core_statement_annotations:
+    type: OptionalText
+    required: true
+  initial_formalization:
+    type: Text
+    required: false
+  initial_formalization_raw:
+    type: OptionalText
+    required: true
+  max_iterations:
+    type: DefaultIterationCap
+    required: true
+outputs:
+  history:
+    type: RefinementHistory
+    value:
+      ref: steps.refine_loop.outputs.final_state.history
+  final_state:
+    type: LoopState
+    value:
+      ref: steps.refine_loop.outputs.final_state
+operations:
+  initialize_and_assess:
+    inputs:
+      informal_statement:
+        type: Text
+      informal_formal_pairs:
+        type: PairExamples
+        required: false
+      file_prefix:
+        type: Text
+      dependency_context:
+        type: OptionalText
+      alignment_hints:
+        type: OptionalText
+      core_statement_annotations:
+        type: OptionalText
+      initial_formalization:
+        type: Text
+        required: false
+      initial_formalization_raw:
+        type: OptionalText
+      max_iterations:
+        type: DefaultIterationCap
+    outputs:
+      state:
+        type: LoopState
+    execution:
+      mode: mixed
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_agentc_initialize_and_assess
+        operation: mathformer_agentc_initialize_and_assess
+  compute_iteration_guard:
+    inputs:
+      state:
+        type: LoopState
+    outputs:
+      guard:
+        type: IterationGuard
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_agentc_compute_iteration_guard
+        operation: mathformer_agentc_compute_iteration_guard
+  record_early_stop:
+    inputs:
+      state:
+        type: LoopState
+      informal_statement:
+        type: Text
+        required: true
+      dependency_context:
+        type: OptionalText
+        required: true
+      alignment_hints:
+        type: OptionalText
+        required: true
+      core_statement_annotations:
+        type: OptionalText
+        required: true
+    outputs:
+      state:
+        type: LoopState
+      stop:
+        type: StopFlag
+    execution:
+      mode: mixed
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_agentc_record_early_stop
+        operation: mathformer_agentc_record_early_stop
+  formal_repair_round:
+    inputs:
+      informal_statement:
+        type: Text
+      file_prefix:
+        type: Text
+      dependency_context:
+        type: OptionalText
+      alignment_hints:
+        type: OptionalText
+      core_statement_annotations:
+        type: OptionalText
+      state:
+        type: LoopState
+      max_iterations:
+        type: DefaultIterationCap
+    outputs:
+      state:
+        type: LoopState
+      stop:
+        type: StopFlag
+    execution:
+      mode: mixed
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_agentc_formal_repair_round
+        operation: mathformer_agentc_formal_repair_round
+  semantic_repair_round:
+    inputs:
+      informal_statement:
+        type: Text
+      file_prefix:
+        type: Text
+      dependency_context:
+        type: OptionalText
+      alignment_hints:
+        type: OptionalText
+      core_statement_annotations:
+        type: OptionalText
+      state:
+        type: LoopState
+      max_iterations:
+        type: DefaultIterationCap
+    outputs:
+      state:
+        type: LoopState
+      stop:
+        type: StopFlag
+    execution:
+      mode: mixed
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_agentc_semantic_repair_round
+        operation: mathformer_agentc_semantic_repair_round
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize_and_assess
+    arguments:
+      informal_statement:
+        ref: inputs.informal_statement
+      informal_formal_pairs:
+        ref: inputs.informal_formal_pairs
+      file_prefix:
+        ref: inputs.file_prefix
+      dependency_context:
+        ref: inputs.dependency_context
+      alignment_hints:
+        ref: inputs.alignment_hints
+      core_statement_annotations:
+        ref: inputs.core_statement_annotations
+      initial_formalization:
+        ref: inputs.initial_formalization
+      initial_formalization_raw:
+        ref: inputs.initial_formalization_raw
+      max_iterations:
+        ref: inputs.max_iterations
+  - id: refine_loop
+    kind: loop
+    state_type: LoopState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 4
+    on_exhausted: budget_exhausted
+    body:
+      kind: sequence
+      steps:
+      - id: guard
+        kind: call
+        operation: compute_iteration_guard
+        arguments:
+          state:
+            ref: loop.state
+      - id: route
+        kind: switch
+        cases:
+        - id: early_stop
+          when:
+            eq:
+            - ref: steps.guard.outputs.guard.route
+            - literal: early_stop
+          body:
+            kind: call
+            operation: record_early_stop
+            arguments:
+              state:
+                ref: loop.state
+              informal_statement:
+                ref: inputs.informal_statement
+              dependency_context:
+                ref: inputs.dependency_context
+              alignment_hints:
+                ref: inputs.alignment_hints
+              core_statement_annotations:
+                ref: inputs.core_statement_annotations
+        - id: compile_failed
+          when:
+            eq:
+            - ref: steps.guard.outputs.guard.route
+            - literal: formal_repair
+          body:
+            kind: call
+            operation: formal_repair_round
+            arguments:
+              informal_statement:
+                ref: inputs.informal_statement
+              file_prefix:
+                ref: inputs.file_prefix
+              dependency_context:
+                ref: inputs.dependency_context
+              alignment_hints:
+                ref: inputs.alignment_hints
+              core_statement_annotations:
+                ref: inputs.core_statement_annotations
+              state:
+                ref: loop.state
+              max_iterations:
+                ref: inputs.max_iterations
+        default:
+          kind: call
+          operation: semantic_repair_round
+          arguments:
+            informal_statement:
+              ref: inputs.informal_statement
+            file_prefix:
+              ref: inputs.file_prefix
+            dependency_context:
+              ref: inputs.dependency_context
+            alignment_hints:
+              ref: inputs.alignment_hints
+            core_statement_annotations:
+              ref: inputs.core_statement_annotations
+            state:
+              ref: loop.state
+            max_iterations:
+              ref: inputs.max_iterations
+        outputs:
+          state:
+            type: LoopState
+            value:
+              ref: selected.outputs.state
+          stop:
+            type: StopFlag
+            value:
+              ref: selected.outputs.stop
+      outputs:
+        state:
+          type: LoopState
+          value:
+            ref: steps.route.outputs.state
+        stop:
+          type: StopFlag
+          value:
+            ref: steps.route.outputs.stop
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.stop
+    outputs:
+      final_state:
+        type: LoopState
+        value:
+          ref: loop.state
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - lean_inputs
+      write:
+      - run_artifacts
+      - lean_diagnostics
+    network:
+    - configured_model_providers
+    external_write: []
+  authority:
+    allowed:
+    - draft_lean_candidate
+    - compile_check_candidate
+    - critique_candidate
+    - refine_candidate
+    - record_refinement_history
+    forbidden:
+    - approve_scientific_truth
+    - promote_generated_theorem
+    - bypass_native_controls
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 18
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Produces candidate code and critique history only; completion is
+    neither proof nor scientific approval.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/autoformalization/autoformalization-agentc/scripts/agentc.py
+    selector: IterativeSelfRefinementAgentC.iter_refinement_steps
+    digest: sha256:27588261547f07dec5e06178ffba6df5a62633dff7d16fbe94eea9b57250ca4f
+  - path: scripts/agentc_workflow_tools.py
+    selector: AgentCSteps.call
+    digest: sha256:0bf0ae172b57f94be6c8b8172ba508fbc19cc60ebe0df97570e2cf2da8690bf8
+  gaps:
+  - This contract specializes max_iterations to the source default of four; other
+    constructor values are outside this descriptor.
+  - Callback, trace, log, timing, parsing, and taxonomy helper internals stay inside
+    their source-backed blocks.
+  - Caller gating, later denoise/check/save behavior, and the outer multi-cycle workflow
+    are outside the selected run method.
+extensions:
+  mathformer.source:
+    category: loop
+    native_id: draft_execute_refine_loop
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md

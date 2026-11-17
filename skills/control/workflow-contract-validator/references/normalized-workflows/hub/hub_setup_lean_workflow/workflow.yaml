@@ -1,0 +1,322 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_setup_lean_workflow
+version: 1.0.0
+kind: workflow
+description: 'Fixed setup:lean installer path: validate Python and arguments, require
+  Lake, update, build, then complete.'
+aliases:
+- setup:lean
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  InstallerArgv:
+    schema:
+      type: array
+      const:
+      - --skip-python
+      - --with-lean
+    representation: value
+  LeanArgs:
+    schema:
+      type: object
+      properties:
+        skip_python:
+          const: true
+          type: boolean
+        with_lean:
+          const: true
+          type: boolean
+        skip_lean:
+          const: false
+          type: boolean
+      required:
+      - skip_python
+      - with_lean
+      - skip_lean
+      additionalProperties: true
+    representation: value
+  Lake:
+    schema:
+      type: string
+      minLength: 1
+    representation: value
+  Done:
+    schema:
+      type: 'null'
+    representation: value
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+    representation: value
+  MutationAuthorization:
+    schema:
+      type: boolean
+    representation: value
+inputs:
+  argv:
+    type: InstallerArgv
+  allow_mutating:
+    type: MutationAuthorization
+outputs:
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  initialize:
+    inputs:
+      argv:
+        type: InstallerArgv
+    outputs:
+      args:
+        type: LeanArgs
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_lean_initialize
+        operation: mathformer_setup_lean_initialize
+  require_lake:
+    inputs:
+      args:
+        type: LeanArgs
+    outputs:
+      lake:
+        type: Lake
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_lean_require_lake
+        operation: mathformer_setup_lean_require_lake
+  update:
+    inputs:
+      lake:
+        type: Lake
+      allow_mutating:
+        type: MutationAuthorization
+    outputs:
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_lean_update
+        operation: mathformer_setup_lean_update
+  build:
+    inputs:
+      lake:
+        type: Lake
+      updated:
+        type: Done
+      allow_mutating:
+        type: MutationAuthorization
+    outputs:
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_lean_build
+        operation: mathformer_setup_lean_build
+  complete:
+    inputs:
+      built:
+        type: Done
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_lean_complete
+        operation: mathformer_setup_lean_complete
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments:
+      argv:
+        ref: inputs.argv
+  - id: require_lake
+    kind: call
+    operation: require_lake
+    arguments:
+      args:
+        ref: steps.initialize.outputs.args
+  - id: update
+    kind: call
+    operation: update
+    arguments:
+      lake:
+        ref: steps.require_lake.outputs.lake
+      allow_mutating:
+        ref: inputs.allow_mutating
+  - id: build
+    kind: call
+    operation: build
+    arguments:
+      lake:
+        ref: steps.require_lake.outputs.lake
+      updated:
+        ref: steps.update.outputs.done
+      allow_mutating:
+        ref: inputs.allow_mutating
+  - id: complete
+    kind: call
+    operation: complete
+    arguments:
+      built:
+        ref: steps.build.outputs.done
+  outputs:
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.complete.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - .lake/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked setup description only; completion establishes neither
+    scientific results nor runtime qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/install_env.py
+    selector: main; initialize; parse_args; setup_lean; install_lean; resolve_lake;
+      update_lean; build_lean; run; complete
+    digest: sha256:2c8a00fbf461dddcb10899271ca41d47bf90c9a077b47add7db3c250aab1a5fd
+  - path: scripts/mathformer.py
+    selector: build_registry/setup:lean; run_intent_match; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/setup_lean_tools.py
+    selector: register_setup_lean_tools
+    digest: sha256:015c53633f6475a2b1427db7142e4c2752b5e666385f2a9e2194e0374b6831e4
+  - path: scripts/mcp_server.py
+    selector: register_setup_lean_tools; _graph_layout_write_policy
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory/setup:lean
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Graph specializes main to the immutable setup:lean argv. General Python installation
+    and Lean skip branches are outside this action and cannot be selected through
+    its input schema.
+  - Graph returns the installer exit_code, not a HubResult or write-audit acceptance.
+    The hub envelope remains source-owned boundary metadata. Callable installer steps
+    enforce mutation authorization and service write roots; they do not claim the
+    hub subprocess capture or repository write audit.
+  - Lunar enforces the contract wall-time and call budget; native installer subprocesses
+    have no timeout and cancellation does not guarantee external child termination.
+  - Mandatory runtime receipts do not upgrade optional native reports or qualify network
+    and external effects.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: setup:lean
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: setup:lean
+      summary: Install or update the Lean-facing environment profile.
+      family: setup
+      kind: setup
+      safety: writes_environment
+      command:
+      - '{python}'
+      - scripts/install_env.py
+      - --skip-python
+      - --with-lean
+      depends_on: []
+      required_paths:
+      - scripts/install_env.py
+      required_tools: []
+      optional_tools: []
+      writes:
+      - .lake/
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: Registered MCP installer stages share native functions with main. Lunar
+      executes the ordered graph; the existing hub invocation remains separately controlled.
+    route: setup.lean -> run_intent_match -> run_action -> run_leaf_action; one action,
+      no dependencies.
+    preflight: Fixed argv and Lean branch flags are checked by callable tools. Mutation
+      requires allow_mutating and service write-root authorization. Lake must match
+      PATH discovery. Hub dry-run and audit are not exported as installer completion.
+    completion: Exports the native installer integer return after successful update
+      and build; native diagnostics go to MCP stderr. Exceptions fail the step and
+      stop dependent execution.
+    context_fields:
+    - allow_mutating
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Keep native failure payloads; do not infer acceptance from completion.
+    scientific_payloads: This graph exports the selected main's successful integer
+      return, not a backend proof or report.
+    toolchain: Requires existing Lake/Lean on PATH; does not install elan.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    keep_going_semantics: No child action sequence for setup:lean; keep_going cannot
+      bypass installer failure.
+    extra_args_for_sequence: forbidden for setup:lean
+    modeling: Ordered installer calls; no loop, retry cycle, loop-carried state or
+      checkpoint.
+# REUSE-IgnoreEnd

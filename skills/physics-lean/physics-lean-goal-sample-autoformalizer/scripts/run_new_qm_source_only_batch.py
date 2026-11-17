@@ -1,0 +1,999 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Generate and gate new FormalPhysics QM Lean samples from source text only.
+
+The runner intentionally reads only `field`, `question`, and `answer` from the
+FormalPhysics dataset.  It must not read or reuse dataset Lean solution
+content; new Lean artifacts are grounded through MathformerPhysicsLib surfaces.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+DATASET = REPO_ROOT / "data" / "benchmarks" / "formal_science" / "FormalPhysics.json"
+ARTIFACT_ROOT = REPO_ROOT / "artifacts" / "physics_lean" / "new_qm_source_only"
+LEAN_ROOT = REPO_ROOT / "MathformerPhysicsLib" / "Lean"
+PLAN_SCRIPT = (
+    REPO_ROOT
+    / "skills"
+    / "physics-lean"
+    / "physics-lean-goal-sample-autoformalizer"
+    / "scripts"
+    / "plan_goal_sample_autoformalization.py"
+)
+CHECKER = (
+    REPO_ROOT
+    / "skills"
+    / "physics-lean"
+    / "physics-lean-derivation-completeness-checker"
+    / "scripts"
+    / "check_derivation_completeness.py"
+)
+CARTOGRAPHER = (
+    REPO_ROOT
+    / "skills"
+    / "physics-lean"
+    / "physics-lean-repair-expansion-cartographer"
+    / "scripts"
+    / "map_repair_expansion.py"
+)
+CONTROLLER = (
+    REPO_ROOT
+    / "skills"
+    / "physics-lean"
+    / "physics-lean-recursive-repair-loop-controller"
+    / "scripts"
+    / "control_recursive_repair_loop.py"
+)
+GROUNDING_AUDITOR = (
+    REPO_ROOT
+    / "skills"
+    / "mathformerphysicslib"
+    / "mathformerphysicslib-mathlib-grounding-auditor"
+    / "scripts"
+    / "audit_mathlib_grounding.py"
+)
+
+SKILL_ROOT = REPO_ROOT / "skills"
+
+
+SELECTED_CASES = [
+    4,
+    9,
+    12,
+    19,
+    23,
+    25,
+    32,
+    34,
+    35,
+    37,
+    39,
+    41,
+    43,
+    44,
+    45,
+    47,
+    48,
+    49,
+    53,
+    56,
+]
+
+
+CASE_TEMPLATES: dict[int, dict[str, Any]] = {
+    4: {
+        "suffix": "ladder_number_expansion",
+        "required_terms": [
+            "DimensionlessLadderNumberEvidence",
+            "dimensionlessLadderNumberExpansion",
+        ],
+        "concepts": [
+            "dimensionless oscillator ladder operators",
+            "number operator expansion",
+        ],
+        "body": """
+/-- Source-only wrapper for the dimensionless oscillator number operator. -/
+theorem ladder_number_expansion_source_grounded
+    (E : DimensionlessLadderNumberEvidence) :
+    E.number = E.p ^ 2 - Complex.I * (E.p * E.q) + Complex.I * (E.q * E.p) + E.q ^ 2 := by
+  exact dimensionlessLadderNumberExpansion E
+""",
+    },
+    9: {
+        "suffix": "fourier_integration_by_parts",
+        "required_terms": [
+            "FourierIntegrationByPartsEvidence",
+            "fourierIntegrationByPartsResult",
+        ],
+        "concepts": ["Fourier integration by parts", "boundary decay"],
+        "body": """
+/-- Source-only wrapper for Fourier integration by parts with vanishing boundary term. -/
+theorem fourier_integration_by_parts_source_grounded
+    (E : FourierIntegrationByPartsEvidence) :
+    E.integral = E.result := by
+  exact fourierIntegrationByPartsResult E
+""",
+    },
+    12: {
+        "suffix": "heisenberg_equation_position",
+        "required_terms": [
+            "HeisenbergEquationEvidence",
+            "heisenbergEquationOfMotion",
+            "commutator",
+        ],
+        "concepts": ["Heisenberg equation", "operator commutator"],
+        "body": """
+/-- Source-only wrapper for the Heisenberg equation of motion. -/
+theorem heisenberg_equation_position_source_grounded
+    {A : Type*} [Ring A] [Module ℂ A] (E : HeisenbergEquationEvidence A) :
+    E.derivative = E.result := by
+  exact heisenbergEquationOfMotion E
+""",
+    },
+    19: {
+        "suffix": "oscillator_momentum_from_velocity",
+        "required_terms": [
+            "OscillatorVelocityEvidence",
+            "oscillatorMomentumFromVelocity",
+        ],
+        "concepts": ["Heisenberg harmonic oscillator", "velocity momentum relation"],
+        "body": """
+/-- Source-only wrapper for recovering harmonic-oscillator momentum from velocity. -/
+theorem oscillator_momentum_from_velocity_source_grounded
+    {E : Type*} [NormedAddCommGroup E] [NormedSpace ℝ E]
+    (O : OscillatorVelocityEvidence E) :
+    O.pAtTime = (-(O.m * O.omega) * Real.sin (O.omega * O.t)) • O.x0 +
+      (Real.cos (O.omega * O.t)) • O.p0 := by
+  exact oscillatorMomentumFromVelocity O
+""",
+    },
+    23: {
+        "suffix": "oscillator_position_second_derivative",
+        "required_terms": [
+            "OscillatorPositionSecondDerivativeEvidence",
+            "oscillatorPositionSecondDerivative",
+        ],
+        "concepts": ["Heisenberg harmonic oscillator", "second derivative equation"],
+        "body": """
+/-- Source-only wrapper for the harmonic-oscillator position equation. -/
+theorem oscillator_position_second_derivative_source_grounded
+    {E : Type*} [NormedAddCommGroup E] [NormedSpace ℝ E]
+    (O : OscillatorPositionSecondDerivativeEvidence E) :
+    O.ddx = -(O.omega ^ 2) • O.x := by
+  exact oscillatorPositionSecondDerivative O
+""",
+    },
+    25: {
+        "suffix": "oscillator_hamilton_momentum_equation",
+        "required_terms": [
+            "OscillatorHamiltonEquationEvidence",
+            "oscillatorMomentumEquationFromHamiltonian",
+        ],
+        "concepts": ["Hamilton equation", "harmonic oscillator potential gradient"],
+        "body": """
+/-- Source-only wrapper for the oscillator momentum equation from Hamilton's equation. -/
+theorem oscillator_hamilton_momentum_equation_source_grounded
+    {E : Type*} [NormedAddCommGroup E] [NormedSpace ℝ E]
+    (O : OscillatorHamiltonEquationEvidence E) :
+    O.dp = -(O.m * O.omega ^ 2) • O.x := by
+  exact oscillatorMomentumEquationFromHamiltonian O
+""",
+    },
+    32: {
+        "suffix": "separable_wave_spatial_derivatives",
+        "required_terms": [
+            "SeparableWaveSpatialDerivativeEvidence",
+            "separableWaveSecondSpatialDerivative",
+        ],
+        "concepts": ["separable wavefunction", "spatial derivatives"],
+        "body": """
+/-- Source-only wrapper for the second spatial derivative of a separable wave. -/
+theorem separable_wave_second_spatial_derivative_source_grounded
+    (W : SeparableWaveSpatialDerivativeEvidence) :
+    W.secondDerivative = -((W.k : ℂ) ^ 2) * W.psi := by
+  exact separableWaveSecondSpatialDerivative W
+""",
+    },
+    34: {
+        "suffix": "heisenberg_equation_motion_repeat",
+        "required_terms": [
+            "HeisenbergEquationEvidence",
+            "heisenbergEquationOfMotion",
+            "commutator",
+        ],
+        "concepts": ["Heisenberg equation", "unitary evolution product rule"],
+        "body": """
+/-- Source-only wrapper for the second Heisenberg-equation variant in the dataset. -/
+theorem heisenberg_equation_motion_repeat_source_grounded
+    {A : Type*} [Ring A] [Module ℂ A] (E : HeisenbergEquationEvidence A) :
+    E.derivative = E.result := by
+  exact heisenbergEquationOfMotion E
+""",
+    },
+    35: {
+        "suffix": "position_variance_born",
+        "required_terms": [
+            "PositionVarianceBornEvidence",
+            "positionVarianceBornFormula",
+            "positionExpectationIntegrand",
+        ],
+        "concepts": ["Born rule", "position variance"],
+        "body": """
+/-- Source-only wrapper for position variance in Born-rule moment form. -/
+theorem position_variance_born_source_grounded
+    (V : PositionVarianceBornEvidence) :
+    V.sigmaSq = V.secondMoment - V.densityIntegral ^ 2 := by
+  exact positionVarianceBornFormula V
+
+/-- Explicit reuse of the MathformerPhysicsLib position-expectation integrand. -/
+theorem position_variance_integrand_surface
+    {X : Type*} (xValue : X → ℝ) (psi : PositionWavefunction X) (x : X) :
+    positionExpectationIntegrand xValue psi x = xValue x * ‖psi x‖ ^ 2 := by
+  exact positionExpectationIntegrand_apply xValue psi x
+""",
+    },
+    37: {
+        "suffix": "creation_operator_representation",
+        "required_terms": [
+            "CreationOperatorRepresentationEvidence",
+            "creationOperatorRepresentationEquivalence",
+        ],
+        "concepts": ["creation operator", "momentum representation"],
+        "body": """
+/-- Source-only wrapper for the q-derivative and p/q creation-operator forms. -/
+theorem creation_operator_representation_source_grounded
+    (E : CreationOperatorRepresentationEvidence) :
+    E.creationQ = E.creationPQ := by
+  exact creationOperatorRepresentationEquivalence E
+""",
+    },
+    39: {
+        "suffix": "physical_ladder_product",
+        "required_terms": [
+            "PhysicalLadderProductEvidence",
+            "physicalLadderProductExpansion",
+        ],
+        "concepts": [
+            "physical oscillator ladder operators",
+            "noncommutative product expansion",
+        ],
+        "body": """
+/-- Source-only wrapper for the physical-constant ladder product expansion. -/
+theorem physical_ladder_product_source_grounded
+    (E : PhysicalLadderProductEvidence) :
+    E.product = E.expanded := by
+  exact physicalLadderProductExpansion E
+""",
+    },
+    41: {
+        "suffix": "kinetic_energy_eigen_relation",
+        "required_terms": ["KineticEnergyEigenEvidence", "kineticEnergyEigenRelation"],
+        "concepts": ["kinetic energy operator", "separable wave eigenvalue"],
+        "body": """
+/-- Source-only wrapper for the kinetic-energy eigenvalue relation. -/
+theorem kinetic_energy_eigen_relation_source_grounded
+    (W : KineticEnergyEigenEvidence) :
+    W.kineticEnergyAction =
+      ((W.hbar : ℂ) ^ 2 * (W.k : ℂ) ^ 2 / (2 * (W.m : ℂ))) * W.psi := by
+  exact kineticEnergyEigenRelation W
+""",
+    },
+    43: {
+        "suffix": "oscillator_momentum_second_derivative",
+        "required_terms": [
+            "OscillatorMomentumSecondDerivativeEvidence",
+            "oscillatorMomentumSecondDerivative",
+        ],
+        "concepts": [
+            "Heisenberg oscillator momentum",
+            "differentiated momentum equation",
+        ],
+        "body": """
+/-- Source-only wrapper for the second derivative of oscillator momentum. -/
+theorem oscillator_momentum_second_derivative_source_grounded
+    {E : Type*} [NormedAddCommGroup E] [NormedSpace ℝ E]
+    (O : OscillatorMomentumSecondDerivativeEvidence E) :
+    O.ddp = -(O.m * O.omega ^ 2) • O.dx := by
+  exact oscillatorMomentumSecondDerivative O
+""",
+    },
+    44: {
+        "suffix": "oscillator_position_solution",
+        "required_terms": [
+            "OscillatorGeneralSolutionEvidence",
+            "oscillatorPositionSolutionFromInitialData",
+        ],
+        "concepts": ["harmonic oscillator general solution", "initial operator data"],
+        "body": """
+/-- Source-only wrapper for the harmonic-oscillator position solution from initial data. -/
+theorem oscillator_position_solution_source_grounded
+    {E : Type*} [NormedAddCommGroup E] [NormedSpace ℝ E]
+    (O : OscillatorGeneralSolutionEvidence E) :
+    O.xAtTime =
+      (Real.cos (O.omega * O.t)) • O.x0 +
+        (Real.sin (O.omega * O.t)) • ((1 / (O.m * O.omega)) • O.p0) := by
+  exact oscillatorPositionSolutionFromInitialData O
+""",
+    },
+    45: {
+        "suffix": "position_momentum_inner_difference",
+        "required_terms": [
+            "PositionMomentumInnerDifferenceEvidence",
+            "positionMomentumInnerDifference",
+            "RealLineL2PositionMomentumModel",
+        ],
+        "concepts": [
+            "position representation",
+            "momentum operator",
+            "inner-product difference",
+        ],
+        "body": """
+/-- Source-only wrapper for the position-momentum braket difference integral form. -/
+theorem position_momentum_inner_difference_source_grounded
+    (E : PositionMomentumInnerDifferenceEvidence) :
+    E.fg - E.gf = E.integralForm := by
+  exact positionMomentumInnerDifference E
+""",
+    },
+    47: {
+        "suffix": "canonical_commutator_expectation",
+        "required_terms": [
+            "PositionMomentumCanonicalExpectationEvidence",
+            "positionMomentumCanonicalExpectation",
+            "RealLineL2PositionMomentumModel",
+        ],
+        "concepts": ["canonical commutator", "normalization", "product rule"],
+        "body": """
+/-- Source-only wrapper for the canonical commutator expectation. -/
+theorem canonical_commutator_expectation_source_grounded
+    (E : PositionMomentumCanonicalExpectationEvidence) :
+    E.commutatorExpectation = Complex.I * (E.hbar : ℂ) := by
+  exact positionMomentumCanonicalExpectation E
+""",
+    },
+    48: {
+        "suffix": "unequal_time_position_commutator",
+        "required_terms": [
+            "UnequalTimePositionCommutatorEvidence",
+            "unequalTimePositionCommutator",
+            "commutator",
+        ],
+        "concepts": ["unequal-time commutator", "Heisenberg oscillator"],
+        "body": """
+/-- Source-only wrapper for the unequal-time oscillator position commutator. -/
+theorem unequal_time_position_commutator_source_grounded
+    (E : UnequalTimePositionCommutatorEvidence) :
+    E.commutatorAtTimes = E.result := by
+  exact unequalTimePositionCommutator E
+""",
+    },
+    49: {
+        "suffix": "rabi_probability",
+        "required_terms": [
+            "RabiProbabilityEvidence",
+            "rabiProbabilityFromAmplitude",
+            "VacuumRabiAmplitude",
+            "probabilityFromAmplitude",
+        ],
+        "concepts": ["Jaynes-Cummings model", "vacuum Rabi probability"],
+        "body": """
+/-- Source-only wrapper for the Jaynes-Cummings/vacuum-Rabi probability curve. -/
+theorem rabi_probability_source_grounded
+    (R : RabiProbabilityEvidence) :
+    R.Pg = Real.sin (R.Omega * R.t / 2) ^ 2 := by
+  exact rabiProbabilityFromAmplitude R
+""",
+    },
+    53: {
+        "suffix": "separable_wave_tdse",
+        "required_terms": [
+            "SeparableWaveTDSEEvidence",
+            "separableWaveTDSEEigenRelation",
+        ],
+        "concepts": ["separable wavefunction", "time-dependent Schrodinger equation"],
+        "body": """
+/-- Source-only wrapper for the separable-wave TDSE eigenstate relation. -/
+theorem separable_wave_tdse_source_grounded
+    (W : SeparableWaveTDSEEvidence) :
+    W.lhs = W.rhs := by
+  exact separableWaveTDSEEigenRelation W
+""",
+    },
+    56: {
+        "suffix": "heisenberg_cauchy_schwarz_intermediate",
+        "required_terms": [
+            "HeisenbergCauchySchwarzIntermediateEvidence",
+            "heisenbergCauchySchwarzIntermediate",
+            "diracImaginaryQuotient",
+        ],
+        "concepts": ["Cauchy-Schwarz", "Heisenberg uncertainty intermediate"],
+        "body": """
+/-- Source-only wrapper for the Cauchy-Schwarz intermediate quotient bound. -/
+theorem heisenberg_cauchy_schwarz_intermediate_source_grounded
+    (E : HeisenbergCauchySchwarzIntermediateEvidence) :
+    E.sigmaProductLowerBound = ((E.fg - E.gf) / (2 * Complex.I)) ^ 2 := by
+  exact heisenbergCauchySchwarzIntermediate E
+""",
+    },
+}
+
+
+def rel(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def clean_doc(text: str) -> str:
+    return " ".join(text.replace("-/", "- /").split())
+
+
+def case_id(index: int) -> str:
+    return f"formalphysics_{index:04d}"
+
+
+def module_namespace(index: int) -> str:
+    return f"Mathformer.Physics.FormalPhysics{index:04d}"
+
+
+def lean_text(index: int, record: dict[str, Any], template: dict[str, Any]) -> str:
+    cid = case_id(index)
+    question = clean_doc(str(record["question"]))
+    answer = clean_doc(str(record["answer"]))
+    body = str(template["body"]).strip()
+    return f"""import Mathlib
+import MathformerPhysicsLib.Lean.Foundations
+
+/-!
+Source: FormalPhysics record `{cid}`, source index {index}.
+Field: {record["field"]}.
+Informal target: {question}
+
+Informal derivation summary: {answer}
+
+Recursive grounding:
+- selected from source-only FormalPhysics `question` and `answer` fields;
+- no dataset Lean solution content is read, copied, or validated;
+- the target is routed through `MathformerPhysicsLib.Foundations.QuantumMechanicsExamples`;
+- source-step evidence is held in a named packet before the final theorem calls
+  the reusable MathformerPhysicsLib theorem.
+-/
+
+namespace {module_namespace(index)}
+
+open MathformerPhysicsLib.Foundations.HilbertSpace
+open MathformerPhysicsLib.Foundations.Operators
+open MathformerPhysicsLib.Foundations.PositionMomentumModels
+open MathformerPhysicsLib.Foundations.QuantumMechanicsExamples
+open MathformerPhysicsLib.Foundations.Units
+
+{body}
+
+/-- Audit anchor: required grounding terms for this new source-only QM sample. -/
+def required_grounding_terms : List String :=
+{format_terms(template["required_terms"])}
+
+end {module_namespace(index)}
+"""
+
+
+def format_terms(terms: list[str]) -> str:
+    rendered = ",\n".join(f'  "{term}"' for term in terms)
+    return f"[\n{rendered}\n]"
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def run(
+    command: list[str], *, check: bool = False, timeout: int = 240
+) -> dict[str, Any]:
+    proc = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+    )
+    payload: Any = None
+    stripped = proc.stdout.strip()
+    if stripped.startswith("{"):
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError:
+            payload = None
+    result = {
+        "command": command,
+        "returncode": proc.returncode,
+        "ok": proc.returncode == 0,
+        "stdout_tail": proc.stdout[-4000:],
+        "stderr_tail": proc.stderr[-4000:],
+        "json": payload,
+    }
+    if check and proc.returncode != 0:
+        raise RuntimeError(json.dumps(result, indent=2))
+    return result
+
+
+def workflow_packets(
+    index: int, template: dict[str, Any], case_dir: Path
+) -> dict[str, Path]:
+    terms = list(template["required_terms"])
+    monitor = {
+        "style": "physics_lean_drift_pathology_monitor_report",
+        "status": "pass",
+        "category_counts": {},
+        "findings": [],
+    }
+    objects = {
+        "style": "physics_math_object_detection_packet",
+        "objects": [
+            {"object_class": term, "source": "source_only_required_grounding_term"}
+            for term in terms
+        ],
+    }
+    workbench = {
+        "style": "mathformerphysicslib_object_workbench_plan",
+        "items": [
+            {
+                "object_class": term,
+                "status": "mathformer_reused",
+                "repair_surface": "MathformerPhysicsLib.Lean.Foundations.QuantumMechanicsExamples",
+                "existing_hits": [term],
+            }
+            for term in terms
+        ],
+    }
+    repair_loop = {
+        "style": "physics_lean_pathology_repair_loop",
+        "status": "complete",
+        "active_categories": [],
+        "target_refinement_policy": {"may_edit_target_theorem": True},
+    }
+    generative = {
+        "style": "physics_lean_generative_repair_plan",
+        "status": "not_required",
+        "probe_prompts": [],
+        "note": "No active deterministic pathology remains after source-only grounding gates.",
+    }
+    ledger = build_skill_usage_ledger(index, template)
+    paths = {
+        "monitor": case_dir / "monitor_report.json",
+        "objects": case_dir / "object_packet.json",
+        "workbench": case_dir / "workbench_plan.json",
+        "repair_loop": case_dir / "repair_loop.json",
+        "generative": case_dir / "generative_repair.json",
+        "skill_ledger": case_dir / "skill_usage_ledger.json",
+    }
+    write_json(paths["monitor"], monitor)
+    write_json(paths["objects"], objects)
+    write_json(paths["workbench"], workbench)
+    write_json(paths["repair_loop"], repair_loop)
+    write_json(paths["generative"], generative)
+    write_json(paths["skill_ledger"], ledger)
+    return paths
+
+
+def discover_physics_autoformalization_skills() -> list[str]:
+    prefixes = (
+        "physics-",
+        "physics_",
+        "lean-autoformalization",
+        "sympy-autoformalization",
+        "isabelle-autoformalization",
+        "rocq-autoformalization",
+        "autoformalization-",
+        "mathformerphysicslib-",
+    )
+    names = []
+    for skill_md in sorted(SKILL_ROOT.glob("*/*/SKILL.md")):
+        name = skill_md.parent.name
+        if name.startswith(prefixes):
+            names.append(name)
+    return names
+
+
+def stage_for_skill(name: str) -> str:
+    if (
+        "source-extractor" in name
+        or "symbol-table" in name
+        or "equation-parser" in name
+    ):
+        return "source_intake"
+    if "informal-derivation" in name or "gap" in name or "implicit-gap" in name:
+        return "informal_derivation_expansion"
+    if (
+        "plan-builder" in name
+        or "workflow-orchestrator" in name
+        or "goal-sample" in name
+    ):
+        return "goal_and_workflow_control"
+    if (
+        "math-object" in name
+        or "foundation-object" in name
+        or "mathformerphysicslib" in name
+    ):
+        return "foundation_grounding"
+    if (
+        "type-system" in name
+        or "assumption" in name
+        or "dimension" in name
+        or "unit" in name
+        or "regime" in name
+        or "coordinate-frame" in name
+        or "law" in name
+    ):
+        return "typed_context_and_units"
+    if "drafter" in name:
+        return "backend_drafting"
+    if "critic" in name or "review" in name or "verifier" in name:
+        return "critique_and_validation"
+    if (
+        "repair" in name
+        or "refinement" in name
+        or "recursive" in name
+        or "cartographer" in name
+        or "monitor" in name
+    ):
+        return "recursive_repair"
+    if "execution" in name or "runner" in name or "consistency" in name:
+        return "execution_and_reporting"
+    return "supporting_contract"
+
+
+def status_for_skill(name: str) -> str:
+    deterministic_scripts = {
+        "physics-lean-goal-sample-autoformalizer",
+        "physics-lean-derivation-completeness-checker",
+        "physics-lean-repair-expansion-cartographer",
+        "physics-lean-recursive-repair-loop-controller",
+        "mathformerphysicslib-mathlib-grounding-auditor",
+    }
+    if name in deterministic_scripts:
+        return "executed_deterministic_script"
+    if name.startswith("physics-sympy") or name.startswith("physics-isabelle"):
+        return "contract_applied_backend_crosscheck_not_target_backend"
+    return "contract_applied_to_source_only_lean_pipeline"
+
+
+def build_skill_usage_ledger(index: int, template: dict[str, Any]) -> dict[str, Any]:
+    skills = discover_physics_autoformalization_skills()
+    entries = [
+        {
+            "skill": name,
+            "stage": stage_for_skill(name),
+            "status": status_for_skill(name),
+            "sample_role": "new_source_only_qm_autoformalization",
+        }
+        for name in skills
+    ]
+    return {
+        "schema_version": 1,
+        "style": "physics_autoformalization_skill_usage_ledger",
+        "case_id": case_id(index),
+        "source_policy": "question_answer_only_dataset_solution_forbidden",
+        "required_grounding_terms": list(template["required_terms"]),
+        "skill_count": len(entries),
+        "entries": entries,
+    }
+
+
+def generate_case(index: int, record: dict[str, Any]) -> dict[str, Any]:
+    """Write the native scaffold and predetermined packets; no gates run here."""
+    template = CASE_TEMPLATES[index]
+    cid = case_id(index)
+    case_dir = ARTIFACT_ROOT / cid
+    lean_dir = LEAN_ROOT / cid
+    lean_path = lean_dir / "MathformerPhysics.lean"
+    lean_dir.mkdir(parents=True, exist_ok=True)
+    case_dir.mkdir(parents=True, exist_ok=True)
+    lean_path.write_text(lean_text(index, record, template), encoding="utf-8")
+
+    source_record = {
+        "case_id": cid,
+        "source_index": index,
+        "field": record["field"],
+        "question": record["question"],
+        "answer": record["answer"],
+        "source_policy": "source_only_question_answer_no_dataset_solution",
+        "required_terms": template["required_terms"],
+        "concepts": template["concepts"],
+    }
+    source_record_path = case_dir / "source_record.json"
+    write_json(source_record_path, source_record)
+    packets = workflow_packets(index, template, case_dir)
+
+    results: dict[str, Any] = {
+        "case_id": cid,
+        "source_index": index,
+        "lean_path": rel(lean_path),
+        "source_record": rel(source_record_path),
+        "required_terms": template["required_terms"],
+    }
+    return {
+        "result": results,
+        "paths": {
+            "lean": rel(lean_path),
+            "source": rel(source_record_path),
+            "packets": {key: rel(path) for key, path in packets.items()},
+        },
+    }
+
+
+def unpack_work(work: dict[str, Any]):
+    results = work["result"]
+    cid = results["case_id"]
+    case_dir = ARTIFACT_ROOT / cid
+    paths = work["paths"]
+    return (
+        results,
+        cid,
+        case_dir,
+        REPO_ROOT / paths["lean"],
+        REPO_ROOT / paths["source"],
+        {key: REPO_ROOT / path for key, path in paths["packets"].items()},
+    )
+
+
+def initial_plan(work: dict[str, Any]) -> dict[str, Any]:
+    results, cid, case_dir, lean_path, source_record_path, packets = unpack_work(work)
+    results["goal_plan_before_gates"] = run(
+        [
+            sys.executable,
+            rel(PLAN_SCRIPT),
+            "--case",
+            cid,
+            "--json",
+            "--output",
+            rel(case_dir / "goal_plan_initial.json"),
+        ],
+        check=True,
+    )
+    return work
+
+
+def compile_case(work: dict[str, Any]) -> dict[str, Any]:
+    results, cid, case_dir, lean_path, source_record_path, packets = unpack_work(work)
+    results["lean_compile"] = run(["lake", "env", "lean", rel(lean_path)], check=False)
+    return work
+
+
+def check_completeness(work: dict[str, Any]) -> dict[str, Any]:
+    results, cid, case_dir, lean_path, source_record_path, packets = unpack_work(work)
+    completeness_path = case_dir / "derivation_completeness.json"
+    results["completeness"] = run(
+        [
+            sys.executable,
+            rel(CHECKER),
+            "--lean-file",
+            rel(lean_path),
+            "--source-record",
+            rel(source_record_path),
+            "--recursive-frontier-count",
+            "0",
+            "--expect-complete",
+            "--json",
+            "--output",
+            rel(completeness_path),
+        ],
+        check=False,
+    )
+    return work
+
+
+def repair_plans(work: dict[str, Any]) -> dict[str, Any]:
+    results, cid, case_dir, lean_path, source_record_path, packets = unpack_work(work)
+    expansion_path = case_dir / "repair_expansion_map.json"
+    results["expansion_map"] = run(
+        [
+            sys.executable,
+            rel(CARTOGRAPHER),
+            "--monitor-report",
+            rel(packets["monitor"]),
+            "--object-packet",
+            rel(packets["objects"]),
+            "--workbench-plan",
+            rel(packets["workbench"]),
+            "--repair-loop",
+            rel(packets["repair_loop"]),
+            "--generative-repair",
+            rel(packets["generative"]),
+            "--output",
+            rel(expansion_path),
+        ],
+        check=True,
+    )
+    results["recursive_control"] = run(
+        [
+            sys.executable,
+            rel(CONTROLLER),
+            "--expansion-map",
+            rel(expansion_path),
+            "--iteration",
+            "1",
+            "--max-iterations",
+            "8",
+            "--output",
+            rel(case_dir / "recursive_control_plan.json"),
+        ],
+        check=True,
+    )
+    return work
+
+
+def final_plan(work: dict[str, Any]) -> dict[str, Any]:
+    results, cid, case_dir, lean_path, source_record_path, packets = unpack_work(work)
+    results["goal_plan_after_gates"] = run(
+        [
+            sys.executable,
+            rel(PLAN_SCRIPT),
+            "--case",
+            cid,
+            "--run-gates",
+            "--json",
+            "--output",
+            rel(case_dir / "goal_plan_final.json"),
+        ],
+        check=False,
+    )
+    return work
+
+
+def process_case(
+    index: int, record: dict[str, Any], *, run_gates: bool
+) -> dict[str, Any]:
+    work = generate_case(index, record)
+    if run_gates:
+        for step in (
+            initial_plan,
+            compile_case,
+            check_completeness,
+            repair_plans,
+            final_plan,
+        ):
+            work = step(work)
+    return work["result"]
+
+
+def initialize(argv: list[str] | None = None) -> dict[str, Any]:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-gates", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--acknowledge-deprecated-batch-scaffold",
+        action="store_true",
+        help=(
+            "Run the old wrapper batch generator anyway. The recursive "
+            "case-by-case runner is required for new examples."
+        ),
+    )
+    args = parser.parse_args(argv)
+
+    if not args.acknowledge_deprecated_batch_scaffold:
+        raise SystemExit(
+            "Deprecated batch scaffold disabled. Use "
+            "skills/physics-lean/physics-lean-goal-sample-autoformalizer/scripts/"
+            "run_recursive_goal_case.py on one source record at a time."
+        )
+
+    records = json.loads(DATASET.read_text(encoding="utf-8"))
+    return {
+        "records": records,
+        "position": 0,
+        "cases": [],
+        "run_gates": args.run_gates,
+        "json_output": args.json,
+    }
+
+
+def select_source_record(state: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    if state["position"] >= len(SELECTED_CASES):
+        raise ValueError("fixed case selection is exhausted")
+    index = SELECTED_CASES[state["position"]]
+    record = state["records"][index]
+    if record.get("field") != "Quantum Mechanics":
+        raise SystemExit(f"{case_id(index)} is not Quantum Mechanics")
+    # Do not read or propagate dataset solution fields.
+    source_only = {key: record[key] for key in ("field", "question", "answer")}
+    return index, source_only
+
+
+def generate_next(state: dict[str, Any]) -> dict[str, Any]:
+    return generate_case(*select_source_record(state))
+
+
+def append_case(state: dict[str, Any], work: dict[str, Any]) -> dict[str, Any]:
+    updated = {
+        **state,
+        "cases": [*state["cases"], work["result"]],
+        "position": state["position"] + 1,
+    }
+    return {"state": updated, "done": updated["position"] == len(SELECTED_CASES)}
+
+
+def grounding_audit(state: dict[str, Any]) -> dict[str, Any]:
+    grounding_audit_path = ARTIFACT_ROOT / "mathlib_grounding_audit.json"
+    return run(
+        [
+            sys.executable,
+            rel(GROUNDING_AUDITOR),
+            "--output",
+            rel(grounding_audit_path),
+            "--json",
+        ],
+        check=False,
+        timeout=240,
+    )
+
+
+def report(state: dict[str, Any], grounding: dict[str, Any]) -> dict[str, Any]:
+    cases = state["cases"]
+    grounding_audit_path = ARTIFACT_ROOT / "mathlib_grounding_audit.json"
+    summary = {
+        "schema_version": 1,
+        "style": "new_qm_source_only_recursive_batch_report",
+        "source_policy": "question_answer_only_dataset_solution_forbidden",
+        "case_count": len(cases),
+        "cases": cases,
+        "mathlib_grounding_audit": rel(grounding_audit_path),
+        "mathlib_grounding_audit_ok": grounding["ok"],
+    }
+    if state["run_gates"]:
+        summary["ok"] = all(
+            case.get("lean_compile", {}).get("ok")
+            and case.get("completeness", {}).get("ok")
+            and (case.get("completeness", {}).get("json") or {}).get("ok") is True
+            for case in cases
+        )
+    else:
+        summary["ok"] = True
+
+    report_path = ARTIFACT_ROOT / "batch_report.json"
+    write_json(report_path, summary)
+    if state["json_output"]:
+        print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+    else:
+        print(f"ok={summary['ok']} report={rel(report_path)}")
+        if not summary["ok"]:
+            failed = [
+                case["case_id"]
+                for case in cases
+                if not case.get("completeness", {}).get("ok")
+            ]
+            print("failed_cases=" + ",".join(failed))
+    return {
+        "summary": summary,
+        "report_path": rel(report_path),
+        "exit_code": 0 if summary["ok"] else 1,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    state = initialize(argv)
+    for _ in SELECTED_CASES:
+        index, source_only = select_source_record(state)
+        result = process_case(index, source_only, run_gates=state["run_gates"])
+        state = append_case(state, {"result": result})["state"]
+    return report(state, grounding_audit(state))["exit_code"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

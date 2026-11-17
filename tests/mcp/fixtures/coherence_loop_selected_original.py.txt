@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Run the MathformerPhysicsLib coherence and generative critic loop."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sys
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPT_ROOT = (
+    REPO_ROOT
+    / "skills"
+    / "mathformerphysicslib"
+    / "mathformerphysicslib-coherence-inventory-builder"
+    / "scripts"
+)
+sys.path.insert(0, str(SCRIPT_ROOT))
+
+from coherence_common import (  # noqa: E402
+    audit_grounding,
+    build_inventory,
+    canonicalize,
+    coherence_gate,
+    critic_api,
+    critic_integration,
+    critic_redefinitions,
+    generative_plan,
+    markdown_report,
+    repair_plan,
+)
+
+DEFAULT_ARTIFACT_DIR = REPO_ROOT / "artifacts" / "mathformerphysicslib" / "coherence"
+GROUNDING_RANK = {
+    "unverified_local": 0,
+    "local_blocker": 1,
+    "mathlib_bridge": 2,
+    "direct_mathlib": 3,
+}
+
+
+def write_json(path: Path, payload: dict[str, Any], repository_root: Path = REPO_ROOT) -> str:
+    """Write JSON and return a repository-relative path."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return path.relative_to(repository_root).as_posix()
+
+
+def load_existing_json(path: Path) -> dict[str, Any] | None:
+    """Load a previous report if it exists and is valid JSON."""
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def grounding_by_concept(report: dict[str, Any] | None) -> dict[str, str]:
+    """Map concept ids to grounding levels for monotonic comparison."""
+    if not report:
+        return {}
+    rows: dict[str, str] = {}
+    for concept in report.get("concepts", []):
+        if not isinstance(concept, dict):
+            continue
+        concept_id = str(concept.get("concept_id") or "")
+        level = str(concept.get("grounding_level") or "")
+        if concept_id and level:
+            rows[concept_id] = level
+    return rows
+
+
+def compare_grounding(
+    previous: dict[str, Any] | None, current: dict[str, Any]
+) -> dict[str, Any]:
+    """Compare current grounding levels with the previous artifact."""
+    previous_rows = grounding_by_concept(previous)
+    current_rows = grounding_by_concept(current)
+    if not previous_rows:
+        return {
+            "status": "no_previous_report",
+            "ok": True,
+            "regression_count": 0,
+            "improvement_count": 0,
+            "regressions": [],
+            "improvements": [],
+        }
+    regressions = []
+    improvements = []
+    for concept_id, current_level in sorted(current_rows.items()):
+        previous_level = previous_rows.get(concept_id)
+        if previous_level is None:
+            continue
+        previous_rank = GROUNDING_RANK.get(previous_level, -1)
+        current_rank = GROUNDING_RANK.get(current_level, -1)
+        if current_rank < previous_rank:
+            regressions.append(
+                {
+                    "concept_id": concept_id,
+                    "previous_level": previous_level,
+                    "current_level": current_level,
+                }
+            )
+        elif current_rank > previous_rank:
+            improvements.append(
+                {
+                    "concept_id": concept_id,
+                    "previous_level": previous_level,
+                    "current_level": current_level,
+                }
+            )
+    return {
+        "status": "regressed" if regressions else "monotonic",
+        "ok": not regressions,
+        "regression_count": len(regressions),
+        "improvement_count": len(improvements),
+        "regressions": regressions,
+        "improvements": improvements,
+    }
+
+
+def prepare_directory(output_dir: Path) -> str:
+    """Create the destination before inventory traversal."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return str(output_dir)
+
+
+def compare_previous(output_dir: Path, grounding: dict[str, Any]) -> dict[str, Any]:
+    """Attach the native cross-run comparison before any report is overwritten."""
+    grounding["monotonic_comparison"] = compare_grounding(
+        load_existing_json(output_dir / "mathlib_grounding.json"),
+        grounding,
+    )
+    return grounding
+
+
+def run_critics(inventory: dict, graph: dict, grounding: dict, repository_root: Path | None = None) -> list[dict]:
+    """Run all critics in native order, regardless of findings."""
+    redefinitions = critic_redefinitions(graph, grounding)
+    integration = critic_integration(inventory, graph, repository_root)
+    api = critic_api(graph, repository_root)
+    deterministic_reports = [grounding, redefinitions, integration, api]
+    return deterministic_reports
+
+
+def plan_and_gate(deterministic_reports: list[dict]) -> dict:
+    """Construct advisory plans; never execute probes or repairs."""
+    generative = generative_plan(deterministic_reports)
+    repairs = repair_plan(deterministic_reports)
+    gate = coherence_gate(deterministic_reports)
+    gate["repair_plan_status"] = repairs.get("status")
+    gate["repair_action_count"] = len(repairs.get("actions", []))
+    return {"generative": generative, "repairs": repairs, "gate": gate}
+
+
+def write_reports(output_dir: Path, inventory: dict, graph: dict, reports: list[dict], plans: dict, repository_root: Path = REPO_ROOT) -> dict:
+    """Write Markdown first, followed by the nine native JSON artifacts."""
+    grounding, redefinitions, integration, api = reports
+    generative, repairs, gate = plans["generative"], plans["repairs"], plans["gate"]
+    markdown_path = output_dir / "coherence_report.md"
+    markdown_path.write_text(markdown_report(gate, repairs), encoding="utf-8")
+
+    artifacts = {
+        "inventory": write_json(output_dir / "inventory.json", inventory, repository_root),
+        "concept_graph": write_json(output_dir / "concept_graph.json", graph, repository_root),
+        "grounding": write_json(output_dir / "mathlib_grounding.json", grounding, repository_root),
+        "redefinitions": write_json(
+            output_dir / "redefinition_critic.json", redefinitions, repository_root
+        ),
+        "integration": write_json(output_dir / "integration_critic.json", integration, repository_root),
+        "api": write_json(output_dir / "api_operability_critic.json", api, repository_root),
+        "generative": write_json(
+            output_dir / "generative_coherence_critic_plan.json", generative, repository_root
+        ),
+        "repair": write_json(output_dir / "repair_plan.json", repairs, repository_root),
+        "gate": write_json(output_dir / "coherence_gate.json", gate, repository_root),
+        "markdown_report": markdown_path.relative_to(repository_root).as_posix(),
+    }
+    return artifacts
+
+
+def check_and_summarize(inventory: dict, graph: dict, reports: list[dict], plans: dict, artifacts: dict, repository_root: Path = REPO_ROOT) -> dict:
+    """Evaluate the six native checks independently of gate status."""
+    grounding = reports[0]
+    generative, repairs, gate = plans["generative"], plans["repairs"], plans["gate"]
+    markdown_path = repository_root / artifacts["markdown_report"]
+    top10_modules = [
+        module["path"]
+        for module in inventory.get("modules", [])
+        if "formalphysics_" in str(module.get("path", ""))
+    ]
+    checks = [
+        {
+            "id": "inventory.scans_lean_modules",
+            "ok": int(inventory.get("module_count", 0)) > 0,
+            "detail": inventory.get("module_count", 0),
+        },
+        {
+            "id": "top10_cases_included",
+            "ok": bool(top10_modules),
+            "detail": top10_modules[:10],
+        },
+        {
+            "id": "generative_interpretation_full",
+            "ok": generative.get("probe_count") == 7
+            and all(
+                probe.get("expected_report_schema")
+                for probe in generative.get("probes", [])
+            )
+            and generative.get("blocking_policy", {}).get(
+                "may_block_only_with_deterministic_evidence"
+            )
+            is True,
+            "detail": {"probe_count": generative.get("probe_count")},
+        },
+        {
+            "id": "grounding.failed_candidates_recorded",
+            "ok": grounding.get("failed_candidate_count", 0) >= 0
+            and all(
+                "failed_mathlib_candidates" in concept
+                for concept in grounding.get("concepts", [])
+            ),
+            "detail": {
+                "failed_candidate_count": grounding.get("failed_candidate_count", 0)
+            },
+        },
+        {
+            "id": "grounding.monotonic_comparison_present",
+            "ok": bool(grounding.get("monotonic_comparison", {}).get("status")),
+            "detail": grounding.get("monotonic_comparison", {}),
+        },
+        {
+            "id": "report_written",
+            "ok": markdown_path.exists()
+            and "MathformerPhysicsLib Coherence Report"
+            in markdown_path.read_text(encoding="utf-8"),
+            "detail": markdown_path.relative_to(repository_root).as_posix(),
+        },
+    ]
+    return {
+        "schema_version": 1,
+        "style": "mathformerphysicslib_coherence_loop_report",
+        "ok": all(check["ok"] for check in checks),
+        "checks": checks,
+        "artifacts": artifacts,
+        "module_count": inventory.get("module_count", 0),
+        "concept_count": graph.get("concept_count", 0),
+        "top10_module_count": len(top10_modules),
+        "generative_probe_count": generative.get("probe_count", 0),
+        "repair_action_count": repairs.get("action_count", 0),
+        "gate_status": gate.get("status"),
+    }
+
+
+def run_loop(output_dir: Path, repository_root: Path | None = None) -> dict[str, Any]:
+    """Run exactly one pass using the same stages exposed through MCP.
+
+    An explicit repository root supplies filesystem context for isolated callers;
+    the CLI retains its original repository defaults.
+    """
+    prepare_directory(output_dir)
+    inventory = build_inventory() if repository_root is None else build_inventory(repository_root)
+    graph = canonicalize(inventory)
+    grounding = audit_grounding(graph)
+    grounding = compare_previous(output_dir, grounding)
+    reports = run_critics(inventory, graph, grounding, repository_root)
+    plans = plan_and_gate(reports)
+    root = REPO_ROOT if repository_root is None else repository_root
+    artifacts = write_reports(output_dir, inventory, graph, reports, plans, root)
+    return check_and_summarize(inventory, graph, reports, plans, artifacts, root)
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_ARTIFACT_DIR)
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the coherence loop."""
+    args = parse_args(argv)
+    report = run_loop(args.output_dir)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0 if report["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

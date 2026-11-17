@@ -1,0 +1,825 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from sympy_physics_derivation_trace_loop import (
+    ExpandedDerivation,
+    PhysicalModel,
+    PhysicsSympyConsistencyAssessment,
+    PhysicsSympyDerivationRequest,
+    SampleCoverageReview,
+    SourceDerivationModel,
+    SympyDerivationArtifact,
+    SympyDerivationBasis,
+    SympyDerivationPlan,
+    SympyExecutionReport,
+    SympyFormalReviewCase,
+    SympyGroundingBasis,
+    SympyMathematicalReview,
+    SympyPhysicalReviewCase,
+    SympyPhysicsBasis,
+    SympyPhysicsCase,
+    SympyPhysicsDerivationTraceCritiquePhysicsSympyDimensionsArtifact,
+    SympyPhysicsDerivationTraceCritiquePhysicsSympySemanticsArtifact,
+    SympyPhysicsDerivationTraceDraftPhysicsSympyDerivationArtifact,
+    SympyPhysicsDerivationTraceExecutePhysicsSympyDerivationArtifact,
+    SympyPhysicsDerivationTraceExecutePhysicsSympyInterpretArtifact,
+    SympyPhysicsDerivationTracePhysicsDependenciesProbeArtifact,
+    SympyPhysicsDerivationTracePhysicsDimensionsModelArtifact,
+    SympyPhysicsDerivationTracePhysicsEquationsParseArtifact,
+    SympyPhysicsDerivationTracePhysicsFramesBuildArtifact,
+    SympyPhysicsDerivationTracePhysicsGapsDetectArtifact,
+    SympyPhysicsDerivationTracePhysicsGapsExpandArtifact,
+    SympyPhysicsDerivationTracePhysicsInformalElicitArtifact,
+    SympyPhysicsDerivationTracePhysicsInformalExpandArtifact,
+    SympyPhysicsDerivationTracePhysicsInformalReviewArtifact,
+    SympyPhysicsDerivationTracePhysicsLawsGroundArtifact,
+    SympyPhysicsDerivationTracePhysicsNumericSampleArtifact,
+    SympyPhysicsDerivationTracePhysicsRegimesModelArtifact,
+    SympyPhysicsDerivationTracePhysicsSourceExtractArtifact,
+    SympyPhysicsDerivationTracePhysicsStepsVerifyArtifact,
+    SympyPhysicsDerivationTracePhysicsSymbolsBuildArtifact,
+    SympyPhysicsDerivationTracePhysicsSympyAssumptionsEncodeArtifact,
+    SympyPhysicsDerivationTracePhysicsSympyDesignGuardReviewArtifact,
+    SympyPhysicsDerivationTracePhysicsSympyEquationSurfaceBuildArtifact,
+    SympyPhysicsDerivationTracePhysicsSympyGoalSamplePlanArtifact,
+    SympyPhysicsDerivationTracePhysicsSympyGroundedSampleThoroughnessArtifact,
+    SympyPhysicsDerivationTracePhysicsSympyLibraryGroundingBuildArtifact,
+    SympyPhysicsDerivationTracePhysicsSympyRecursiveRepairControlArtifact,
+    SympyPhysicsDerivationTracePhysicsSympyRepairExpansionMapArtifact,
+    SympyPhysicsDerivationTracePhysicsSympySourceOnlyRunArtifact,
+    SympyPhysicsDerivationTracePhysicsSympyWorkflowPlanArtifact,
+    SympyPhysicsDerivationTracePhysicsUnitsGroundArtifact,
+    SympyPhysicsDerivationTracePhysicsUnitsVerifyArtifact,
+    SympyPhysicsDerivationTraceRefinePhysicsSympyReviewArtifact,
+    SympyPhysicsDerivationTraceReviewMathematicalSympyFinalEquationsArtifact,
+    SympyPhysicsDerivationTraceReviewPhysicsSympyFinalEquationsArtifact,
+    SympyPhysicsDisposition,
+    SympyPhysicsReview,
+    SympyRepairCase,
+    SympyRepairRoute,
+)
+from material_relations import TestsCritiquePhysicsSympySemanticsCertificate
+from material_relations import TestsPhysicsSympyDesignGuardReviewCertificate
+from material_relations import TestsRefinePhysicsSympyReviewCertificate
+from reasoning import ReconstructWithSympy
+from relations import CompleteDerivationStepsCertificate
+from relations import DefinePhysicalModelCertificate
+from relations import DraftExecutableDerivationCertificate
+from relations import GroundSympyPlanCertificate
+from relations import ReviewMathematicalValidityCertificate
+from relations import ReviewPhysicalFidelityCertificate
+from relations import ReviewSampleCoverageCertificate
+from relations import RouteReviewRepairsCertificate
+from relations import RunSympyDerivationCertificate
+from relations import SummarizeSympyRunCertificate
+from generated.critique_physics_sympy_semantics_skill import physics_sympy_equational_semantics_critic_skill as critique_physics_sympy_semantics_skill_binding
+from generated.physics_sympy_design_guard_review_skill import physics_sympy_review_refinement_router_skill as physics_sympy_design_guard_review_skill_binding
+from generated.refine_physics_sympy_review_skill import physics_sympy_review_refinement_router_skill as refine_physics_sympy_review_skill_binding
+from generated.reasoning_source_model_1_skill import physics_sympy_goal_sample_autoformalizer_skill as source_model_reasoning_skill_1
+from generated.reasoning_source_model_2_skill import physics_sympy_dependency_prober_skill as source_model_reasoning_skill_2
+from generated.reasoning_source_model_3_skill import physics_derivation_source_extractor_skill as source_model_reasoning_skill_3
+from generated.reasoning_source_model_4_skill import physics_informal_derivation_elicitor_skill as source_model_reasoning_skill_4
+from generated.reasoning_source_model_5_skill import physics_informal_derivation_expander_skill as source_model_reasoning_skill_5
+from generated.reasoning_source_model_6_skill import physics_informal_derivation_readiness_reviewer_skill as source_model_reasoning_skill_6
+from generated.reasoning_physical_model_1_skill import physics_symbol_table_builder_skill as physical_model_reasoning_skill_1
+from generated.reasoning_physical_model_2_skill import physics_dimension_modeler_skill as physical_model_reasoning_skill_2
+from generated.reasoning_physical_model_3_skill import physics_unit_system_grounder_skill as physical_model_reasoning_skill_3
+from generated.reasoning_physical_model_4_skill import physics_equation_parser_skill as physical_model_reasoning_skill_4
+from generated.reasoning_physical_model_5_skill import physics_regime_assumption_modeler_skill as physical_model_reasoning_skill_5
+from generated.reasoning_physical_model_6_skill import physics_coordinate_frame_context_builder_skill as physical_model_reasoning_skill_6
+from generated.reasoning_expanded_steps_1_skill import physics_implicit_gap_detector_skill as expanded_steps_reasoning_skill_1
+from generated.reasoning_expanded_steps_2_skill import physics_derivation_gap_expander_skill as expanded_steps_reasoning_skill_2
+from generated.reasoning_expanded_steps_3_skill import physics_law_concept_grounding_navigator_skill as expanded_steps_reasoning_skill_3
+from generated.reasoning_sympy_plan_1_skill import physics_sympy_library_grounding_builder_skill as sympy_plan_reasoning_skill_1
+from generated.reasoning_sympy_plan_2_skill import physics_sympy_workflow_orchestrator_skill as sympy_plan_reasoning_skill_2
+from generated.reasoning_sympy_plan_3_skill import physics_sympy_equation_surface_builder_skill as sympy_plan_reasoning_skill_3
+from generated.reasoning_sympy_plan_4_skill import physics_sympy_assumption_context_encoder_skill as sympy_plan_reasoning_skill_4
+from generated.reasoning_sympy_artifact_1_skill import physics_sympy_derivation_drafter_skill as sympy_artifact_reasoning_skill_1
+from generated.reasoning_execution_report_1_skill import physics_sympy_execution_runner_skill as execution_report_reasoning_skill_1
+from generated.reasoning_execution_report_2_skill import physics_sympy_execution_interpreter_skill as execution_report_reasoning_skill_2
+from generated.reasoning_math_review_1_skill import physics_unit_analysis_verifier_skill as math_review_reasoning_skill_1
+from generated.reasoning_math_review_2_skill import physics_derivation_step_verifier_skill as math_review_reasoning_skill_2
+from generated.reasoning_math_review_3_skill import physics_numeric_sanity_sampler_skill as math_review_reasoning_skill_3
+from generated.reasoning_math_review_4_skill import mathematical_sympy_final_equation_reviewer_skill as math_review_reasoning_skill_4
+from generated.reasoning_physics_review_1_skill import physics_sympy_equational_semantics_critic_skill as physics_review_reasoning_skill_1
+from generated.reasoning_physics_review_2_skill import physics_sympy_dimension_projection_critic_skill as physics_review_reasoning_skill_2
+from generated.reasoning_physics_review_3_skill import physics_sympy_final_equation_reviewer_skill as physics_review_reasoning_skill_3
+from generated.reasoning_repair_route_1_skill import physics_sympy_review_refinement_router_skill as repair_route_reasoning_skill_1
+from generated.reasoning_repair_route_2_skill import physics_sympy_repair_expansion_cartographer_skill as repair_route_reasoning_skill_2
+from generated.reasoning_repair_route_3_skill import physics_sympy_recursive_repair_loop_controller_skill as repair_route_reasoning_skill_3
+from generated.reasoning_sample_review_1_skill import physics_sympy_goal_sample_autoformalizer_skill as sample_review_reasoning_skill_1
+from generated.reasoning_report_1_skill import physics_derivation_consistency_report_orchestrator_skill as report_reasoning_skill_1
+
+def physical_model_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> DefinePhysicalModelCertificate[SourceValue, TargetValue]:
+    return DefinePhysicalModelCertificate(source = source, target = target)
+
+def expanded_steps_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> CompleteDerivationStepsCertificate[SourceValue, TargetValue]:
+    return CompleteDerivationStepsCertificate(source = source, target = target)
+
+def sympy_plan_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> GroundSympyPlanCertificate[SourceValue, TargetValue]:
+    return GroundSympyPlanCertificate(source = source, target = target)
+
+def sympy_artifact_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> DraftExecutableDerivationCertificate[SourceValue, TargetValue]:
+    return DraftExecutableDerivationCertificate(source = source, target = target)
+
+def execution_report_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> RunSympyDerivationCertificate[SourceValue, TargetValue]:
+    return RunSympyDerivationCertificate(source = source, target = target)
+
+def math_review_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ReviewMathematicalValidityCertificate[SourceValue, TargetValue]:
+    return ReviewMathematicalValidityCertificate(source = source, target = target)
+
+def physics_review_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ReviewPhysicalFidelityCertificate[SourceValue, TargetValue]:
+    return ReviewPhysicalFidelityCertificate(source = source, target = target)
+
+def repair_route_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> RouteReviewRepairsCertificate[SourceValue, TargetValue]:
+    return RouteReviewRepairsCertificate(source = source, target = target)
+
+def sample_review_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ReviewSampleCoverageCertificate[SourceValue, TargetValue]:
+    return ReviewSampleCoverageCertificate(source = source, target = target)
+
+def report_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> SummarizeSympyRunCertificate[SourceValue, TargetValue]:
+    return SummarizeSympyRunCertificate(source = source, target = target)
+
+# Generative interpretation ReadSourceDerivation uses skill context selected from material steps: physics_sympy_goal_sample_plan, physics_sympy_source_only_run, physics_dependencies_probe, physics_source_extract, physics_informal_elicit, physics_informal_expand, physics_informal_review.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-sympy-goal-sample-autoformalizer, physics-sympy-dependency-prober, physics-derivation-source-extractor, physics-informal-derivation-elicitor, physics-informal-derivation-expander, physics-informal-derivation-readiness-reviewer.
+agent source_model_reasoning_agent(
+    task: PhysicsSympyDerivationRequest,
+) -> Result[Generated[SourceDerivationModel], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PhysicsSympyDerivationRequest] = [source_model_reasoning_skill_1, source_model_reasoning_skill_2, source_model_reasoning_skill_3, source_model_reasoning_skill_4, source_model_reasoning_skill_5, source_model_reasoning_skill_6]
+
+# Generative interpretation ModelPhysicalSystem uses skill context selected from material steps: physics_symbols_build, physics_dimensions_model, physics_units_ground, physics_equations_parse, physics_regimes_model, physics_frames_build.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-symbol-table-builder, physics-dimension-modeler, physics-unit-system-grounder, physics-equation-parser, physics-regime-assumption-modeler, physics-coordinate-frame-context-builder.
+agent physical_model_reasoning_agent(
+    task: SourceDerivationModel,
+) -> Result[Generated[PhysicalModel], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SourceDerivationModel] = [physical_model_reasoning_skill_1, physical_model_reasoning_skill_2, physical_model_reasoning_skill_3, physical_model_reasoning_skill_4, physical_model_reasoning_skill_5, physical_model_reasoning_skill_6]
+
+# Generative interpretation ExpandDerivationSteps uses skill context selected from material steps: physics_gaps_detect, physics_gaps_expand, physics_laws_ground.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-implicit-gap-detector, physics-derivation-gap-expander, physics-law-concept-grounding-navigator.
+agent expanded_steps_reasoning_agent(
+    task: SympyDerivationBasis,
+) -> Result[Generated[ExpandedDerivation], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyDerivationBasis] = [expanded_steps_reasoning_skill_1, expanded_steps_reasoning_skill_2, expanded_steps_reasoning_skill_3]
+
+# Generative interpretation PlanSympyDerivation uses skill context selected from material steps: physics_sympy_library_grounding_build, physics_sympy_workflow_plan, physics_sympy_equation_surface_build, physics_sympy_assumptions_encode.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-sympy-library-grounding-builder, physics-sympy-workflow-orchestrator, physics-sympy-equation-surface-builder, physics-sympy-assumption-context-encoder.
+agent sympy_plan_reasoning_agent(
+    task: SympyGroundingBasis,
+) -> Result[Generated[SympyDerivationPlan], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyGroundingBasis] = [sympy_plan_reasoning_skill_1, sympy_plan_reasoning_skill_2, sympy_plan_reasoning_skill_3, sympy_plan_reasoning_skill_4]
+
+# Generative interpretation DraftSympyDerivation uses skill context selected from material steps: draft_physics_sympy_derivation.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-sympy-derivation-drafter.
+agent sympy_artifact_reasoning_agent(
+    task: SympyPhysicsBasis,
+) -> Result[Generated[SympyDerivationArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyPhysicsBasis] = [sympy_artifact_reasoning_skill_1]
+
+# Generative interpretation ExecuteSympyDerivation uses skill context selected from material steps: execute_physics_sympy_derivation, execute_physics_sympy_interpret.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-sympy-execution-runner, physics-sympy-execution-interpreter.
+agent execution_report_reasoning_agent(
+    task: SympyDerivationArtifact,
+) -> Result[Generated[SympyExecutionReport], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyDerivationArtifact] = [execution_report_reasoning_skill_1, execution_report_reasoning_skill_2]
+
+# Generative interpretation ReviewSympyMathematics uses skill context selected from material steps: physics_units_verify, physics_steps_verify, physics_numeric_sample, review_mathematical_sympy_final_equations.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-unit-analysis-verifier, physics-derivation-step-verifier, physics-numeric-sanity-sampler, mathematical-sympy-final-equation-reviewer.
+agent math_review_reasoning_agent(
+    task: SympyFormalReviewCase,
+) -> Result[Generated[SympyMathematicalReview], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyFormalReviewCase] = [math_review_reasoning_skill_1, math_review_reasoning_skill_2, math_review_reasoning_skill_3, math_review_reasoning_skill_4]
+
+# Generative interpretation ReviewPhysicsFidelity uses skill context selected from material steps: critique_physics_sympy_semantics, critique_physics_sympy_dimensions, review_physics_sympy_final_equations.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-sympy-equational-semantics-critic, physics-sympy-dimension-projection-critic, physics-sympy-final-equation-reviewer.
+agent physics_review_reasoning_agent(
+    task: SympyPhysicalReviewCase,
+) -> Result[Generated[SympyPhysicsReview], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyPhysicalReviewCase] = [physics_review_reasoning_skill_1, physics_review_reasoning_skill_2, physics_review_reasoning_skill_3]
+
+# Generative interpretation RouteSympyRepairs uses skill context selected from material steps: physics_sympy_design_guard_review, refine_physics_sympy_review, physics_sympy_repair_expansion_map, physics_sympy_recursive_repair_control.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-sympy-review-refinement-router, physics-sympy-repair-expansion-cartographer, physics-sympy-recursive-repair-loop-controller.
+agent repair_route_reasoning_agent(
+    task: SympyRepairCase,
+) -> Result[Generated[SympyRepairRoute], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyRepairCase] = [repair_route_reasoning_skill_1, repair_route_reasoning_skill_2, repair_route_reasoning_skill_3]
+
+# Generative interpretation ReviewSampleCoverage uses skill context selected from material steps: physics_sympy_grounded_sample_thoroughness.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-sympy-goal-sample-autoformalizer.
+agent sample_review_reasoning_agent(
+    task: SympyRepairRoute,
+) -> Result[Generated[SampleCoverageReview], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyRepairRoute] = [sample_review_reasoning_skill_1]
+
+# Generative interpretation ReportSympyPhysics uses skill context selected from material steps: consistency_physics_derivation_report.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-derivation-consistency-report-orchestrator.
+agent report_reasoning_agent(
+    task: SympyPhysicsCase,
+) -> Result[Generated[SympyPhysicsDisposition], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyPhysicsCase] = [report_reasoning_skill_1]
+
+converted_reasoning = ReconstructWithSympy(
+    source_model = source_model_reasoning_agent,
+    physical_model = physical_model_reasoning_agent,
+    physical_model_by = physical_model_reasoning_relation_builder,
+    expanded_steps = expanded_steps_reasoning_agent,
+    expanded_steps_by = expanded_steps_reasoning_relation_builder,
+    sympy_plan = sympy_plan_reasoning_agent,
+    sympy_plan_by = sympy_plan_reasoning_relation_builder,
+    sympy_artifact = sympy_artifact_reasoning_agent,
+    sympy_artifact_by = sympy_artifact_reasoning_relation_builder,
+    execution_report = execution_report_reasoning_agent,
+    execution_report_by = execution_report_reasoning_relation_builder,
+    math_review = math_review_reasoning_agent,
+    math_review_by = math_review_reasoning_relation_builder,
+    physics_review = physics_review_reasoning_agent,
+    physics_review_by = physics_review_reasoning_relation_builder,
+    repair_route = repair_route_reasoning_agent,
+    repair_route_by = repair_route_reasoning_relation_builder,
+    sample_review = sample_review_reasoning_agent,
+    sample_review_by = sample_review_reasoning_relation_builder,
+    report = report_reasoning_agent,
+    report_by = report_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `physics-sympy-goal-sample-autoformalizer`; this does not execute the linked native resource.
+def physics_sympy_goal_sample_plan_material_binding(source: PhysicsSympyDerivationRequest) -> Computed[SympyPhysicsDerivationTracePhysicsSympyGoalSamplePlanArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsSympyGoalSamplePlanArtifact(
+        subject = "typed material binding for physics_sympy_goal_sample_plan",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_sympy_goal_sample_plan")
+
+# Material binding descriptor for `physics-sympy-goal-sample-autoformalizer`; this does not execute the linked native resource.
+def physics_sympy_source_only_run_material_binding(source: SympyPhysicsDerivationTracePhysicsSympyGoalSamplePlanArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsSympySourceOnlyRunArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsSympySourceOnlyRunArtifact(
+        subject = "typed material binding for physics_sympy_source_only_run",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_sympy_source_only_run",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_sympy_source_only_run")
+
+# Material binding descriptor for `physics-sympy-dependency-prober`; this does not execute the linked native resource.
+def physics_dependencies_probe_material_binding(source: SympyPhysicsDerivationTracePhysicsSympySourceOnlyRunArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsDependenciesProbeArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsDependenciesProbeArtifact(
+        subject = "typed material binding for physics_dependencies_probe",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_dependencies_probe",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_dependencies_probe")
+
+# Material binding descriptor for `physics-derivation-source-extractor`; this does not execute the linked native resource.
+def physics_source_extract_material_binding(source: SympyPhysicsDerivationTracePhysicsDependenciesProbeArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsSourceExtractArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsSourceExtractArtifact(
+        subject = "typed material binding for physics_source_extract",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_source_extract")
+
+# Material binding descriptor for `physics-informal-derivation-elicitor`; this does not execute the linked native resource.
+def physics_informal_elicit_material_binding(source: SympyPhysicsDerivationTracePhysicsSourceExtractArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsInformalElicitArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsInformalElicitArtifact(
+        subject = "typed material binding for physics_informal_elicit",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_informal_elicit",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_informal_elicit")
+
+# Material binding descriptor for `physics-informal-derivation-expander`; this does not execute the linked native resource.
+def physics_informal_expand_material_binding(source: SympyPhysicsDerivationTracePhysicsInformalElicitArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsInformalExpandArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsInformalExpandArtifact(
+        subject = "typed material binding for physics_informal_expand",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_informal_expand")
+
+# Material binding descriptor for `physics-informal-derivation-readiness-reviewer`; this does not execute the linked native resource.
+def physics_informal_review_material_binding(source: SympyPhysicsDerivationTracePhysicsInformalExpandArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsInformalReviewArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsInformalReviewArtifact(
+        subject = "typed material binding for physics_informal_review",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_informal_review")
+
+# Material binding descriptor for `physics-symbol-table-builder`; this does not execute the linked native resource.
+def physics_symbols_build_material_binding(source: SympyPhysicsDerivationTracePhysicsInformalReviewArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsSymbolsBuildArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsSymbolsBuildArtifact(
+        subject = "typed material binding for physics_symbols_build",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_symbols_build",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_symbols_build")
+
+# Material binding descriptor for `physics-dimension-modeler`; this does not execute the linked native resource.
+def physics_dimensions_model_material_binding(source: SympyPhysicsDerivationTracePhysicsSymbolsBuildArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsDimensionsModelArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsDimensionsModelArtifact(
+        subject = "typed material binding for physics_dimensions_model",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_dimensions_model",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_dimensions_model")
+
+# Material binding descriptor for `physics-unit-system-grounder`; this does not execute the linked native resource.
+def physics_units_ground_material_binding(source: SympyPhysicsDerivationTracePhysicsDimensionsModelArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsUnitsGroundArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsUnitsGroundArtifact(
+        subject = "typed material binding for physics_units_ground",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_units_ground")
+
+# Material binding descriptor for `physics-equation-parser`; this does not execute the linked native resource.
+def physics_equations_parse_material_binding(source: SympyPhysicsDerivationTracePhysicsUnitsGroundArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsEquationsParseArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsEquationsParseArtifact(
+        subject = "typed material binding for physics_equations_parse",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_equations_parse")
+
+# Material binding descriptor for `physics-regime-assumption-modeler`; this does not execute the linked native resource.
+def physics_regimes_model_material_binding(source: SympyPhysicsDerivationTracePhysicsEquationsParseArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsRegimesModelArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsRegimesModelArtifact(
+        subject = "typed material binding for physics_regimes_model",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_regimes_model",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_regimes_model")
+
+# Material binding descriptor for `physics-coordinate-frame-context-builder`; this does not execute the linked native resource.
+def physics_frames_build_material_binding(source: SympyPhysicsDerivationTracePhysicsRegimesModelArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsFramesBuildArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsFramesBuildArtifact(
+        subject = "typed material binding for physics_frames_build",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_frames_build",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_frames_build")
+
+# Material binding descriptor for `physics-implicit-gap-detector`; this does not execute the linked native resource.
+def physics_gaps_detect_material_binding(source: SympyPhysicsDerivationTracePhysicsFramesBuildArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsGapsDetectArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsGapsDetectArtifact(
+        subject = "typed material binding for physics_gaps_detect",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_gaps_detect",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_gaps_detect")
+
+# Material binding descriptor for `physics-derivation-gap-expander`; this does not execute the linked native resource.
+def physics_gaps_expand_material_binding(source: SympyPhysicsDerivationTracePhysicsGapsDetectArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsGapsExpandArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsGapsExpandArtifact(
+        subject = "typed material binding for physics_gaps_expand",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_gaps_expand")
+
+# Material binding descriptor for `physics-law-concept-grounding-navigator`; this does not execute the linked native resource.
+def physics_laws_ground_material_binding(source: SympyPhysicsDerivationTracePhysicsGapsExpandArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsLawsGroundArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsLawsGroundArtifact(
+        subject = "typed material binding for physics_laws_ground",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_laws_ground")
+
+# Material binding descriptor for `physics-sympy-library-grounding-builder`; this does not execute the linked native resource.
+def physics_sympy_library_grounding_build_material_binding(source: SympyPhysicsDerivationTracePhysicsLawsGroundArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsSympyLibraryGroundingBuildArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsSympyLibraryGroundingBuildArtifact(
+        subject = "typed material binding for physics_sympy_library_grounding_build",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_sympy_library_grounding_build")
+
+# Material binding descriptor for `physics-sympy-workflow-orchestrator`; this does not execute the linked native resource.
+def physics_sympy_workflow_plan_material_binding(source: SympyPhysicsDerivationTracePhysicsSympyLibraryGroundingBuildArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsSympyWorkflowPlanArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsSympyWorkflowPlanArtifact(
+        subject = "typed material binding for physics_sympy_workflow_plan",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_sympy_workflow_plan")
+
+# Material binding descriptor for `physics-sympy-equation-surface-builder`; this does not execute the linked native resource.
+def physics_sympy_equation_surface_build_material_binding(source: SympyPhysicsDerivationTracePhysicsSympyWorkflowPlanArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsSympyEquationSurfaceBuildArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsSympyEquationSurfaceBuildArtifact(
+        subject = "typed material binding for physics_sympy_equation_surface_build",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_sympy_equation_surface_build",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_sympy_equation_surface_build")
+
+# Material binding descriptor for `physics-sympy-assumption-context-encoder`; this does not execute the linked native resource.
+def physics_sympy_assumptions_encode_material_binding(source: SympyPhysicsDerivationTracePhysicsSympyEquationSurfaceBuildArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsSympyAssumptionsEncodeArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsSympyAssumptionsEncodeArtifact(
+        subject = "typed material binding for physics_sympy_assumptions_encode",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_sympy_assumptions_encode",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_sympy_assumptions_encode")
+
+# Material binding descriptor for `physics-sympy-derivation-drafter`; this does not execute the linked native resource.
+def draft_physics_sympy_derivation_material_binding(source: SympyPhysicsDerivationTracePhysicsSympyAssumptionsEncodeArtifact) -> Computed[SympyPhysicsDerivationTraceDraftPhysicsSympyDerivationArtifact]:
+    artifact = SympyPhysicsDerivationTraceDraftPhysicsSympyDerivationArtifact(
+        subject = "typed material binding for draft_physics_sympy_derivation",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: draft_physics_sympy_derivation")
+
+# Material binding descriptor for `physics-sympy-execution-runner`; this does not execute the linked native resource.
+def execute_physics_sympy_derivation_material_binding(source: SympyPhysicsDerivationTraceDraftPhysicsSympyDerivationArtifact) -> Computed[SympyPhysicsDerivationTraceExecutePhysicsSympyDerivationArtifact]:
+    artifact = SympyPhysicsDerivationTraceExecutePhysicsSympyDerivationArtifact(
+        subject = "typed material binding for execute_physics_sympy_derivation",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation execute_physics_sympy_derivation",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: execute_physics_sympy_derivation")
+
+# Material binding descriptor for `physics-sympy-execution-interpreter`; this does not execute the linked native resource.
+def execute_physics_sympy_interpret_material_binding(source: SympyPhysicsDerivationTraceExecutePhysicsSympyDerivationArtifact) -> Computed[SympyPhysicsDerivationTraceExecutePhysicsSympyInterpretArtifact]:
+    artifact = SympyPhysicsDerivationTraceExecutePhysicsSympyInterpretArtifact(
+        subject = "typed material binding for execute_physics_sympy_interpret",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation execute_physics_sympy_interpret",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: execute_physics_sympy_interpret")
+
+# Material binding descriptor for `physics-unit-analysis-verifier`; this does not execute the linked native resource.
+def physics_units_verify_material_binding(source: SympyPhysicsDerivationTraceExecutePhysicsSympyInterpretArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsUnitsVerifyArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsUnitsVerifyArtifact(
+        subject = "typed material binding for physics_units_verify",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_units_verify")
+
+# Material binding descriptor for `physics-derivation-step-verifier`; this does not execute the linked native resource.
+def physics_steps_verify_material_binding(source: SympyPhysicsDerivationTracePhysicsUnitsVerifyArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsStepsVerifyArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsStepsVerifyArtifact(
+        subject = "typed material binding for physics_steps_verify",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_steps_verify")
+
+# Material binding descriptor for `physics-numeric-sanity-sampler`; this does not execute the linked native resource.
+def physics_numeric_sample_material_binding(source: SympyPhysicsDerivationTracePhysicsStepsVerifyArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsNumericSampleArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsNumericSampleArtifact(
+        subject = "typed material binding for physics_numeric_sample",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_numeric_sample",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_numeric_sample")
+
+# Epistemic occurrence owned by `physics-sympy-equational-semantics-critic`; output assurance remains Generated.
+agent critique_physics_sympy_semantics_agent(
+    task: SympyPhysicsDerivationTracePhysicsNumericSampleArtifact,
+) -> Result[Generated[SympyPhysicsDerivationTraceCritiquePhysicsSympySemanticsArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyPhysicsDerivationTracePhysicsNumericSampleArtifact] = [critique_physics_sympy_semantics_skill_binding]
+
+def critique_physics_sympy_semantics_relation_builder(
+    source: SympyPhysicsDerivationTracePhysicsNumericSampleArtifact,
+    target: Generated[SympyPhysicsDerivationTraceCritiquePhysicsSympySemanticsArtifact],
+) -> TestsCritiquePhysicsSympySemanticsCertificate:
+    return TestsCritiquePhysicsSympySemanticsCertificate(source = source, target = target)
+
+# Material binding descriptor for `physics-sympy-dimension-projection-critic`; this does not execute the linked native resource.
+def critique_physics_sympy_dimensions_material_binding(source: SympyPhysicsDerivationTraceCritiquePhysicsSympySemanticsArtifact) -> Computed[SympyPhysicsDerivationTraceCritiquePhysicsSympyDimensionsArtifact]:
+    artifact = SympyPhysicsDerivationTraceCritiquePhysicsSympyDimensionsArtifact(
+        subject = "typed material binding for critique_physics_sympy_dimensions",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: critique_physics_sympy_dimensions")
+
+# Material binding descriptor for `physics-sympy-final-equation-reviewer`; this does not execute the linked native resource.
+def review_physics_sympy_final_equations_material_binding(source: SympyPhysicsDerivationTraceCritiquePhysicsSympyDimensionsArtifact) -> Computed[SympyPhysicsDerivationTraceReviewPhysicsSympyFinalEquationsArtifact]:
+    artifact = SympyPhysicsDerivationTraceReviewPhysicsSympyFinalEquationsArtifact(
+        subject = "typed material binding for review_physics_sympy_final_equations",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: review_physics_sympy_final_equations")
+
+# Material binding descriptor for `mathematical-sympy-final-equation-reviewer`; this does not execute the linked native resource.
+def review_mathematical_sympy_final_equations_material_binding(source: SympyPhysicsDerivationTraceReviewPhysicsSympyFinalEquationsArtifact) -> Computed[SympyPhysicsDerivationTraceReviewMathematicalSympyFinalEquationsArtifact]:
+    artifact = SympyPhysicsDerivationTraceReviewMathematicalSympyFinalEquationsArtifact(
+        subject = "typed material binding for review_mathematical_sympy_final_equations",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: review_mathematical_sympy_final_equations")
+
+# Epistemic occurrence owned by `physics-sympy-review-refinement-router`; output assurance remains Generated.
+agent physics_sympy_design_guard_review_agent(
+    task: SympyPhysicsDerivationTraceReviewMathematicalSympyFinalEquationsArtifact,
+) -> Result[Generated[SympyPhysicsDerivationTracePhysicsSympyDesignGuardReviewArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyPhysicsDerivationTraceReviewMathematicalSympyFinalEquationsArtifact] = [physics_sympy_design_guard_review_skill_binding]
+
+def physics_sympy_design_guard_review_relation_builder(
+    source: SympyPhysicsDerivationTraceReviewMathematicalSympyFinalEquationsArtifact,
+    target: Generated[SympyPhysicsDerivationTracePhysicsSympyDesignGuardReviewArtifact],
+) -> TestsPhysicsSympyDesignGuardReviewCertificate:
+    return TestsPhysicsSympyDesignGuardReviewCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `physics-sympy-review-refinement-router`; output assurance remains Generated.
+agent refine_physics_sympy_review_agent(
+    task: SympyPhysicsDerivationTracePhysicsSympyDesignGuardReviewArtifact,
+) -> Result[Generated[SympyPhysicsDerivationTraceRefinePhysicsSympyReviewArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyPhysicsDerivationTracePhysicsSympyDesignGuardReviewArtifact] = [refine_physics_sympy_review_skill_binding]
+
+def refine_physics_sympy_review_relation_builder(
+    source: SympyPhysicsDerivationTracePhysicsSympyDesignGuardReviewArtifact,
+    target: Generated[SympyPhysicsDerivationTraceRefinePhysicsSympyReviewArtifact],
+) -> TestsRefinePhysicsSympyReviewCertificate:
+    return TestsRefinePhysicsSympyReviewCertificate(source = source, target = target)
+
+# Material binding descriptor for `physics-sympy-repair-expansion-cartographer`; this does not execute the linked native resource.
+def physics_sympy_repair_expansion_map_material_binding(source: SympyPhysicsDerivationTraceRefinePhysicsSympyReviewArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsSympyRepairExpansionMapArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsSympyRepairExpansionMapArtifact(
+        subject = "typed material binding for physics_sympy_repair_expansion_map",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_sympy_repair_expansion_map")
+
+# Material binding descriptor for `physics-sympy-recursive-repair-loop-controller`; this does not execute the linked native resource.
+def physics_sympy_recursive_repair_control_material_binding(source: SympyPhysicsDerivationTracePhysicsSympyRepairExpansionMapArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsSympyRecursiveRepairControlArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsSympyRecursiveRepairControlArtifact(
+        subject = "typed material binding for physics_sympy_recursive_repair_control",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_sympy_recursive_repair_control")
+
+# Material binding descriptor for `physics-sympy-goal-sample-autoformalizer`; this does not execute the linked native resource.
+def physics_sympy_grounded_sample_thoroughness_material_binding(source: SympyPhysicsDerivationTracePhysicsSympyRecursiveRepairControlArtifact) -> Computed[SympyPhysicsDerivationTracePhysicsSympyGroundedSampleThoroughnessArtifact]:
+    artifact = SympyPhysicsDerivationTracePhysicsSympyGroundedSampleThoroughnessArtifact(
+        subject = "typed material binding for physics_sympy_grounded_sample_thoroughness",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_sympy_grounded_sample_thoroughness")
+
+# Material binding descriptor for `physics-derivation-consistency-report-orchestrator`; this does not execute the linked native resource.
+def consistency_physics_derivation_report_material_binding(source: SympyPhysicsDerivationTracePhysicsSympyGroundedSampleThoroughnessArtifact) -> Computed[PhysicsSympyConsistencyAssessment]:
+    artifact = PhysicsSympyConsistencyAssessment(
+        subject = "typed material binding for consistency_physics_derivation_report",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_physics_derivation_report")
+
+# executable physics derivation autoformalization over SymPy using anchored source extraction, informal expansion, quantity binding, equation surfaces, contextual assumptions, dimensional and unit modeling, implicit gap closure, physical law grounding, artifact execution, execution interpretation, equational semantics critics, final equation reviewers, localized monotonic refinement, numeric sanity sampling, and reference-free consistency metrics.
+workflow SympyPhysicsDerivationTraceLoop(
+    workflow_source: PhysicsSympyDerivationRequest,
+) -> Computed[PhysicsSympyConsistencyAssessment]
+    fails ModelFailure
+    ! {AI.Generate, Context.Disclose}:
+    sequence:
+        [physics_sympy_goal_sample_plan: physics_sympy_goal_sample_plan_material_binding(workflow_source)]
+        [physics_sympy_source_only_run: physics_sympy_source_only_run_material_binding(physics_sympy_goal_sample_plan.value)]
+        [physics_dependencies_probe: physics_dependencies_probe_material_binding(physics_sympy_source_only_run.value)]
+        [physics_source_extract: physics_source_extract_material_binding(physics_dependencies_probe.value)]
+        [physics_informal_elicit: physics_informal_elicit_material_binding(physics_source_extract.value)]
+        [physics_informal_expand: physics_informal_expand_material_binding(physics_informal_elicit.value)]
+        [physics_informal_review: physics_informal_review_material_binding(physics_informal_expand.value)]
+        [physics_symbols_build: physics_symbols_build_material_binding(physics_informal_review.value)]
+        [physics_dimensions_model: physics_dimensions_model_material_binding(physics_symbols_build.value)]
+        [physics_units_ground: physics_units_ground_material_binding(physics_dimensions_model.value)]
+        [physics_equations_parse: physics_equations_parse_material_binding(physics_units_ground.value)]
+        [physics_regimes_model: physics_regimes_model_material_binding(physics_equations_parse.value)]
+        [physics_frames_build: physics_frames_build_material_binding(physics_regimes_model.value)]
+        [physics_gaps_detect: physics_gaps_detect_material_binding(physics_frames_build.value)]
+        [physics_gaps_expand: physics_gaps_expand_material_binding(physics_gaps_detect.value)]
+        [physics_laws_ground: physics_laws_ground_material_binding(physics_gaps_expand.value)]
+        [physics_sympy_library_grounding_build: physics_sympy_library_grounding_build_material_binding(physics_laws_ground.value)]
+        [physics_sympy_workflow_plan: physics_sympy_workflow_plan_material_binding(physics_sympy_library_grounding_build.value)]
+        [physics_sympy_equation_surface_build: physics_sympy_equation_surface_build_material_binding(physics_sympy_workflow_plan.value)]
+        [physics_sympy_assumptions_encode: physics_sympy_assumptions_encode_material_binding(physics_sympy_equation_surface_build.value)]
+        [draft_physics_sympy_derivation: draft_physics_sympy_derivation_material_binding(physics_sympy_assumptions_encode.value)]
+        [execute_physics_sympy_derivation: execute_physics_sympy_derivation_material_binding(draft_physics_sympy_derivation.value)]
+        [execute_physics_sympy_interpret: execute_physics_sympy_interpret_material_binding(execute_physics_sympy_derivation.value)]
+        [physics_units_verify: physics_units_verify_material_binding(execute_physics_sympy_interpret.value)]
+        [physics_steps_verify: physics_steps_verify_material_binding(physics_units_verify.value)]
+        [physics_numeric_sample: physics_numeric_sample_material_binding(physics_steps_verify.value)]
+        [critique_physics_sympy_semantics: critique_physics_sympy_semantics_agent(physics_numeric_sample.value)]
+        [critique_physics_sympy_dimensions: critique_physics_sympy_dimensions_material_binding(critique_physics_sympy_semantics.value)]
+        [review_physics_sympy_final_equations: review_physics_sympy_final_equations_material_binding(critique_physics_sympy_dimensions.value)]
+        [review_mathematical_sympy_final_equations: review_mathematical_sympy_final_equations_material_binding(review_physics_sympy_final_equations.value)]
+        [physics_sympy_design_guard_review: physics_sympy_design_guard_review_agent(review_mathematical_sympy_final_equations.value)]
+        [refine_physics_sympy_review: refine_physics_sympy_review_agent(physics_sympy_design_guard_review.value)]
+        [physics_sympy_repair_expansion_map: physics_sympy_repair_expansion_map_material_binding(refine_physics_sympy_review.value)]
+        [physics_sympy_recursive_repair_control: physics_sympy_recursive_repair_control_material_binding(physics_sympy_repair_expansion_map.value)]
+        [physics_sympy_grounded_sample_thoroughness: physics_sympy_grounded_sample_thoroughness_material_binding(physics_sympy_recursive_repair_control.value)]
+        [consistency_physics_derivation_report: consistency_physics_derivation_report_material_binding(physics_sympy_grounded_sample_thoroughness.value)]
+    return consistency_physics_derivation_report

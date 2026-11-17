@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-FileContributor: Danilo Gusicuma <danilo.gusicuma@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+services:
+  mathformer-mcp:
+    build:
+      context: ../..
+      dockerfile: deploy/mcp/Dockerfile
+      args:
+        MATHFORMER_CONTAINER_ROOT: ${MATHFORMER_CONTAINER_ROOT:?Set the absolute container working directory}
+    command:
+      - python
+      - scripts/mathformer_mcp_service.py
+      - --config
+      - config/mathformer_mcp.local.toml
+    ports:
+      - "8765:8765"
+    volumes:
+      - ../../config/mathformer_mcp.local.toml:${MATHFORMER_CONTAINER_ROOT:?Set the absolute container working directory}/config/mathformer_mcp.local.toml:ro
+      - ../../artifacts:${MATHFORMER_CONTAINER_ROOT:?Set the absolute container working directory}/artifacts
+    restart: unless-stopped

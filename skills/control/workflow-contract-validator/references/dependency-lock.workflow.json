@@ -1,0 +1,541 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_environment_dependency_lock_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Check the uv lock once, evaluate six cases, print a result and return its exit code.",
+  "aliases": [
+    "environment:dependency-lock"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "UvResult": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "returncode": {
+            "type": "integer"
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "returncode",
+          "stdout",
+          "stderr"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "FileTexts": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "project_text": {
+            "type": "string"
+          },
+          "lock_text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_text",
+          "lock_text"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Payload": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "suite": {
+            "type": "string",
+            "const": "dependency_lock_contract"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "cases": {
+            "type": "object",
+            "properties": {
+              "pyproject_present": {
+                "type": "boolean"
+              },
+              "lock_present": {
+                "type": "boolean"
+              },
+              "lock_current": {
+                "type": "boolean"
+              },
+              "profiles_declared": {
+                "type": "boolean"
+              },
+              "reference_packages_locked": {
+                "type": "boolean"
+              },
+              "python_abi_range_locked": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "pyproject_present",
+              "lock_present",
+              "lock_current",
+              "profiles_declared",
+              "reference_packages_locked",
+              "python_abi_range_locked"
+            ],
+            "additionalProperties": false
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "const": [
+              "physics",
+              "mcp",
+              "documents",
+              "providers",
+              "knowledge-base"
+            ]
+          },
+          "uv_stdout": {
+            "type": "string"
+          },
+          "uv_stderr": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "suite",
+          "ok",
+          "cases",
+          "profiles",
+          "uv_stdout",
+          "uv_stderr"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "PrintedText": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          1
+        ]
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "repository_root": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "repository_root"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "json_output": {
+      "type": "Flag"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "payload": {
+      "type": "Payload",
+      "value": {
+        "ref": "flow.outputs.payload"
+      }
+    },
+    "stdout": {
+      "type": "PrintedText",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "check_uv": {
+      "inputs": {
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "UvResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dependency_lock_check_uv",
+          "operation": "mathformer_dependency_lock_check_uv"
+        }
+      }
+    },
+    "read_files": {
+      "inputs": {
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "texts": {
+          "type": "FileTexts"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dependency_lock_read_files",
+          "operation": "mathformer_dependency_lock_read_files"
+        }
+      }
+    },
+    "build_payload": {
+      "inputs": {
+        "uv": {
+          "type": "UvResult"
+        },
+        "texts": {
+          "type": "FileTexts"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "payload": {
+          "type": "Payload"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dependency_lock_build_payload",
+          "operation": "mathformer_dependency_lock_build_payload"
+        }
+      }
+    },
+    "print_and_return": {
+      "inputs": {
+        "payload": {
+          "type": "Payload"
+        },
+        "json_output": {
+          "type": "Flag"
+        }
+      },
+      "outputs": {
+        "stdout": {
+          "type": "PrintedText"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_dependency_lock_print_and_return",
+          "operation": "mathformer_dependency_lock_print_and_return"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "uv",
+        "kind": "call",
+        "operation": "check_uv",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "files",
+        "kind": "call",
+        "operation": "read_files",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "evaluate",
+        "kind": "call",
+        "operation": "build_payload",
+        "arguments": {
+          "uv": {
+            "ref": "steps.uv.outputs.result"
+          },
+          "texts": {
+            "ref": "steps.files.outputs.texts"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "emit",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "json",
+            "when": {
+              "ref": "inputs.json_output"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "print_and_return",
+              "arguments": {
+                "payload": {
+                  "ref": "steps.evaluate.outputs.payload"
+                },
+                "json_output": {
+                  "literal": true
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "print_and_return",
+          "arguments": {
+            "payload": {
+              "ref": "steps.evaluate.outputs.payload"
+            },
+            "json_output": {
+              "literal": false
+            }
+          }
+        },
+        "outputs": {
+          "stdout": {
+            "type": "PrintedText",
+            "value": {
+              "ref": "selected.outputs.stdout"
+            }
+          },
+          "exit_code": {
+            "type": "ExitCode",
+            "value": {
+              "ref": "selected.outputs.exit_code"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "payload": {
+        "type": "Payload",
+        "value": {
+          "ref": "steps.evaluate.outputs.payload"
+        }
+      },
+      "stdout": {
+        "type": "PrintedText",
+        "value": {
+          "ref": "steps.emit.outputs.stdout"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.emit.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 4
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked description only; no runtime qualification or scientific promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/environment/run_dependency_lock_contract.py",
+        "selector": "main",
+        "digest": "sha256:3a503fa055c76ccc76d418b2d20cd8ebda3f6c7846104df01130442a04bb3618"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/environment:dependency-lock; run_action; run_leaf_action; preflight; prepare_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/dependency_lock_tools.py",
+        "selector": "register_dependency_lock_tools",
+        "digest": "sha256:55c87fa1a985d1c19a621940da1aea308b58e9b2e81e1a20ca1857527ca88330"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_dependency_lock_tools(mcp)",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory/environment:dependency-lock",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_dependency_lock_workflow_tests.py",
+        "selector": "DependencyLockTests",
+        "digest": "sha256:7f67ec5112909c23f07cfc71a13ffeb8b55448950a4411d143f9577b4c971d20"
+      },
+      {
+        "path": "tests/mcp/fixtures/dependency_lock_original.py.txt",
+        "selector": "main",
+        "digest": "sha256:d53e43e930906ca45aa0fbd1d77a341d56685df9ec8fc5245037f2ed4f2c0602"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "mcp.dependency_lock.workflow",
+        "digest": "sha256:c89ea40eb814fb32f1e9adfd5d5042dd178c490af6ff9ada6e7ecea4fdddbdc9"
+      }
+    ],
+    "gaps": [
+      "Hub admission, snapshots and optional reports remain caller behavior, outside this main graph.",
+      "The required 3600-second policy ceiling is inherited normalization metadata, not a native timeout or equivalence claim.",
+      "uv external effects remain subject to host qualification; MCP and Lunar supply execution receipts, not scientific promotion."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "environment:dependency-lock",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md"
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered controller run_action calls run_leaf_action with --json; json_output is true through the hub.",
+      "preflight": "Missing required files/tools or extra arguments block; dry-run returns before main execution.",
+      "required_paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "tests/environment/run_dependency_lock_contract.py"
+      ],
+      "required_tools": [
+        "uv"
+      ],
+      "depends_on": [],
+      "safety": "read_only",
+      "writes": [],
+      "timeout_seconds": null,
+      "postflight": "Repository snapshots audit undeclared writes and can set hub ok=false despite script exit 0.",
+      "failures": "Uncaught subprocess/read errors terminate exceptionally; nonzero uv exit is a case failure, not an early stop.",
+      "scope": "Payload/stdout/exit_code describe main; the controller's HubResult is a distinct envelope.",
+      "stopping": "One uv invocation, bounded checks, print and immediate return; no retry, dependency loop or keep-going state."
+    }
+  }
+}

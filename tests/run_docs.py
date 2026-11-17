@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+#
+# Intent:
+#   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+#
+# Function:
+#   Contains executable tests, fixtures, and manifests used for local and CI validation.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Run documentation and Mathformer Library rendering tests."""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return subprocess.call(delegate_command(), cwd=REPO_ROOT)
+
+
+def delegate_command(argv=None) -> list[str]:
+    """Build the single native delegate invocation, shared with MCP parsing."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--fail-on-warning", action="store_true")
+    args = parser.parse_args(argv)
+    command = [
+        sys.executable,
+        "tests/test_program/run_comprehensive_tests.py",
+        "--module-family",
+        "docs",
+        "--module-family",
+        "mathformerlib",
+        "--write-jsonl",
+        "--write-junit",
+    ]
+    if args.json:
+        command.append("--json")
+    if args.fail_on_warning:
+        command.append("--fail-on-warning")
+    return command
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

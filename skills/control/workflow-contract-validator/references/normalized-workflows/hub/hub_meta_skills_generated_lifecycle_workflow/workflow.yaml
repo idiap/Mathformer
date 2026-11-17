@@ -1,0 +1,424 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_meta_skills_generated_lifecycle_workflow
+version: 1.0.0
+kind: workflow
+description: Validate every discovered lifecycle record once, accumulate findings,
+  and write the lifecycle validation report.
+aliases:
+- meta-skills:generated-lifecycle
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RecordBound:
+    schema:
+      type: integer
+      const: 10000
+      description: 'Environmental specialization: discovery yields at most this many
+        records; not a native CLI argument or truncation limit.'
+  LifecycleSchema:
+    schema:
+      type: object
+      required:
+      - required
+      - states
+      - required_artifacts_for_task_local_validation
+      - promotion_gate_required
+      properties:
+        required:
+          type: array
+          items:
+            type: string
+        states:
+          type: array
+          items:
+            type: string
+        required_artifacts_for_task_local_validation:
+          type: array
+          items:
+            type: string
+        promotion_gate_required:
+          type: array
+          items:
+            type: string
+  Flag:
+    schema:
+      type: boolean
+  Findings:
+    schema:
+      type: array
+      items:
+        type: object
+        required:
+        - severity
+        - code
+        - path
+        properties:
+          severity:
+            type: string
+          code:
+            type: string
+          path:
+            type: string
+  Traversal:
+    schema:
+      type: object
+      required:
+      - paths
+      - cursor
+      - results
+      - all_findings
+      properties:
+        paths:
+          type: array
+          maxItems: 10000
+          items:
+            type: string
+        cursor:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        results:
+          type: array
+          items:
+            type: object
+            required:
+            - path
+            - ok
+            - findings
+            properties:
+              path:
+                type: string
+              ok:
+                type: boolean
+              findings:
+                type: array
+                items:
+                  type: object
+        all_findings:
+          type: array
+          items:
+            type: object
+  Report:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - style
+      - ok
+      - record_count
+      - results
+      - findings
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: mathformer_meta_generated_skill_lifecycle_validation
+        ok:
+          type: boolean
+        record_count:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        results:
+          type: array
+          items:
+            type: object
+        findings:
+          type: array
+          items:
+            type: object
+    representation: value
+    media_type: application/json
+  Context:
+    schema:
+      type: object
+      required:
+      - repo_root
+      properties:
+        repo_root:
+          type: string
+          minLength: 1
+      additionalProperties: false
+inputs:
+  record_bound:
+    type: RecordBound
+  context:
+    type: Context
+outputs:
+  result:
+    type: Report
+    value:
+      ref: flow.outputs.result
+operations:
+  prepare:
+    inputs:
+      record_bound:
+        type: RecordBound
+      context:
+        type: Context
+    outputs:
+      schema:
+        type: LifecycleSchema
+      state:
+        type: Traversal
+      has_records:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generated_lifecycle_prepare
+        operation: mathformer_generated_lifecycle_prepare
+  validate_record:
+    inputs:
+      schema:
+        type: LifecycleSchema
+      state:
+        type: Traversal
+      context:
+        type: Context
+    outputs:
+      findings:
+        type: Findings
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generated_lifecycle_validate_record
+        operation: mathformer_generated_lifecycle_validate_record
+  accumulate:
+    inputs:
+      state:
+        type: Traversal
+      findings:
+        type: Findings
+      context:
+        type: Context
+    outputs:
+      state:
+        type: Traversal
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generated_lifecycle_accumulate
+        operation: mathformer_generated_lifecycle_accumulate
+  write_report:
+    inputs:
+      state:
+        type: Traversal
+      context:
+        type: Context
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generated_lifecycle_write_report
+        operation: mathformer_generated_lifecycle_write_report
+flow:
+  kind: sequence
+  steps:
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      record_bound:
+        ref: inputs.record_bound
+      context:
+        ref: inputs.context
+  - id: visit
+    kind: loop
+    state_type: Traversal
+    initial:
+      ref: steps.prepare.outputs.state
+    max_iterations: 10000
+    on_exhausted: fail
+    description: Visit sorted paths once. At exactly 10000 records the final body
+      returns done=true and exits normally; exhaustion is unreachable within the declared
+      input domain.
+    body:
+      kind: sequence
+      steps:
+      - id: validate
+        kind: call
+        operation: validate_record
+        arguments:
+          schema:
+            ref: steps.prepare.outputs.schema
+          state:
+            ref: loop.state
+          context:
+            ref: inputs.context
+      - id: accumulate
+        kind: call
+        operation: accumulate
+        arguments:
+          state:
+            ref: loop.state
+          findings:
+            ref: steps.validate.outputs.findings
+          context:
+            ref: inputs.context
+      outputs:
+        state:
+          type: Traversal
+          value:
+            ref: steps.accumulate.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: steps.accumulate.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: Traversal
+        value:
+          ref: body.outputs.state
+  - id: write
+    kind: call
+    operation: write_report
+    arguments:
+      state:
+        ref: steps.visit.outputs.state
+      context:
+        ref: inputs.context
+  outputs:
+    result:
+      type: Report
+      value:
+        ref: steps.write.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - meta_skills/schemas/generated_skill_lifecycle.schema.json
+      - meta_skills/registry/generated_skills/
+      write:
+      - artifacts/meta_skills/generated_skill_lifecycle_validation.json
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - validate_lifecycle_records
+    - write_validation_report
+    forbidden:
+    - promote_generated_skill
+    - transition_lifecycle_state
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 20002
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked validation description only; report success establishes
+    neither promotion nor scientific truth.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: meta_skills/scripts/validate_generated_skill_lifecycle.py
+    selector: run
+    digest: sha256:fb2fbf0882932a78ae52e27b24aecb77f72209e0dc6f9749d05eaad1ed2a0fce
+  - path: meta_skills/scripts/validate_generated_skill_lifecycle.py
+    selector: validate_lifecycle; main
+    digest: sha256:fb2fbf0882932a78ae52e27b24aecb77f72209e0dc6f9749d05eaad1ed2a0fce
+  - path: scripts/mathformer.py
+    selector: build_registry/action:meta-skills:generated-lifecycle; prepare_leaf_boundary;
+      launch_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/meta_skills/run_meta_skill_suite.py
+    selector: COMMANDS; subprocess.run(timeout=180)
+    digest: sha256:06c35f2abb57248a44871776621cfe6612c81e24ad802517780d88a29a8e9fab
+  - path: scripts/generated_lifecycle_tools.py
+    digest: sha256:d894b14ef50122328904cb849d2a58e74c464a1db58d6b01a1c8d806921fd501
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_generated_lifecycle_workflow_tests.py
+    digest: sha256:d52f473df80465772dff21cbda787e982b4fcc7ee1d8ab79210d69fc3bd4afac
+  - path: tests/test_matrix.json
+    digest: sha256:e867f8c7339af839f05b1731f9ccaa6a766576df13690be2e67508606c96e9ef
+  gaps:
+  - The adapter rejects discovery above 10000 records without truncation; native run()
+    remains unbounded.
+  - Lunar enforces descriptor budgets; the native action has no timeout and the independent
+    suite uses 180 seconds.
+  - CLI formatting and hub preflight/dry-run/write audits remain outside the selected
+    run() graph. Lunar supplies runtime receipts.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: meta-skills:generated-lifecycle
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: meta-skills:generated-lifecycle
+      family: meta_skills
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - meta_skills/scripts/validate_generated_skill_lifecycle.py
+      - --json
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: null
+      writes:
+      - artifacts/meta_skills/generated_skill_lifecycle_validation.json
+  mathformer.native_boundary:
+    execution: run() and registered MCP block tools share native prepare, validate_record,
+      accumulate, write_report implementations; root context relocates the native
+      repository layout.
+    failure_policy: 'Unhandled file, JSON and type exceptions abort immediately; no
+      guaranteed report then. Validation findings are data: run returns a report with
+      ok=false after visiting all records.'
+    cli: main prints JSON with --json, otherwise PASS/FAIL; exits 0 iff payload.ok
+      else 1.
+    hub: Preflight failure or dry-run can stop before launch; writes audited afterward.
+      Hub controls are outside selected run() graph.
+    timeout: Native action timeout_seconds=null; test-suite direct invocation uses
+      180 seconds.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: Selected run() control flow only; no retry, convergence, lifecycle transition,
+      promotion, or checkpoint operation.
+    empty_traversal: On empty discovery the block adapters return empty findings and
+      unchanged state with done=true; no native validate_lifecycle call occurs. Root
+      loop placement supports Lunar exhaustion handling.
+# REUSE-IgnoreEnd

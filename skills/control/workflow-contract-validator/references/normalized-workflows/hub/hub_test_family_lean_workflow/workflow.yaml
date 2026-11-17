@@ -1,0 +1,503 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_test_family_lean_workflow
+version: 1.0.0
+kind: workflow
+description: Lean matrix traversal and report publication under the native hub boundary.
+aliases:
+- test:family:lean
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Args:
+    schema:
+      type: object
+      required:
+      - module_family
+      - profile
+      - emit_dependency_map_only
+      - fail_on_warning
+      - changed_files_only
+      - validate_matrix
+      - json
+      properties:
+        module_family:
+          const:
+          - lean
+        profile:
+          const: workstation
+        emit_dependency_map_only:
+          type: boolean
+          const: false
+        fail_on_warning:
+          const: false
+        changed_files_only:
+          const: false
+        validate_matrix:
+          const: false
+        json:
+          const: true
+      description: Parsed fixed hub invocation; other fields retain parse_args defaults.
+      additionalProperties: false
+  Domain:
+    schema:
+      type: object
+      required:
+      - max_selected_rows
+      properties:
+        max_selected_rows:
+          type: integer
+          const: 4096
+      additionalProperties: false
+      description: Input precondition that canonical Lean selection has at most 4096
+        rows.
+  State:
+    schema:
+      type: object
+      required:
+      - matrix
+      - selected
+      - families
+      - index
+      - results
+      properties:
+        matrix:
+          type: array
+          items:
+            type: object
+        selected:
+          type: array
+          maxItems: 4096
+          items:
+            type: object
+        families:
+          type: array
+          items:
+            type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 4096
+        results:
+          type: array
+          maxItems: 4096
+          items:
+            type: object
+      additionalProperties: false
+  Bool:
+    schema:
+      type: boolean
+  Report:
+    schema:
+      type: object
+      required:
+      - ok
+      - run_id
+      - families
+      - summary
+      - results
+      - schema_errors
+      - matrix_errors
+      properties:
+        ok:
+          type: boolean
+        run_id:
+          type: string
+        families:
+          type: array
+          items:
+            type: string
+        summary:
+          type: object
+        results:
+          type: array
+          items:
+            type: object
+        schema_errors:
+          type: array
+        matrix_errors:
+          type: array
+  Exit:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+  Context:
+    schema:
+      type: object
+      required:
+      - handle
+      properties:
+        handle:
+          type: string
+      additionalProperties: false
+inputs:
+  args:
+    type: Args
+  domain:
+    type: Domain
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+  exit_code:
+    type: Exit
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  enter:
+    inputs:
+      args:
+        type: Args
+    outputs:
+      snapshot_only:
+        type: Bool
+      context:
+        type: Context
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_lean_family_enter
+        operation: mathformer_lean_family_enter
+  snapshot:
+    inputs:
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_lean_family_snapshot
+        operation: mathformer_lean_family_snapshot
+  prepare:
+    inputs:
+      args:
+        type: Args
+      domain:
+        type: Domain
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_lean_family_prepare
+        operation: mathformer_lean_family_prepare
+  advance:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_lean_family_advance
+        operation: mathformer_lean_family_advance
+  finalize:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_lean_family_finalize
+        operation: mathformer_lean_family_finalize
+  publish:
+    inputs:
+      report:
+        type: Report
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      exit_code:
+        type: Exit
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_lean_family_publish
+        operation: mathformer_lean_family_publish
+  retain_empty:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_lean_family_retain_empty
+        operation: mathformer_lean_family_retain_empty
+flow:
+  kind: sequence
+  steps:
+  - id: enter
+    kind: call
+    operation: enter
+    arguments:
+      args:
+        ref: inputs.args
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      domain:
+        ref: inputs.domain
+      args:
+        ref: inputs.args
+      context:
+        ref: steps.enter.outputs.context
+  - id: checks
+    kind: loop
+    state_type: State
+    initial:
+      ref: steps.prepare.outputs.state
+    max_iterations: 4096
+    on_exhausted: fail
+    body:
+      kind: switch
+      cases:
+      - id: empty
+        when:
+          ref: steps.prepare.outputs.done
+        body:
+          id: retain
+          kind: call
+          operation: retain_empty
+          arguments:
+            state:
+              ref: loop.state
+            args:
+              ref: inputs.args
+            context:
+              ref: steps.enter.outputs.context
+      default:
+        id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          args:
+            ref: inputs.args
+          context:
+            ref: steps.enter.outputs.context
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: State
+        value:
+          ref: body.outputs.state
+  - id: finalize
+    kind: call
+    operation: finalize
+    arguments:
+      state:
+        ref: steps.checks.outputs.state
+      args:
+        ref: inputs.args
+      context:
+        ref: steps.enter.outputs.context
+  - id: publish
+    kind: call
+    operation: publish
+    arguments:
+      report:
+        ref: steps.finalize.outputs.report
+      args:
+        ref: inputs.args
+      context:
+        ref: steps.enter.outputs.context
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finalize.outputs.report
+    exit_code:
+      type: Exit
+      value:
+        ref: steps.publish.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 4100
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked description only; no scientific result or runtime qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: run; enter_checks; snapshot_report; prepare_checks; advance_check; run_check;
+      finalize_checks; publish_report; parse_args; main
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: scripts/mathformer.py
+    selector: build_registry; run_action; run_leaf_action; preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/comprehensive_strict_tools.py
+    selector: source_runner
+    digest: sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd
+  - path: scripts/lean_family_workflow_tools.py
+    selector: register_lean_family_tools
+    digest: sha256:0c1fbdc566f3c875c83caa5765771f96b8d5801ec36b268a697bba42e93ca17b
+  - path: tests/mcp/run_lean_family_workflow_tests.py
+    selector: LeanFamilyTests
+    digest: sha256:81749799f12ddaf20115e188cdf68107145cb94db038238c1e4eeb26d3ac965b
+  - path: tests/mcp/fixtures/lean_family_original.py.txt
+    selector: run; main
+    digest: sha256:6641f0bc33958a7e6784c7bcea6931506cb23c322bcd070b9f7e4b7c4ece6f4e
+  - path: tests/mcp/fixtures/comprehensive_workflow_boundary.py
+    selector: install; serve
+    digest: sha256:b21352e7b0f9e6e7439d058573e75457f0485f5fd9b65d9002b6801b7cea33d7
+  - path: tests/mcp/fixtures/comprehensive_strict_boundary.py
+    selector: install
+    digest: sha256:7ef72487cc2ff1b63f167a1d1c5ccbfec5b5dc3bc300c597253f14b066591bd3
+  - path: scripts/mcp_server.py
+    selector: register_lean_family_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: hub_descriptors
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Specialization requires at most 4096 selected Lean rows. The adapter rejects larger
+    selections before traversal; exactly 4096 completes normally.
+  - Fixed hub arguments exclude snapshot-only mode, retained in the source and registered
+    snapshot interface. The executable graph specializes this unreachable branch and
+    uses a verified empty-state pass-through so the top-level Lunar loop performs
+    zero native checks for empty selection. Strict and optional publication paths
+    remain source-owned.
+  - Hub preflight, dry-run and outer repository write auditing remain the invoking
+    native hub boundary; these step tools authorize writes and retain owned state.
+  - The 3600s and operation-call limits remain normalization metadata; native hub
+    subprocess timeout is 900s. Runtime receipts do not imply scientific acceptance.
+  - External effects remain subject to native dependency and compiler capabilities;
+    deterministic fixtures qualify orchestration only.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: test:family:lean
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: test:family:lean
+      family: lean
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/test_program/run_comprehensive_tests.py
+      - --module-family
+      - lean
+      - --json
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: 900
+      writes:
+      - artifacts/
+  mathformer.native_boundary:
+    execution: main -> parse_args -> run -> publish_report; invoked only after native
+      hub preflight. Dry-run does not run the runner.
+    failure_policy: Preserve failed preflight, subprocess exit and write-audit status;
+      never convert to acceptance.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+# REUSE-IgnoreEnd

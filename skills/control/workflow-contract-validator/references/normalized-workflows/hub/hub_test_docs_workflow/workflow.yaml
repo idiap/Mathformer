@@ -1,0 +1,525 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_test_docs_workflow
+version: 1.0.0
+kind: workflow
+description: Source projection of run_docs.main and its single delegated documentation/library
+  test run.
+aliases:
+- test:docs
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type: array
+      items:
+        enum:
+        - --json
+        - --fail-on-warning
+      description: Wrapper CLI flags; hub test:docs supplies only --json.
+  Matrix:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - tests
+      properties:
+        schema_version:
+          const: 2
+        tests:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items:
+            type: object
+      description: Read-only snapshot of tests/test_matrix.json used by load_matrix;
+        capped specialization, not an override.
+  Args:
+    schema:
+      type: object
+      required:
+      - json
+      - fail_on_warning
+      - module_family
+      - profile
+      - write_jsonl
+      - write_junit
+      - handle
+      - run_id
+      - output_file
+      - changed_files_only
+      - validate_matrix
+      - emit_dependency_map_only
+      properties:
+        json:
+          type: boolean
+        fail_on_warning:
+          type: boolean
+        module_family:
+          const:
+          - docs
+          - mathformerlib
+        profile:
+          const: workstation
+        write_jsonl:
+          type: string
+        write_junit:
+          type: string
+        handle:
+          type: string
+        run_id:
+          type: string
+        output_file:
+          type: string
+        changed_files_only:
+          const: false
+        validate_matrix:
+          const: false
+        emit_dependency_map_only:
+          const: false
+      description: Native parse-time defaults and flags, with an opaque owned execution
+        handle. No caller-selected output paths.
+  State:
+    schema:
+      type: object
+      required:
+      - matrix
+      - selected
+      - families
+      - index
+      - results
+      properties:
+        matrix:
+          type: array
+          items:
+            type: object
+        selected:
+          type: array
+          maxItems: 10000
+          items:
+            type: object
+        families:
+          type: array
+          items:
+            type: string
+        index:
+          type: integer
+          minimum: 0
+        results:
+          type: array
+          items:
+            type: object
+  Bool:
+    schema:
+      type: boolean
+  Report:
+    schema:
+      type: object
+      required:
+      - ok
+      - results
+      - summary
+      - schema_errors
+      - matrix_errors
+      - capability_ledger
+      - dependency_map
+      properties:
+        ok:
+          type: boolean
+        results:
+          type: array
+          items:
+            type: object
+        summary:
+          type: object
+        schema_errors:
+          type: array
+        matrix_errors:
+          type: array
+        capability_ledger:
+          type: object
+        dependency_map:
+          type: string
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+inputs:
+  argv:
+    type: Argv
+  matrix:
+    type: Matrix
+outputs:
+  report:
+    type: Report
+    value:
+      ref: steps.finalize.outputs.report
+  exit_code:
+    type: ExitCode
+    value:
+      ref: steps.publish.outputs.exit_code
+operations:
+  parse:
+    inputs:
+      argv:
+        type: Argv
+    outputs:
+      args:
+        type: Args
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_parse
+        operation: mathformer_docs_parse
+  prepare:
+    inputs:
+      args:
+        type: Args
+      matrix:
+        type: Matrix
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_prepare
+        operation: mathformer_docs_prepare
+  guard:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+    outputs:
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_guard
+        operation: mathformer_docs_guard
+  advance:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_advance
+        operation: mathformer_docs_advance
+  finalize:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_finalize
+        operation: mathformer_docs_finalize
+  publish:
+    inputs:
+      report:
+        type: Report
+      args:
+        type: Args
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_publish
+        operation: mathformer_docs_publish
+  retain_empty:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_retain_empty
+        operation: mathformer_docs_retain_empty
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse
+    arguments:
+      argv:
+        ref: inputs.argv
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      args:
+        ref: steps.parse.outputs.args
+      matrix:
+        ref: inputs.matrix
+  - id: guard
+    kind: call
+    operation: guard
+    arguments:
+      state:
+        ref: steps.prepare.outputs.state
+      args:
+        ref: steps.parse.outputs.args
+  - kind: loop
+    state_type: State
+    initial:
+      ref: steps.prepare.outputs.state
+    max_iterations: 10000
+    on_exhausted: fail
+    body:
+      kind: switch
+      cases:
+      - id: empty
+        when:
+          ref: steps.guard.outputs.done
+        body:
+          kind: call
+          operation: retain_empty
+          arguments:
+            state:
+              ref: loop.state
+            args:
+              ref: steps.parse.outputs.args
+      default:
+        kind: sequence
+        steps:
+        - id: advance
+          kind: call
+          operation: advance
+          arguments:
+            state:
+              ref: loop.state
+            args:
+              ref: steps.parse.outputs.args
+        - id: guard_next
+          kind: call
+          operation: guard
+          arguments:
+            state:
+              ref: steps.advance.outputs.state
+            args:
+              ref: steps.parse.outputs.args
+        outputs:
+          state:
+            type: State
+            value:
+              ref: steps.advance.outputs.state
+          done:
+            type: Bool
+            value:
+              ref: steps.guard_next.outputs.done
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: State
+        value:
+          ref: loop.state
+    id: traverse
+    description: Each selected row advances once. Empty selection retains unchanged
+      state once without executing a check. Exact-bound completion succeeds; exhaustion
+      fails before finalization.
+  - id: finalize
+    kind: call
+    operation: finalize
+    arguments:
+      state:
+        ref: steps.traverse.outputs.state
+      args:
+        ref: steps.parse.outputs.args
+  - id: publish
+    kind: call
+    operation: publish
+    arguments:
+      report:
+        ref: steps.finalize.outputs.report
+      args:
+        ref: steps.parse.outputs.args
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finalize.outputs.report
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.publish.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 20005
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked description only; no runtime qualification, scientific
+    truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/run_docs.py
+    selector: main
+    digest: sha256:a85b099ee3a780272d1618827304a0fbb0dbe77c9e623e90209d7a0b9a78a716
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: parse_args; run; prepare_checks; advance_check; run_check; finalize_checks;
+      publish_report
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: scripts/mathformer.py
+    selector: build_registry/action:test:docs; run_action; run_leaf_action; preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/docs_workflow_tools.py
+    digest: sha256:e7a533a88b85ade0daaae7c74a79eeefe55543fbd374df6e0004983f18632949
+  - path: scripts/comprehensive_strict_tools.py
+    digest: sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  gaps:
+  - The graph projects the single wrapper delegate invocation through shared native
+    helpers; it does not launch the wrapper and repeat its work. Parsed arguments
+    and cursor/report histories are owned by the MCP session.
+  - Matrix input must equal the canonical tests/test_matrix.json snapshot read by
+    load_matrix. At most 10000 rows are accepted; larger native matrices are outside
+    this specialization.
+  - At 10000 selected checks the final advance exits normally. Exhaustion is defensive
+    and unreachable for valid source state within this domain.
+  - 3600s and operation-call budgets are enforced by Lunar, not native overall deadlines.
+    Native per-check timeouts and unexpected exceptions remain unchanged; there is
+    no retry.
+  - Hub preflight/dry-run and post-execution write auditing remain external controller
+    behavior. Native reports establish neither scientific truth nor promotion. MCP
+    publication redirects native CLI stdout to stderr to preserve JSON-RPC.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: test:docs
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: test:docs
+      summary: Validate documentation links and expected documentation surfaces.
+      family: docs
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/run_docs.py
+      - --json
+      depends_on: []
+      required_paths:
+      - tests/run_docs.py
+      required_tools: []
+      optional_tools: []
+      writes:
+      - artifacts/
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: Registered mathformer_docs_* MCP tools call shared wrapper argument
+      construction and native comprehensive runner functions, under service write
+      policy and path checks.
+    effects_status: partial_native_declarations
+    failure_policy: Hub can prevent launch on preflight/dry-run and mark execution
+      failed on undeclared writes; preserve native failed status.
+    qualification_capability_names_are_not_runtime_grants: true
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    callers:
+    - docs.validate
+    - quality:smoke
+    - review:autoformalization-framework
+    modeling: Wrapper command is a single subprocess, no retry. Delegate helper internals
+      stay in owning operations.
+# REUSE-IgnoreEnd

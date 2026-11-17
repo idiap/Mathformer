@@ -1,0 +1,440 @@
+{
+  "version": 2,
+  "description": "Codex-exec probes for Mathformer generative and hybrid skill families.",
+  "default_oracle": {
+    "required_substrings": ["skill", "verdict", "evidence", "regression"],
+    "forbidden_substrings": ["I cannot", "can't help", "not enough information"]
+  },
+  "probes": [
+    {
+      "id": "generative-coordinator-controlled-composition",
+      "skill": "mathformer-generative-workflow-coordinator",
+      "family": "orchestration",
+      "prompt": "Read skills/control/mathformer-generative-workflow-coordinator/SKILL.md and skills/control/mathformer-workflow-router/SKILL.md. Do not edit files. A user asks: `Set up Mathformer, formalize a paper theory in Lean, and publish the result.` The user has authorized local setup and formalization but has not authorized publication. Return compact JSON with keys skill, verdict, evidence, regression. The evidence must decompose the goal, resolve named workflows through the deterministic router, preserve ordering, and block publication pending explicit authorization.",
+      "oracle": {
+        "required_substrings": ["mathformer-generative-workflow-coordinator", "router", "publication", "authorization", "regression"],
+        "required_any_substrings": [["decompose", "setup"], ["block", "pending"]],
+        "forbidden_substrings": ["publish immediately", "invent action"]
+      }
+    },
+    {
+      "id": "agentc-specialized-routing",
+      "skill": "autoformalization-agentc",
+      "family": "compatibility_wrapper",
+      "prompt": "Read skills/autoformalization/autoformalization-agentc/SKILL.md. Do not edit files. A user asks the legacy AgentC wrapper to change the Lean semantic-preservation prompt. Return compact JSON with keys skill, verdict, evidence, regression. The verdict should route canonical prompt edits to the specialized owner while preserving AgentC compatibility.",
+      "oracle": {
+        "required_substrings": ["autoformalization-agentc", "specialized", "compatibility", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "workflow-hook-order-before-drafting",
+      "skill": "autoformalization-workflow-orchestrator",
+      "family": "orchestration",
+      "prompt": "Read skills/autoformalization/autoformalization-workflow-orchestrator/SKILL.md and skills/SKILL_HOOKS.yaml. Do not edit files. For an end-to-end run with LaTeX expansion, review, mathlib mapping, initial drafting, Lean execution, and refinement, return compact JSON with keys skill, verdict, evidence, regression. The evidence must state that expansion review and mathlib alignment happen before drafting, and Lean execution happens after initial output.",
+      "oracle": {
+        "required_substrings": ["autoformalization-workflow-orchestrator", "review", "mathlib", "draft", "regression"],
+        "required_any_substrings": [["execute.initial", "Lean execution", "execution"]],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "result-existence-precheck-blocks-duplicate",
+      "skill": "result-existence-precheck-orchestrator",
+      "family": "orchestration",
+      "prompt": "Read skills/autoformalization/result-existence-precheck-orchestrator/SKILL.md and skills/mathlib/mathlib-result-existence-checker/SKILL.md. Do not edit files. A target theorem has an exact MathformerLib candidate `MathformerLib.true_intro`, and official mathlib web confirmation has not yet ruled out duplicates. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must block initial drafting, route to reuse or candidate verification, and mention that web search over official mathlib sources is required before claiming absence.",
+      "oracle": {
+        "required_substrings": ["result-existence-precheck-orchestrator", "block", "MathformerLib.true_intro", "web", "regression"],
+        "required_any_substrings": [["reuse", "verify"]],
+        "forbidden_substrings": ["proceed directly"]
+      }
+    },
+    {
+      "id": "latex-binding-dangling-variable",
+      "skill": "latex-expansion-binding-reviewer",
+      "family": "latex_review",
+      "prompt": "Read skills/latex-textbook/latex-expansion-binding-reviewer/SKILL.md. Do not edit files. Evaluate this expansion: `Theorem: For every x in A, y > x. Proof: Let x in A. Since y is positive, y > x.` Return compact JSON with keys skill, verdict, evidence, regression. The verdict must be fail if any binder or domain is missing.",
+      "oracle": {
+        "required_substrings": ["latex-expansion-binding-reviewer", "fail", "y", "binder", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "latex-completeness-missing-compactness",
+      "skill": "latex-expansion-completeness-reviewer",
+      "family": "latex_review",
+      "prompt": "Read skills/latex-textbook/latex-expansion-completeness-reviewer/SKILL.md. Do not edit files. Source theorem assumes a compact topological space. Expanded theorem omits compactness but keeps the same conclusion. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail because a prerequisite assumption was dropped.",
+      "oracle": {
+        "required_substrings": ["latex-expansion-completeness-reviewer", "fail", "compact", "assumption", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "latex-review-suite-blocking-failure",
+      "skill": "latex-expansion-review-orchestrator",
+      "family": "latex_review",
+      "prompt": "Read skills/latex-textbook/latex-expansion-review-orchestrator/SKILL.md. Do not edit files. Completeness review passes, but binding review reports a dangling variable. Return compact JSON with keys skill, verdict, evidence, regression. The suite verdict must fail because one blocking reviewer failed.",
+      "oracle": {
+        "required_substrings": ["latex-expansion-review-orchestrator", "fail", "binding", "regression"],
+        "required_any_substrings": [["gate", "suite passes", "blocking"]],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "latex-expander-preserve-conclusion",
+      "skill": "latex-prerequisite-expander",
+      "family": "latex_expansion",
+      "prompt": "Read skills/latex-textbook/latex-prerequisite-expander/SKILL.md. Do not edit files. A theorem says every finite group has a left identity. A proposed expansion silently changes the conclusion to a two-sided identity. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail because prerequisite expansion may add definitions and assumptions but must preserve the target conclusion.",
+      "oracle": {
+        "required_substrings": ["latex-prerequisite-expander", "fail", "conclusion", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "lean-drafter-no-sorry",
+      "skill": "lean-autoformalization-drafter",
+      "family": "lean_generation",
+      "prompt": "Read skills/lean/lean-autoformalization-drafter/SKILL.md. Do not edit files. For the theorem `P -> Q` implies `not Q -> not P`, return compact JSON with keys skill, verdict, evidence, regression describing the expected Lean drafting constraints. Mention that generated Lean must avoid sorry/placeholders, preserve the source statement, and include an `NL/LaTeX:` comment on every generated Lean line.",
+      "oracle": {
+        "required_substrings": ["lean-autoformalization-drafter", "sorry", "source", "NL/LaTeX", "regression"],
+        "forbidden_substrings": ["placeholder is acceptable"]
+      }
+    },
+    {
+      "id": "lean-soft-critique-binary-judgement",
+      "skill": "lean-critique-and-judging",
+      "family": "lean_critique",
+      "prompt": "Read skills/lean/lean-critique-and-judging/SKILL.md. Do not edit files. Informal theorem assumes a group, but the Lean statement quantifies over an arbitrary type with an unconstrained operation. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail and include a binary judgement plus explanation.",
+      "oracle": {
+        "required_substrings": ["lean-critique-and-judging", "fail", "judgement", "explanation", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "lean-critique-suite-semantic-block",
+      "skill": "lean-critique-suite-orchestrator",
+      "family": "lean_critique",
+      "prompt": "Read skills/lean/lean-critique-suite-orchestrator/SKILL.md. Do not edit files. A Lean file compiles, but semantic preservation fails because a uniqueness condition was dropped. Return compact JSON with keys skill, verdict, evidence, regression. The suite verdict must fail even though syntax passes.",
+      "oracle": {
+        "required_substrings": ["lean-critique-suite-orchestrator", "fail", "syntax", "semantic", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "lean-formal-refinement-preserve-target",
+      "skill": "lean-formal-refinement",
+      "family": "lean_refinement",
+      "prompt": "Read skills/lean/lean-formal-refinement/SKILL.md. Do not edit files. Lean reports unknown identifier `Monotone.comp`. A proposed repair replaces the theorem with `True` and drops existing `NL/LaTeX:` comments. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail because repair must address diagnostics while preserving the target theorem, avoiding vacuity, and preserving same-line `NL/LaTeX:` comments.",
+      "oracle": {
+        "required_substrings": ["lean-formal-refinement", "fail", "preserving", "vacuous", "NL/LaTeX", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "lean-line-annotation-stable-lines",
+      "skill": "lean-line-annotation",
+      "family": "annotation",
+      "prompt": "Read skills/lean/lean-line-annotation/SKILL.md. Do not edit files. A Lean file has three lines, with line 2 blank. Return compact JSON with keys skill, verdict, evidence, regression describing the annotation and generated-line-comment requirements. The evidence must say annotation tables preserve exact line numbers, include blank lines, and do not rewrite code; generated Lean artifacts must instead satisfy the `NL/LaTeX:` same-line comment guard.",
+      "oracle": {
+        "required_substrings": ["lean-line-annotation", "line", "blank", "NL/LaTeX", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "lean-logical-soundness-vacuous-assumption",
+      "skill": "lean-logical-soundness-critic",
+      "family": "lean_critique",
+      "prompt": "Read skills/lean/lean-logical-soundness-critic/SKILL.md. Do not edit files. A theorem proves an arbitrary conclusion from hypothesis `False`. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail or block approval because the statement is vacuous/non-substantive.",
+      "oracle": {
+        "required_substrings": ["lean-logical-soundness-critic", "fail", "vacuous", "False", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "lean-mathlib-alignment-local-duplicate",
+      "skill": "lean-mathlib-alignment-critic",
+      "family": "lean_critique",
+      "prompt": "Read skills/lean/lean-mathlib-alignment-critic/SKILL.md. Do not edit files. A Lean file defines `MyEven n := exists k, n = 2*k` instead of using mathlib `Even`. Return compact JSON with keys skill, verdict, evidence, regression. The verdict should warn or fail for local duplication and recommend mathlib-native APIs.",
+      "oracle": {
+        "required_substrings": ["lean-mathlib-alignment-critic", "Even", "mathlib", "duplicate", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "lean-output-denoiser-no-rewrite",
+      "skill": "lean-output-denoiser",
+      "family": "cleanup",
+      "prompt": "Read skills/lean/lean-output-denoiser/SKILL.md. Do not edit files. A model response contains prose and one fenced Lean block with `NL/LaTeX:` line comments. Return compact JSON with keys skill, verdict, evidence, regression describing denoising behavior. The evidence must say to extract the best code block, remove prose, not rewrite or improve the Lean code, and preserve required `NL/LaTeX:` comments.",
+      "oracle": {
+        "required_substrings": ["lean-output-denoiser", "extract", "prose", "NL/LaTeX", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "lean-refinement-taxonomy-labels",
+      "skill": "lean-refinement-taxonomy",
+      "family": "taxonomy",
+      "prompt": "Read skills/lean/lean-refinement-taxonomy/SKILL.md. Do not edit files. A transition adds an import and changes a theorem conclusion from equality to implication after a semantic critique. Return compact JSON with keys skill, verdict, evidence, regression. Mention trigger family, syntactic edit, semantic edit, artifact effect, and preservation risk.",
+      "oracle": {
+        "required_substrings": ["lean-refinement-taxonomy", "trigger", "syntactic", "semantic", "preservation", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "semantic-preservation-uniqueness-loss",
+      "skill": "lean-semantic-preservation-critic",
+      "family": "lean_critique",
+      "prompt": "Read skills/lean/lean-semantic-preservation-critic/SKILL.md. Do not edit files. Source theorem says `there exists a unique identity element`. Lean statement says only `exists e, identity e`. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail if uniqueness is lost.",
+      "oracle": {
+        "required_substrings": ["lean-semantic-preservation-critic", "fail", "unique", "regression"],
+        "required_any_substrings": [["lost", "drops", "dropped", "weakening", "weaker"]],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "lean-syntax-critic-missing-colon",
+      "skill": "lean-syntactic-correctness-critic",
+      "family": "lean_critique",
+      "prompt": "Read skills/lean/lean-syntactic-correctness-critic/SKILL.md. Do not edit files. Lean snippet: `theorem bad True := by trivial`. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail for syntax/elaboration health and recommend running Lean diagnostics.",
+      "oracle": {
+        "required_substrings": ["lean-syntactic-correctness-critic", "fail", "syntax", "diagnostics", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "mathlib-api-verified-first",
+      "skill": "mathlib-api-compatibility-planner",
+      "family": "mathlib_planning",
+      "prompt": "Read skills/mathlib/mathlib-api-compatibility-planner/SKILL.md. Do not edit files. Given candidates `Monotone check_ok=true`, `MyMonotoneWrapper check_ok=false`, and goal `composition of monotone functions`, return compact JSON with keys skill, verdict, evidence, regression. Prefer verified mathlib APIs and isolate unresolved gaps.",
+      "oracle": {
+        "required_substrings": ["mathlib-api-compatibility-planner", "Monotone", "check_ok", "verified", "regression"],
+        "forbidden_substrings": ["MyMonotoneWrapper as primary"]
+      }
+    },
+    {
+      "id": "mathlib-candidate-verifier-fake-decl",
+      "skill": "mathlib-candidate-verifier",
+      "family": "mathlib_verification",
+      "prompt": "Read skills/mathlib/mathlib-candidate-verifier/SKILL.md. Do not edit files. Candidate list contains `Function.Injective` and `Definitely.NotADecl`. Return compact JSON with keys skill, verdict, evidence, regression. The evidence must say `#check` should mark verified declarations check_ok=true and fake declarations check_ok=false with errors.",
+      "oracle": {
+        "required_substrings": ["mathlib-candidate-verifier", "#check", "check_ok", "false", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "mathlib-compat-loop-explicit-gap",
+      "skill": "mathlib-compatibility-loop-orchestrator",
+      "family": "mathlib_planning",
+      "prompt": "Read skills/mathlib/mathlib-compatibility-loop-orchestrator/SKILL.md. Do not edit files. A concept remains unverified after the round cap. Return compact JSON with keys skill, verdict, evidence, regression. The evidence must say the loop stops only with verified coverage or an explicit gap after the configured cap.",
+      "oracle": {
+        "required_substrings": ["mathlib-compatibility-loop-orchestrator", "coverage", "explicit gap", "cap", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "mathlib-coverage-gap-detected",
+      "skill": "mathlib-concept-coverage-reviewer",
+      "family": "mathlib_planning",
+      "prompt": "Read skills/mathlib/mathlib-concept-coverage-reviewer/SKILL.md. Do not edit files. Concepts are `monotone` with a check_ok declaration and `compactness` with only unchecked candidates. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must report a coverage gap for compactness.",
+      "oracle": {
+        "required_substrings": ["mathlib-concept-coverage-reviewer", "gap", "compactness", "coverage", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "mathlib-web-grounding-retrieval-aid-not-final",
+      "skill": "mathlib-web-grounding-orchestrator",
+      "family": "mathlib_planning",
+      "prompt": "Read skills/mathlib/mathlib-web-grounding-orchestrator/SKILL.md. Do not edit files. Local mathlib mapping has a gap for `compactness`; a Loogle hit suggests `CompactSpace`, but no official docs/source URL or Lean #check has run yet. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must keep the claim candidate-only and require official-source corroboration plus local Lean verification before drafting.",
+      "oracle": {
+        "required_substrings": ["mathlib-web-grounding-orchestrator", "candidate", "official", "Lean", "regression"],
+        "required_any_substrings": [["#check", "verification", "verified"]],
+        "forbidden_substrings": ["as established fact"]
+      }
+    },
+    {
+      "id": "proof-expansion-support-hard-web",
+      "skill": "proof-expansion-support-orchestrator",
+      "family": "proof_expansion",
+      "prompt": "Read skills/autoformalization/proof-expansion-support-orchestrator/SKILL.md. Do not edit files. A proof segment says `By the standard Sazonov theorem, tightness follows.` Return compact JSON with keys skill, verdict, evidence, regression. The evidence must route hard or named-theorem segments from difficulty estimation to web research support before LaTeX expansion.",
+      "oracle": {
+        "required_substrings": ["proof-expansion-support-orchestrator", "difficulty", "web", "Sazonov", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "proof-web-research-citation-uncertainty",
+      "skill": "proof-expansion-web-researcher",
+      "family": "proof_expansion",
+      "prompt": "Read skills/autoformalization/proof-expansion-web-researcher/SKILL.md. Do not edit files. A hard proof segment depends on Minlos theorem but available support is incomplete. Return compact JSON with keys skill, verdict, evidence, regression. The evidence must require source URLs, verified hypotheses, and explicit uncertainty rather than unsupported certainty.",
+      "oracle": {
+        "required_substrings": ["proof-expansion-web-researcher", "URL", "hypotheses", "uncertainty", "regression"],
+        "forbidden_substrings": []
+      }
+    },
+    {
+      "id": "physics-lean-math-pipeline-parity",
+      "skill": "physics-lean-workflow-orchestrator",
+      "family": "lean_physics_orchestration",
+      "prompt": "Read skills/physics-lean/physics-lean-workflow-orchestrator/SKILL.md and skills/SKILL_HOOKS.yaml. Do not edit files. Compare the Lean physics loop with the mathematical autoformalization pipeline. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must pass only if physics inherits semantic preservation, source-line translation, result-existence precheck, mathlib grounding, generic Lean critics, reverse informalization, non-vacuity, unified consistency, RFDE, and reference-free monitoring, with physics critics treated as additive rather than replacements.",
+      "oracle": {
+        "required_substrings": ["physics-lean-workflow-orchestrator", "semantic preservation", "mathlib", "RFDE", "regression"],
+        "required_any_substrings": [["source-line", "line translation"], ["reference-free", "reference free"], ["additive", "not replace", "do not replace"]],
+        "forbidden_substrings": ["physics critics replace semantic preservation"]
+      }
+    },
+    {
+      "id": "physics-informal-elicitation-missing-context",
+      "skill": "physics-informal-derivation-elicitor",
+      "family": "physics_informal_preformalization",
+      "prompt": "Read skills/physics-common/physics-informal-derivation-elicitor/SKILL.md. Do not edit files. Source says `derive F = ma` but gives no frame, units, or assumptions. Return compact JSON with keys skill, verdict, evidence, regression. The evidence must elicit missing quantities, dimensions/units, frame/regime, assumptions, and laws without pretending they are source-backed.",
+      "oracle": {
+        "required_substrings": ["physics-informal-derivation-elicitor", "units", "frame", "assumptions", "regression"],
+        "required_any_substrings": [["generated-support", "user_needed", "blocked"], ["laws", "law"]],
+        "forbidden_substrings": ["source-backed inertial frame"]
+      }
+    },
+    {
+      "id": "physics-informal-expansion-generated-support",
+      "skill": "physics-informal-derivation-expander",
+      "family": "physics_informal_preformalization",
+      "prompt": "Read skills/physics-common/physics-informal-derivation-expander/SKILL.md. Do not edit files. A source jumps from an energy integral to the final Euler-Lagrange equation with no intermediate calculus. Return compact JSON with keys skill, verdict, evidence, regression. The expansion must preserve source anchors and label any inserted bridge as generated support requiring law/rule provenance and dimension/unit checks.",
+      "oracle": {
+        "required_substrings": ["physics-informal-derivation-expander", "source", "generated support", "dimension", "regression"],
+        "required_any_substrings": [["law", "rule"], ["anchor", "anchors"]],
+        "forbidden_substrings": ["literal source bridge"]
+      }
+    },
+    {
+      "id": "physics-informal-readiness-unreviewed-gap",
+      "skill": "physics-informal-derivation-readiness-reviewer",
+      "family": "physics_informal_preformalization",
+      "prompt": "Read skills/physics-common/physics-informal-derivation-readiness-reviewer/SKILL.md. Do not edit files. An expanded informal derivation has one generated-support transition with no law provenance, no unit status, and no web-support packet. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail or block backend drafting and route back to expansion or web support.",
+      "oracle": {
+        "required_substrings": ["physics-informal-derivation-readiness-reviewer", "block", "generated", "web", "regression"],
+        "required_any_substrings": [["law", "rule"], ["unit", "dimension"]],
+        "forbidden_substrings": ["ready for drafting"]
+      }
+    },
+    {
+      "id": "physics-lean-semantics-vector-erasure",
+      "skill": "physics-lean-physical-semantics-critic",
+      "family": "lean_physics_critique",
+      "prompt": "Read skills/physics-lean/physics-lean-physical-semantics-critic/SKILL.md. Do not edit files. Source says `force is a vector field in an inertial frame and Newton's law gives F = m a`; Lean states only `theorem t (F m a : Real) : F = m * a`. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail or block because vector/frame/law physics was erased into raw scalar algebra.",
+      "oracle": {
+        "required_substrings": ["physics-lean-physical-semantics-critic", "fail", "vector", "frame", "regression"],
+        "required_any_substrings": [["raw scalar", "scalar algebra", "erased"]],
+        "forbidden_substrings": ["complete"]
+      }
+    },
+    {
+      "id": "physics-lean-assumption-hidden-positivity",
+      "skill": "physics-lean-assumption-critic",
+      "family": "lean_physics_critique",
+      "prompt": "Read skills/physics-lean/physics-lean-assumption-critic/SKILL.md. Do not edit files. Source derives a relation for real x in a coordinate frame. Lean adds `hx : 0 < x` and `hden : y ≠ 0`, with no assumption packet labels. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail or block for hidden strengthening and missing source/generated-support labels.",
+      "oracle": {
+        "required_substrings": ["physics-lean-assumption-critic", "fail", "hidden", "positivity", "regression"],
+        "required_any_substrings": [["generated-support", "source-backed", "label"]],
+        "forbidden_substrings": ["assumption faithful"]
+      }
+    },
+    {
+      "id": "physics-lean-dimension-raw-real-erasure",
+      "skill": "physics-lean-dimension-critic",
+      "family": "lean_physics_critique",
+      "prompt": "Read skills/physics-lean/physics-lean-dimension-critic/SKILL.md. Do not edit files. Source is a dimensioned energy equation with joule, kilogram, meter, and second units. Lean uses only raw `Real` variables and has no `Quantity`, `PhysDim`, unit report, or projection lemma. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail or block for missing unit/dimension discipline.",
+      "oracle": {
+        "required_substrings": ["physics-lean-dimension-critic", "fail", "dimension", "unit", "regression"],
+        "required_any_substrings": [["raw", "Real", "projection"]],
+        "forbidden_substrings": ["dimensionally complete"]
+      }
+    },
+    {
+      "id": "physics-lean-generative-critic-codex-exec",
+      "skill": "physics-lean-generative-critic-orchestrator",
+      "family": "lean_physics_critique",
+      "prompt": "Read skills/physics-lean/physics-lean-generative-critic-orchestrator/SKILL.md. Do not edit files. A near-final Lean physics artifact passes compile but critics disagree about source physics preservation. Return compact JSON with keys skill, verdict, evidence, regression. The evidence must say to run deterministic critics first and use Codex exec for adversarial probes, while treating generative findings as hypotheses until backed by source anchors, Lean diagnostics, unit reports, deterministic critics, or repeated probes.",
+      "oracle": {
+        "required_substrings": ["physics-lean-generative-critic-orchestrator", "Codex exec", "deterministic", "hypotheses", "regression"],
+        "required_any_substrings": [["source anchors", "Lean diagnostics", "unit reports", "repeated probes"]],
+        "forbidden_substrings": ["generative finding is final proof"]
+      }
+    },
+    {
+      "id": "physics-final-review-hidden-frame-unit",
+      "skill": "physics-final-hypothesis-reviewer",
+      "family": "lean_physics_final_review",
+      "prompt": "Read skills/physics-common/physics-final-hypothesis-reviewer/SKILL.md. Do not edit files. Source derives a vector force equation in an inertial frame with unit constraints, but the final Lean hypotheses use only raw `Real` variables and no frame, unit, law, or projection bridge. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail or block and route to localized review refinement surfaces.",
+      "oracle": {
+        "required_substrings": ["physics-final-hypothesis-reviewer", "fail", "frame", "unit", "regression"],
+        "required_any_substrings": [["localized", "refinement", "repair surface"]],
+        "forbidden_substrings": ["complete"]
+      }
+    },
+    {
+      "id": "mathematical-final-review-quantifier-loss",
+      "skill": "mathematical-final-hypothesis-reviewer",
+      "family": "lean_physics_final_review",
+      "prompt": "Read skills/autoformalization/mathematical-final-hypothesis-reviewer/SKILL.md. Do not edit files. Source says `for every x there exists a unique y`, but the final Lean statement proves only `theorem t : True`. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail or block for quantifier/conclusion/uniqueness loss and proof-vacuity risk.",
+      "oracle": {
+        "required_substrings": ["mathematical-final-hypothesis-reviewer", "fail", "unique", "True", "regression"],
+        "required_any_substrings": [["quantifier", "conclusion", "vacuity"]],
+        "forbidden_substrings": ["acceptable"]
+      }
+    },
+    {
+      "id": "final-derivation-review-routes-failure",
+      "skill": "final-derivation-review-orchestrator",
+      "family": "lean_physics_final_review",
+      "prompt": "Read skills/autoformalization/final-derivation-review-orchestrator/SKILL.md. Do not edit files. Physics final review fails for missing unit hypotheses, mathematical final review passes, and consistency is still draft. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must block final acceptance and route the failure to localized monotonic review refinement while preserving already-correct properties.",
+      "oracle": {
+        "required_substrings": ["final-derivation-review-orchestrator", "block", "localized", "monotonic", "regression"],
+        "required_any_substrings": [["physics", "unit", "refinement"]],
+        "forbidden_substrings": ["complete"]
+      }
+    },
+    {
+      "id": "physics-review-refinement-monotonic-local",
+      "skill": "physics-lean-review-refinement-router",
+      "family": "lean_physics_final_review",
+      "prompt": "Read skills/physics-lean/physics-lean-review-refinement-router/SKILL.md. Do not edit files. Final review fails only for a missing projection bridge, while source anchors, theorem name, unit report, non-vacuity, and Lean execution already pass. Return compact JSON with keys skill, verdict, evidence, regression. The refinement plan must be localized and monotonic, preserving already-correct parts and rerunning affected reviewers/gates.",
+      "oracle": {
+        "required_substrings": ["physics-lean-review-refinement-router", "localized", "monotonic", "projection", "regression"],
+        "required_any_substrings": [["source anchors", "theorem name", "unit report", "non-vacuity", "Lean execution"]],
+        "forbidden_substrings": ["rewrite everything"]
+      }
+    },
+    {
+      "id": "physics-lean-generative-repair-library-first",
+      "skill": "physics-lean-generative-repair-orchestrator",
+      "family": "lean_physics_repair",
+      "prompt": "Read skills/physics-lean/physics-lean-generative-repair-orchestrator/SKILL.md. Do not edit files. A deterministic pathology loop finds notational collapse from quantum operators to raw Real scalars and the MathformerPhysicsLib workbench still has candidate-only support. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must keep generative repair advisory, require MathformerPhysicsLib-first object work before target theorem edits, and require deterministic rerun gates before completion.",
+      "oracle": {
+        "required_substrings": ["physics-lean-generative-repair-orchestrator", "advisory", "MathformerPhysicsLib", "deterministic", "regression"],
+        "required_any_substrings": [["promotion", "registry", "compile", "consistency"]],
+        "forbidden_substrings": ["complete without rerun"]
+      }
+    },
+    {
+      "id": "physics-lean-recursive-repair-control-exhaustive",
+      "skill": "physics-lean-recursive-repair-loop-controller",
+      "family": "lean_physics_repair",
+      "prompt": "Read skills/physics-lean/physics-lean-recursive-repair-loop-controller/SKILL.md. Do not edit files. An expansion map is exhaustive but still has candidate-only MathformerPhysicsLib object support, and the current iteration signature has appeared in a previous map. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must block recursion because of the repeated signature, mention exhaustive expansion, bounded recursive control, and deterministic rerun gates.",
+      "oracle": {
+        "required_substrings": ["physics-lean-recursive-repair-loop-controller", "block", "exhaustive", "repeated", "regression"],
+        "required_any_substrings": [["bounded", "max-iteration", "iteration limit"], ["deterministic", "rerun gates"]],
+        "forbidden_substrings": ["recurse anyway", "complete"]
+      }
+    },
+    {
+      "id": "workflow-monotonicity",
+      "skill": "autoformalization-reflective-refinement-loop",
+      "family": "orchestration",
+      "prompt": "Read skills/autoformalization/autoformalization-reflective-refinement-loop/SKILL.md. Do not edit files. A proposed prompt change improves one new case but breaks `wiki_contrapositive`, which was previously successful. Return compact JSON with keys skill, verdict, evidence, regression. The verdict must fail under the monotonicity rule.",
+      "oracle": {
+        "required_substrings": ["autoformalization-reflective-refinement-loop", "fail", "wiki_contrapositive", "monotonic", "regression"],
+        "forbidden_substrings": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,792 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from isabelle_physics_derivation_trace_loop import (
+    IsabelleAcceptanceCase,
+    IsabelleDerivationPlan,
+    IsabelleFormalizationPacket,
+    IsabelleGroundingBasis,
+    IsabelleMathematicalReview,
+    IsabellePhysicsCase,
+    IsabellePhysicsDerivationTraceArtifactRealnessGateArtifact,
+    IsabellePhysicsDerivationTraceConsistencyPhysicsIsabelleReportArtifact,
+    IsabellePhysicsDerivationTraceDraftPhysicsIsabelleDerivationArtifact,
+    IsabellePhysicsDerivationTraceExecutePhysicsIsabelleDerivationArtifact,
+    IsabellePhysicsDerivationTraceIntakeSourceUnitInventoryArtifact,
+    IsabellePhysicsDerivationTraceIsabelleGroundingSearchArtifact,
+    IsabellePhysicsDerivationTracePhysicsDimensionsModelArtifact,
+    IsabellePhysicsDerivationTracePhysicsEquationsParseArtifact,
+    IsabellePhysicsDerivationTracePhysicsFramesBuildArtifact,
+    IsabellePhysicsDerivationTracePhysicsGapsDetectArtifact,
+    IsabellePhysicsDerivationTracePhysicsGapsExpandArtifact,
+    IsabellePhysicsDerivationTracePhysicsInformalElicitArtifact,
+    IsabellePhysicsDerivationTracePhysicsInformalExpandArtifact,
+    IsabellePhysicsDerivationTracePhysicsInformalReviewArtifact,
+    IsabellePhysicsDerivationTracePhysicsIsabelleAssumptionsEncodeArtifact,
+    IsabellePhysicsDerivationTracePhysicsIsabelleBackgroundPlanArtifact,
+    IsabellePhysicsDerivationTracePhysicsIsabelleTypeSystemBuildArtifact,
+    IsabellePhysicsDerivationTracePhysicsIsabelleWorkflowPlanArtifact,
+    IsabellePhysicsDerivationTracePhysicsLawsGroundArtifact,
+    IsabellePhysicsDerivationTracePhysicsRegimesModelArtifact,
+    IsabellePhysicsDerivationTracePhysicsSourceExtractArtifact,
+    IsabellePhysicsDerivationTracePhysicsSymbolsBuildArtifact,
+    IsabellePhysicsDerivationTracePhysicsUnitsGroundArtifact,
+    IsabellePhysicsDerivationTracePreformalizationExpandArtifact,
+    IsabellePhysicsDerivationTracePreformalizationExpansionDifficultyArtifact,
+    IsabellePhysicsDerivationTracePreformalizationExpansionSupportArtifact,
+    IsabellePhysicsDerivationTracePreformalizationExpansionWebSupportArtifact,
+    IsabellePhysicsDerivationTracePreformalizationLineTranslationPacketArtifact,
+    IsabellePhysicsDerivationTracePreformalizationResultExistencePrecheckArtifact,
+    IsabellePhysicsDerivationTracePreformalizationReviewBindingsArtifact,
+    IsabellePhysicsDerivationTracePreformalizationReviewCompletenessArtifact,
+    IsabellePhysicsDerivationTracePreformalizationReviewSuiteArtifact,
+    IsabellePhysicsDerivationTraceReviewMathematicalIsabelleFinalHypothesesArtifact,
+    IsabellePhysicsDerivationTraceReviewPhysicsIsabelleFinalHypothesesArtifact,
+    IsabellePhysicsDisposition,
+    IsabellePhysicsReview,
+    IsabelleProcessReview,
+    IsabelleReflectionCase,
+    IsabelleReviewCase,
+    IsabelleSessionReport,
+    IsabelleTheory,
+    IsabelleTheoryBasis,
+    PhysicalModel,
+    PhysicsIsabelleConsistencyAssessment,
+    PhysicsIsabelleDerivationRequest,
+    SourceDerivationModel,
+)
+from material_relations import FormalizesPreformalizationExpansionSupportCertificate
+from material_relations import FormalizesPreformalizationExpansionWebSupportCertificate
+from material_relations import FormalizesPreformalizationExpandCertificate
+from material_relations import TestsPreformalizationReviewSuiteCertificate
+from material_relations import TestsPreformalizationReviewCompletenessCertificate
+from material_relations import TestsPreformalizationReviewBindingsCertificate
+from reasoning import ReconstructInIsabelle
+from relations import AssessIsabelleProcessCertificate
+from relations import DefinePhysicalModelCertificate
+from relations import DraftIsabelleArtifactCertificate
+from relations import GroundIsabellePlanCertificate
+from relations import PrepareTranslationObligationsCertificate
+from relations import ReviewMathematicalValidityCertificate
+from relations import ReviewPhysicalFidelityCertificate
+from relations import RunIsabelleBuildCertificate
+from relations import SummarizeIsabelleRunCertificate
+from generated.preformalization_expansion_support_skill import proof_expansion_support_orchestrator_skill as preformalization_expansion_support_skill_binding
+from generated.preformalization_expansion_web_support_skill import proof_expansion_web_researcher_skill as preformalization_expansion_web_support_skill_binding
+from generated.preformalization_expand_skill import latex_prerequisite_expander_skill as preformalization_expand_skill_binding
+from generated.preformalization_review_suite_skill import latex_expansion_review_orchestrator_skill as preformalization_review_suite_skill_binding
+from generated.preformalization_review_completeness_skill import latex_expansion_completeness_reviewer_skill as preformalization_review_completeness_skill_binding
+from generated.preformalization_review_bindings_skill import latex_expansion_binding_reviewer_skill as preformalization_review_bindings_skill_binding
+from generated.reasoning_source_model_1_skill import source_formalizable_unit_extractor_skill as source_model_reasoning_skill_1
+from generated.reasoning_source_model_2_skill import proof_expansion_support_orchestrator_skill as source_model_reasoning_skill_2
+from generated.reasoning_source_model_3_skill import proof_expansion_difficulty_estimator_skill as source_model_reasoning_skill_3
+from generated.reasoning_source_model_4_skill import proof_expansion_web_researcher_skill as source_model_reasoning_skill_4
+from generated.reasoning_source_model_5_skill import latex_prerequisite_expander_skill as source_model_reasoning_skill_5
+from generated.reasoning_source_model_6_skill import physics_derivation_source_extractor_skill as source_model_reasoning_skill_6
+from generated.reasoning_source_model_7_skill import physics_informal_derivation_elicitor_skill as source_model_reasoning_skill_7
+from generated.reasoning_source_model_8_skill import physics_informal_derivation_expander_skill as source_model_reasoning_skill_8
+from generated.reasoning_source_model_9_skill import physics_informal_derivation_readiness_reviewer_skill as source_model_reasoning_skill_9
+from generated.reasoning_formalization_packet_1_skill import latex_expansion_review_orchestrator_skill as formalization_packet_reasoning_skill_1
+from generated.reasoning_formalization_packet_2_skill import latex_expansion_completeness_reviewer_skill as formalization_packet_reasoning_skill_2
+from generated.reasoning_formalization_packet_3_skill import latex_expansion_binding_reviewer_skill as formalization_packet_reasoning_skill_3
+from generated.reasoning_formalization_packet_4_skill import source_line_translation_packet_builder_skill as formalization_packet_reasoning_skill_4
+from generated.reasoning_formalization_packet_5_skill import result_existence_precheck_orchestrator_skill as formalization_packet_reasoning_skill_5
+from generated.reasoning_formalization_packet_6_skill import physics_implicit_gap_detector_skill as formalization_packet_reasoning_skill_6
+from generated.reasoning_formalization_packet_7_skill import physics_derivation_gap_expander_skill as formalization_packet_reasoning_skill_7
+from generated.reasoning_physical_model_1_skill import physics_symbol_table_builder_skill as physical_model_reasoning_skill_1
+from generated.reasoning_physical_model_2_skill import physics_dimension_modeler_skill as physical_model_reasoning_skill_2
+from generated.reasoning_physical_model_3_skill import physics_unit_system_grounder_skill as physical_model_reasoning_skill_3
+from generated.reasoning_physical_model_4_skill import physics_equation_parser_skill as physical_model_reasoning_skill_4
+from generated.reasoning_physical_model_5_skill import physics_regime_assumption_modeler_skill as physical_model_reasoning_skill_5
+from generated.reasoning_physical_model_6_skill import physics_coordinate_frame_context_builder_skill as physical_model_reasoning_skill_6
+from generated.reasoning_physical_model_7_skill import physics_law_concept_grounding_navigator_skill as physical_model_reasoning_skill_7
+from generated.reasoning_isabelle_plan_1_skill import isarmathlib_grounding_navigator_skill as isabelle_plan_reasoning_skill_1
+from generated.reasoning_isabelle_plan_2_skill import physics_isabelle_workflow_orchestrator_skill as isabelle_plan_reasoning_skill_2
+from generated.reasoning_isabelle_plan_3_skill import physics_isabelle_type_system_builder_skill as isabelle_plan_reasoning_skill_3
+from generated.reasoning_isabelle_plan_4_skill import physics_isabelle_assumption_context_encoder_skill as isabelle_plan_reasoning_skill_4
+from generated.reasoning_theory_1_skill import physics_isabelle_derivation_drafter_skill as theory_reasoning_skill_1
+from generated.reasoning_session_report_1_skill import isabelle_execution_runner_skill as session_report_reasoning_skill_1
+from generated.reasoning_session_report_2_skill import autoformalization_result_realness_verifier_skill as session_report_reasoning_skill_2
+from generated.reasoning_math_review_1_skill import mathematical_isabelle_final_hypothesis_reviewer_skill as math_review_reasoning_skill_1
+from generated.reasoning_physics_review_1_skill import physics_isabelle_final_hypothesis_reviewer_skill as physics_review_reasoning_skill_1
+from generated.reasoning_process_review_1_skill import physics_isabelle_workflow_orchestrator_skill as process_review_reasoning_skill_1
+from generated.reasoning_report_1_skill import physics_isabelle_consistency_report_orchestrator_skill as report_reasoning_skill_1
+
+def formalization_packet_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> PrepareTranslationObligationsCertificate[SourceValue, TargetValue]:
+    return PrepareTranslationObligationsCertificate(source = source, target = target)
+
+def physical_model_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> DefinePhysicalModelCertificate[SourceValue, TargetValue]:
+    return DefinePhysicalModelCertificate(source = source, target = target)
+
+def isabelle_plan_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> GroundIsabellePlanCertificate[SourceValue, TargetValue]:
+    return GroundIsabellePlanCertificate(source = source, target = target)
+
+def theory_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> DraftIsabelleArtifactCertificate[SourceValue, TargetValue]:
+    return DraftIsabelleArtifactCertificate(source = source, target = target)
+
+def session_report_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> RunIsabelleBuildCertificate[SourceValue, TargetValue]:
+    return RunIsabelleBuildCertificate(source = source, target = target)
+
+def math_review_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ReviewMathematicalValidityCertificate[SourceValue, TargetValue]:
+    return ReviewMathematicalValidityCertificate(source = source, target = target)
+
+def physics_review_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ReviewPhysicalFidelityCertificate[SourceValue, TargetValue]:
+    return ReviewPhysicalFidelityCertificate(source = source, target = target)
+
+def process_review_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AssessIsabelleProcessCertificate[SourceValue, TargetValue]:
+    return AssessIsabelleProcessCertificate(source = source, target = target)
+
+def report_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> SummarizeIsabelleRunCertificate[SourceValue, TargetValue]:
+    return SummarizeIsabelleRunCertificate(source = source, target = target)
+
+# Generative interpretation PrepareSourceDerivation uses skill context selected from material steps: intake_source_unit_inventory, preformalization_expansion_support, preformalization_expansion_difficulty, preformalization_expansion_web_support, preformalization_expand, physics_source_extract, physics_informal_elicit, physics_informal_expand, physics_informal_review.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: source-formalizable-unit-extractor, proof-expansion-support-orchestrator, proof-expansion-difficulty-estimator, proof-expansion-web-researcher, latex-prerequisite-expander, physics-derivation-source-extractor, physics-informal-derivation-elicitor, physics-informal-derivation-expander, physics-informal-derivation-readiness-reviewer.
+agent source_model_reasoning_agent(
+    task: PhysicsIsabelleDerivationRequest,
+) -> Result[Generated[SourceDerivationModel], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PhysicsIsabelleDerivationRequest] = [source_model_reasoning_skill_1, source_model_reasoning_skill_2, source_model_reasoning_skill_3, source_model_reasoning_skill_4, source_model_reasoning_skill_5, source_model_reasoning_skill_6, source_model_reasoning_skill_7, source_model_reasoning_skill_8, source_model_reasoning_skill_9]
+
+# Generative interpretation PrepareFormalizationPacket uses skill context selected from material steps: preformalization_review_suite, preformalization_review_completeness, preformalization_review_bindings, preformalization_line_translation_packet, preformalization_result_existence_precheck, physics_gaps_detect, physics_gaps_expand.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: latex-expansion-review-orchestrator, latex-expansion-completeness-reviewer, latex-expansion-binding-reviewer, source-line-translation-packet-builder, result-existence-precheck-orchestrator, physics-implicit-gap-detector, physics-derivation-gap-expander.
+agent formalization_packet_reasoning_agent(
+    task: SourceDerivationModel,
+) -> Result[Generated[IsabelleFormalizationPacket], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SourceDerivationModel] = [formalization_packet_reasoning_skill_1, formalization_packet_reasoning_skill_2, formalization_packet_reasoning_skill_3, formalization_packet_reasoning_skill_4, formalization_packet_reasoning_skill_5, formalization_packet_reasoning_skill_6, formalization_packet_reasoning_skill_7]
+
+# Generative interpretation ModelPhysicalSystem uses skill context selected from material steps: physics_symbols_build, physics_dimensions_model, physics_units_ground, physics_equations_parse, physics_regimes_model, physics_frames_build, physics_laws_ground.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-symbol-table-builder, physics-dimension-modeler, physics-unit-system-grounder, physics-equation-parser, physics-regime-assumption-modeler, physics-coordinate-frame-context-builder, physics-law-concept-grounding-navigator.
+agent physical_model_reasoning_agent(
+    task: SourceDerivationModel,
+) -> Result[Generated[PhysicalModel], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SourceDerivationModel] = [physical_model_reasoning_skill_1, physical_model_reasoning_skill_2, physical_model_reasoning_skill_3, physical_model_reasoning_skill_4, physical_model_reasoning_skill_5, physical_model_reasoning_skill_6, physical_model_reasoning_skill_7]
+
+# Generative interpretation PlanIsabelleTheory uses skill context selected from material steps: isabelle_grounding_search, physics_isabelle_workflow_plan, physics_isabelle_type_system_build, physics_isabelle_background_plan, physics_isabelle_assumptions_encode.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: isarmathlib-grounding-navigator, physics-isabelle-workflow-orchestrator, physics-isabelle-type-system-builder, physics-isabelle-assumption-context-encoder.
+agent isabelle_plan_reasoning_agent(
+    task: IsabelleGroundingBasis,
+) -> Result[Generated[IsabelleDerivationPlan], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabelleGroundingBasis] = [isabelle_plan_reasoning_skill_1, isabelle_plan_reasoning_skill_2, isabelle_plan_reasoning_skill_3, isabelle_plan_reasoning_skill_4]
+
+# Generative interpretation DraftIsabelleTheory uses skill context selected from material steps: draft_physics_isabelle_derivation.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-isabelle-derivation-drafter.
+agent theory_reasoning_agent(
+    task: IsabelleTheoryBasis,
+) -> Result[Generated[IsabelleTheory], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabelleTheoryBasis] = [theory_reasoning_skill_1]
+
+# Generative interpretation RunIsabelleSession uses skill context selected from material steps: execute_physics_isabelle_derivation, artifact_realness_gate.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: isabelle-execution-runner, autoformalization-result-realness-verifier.
+agent session_report_reasoning_agent(
+    task: IsabelleTheory,
+) -> Result[Generated[IsabelleSessionReport], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabelleTheory] = [session_report_reasoning_skill_1, session_report_reasoning_skill_2]
+
+# Generative interpretation ReviewIsabelleMathematics uses skill context selected from material steps: review_mathematical_isabelle_final_hypotheses.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathematical-isabelle-final-hypothesis-reviewer.
+agent math_review_reasoning_agent(
+    task: IsabelleReviewCase,
+) -> Result[Generated[IsabelleMathematicalReview], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabelleReviewCase] = [math_review_reasoning_skill_1]
+
+# Generative interpretation ReviewPhysicsFidelity uses skill context selected from material steps: review_physics_isabelle_final_hypotheses.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-isabelle-final-hypothesis-reviewer.
+agent physics_review_reasoning_agent(
+    task: IsabellePhysicsCase,
+) -> Result[Generated[IsabellePhysicsReview], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabellePhysicsCase] = [physics_review_reasoning_skill_1]
+
+# Generative interpretation ReviewIsabelleProcess uses skill context selected from material steps: reflection_physics_isabelle_process.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-isabelle-workflow-orchestrator.
+agent process_review_reasoning_agent(
+    task: IsabelleReflectionCase,
+) -> Result[Generated[IsabelleProcessReview], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabelleReflectionCase] = [process_review_reasoning_skill_1]
+
+# Generative interpretation ReportIsabellePhysics uses skill context selected from material steps: consistency_physics_isabelle_report.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-isabelle-consistency-report-orchestrator.
+agent report_reasoning_agent(
+    task: IsabelleAcceptanceCase,
+) -> Result[Generated[IsabellePhysicsDisposition], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabelleAcceptanceCase] = [report_reasoning_skill_1]
+
+converted_reasoning = ReconstructInIsabelle(
+    source_model = source_model_reasoning_agent,
+    formalization_packet = formalization_packet_reasoning_agent,
+    formalization_packet_by = formalization_packet_reasoning_relation_builder,
+    physical_model = physical_model_reasoning_agent,
+    physical_model_by = physical_model_reasoning_relation_builder,
+    isabelle_plan = isabelle_plan_reasoning_agent,
+    isabelle_plan_by = isabelle_plan_reasoning_relation_builder,
+    theory = theory_reasoning_agent,
+    theory_by = theory_reasoning_relation_builder,
+    session_report = session_report_reasoning_agent,
+    session_report_by = session_report_reasoning_relation_builder,
+    math_review = math_review_reasoning_agent,
+    math_review_by = math_review_reasoning_relation_builder,
+    physics_review = physics_review_reasoning_agent,
+    physics_review_by = physics_review_reasoning_relation_builder,
+    process_review = process_review_reasoning_agent,
+    process_review_by = process_review_reasoning_relation_builder,
+    report = report_reasoning_agent,
+    report_by = report_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `source-formalizable-unit-extractor`; this does not execute the linked native resource.
+def intake_source_unit_inventory_material_binding(source: PhysicsIsabelleDerivationRequest) -> Computed[IsabellePhysicsDerivationTraceIntakeSourceUnitInventoryArtifact]:
+    artifact = IsabellePhysicsDerivationTraceIntakeSourceUnitInventoryArtifact(
+        subject = "typed material binding for intake_source_unit_inventory",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation intake_source_unit_inventory",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: intake_source_unit_inventory")
+
+# Epistemic occurrence owned by `proof-expansion-support-orchestrator`; output assurance remains Generated.
+agent preformalization_expansion_support_agent(
+    task: IsabellePhysicsDerivationTraceIntakeSourceUnitInventoryArtifact,
+) -> Result[Generated[IsabellePhysicsDerivationTracePreformalizationExpansionSupportArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabellePhysicsDerivationTraceIntakeSourceUnitInventoryArtifact] = [preformalization_expansion_support_skill_binding]
+
+def preformalization_expansion_support_relation_builder(
+    source: IsabellePhysicsDerivationTraceIntakeSourceUnitInventoryArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationExpansionSupportArtifact],
+) -> FormalizesPreformalizationExpansionSupportCertificate:
+    return FormalizesPreformalizationExpansionSupportCertificate(source = source, target = target)
+
+# Material binding descriptor for `proof-expansion-difficulty-estimator`; this does not execute the linked native resource.
+def preformalization_expansion_difficulty_material_binding(source: IsabellePhysicsDerivationTracePreformalizationExpansionSupportArtifact) -> Computed[IsabellePhysicsDerivationTracePreformalizationExpansionDifficultyArtifact]:
+    artifact = IsabellePhysicsDerivationTracePreformalizationExpansionDifficultyArtifact(
+        subject = "typed material binding for preformalization_expansion_difficulty",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_expansion_difficulty")
+
+# Epistemic occurrence owned by `proof-expansion-web-researcher`; output assurance remains Generated.
+agent preformalization_expansion_web_support_agent(
+    task: IsabellePhysicsDerivationTracePreformalizationExpansionDifficultyArtifact,
+) -> Result[Generated[IsabellePhysicsDerivationTracePreformalizationExpansionWebSupportArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabellePhysicsDerivationTracePreformalizationExpansionDifficultyArtifact] = [preformalization_expansion_web_support_skill_binding]
+
+def preformalization_expansion_web_support_relation_builder(
+    source: IsabellePhysicsDerivationTracePreformalizationExpansionDifficultyArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationExpansionWebSupportArtifact],
+) -> FormalizesPreformalizationExpansionWebSupportCertificate:
+    return FormalizesPreformalizationExpansionWebSupportCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-prerequisite-expander`; output assurance remains Generated.
+agent preformalization_expand_agent(
+    task: IsabellePhysicsDerivationTracePreformalizationExpansionWebSupportArtifact,
+) -> Result[Generated[IsabellePhysicsDerivationTracePreformalizationExpandArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabellePhysicsDerivationTracePreformalizationExpansionWebSupportArtifact] = [preformalization_expand_skill_binding]
+
+def preformalization_expand_relation_builder(
+    source: IsabellePhysicsDerivationTracePreformalizationExpansionWebSupportArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationExpandArtifact],
+) -> FormalizesPreformalizationExpandCertificate:
+    return FormalizesPreformalizationExpandCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-expansion-review-orchestrator`; output assurance remains Generated.
+agent preformalization_review_suite_agent(
+    task: IsabellePhysicsDerivationTracePreformalizationExpandArtifact,
+) -> Result[Generated[IsabellePhysicsDerivationTracePreformalizationReviewSuiteArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabellePhysicsDerivationTracePreformalizationExpandArtifact] = [preformalization_review_suite_skill_binding]
+
+def preformalization_review_suite_relation_builder(
+    source: IsabellePhysicsDerivationTracePreformalizationExpandArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationReviewSuiteArtifact],
+) -> TestsPreformalizationReviewSuiteCertificate:
+    return TestsPreformalizationReviewSuiteCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-expansion-completeness-reviewer`; output assurance remains Generated.
+agent preformalization_review_completeness_agent(
+    task: IsabellePhysicsDerivationTracePreformalizationReviewSuiteArtifact,
+) -> Result[Generated[IsabellePhysicsDerivationTracePreformalizationReviewCompletenessArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabellePhysicsDerivationTracePreformalizationReviewSuiteArtifact] = [preformalization_review_completeness_skill_binding]
+
+def preformalization_review_completeness_relation_builder(
+    source: IsabellePhysicsDerivationTracePreformalizationReviewSuiteArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationReviewCompletenessArtifact],
+) -> TestsPreformalizationReviewCompletenessCertificate:
+    return TestsPreformalizationReviewCompletenessCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-expansion-binding-reviewer`; output assurance remains Generated.
+agent preformalization_review_bindings_agent(
+    task: IsabellePhysicsDerivationTracePreformalizationReviewCompletenessArtifact,
+) -> Result[Generated[IsabellePhysicsDerivationTracePreformalizationReviewBindingsArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[IsabellePhysicsDerivationTracePreformalizationReviewCompletenessArtifact] = [preformalization_review_bindings_skill_binding]
+
+def preformalization_review_bindings_relation_builder(
+    source: IsabellePhysicsDerivationTracePreformalizationReviewCompletenessArtifact,
+    target: Generated[IsabellePhysicsDerivationTracePreformalizationReviewBindingsArtifact],
+) -> TestsPreformalizationReviewBindingsCertificate:
+    return TestsPreformalizationReviewBindingsCertificate(source = source, target = target)
+
+# Material binding descriptor for `source-line-translation-packet-builder`; this does not execute the linked native resource.
+def preformalization_line_translation_packet_material_binding(source: IsabellePhysicsDerivationTracePreformalizationReviewBindingsArtifact) -> Computed[IsabellePhysicsDerivationTracePreformalizationLineTranslationPacketArtifact]:
+    artifact = IsabellePhysicsDerivationTracePreformalizationLineTranslationPacketArtifact(
+        subject = "typed material binding for preformalization_line_translation_packet",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_line_translation_packet")
+
+# Material binding descriptor for `result-existence-precheck-orchestrator`; this does not execute the linked native resource.
+def preformalization_result_existence_precheck_material_binding(source: IsabellePhysicsDerivationTracePreformalizationLineTranslationPacketArtifact) -> Computed[IsabellePhysicsDerivationTracePreformalizationResultExistencePrecheckArtifact]:
+    artifact = IsabellePhysicsDerivationTracePreformalizationResultExistencePrecheckArtifact(
+        subject = "typed material binding for preformalization_result_existence_precheck",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_result_existence_precheck")
+
+# Material binding descriptor for `physics-derivation-source-extractor`; this does not execute the linked native resource.
+def physics_source_extract_material_binding(source: IsabellePhysicsDerivationTracePreformalizationResultExistencePrecheckArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsSourceExtractArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsSourceExtractArtifact(
+        subject = "typed material binding for physics_source_extract",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_source_extract")
+
+# Material binding descriptor for `physics-informal-derivation-elicitor`; this does not execute the linked native resource.
+def physics_informal_elicit_material_binding(source: IsabellePhysicsDerivationTracePhysicsSourceExtractArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsInformalElicitArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsInformalElicitArtifact(
+        subject = "typed material binding for physics_informal_elicit",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_informal_elicit",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_informal_elicit")
+
+# Material binding descriptor for `physics-informal-derivation-expander`; this does not execute the linked native resource.
+def physics_informal_expand_material_binding(source: IsabellePhysicsDerivationTracePhysicsInformalElicitArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsInformalExpandArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsInformalExpandArtifact(
+        subject = "typed material binding for physics_informal_expand",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_informal_expand")
+
+# Material binding descriptor for `physics-informal-derivation-readiness-reviewer`; this does not execute the linked native resource.
+def physics_informal_review_material_binding(source: IsabellePhysicsDerivationTracePhysicsInformalExpandArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsInformalReviewArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsInformalReviewArtifact(
+        subject = "typed material binding for physics_informal_review",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_informal_review")
+
+# Material binding descriptor for `physics-symbol-table-builder`; this does not execute the linked native resource.
+def physics_symbols_build_material_binding(source: IsabellePhysicsDerivationTracePhysicsInformalReviewArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsSymbolsBuildArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsSymbolsBuildArtifact(
+        subject = "typed material binding for physics_symbols_build",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_symbols_build",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_symbols_build")
+
+# Material binding descriptor for `physics-dimension-modeler`; this does not execute the linked native resource.
+def physics_dimensions_model_material_binding(source: IsabellePhysicsDerivationTracePhysicsSymbolsBuildArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsDimensionsModelArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsDimensionsModelArtifact(
+        subject = "typed material binding for physics_dimensions_model",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_dimensions_model",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_dimensions_model")
+
+# Material binding descriptor for `physics-unit-system-grounder`; this does not execute the linked native resource.
+def physics_units_ground_material_binding(source: IsabellePhysicsDerivationTracePhysicsDimensionsModelArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsUnitsGroundArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsUnitsGroundArtifact(
+        subject = "typed material binding for physics_units_ground",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_units_ground")
+
+# Material binding descriptor for `physics-equation-parser`; this does not execute the linked native resource.
+def physics_equations_parse_material_binding(source: IsabellePhysicsDerivationTracePhysicsUnitsGroundArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsEquationsParseArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsEquationsParseArtifact(
+        subject = "typed material binding for physics_equations_parse",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_equations_parse")
+
+# Material binding descriptor for `physics-regime-assumption-modeler`; this does not execute the linked native resource.
+def physics_regimes_model_material_binding(source: IsabellePhysicsDerivationTracePhysicsEquationsParseArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsRegimesModelArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsRegimesModelArtifact(
+        subject = "typed material binding for physics_regimes_model",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_regimes_model",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_regimes_model")
+
+# Material binding descriptor for `physics-coordinate-frame-context-builder`; this does not execute the linked native resource.
+def physics_frames_build_material_binding(source: IsabellePhysicsDerivationTracePhysicsRegimesModelArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsFramesBuildArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsFramesBuildArtifact(
+        subject = "typed material binding for physics_frames_build",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_frames_build",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_frames_build")
+
+# Material binding descriptor for `physics-implicit-gap-detector`; this does not execute the linked native resource.
+def physics_gaps_detect_material_binding(source: IsabellePhysicsDerivationTracePhysicsFramesBuildArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsGapsDetectArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsGapsDetectArtifact(
+        subject = "typed material binding for physics_gaps_detect",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_gaps_detect",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_gaps_detect")
+
+# Material binding descriptor for `physics-derivation-gap-expander`; this does not execute the linked native resource.
+def physics_gaps_expand_material_binding(source: IsabellePhysicsDerivationTracePhysicsGapsDetectArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsGapsExpandArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsGapsExpandArtifact(
+        subject = "typed material binding for physics_gaps_expand",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_gaps_expand")
+
+# Material binding descriptor for `physics-law-concept-grounding-navigator`; this does not execute the linked native resource.
+def physics_laws_ground_material_binding(source: IsabellePhysicsDerivationTracePhysicsGapsExpandArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsLawsGroundArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsLawsGroundArtifact(
+        subject = "typed material binding for physics_laws_ground",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_laws_ground")
+
+# Material binding descriptor for `isarmathlib-grounding-navigator`; this does not execute the linked native resource.
+def isabelle_grounding_search_material_binding(source: IsabellePhysicsDerivationTracePhysicsLawsGroundArtifact) -> Computed[IsabellePhysicsDerivationTraceIsabelleGroundingSearchArtifact]:
+    artifact = IsabellePhysicsDerivationTraceIsabelleGroundingSearchArtifact(
+        subject = "typed material binding for isabelle_grounding_search",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: isabelle_grounding_search")
+
+# Material binding descriptor for `physics-isabelle-workflow-orchestrator`; this does not execute the linked native resource.
+def physics_isabelle_workflow_plan_material_binding(source: IsabellePhysicsDerivationTraceIsabelleGroundingSearchArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsIsabelleWorkflowPlanArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsIsabelleWorkflowPlanArtifact(
+        subject = "typed material binding for physics_isabelle_workflow_plan",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_isabelle_workflow_plan")
+
+# Material binding descriptor for `physics-isabelle-type-system-builder`; this does not execute the linked native resource.
+def physics_isabelle_type_system_build_material_binding(source: IsabellePhysicsDerivationTracePhysicsIsabelleWorkflowPlanArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsIsabelleTypeSystemBuildArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsIsabelleTypeSystemBuildArtifact(
+        subject = "typed material binding for physics_isabelle_type_system_build",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_isabelle_type_system_build",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_isabelle_type_system_build")
+
+# Material binding descriptor for `physics-isabelle-workflow-orchestrator`; this does not execute the linked native resource.
+def physics_isabelle_background_plan_material_binding(source: IsabellePhysicsDerivationTracePhysicsIsabelleTypeSystemBuildArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsIsabelleBackgroundPlanArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsIsabelleBackgroundPlanArtifact(
+        subject = "typed material binding for physics_isabelle_background_plan",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_isabelle_background_plan")
+
+# Material binding descriptor for `physics-isabelle-assumption-context-encoder`; this does not execute the linked native resource.
+def physics_isabelle_assumptions_encode_material_binding(source: IsabellePhysicsDerivationTracePhysicsIsabelleBackgroundPlanArtifact) -> Computed[IsabellePhysicsDerivationTracePhysicsIsabelleAssumptionsEncodeArtifact]:
+    artifact = IsabellePhysicsDerivationTracePhysicsIsabelleAssumptionsEncodeArtifact(
+        subject = "typed material binding for physics_isabelle_assumptions_encode",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_isabelle_assumptions_encode",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_isabelle_assumptions_encode")
+
+# Material binding descriptor for `physics-isabelle-derivation-drafter`; this does not execute the linked native resource.
+def draft_physics_isabelle_derivation_material_binding(source: IsabellePhysicsDerivationTracePhysicsIsabelleAssumptionsEncodeArtifact) -> Computed[IsabellePhysicsDerivationTraceDraftPhysicsIsabelleDerivationArtifact]:
+    artifact = IsabellePhysicsDerivationTraceDraftPhysicsIsabelleDerivationArtifact(
+        subject = "typed material binding for draft_physics_isabelle_derivation",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: draft_physics_isabelle_derivation")
+
+# Material binding descriptor for `isabelle-execution-runner`; this does not execute the linked native resource.
+def execute_physics_isabelle_derivation_material_binding(source: IsabellePhysicsDerivationTraceDraftPhysicsIsabelleDerivationArtifact) -> Computed[IsabellePhysicsDerivationTraceExecutePhysicsIsabelleDerivationArtifact]:
+    artifact = IsabellePhysicsDerivationTraceExecutePhysicsIsabelleDerivationArtifact(
+        subject = "typed material binding for execute_physics_isabelle_derivation",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation execute_physics_isabelle_derivation",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: execute_physics_isabelle_derivation")
+
+# Material binding descriptor for `autoformalization-result-realness-verifier`; this does not execute the linked native resource.
+def artifact_realness_gate_material_binding(source: IsabellePhysicsDerivationTraceExecutePhysicsIsabelleDerivationArtifact) -> Computed[IsabellePhysicsDerivationTraceArtifactRealnessGateArtifact]:
+    artifact = IsabellePhysicsDerivationTraceArtifactRealnessGateArtifact(
+        subject = "typed material binding for artifact_realness_gate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        considered_dispositions = ["pass", "warn", "fail", "blocked"],
+        selected_disposition = "not_tested",
+        rationale = "native execution is outside this structural PRISM fixture",
+    )
+    return compute(artifact, procedure = "linked material binding: artifact_realness_gate")
+
+# Material binding descriptor for `physics-isabelle-final-hypothesis-reviewer`; this does not execute the linked native resource.
+def review_physics_isabelle_final_hypotheses_material_binding(source: IsabellePhysicsDerivationTraceArtifactRealnessGateArtifact) -> Computed[IsabellePhysicsDerivationTraceReviewPhysicsIsabelleFinalHypothesesArtifact]:
+    artifact = IsabellePhysicsDerivationTraceReviewPhysicsIsabelleFinalHypothesesArtifact(
+        subject = "typed material binding for review_physics_isabelle_final_hypotheses",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: review_physics_isabelle_final_hypotheses")
+
+# Material binding descriptor for `mathematical-isabelle-final-hypothesis-reviewer`; this does not execute the linked native resource.
+def review_mathematical_isabelle_final_hypotheses_material_binding(source: IsabellePhysicsDerivationTraceReviewPhysicsIsabelleFinalHypothesesArtifact) -> Computed[IsabellePhysicsDerivationTraceReviewMathematicalIsabelleFinalHypothesesArtifact]:
+    artifact = IsabellePhysicsDerivationTraceReviewMathematicalIsabelleFinalHypothesesArtifact(
+        subject = "typed material binding for review_mathematical_isabelle_final_hypotheses",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: review_mathematical_isabelle_final_hypotheses")
+
+# Material binding descriptor for `physics-isabelle-consistency-report-orchestrator`; this does not execute the linked native resource.
+def consistency_physics_isabelle_report_material_binding(source: IsabellePhysicsDerivationTraceReviewMathematicalIsabelleFinalHypothesesArtifact) -> Computed[IsabellePhysicsDerivationTraceConsistencyPhysicsIsabelleReportArtifact]:
+    artifact = IsabellePhysicsDerivationTraceConsistencyPhysicsIsabelleReportArtifact(
+        subject = "typed material binding for consistency_physics_isabelle_report",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_physics_isabelle_report")
+
+# Material binding descriptor for `physics-isabelle-workflow-orchestrator`; this does not execute the linked native resource.
+def reflection_physics_isabelle_process_material_binding(source: IsabellePhysicsDerivationTraceConsistencyPhysicsIsabelleReportArtifact) -> Computed[PhysicsIsabelleConsistencyAssessment]:
+    artifact = PhysicsIsabelleConsistencyAssessment(
+        subject = "typed material binding for reflection_physics_isabelle_process",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation reflection_physics_isabelle_process",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: reflection_physics_isabelle_process")
+
+# controlled physics derivation autoformalization over Isabelle/HOL using shared physics preformalization and Isabelle-specific grounding, drafting, execution, final review, and consistency gates without modifying the Lean physics loop.
+workflow IsabellePhysicsDerivationTraceLoop(
+    workflow_source: PhysicsIsabelleDerivationRequest,
+) -> Computed[PhysicsIsabelleConsistencyAssessment]
+    fails ModelFailure
+    ! {AI.Generate, Context.Disclose}:
+    sequence:
+        [intake_source_unit_inventory: intake_source_unit_inventory_material_binding(workflow_source)]
+        [preformalization_expansion_support: preformalization_expansion_support_agent(intake_source_unit_inventory.value)]
+        [preformalization_expansion_difficulty: preformalization_expansion_difficulty_material_binding(preformalization_expansion_support.value)]
+        [preformalization_expansion_web_support: preformalization_expansion_web_support_agent(preformalization_expansion_difficulty.value)]
+        [preformalization_expand: preformalization_expand_agent(preformalization_expansion_web_support.value)]
+        [preformalization_review_suite: preformalization_review_suite_agent(preformalization_expand.value)]
+        [preformalization_review_completeness: preformalization_review_completeness_agent(preformalization_review_suite.value)]
+        [preformalization_review_bindings: preformalization_review_bindings_agent(preformalization_review_completeness.value)]
+        [preformalization_line_translation_packet: preformalization_line_translation_packet_material_binding(preformalization_review_bindings.value)]
+        [preformalization_result_existence_precheck: preformalization_result_existence_precheck_material_binding(preformalization_line_translation_packet.value)]
+        [physics_source_extract: physics_source_extract_material_binding(preformalization_result_existence_precheck.value)]
+        [physics_informal_elicit: physics_informal_elicit_material_binding(physics_source_extract.value)]
+        [physics_informal_expand: physics_informal_expand_material_binding(physics_informal_elicit.value)]
+        [physics_informal_review: physics_informal_review_material_binding(physics_informal_expand.value)]
+        [physics_symbols_build: physics_symbols_build_material_binding(physics_informal_review.value)]
+        [physics_dimensions_model: physics_dimensions_model_material_binding(physics_symbols_build.value)]
+        [physics_units_ground: physics_units_ground_material_binding(physics_dimensions_model.value)]
+        [physics_equations_parse: physics_equations_parse_material_binding(physics_units_ground.value)]
+        [physics_regimes_model: physics_regimes_model_material_binding(physics_equations_parse.value)]
+        [physics_frames_build: physics_frames_build_material_binding(physics_regimes_model.value)]
+        [physics_gaps_detect: physics_gaps_detect_material_binding(physics_frames_build.value)]
+        [physics_gaps_expand: physics_gaps_expand_material_binding(physics_gaps_detect.value)]
+        [physics_laws_ground: physics_laws_ground_material_binding(physics_gaps_expand.value)]
+        [isabelle_grounding_search: isabelle_grounding_search_material_binding(physics_laws_ground.value)]
+        [physics_isabelle_workflow_plan: physics_isabelle_workflow_plan_material_binding(isabelle_grounding_search.value)]
+        [physics_isabelle_type_system_build: physics_isabelle_type_system_build_material_binding(physics_isabelle_workflow_plan.value)]
+        [physics_isabelle_background_plan: physics_isabelle_background_plan_material_binding(physics_isabelle_type_system_build.value)]
+        [physics_isabelle_assumptions_encode: physics_isabelle_assumptions_encode_material_binding(physics_isabelle_background_plan.value)]
+        [draft_physics_isabelle_derivation: draft_physics_isabelle_derivation_material_binding(physics_isabelle_assumptions_encode.value)]
+        [execute_physics_isabelle_derivation: execute_physics_isabelle_derivation_material_binding(draft_physics_isabelle_derivation.value)]
+        [artifact_realness_gate: artifact_realness_gate_material_binding(execute_physics_isabelle_derivation.value)]
+        [review_physics_isabelle_final_hypotheses: review_physics_isabelle_final_hypotheses_material_binding(artifact_realness_gate.value)]
+        [review_mathematical_isabelle_final_hypotheses: review_mathematical_isabelle_final_hypotheses_material_binding(review_physics_isabelle_final_hypotheses.value)]
+        [consistency_physics_isabelle_report: consistency_physics_isabelle_report_material_binding(review_mathematical_isabelle_final_hypotheses.value)]
+        [reflection_physics_isabelle_process: reflection_physics_isabelle_process_material_binding(consistency_physics_isabelle_report.value)]
+    return reflection_physics_isabelle_process

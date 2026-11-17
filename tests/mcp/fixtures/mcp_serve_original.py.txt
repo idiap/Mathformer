@@ -1,0 +1,98 @@
+def main(argv: Optional[List[str]] = None) -> int:
+    global _READONLY, _AGENTC_SERVICE_CONFIG
+    args = parse_args(argv)
+
+    if args.config:
+        overrides: dict[str, dict[str, Any]] = {"service": {}, "security": {}}
+        if args.transport is not None:
+            overrides["service"]["transport"] = args.transport
+        if args.host is not None:
+            overrides["service"]["host"] = args.host
+        if args.port is not None:
+            overrides["service"]["port"] = args.port
+        if args.readonly is not None:
+            overrides["service"]["readonly"] = args.readonly
+        if args.rate_limit is not None:
+            overrides["service"]["rate_limit_per_minute"] = args.rate_limit
+        if args.auth_token is not None:
+            overrides["security"]["mcp_bearer_token"] = args.auth_token
+        config = load_service_config(
+            args.config, cli_overrides=overrides, require_existing=True
+        )
+        if not config.ok:
+            print(
+                json.dumps(
+                    {"ok": False, "errors": list(config.errors)},
+                    indent=2,
+                    sort_keys=True,
+                ),
+                file=sys.stderr,
+            )
+            return 2
+        _AGENTC_SERVICE_CONFIG = config
+        runtime = config.runtime_settings()
+        apply_runtime_config(
+            call_log_path=runtime["call_log_path"],
+            default_timeout_seconds=runtime["default_timeout_seconds"],
+            allowed_write_roots=runtime["allowed_write_roots"],
+        )
+        apply_provider_environment(config)
+        transport = runtime["transport"]
+        host = runtime["host"]
+        port = runtime["port"]
+        readonly = runtime["readonly"]
+        auth_token = runtime["auth_token"]
+        rate_limit = runtime["rate_limit"]
+        require_auth_for_http = runtime["require_auth_for_http"]
+    else:
+        transport = args.transport or "stdio"
+        host = args.host or "127.0.0.1"
+        port = args.port if args.port is not None else 8765
+        readonly = bool(args.readonly)
+        auth_token = (
+            args.auth_token
+            if args.auth_token is not None
+            else os.environ.get("MATHFORMER_MCP_TOKEN")
+        )
+        rate_limit = args.rate_limit if args.rate_limit is not None else 60
+        require_auth_for_http = False
+
+    _READONLY = readonly
+
+    if transport == "stdio":
+        mcp.run(transport="stdio")
+        return 0
+
+    import uvicorn
+
+    if require_auth_for_http and not auth_token:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "streamable-http config requires a bearer token",
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        return 2
+
+    mcp.settings.host = host
+    mcp.settings.port = port
+    app = mcp.streamable_http_app()
+    if rate_limit > 0:
+        app = _RateLimitMiddleware(app, rate_limit)
+    if auth_token:
+        app = _BearerAuthMiddleware(app, auth_token)
+    else:
+        print(
+            "[mcp_server] WARNING: --transport streamable-http started without "
+            "--auth-token/MATHFORMER_MCP_TOKEN. Anyone who can reach "
+            f"{host}:{port} can call every tool. Set a token or put "
+            "this behind an authenticating reverse proxy.",
+            file=sys.stderr,
+        )
+    uvicorn.run(app, host=host, port=port)
+    return 0

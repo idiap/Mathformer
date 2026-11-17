@@ -1,0 +1,448 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Keep the FormalPhysics comparative report workflow covered by a compact
+#   deterministic test.
+#
+# Intent:
+#   Validate the self-test path and the core report artifacts without requiring
+#   external selected_examples files.
+#
+# Function:
+#   Shares fixture, subprocess and fixed validation steps with MCP bindings.
+#
+# Maintenance Notes:
+#   This test should remain lightweight; full Lean execution is a report option,
+#   not part of this smoke check.
+
+"""Validate the FormalPhysics comparative report builder."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+REPORT_BUILDER = (
+    REPO_ROOT
+    / "skills"
+    / "physics-common"
+    / "formalphysics-comparative-analysis-reporter"
+    / "scripts"
+    / "build_comparative_report.py"
+)
+
+
+def run_report_builder(
+    input_json: Path, output_dir: Path, synthesis_json: Path
+) -> tuple[int, dict[str, Any], str]:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(REPORT_BUILDER),
+            "--input-json",
+            str(input_json),
+            "--output-dir",
+            str(output_dir),
+            "--synthesis-report-json",
+            str(synthesis_json),
+            "--json",
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+    )
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        payload = {}
+    return completed.returncode, payload, completed.stderr
+
+
+CHECK_ITEMS = {
+    "artifacts": (
+        "json",
+        "html",
+        "markdown",
+        "codex_exec_prompts",
+        "qualitative_role_reviews_json",
+        "strategy_summary_json",
+        "strategy_summary_markdown",
+        "theorem_prover_expert_review_markdown",
+        "physics_expert_review_markdown",
+    ),
+    "html": (
+        "Lean Side By Side",
+        "Coverage Leaderboard",
+        "coverage-table",
+        "Invoked Concepts",
+        "Role Reviews",
+        "Strategy Summary",
+        "Judge Synthesis",
+        "Synthesis Todos",
+        "Metric Criteria",
+        "mathlib_concept_grounding",
+        "physics_representation_completeness",
+        "comparison-data",
+        "Foundations",
+        "current_mathformer_lean",
+    ),
+    "metrics": (
+        "mathlib_concept_grounding",
+        "variable_naming_quality",
+        "formal_physics_modeling_depth",
+        "physics_representation_completeness",
+        "reviewability_clarity",
+    ),
+    "critics": (
+        "mathlib_grounding_critic",
+        "naming_reviewability_critic",
+        "formality_depth_critic",
+        "physics_completeness_critic",
+    ),
+}
+
+
+def create_fixture(tmp: Path):
+    findings = []
+    input_json = tmp / "selected_examples.json"
+    input_json.write_text(
+        json.dumps(
+            [
+                {
+                    "FS_index": 0,
+                    "question": "A charged particle has a Lorentz force component.",
+                    "answer": "The reference derives the force component but is not gold.",
+                    "mathformerphysics_output": "theorem stale : True := by trivial",
+                    "formaldiscovery_output": "import Mathlib\n\ntheorem external_solution (q : Real) : q = q := by rfl\n",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    synthesis_json = tmp / "synthesis_report.json"
+    synthesis_json.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "style": "formalphysics_judge_synthesis_report",
+                "source_report": {"summary": {"case_count": 1, "candidate_count": 2}},
+                "approaches": {
+                    "current_mathformer_lean": {
+                        "accepted_count": 1,
+                        "blocked_count": 0,
+                        "best_solution_count": 1,
+                        "aggregate_statuses": {"accepted": 1},
+                        "compile_statuses": {"not_run": 1},
+                        "aspect_scores": {"functional_lean": 4.0},
+                        "strengths": ["Self-test strength."],
+                        "weaknesses": [],
+                    },
+                    "external_formaldiscovery": {
+                        "accepted_count": 0,
+                        "blocked_count": 1,
+                        "best_solution_count": 0,
+                        "aggregate_statuses": {"blocked": 1},
+                        "compile_statuses": {"not_run": 1},
+                        "aspect_scores": {"functional_lean": 2.0},
+                        "strengths": [],
+                        "weaknesses": ["Self-test weakness."],
+                    },
+                },
+                "aspect_comparison": [
+                    {
+                        "aspect_id": "functional_lean",
+                        "label": "Functional Lean",
+                        "focus": "Self-test focus.",
+                        "scores": {
+                            "current_mathformer_lean": 4.0,
+                            "external_formaldiscovery": 2.0,
+                        },
+                        "winner": "current_mathformer_lean",
+                        "gap": 2.0,
+                        "interpretation": "Self-test interpretation.",
+                    }
+                ],
+                "case_synthesis": [
+                    {
+                        "case_id": "formalphysics_0000",
+                        "best_solution": {
+                            "candidate_id": "current_mathformer_lean",
+                            "status": "functional_best",
+                            "mean_score": 4.0,
+                        },
+                        "candidate_statuses": {},
+                        "role_preferences": {
+                            "theorem_prover_expert": "current_mathformer_lean",
+                            "physics_expert": "current_mathformer_lean",
+                        },
+                    }
+                ],
+                "judge_review_synthesis": {
+                    "codex_exec_prompt_readiness": {
+                        "completed_count": 16,
+                        "pending_count": 0,
+                        "by_judge": {"lean_tp_judge": {"completed": 2}},
+                    }
+                },
+                "synthesis_todos": [
+                    {
+                        "id": "FPSYN-SELF",
+                        "title": "Self-test todo",
+                        "detail": "Verify synthesis tab rendering.",
+                        "status": "test",
+                        "actionability": "repo_actionable",
+                    }
+                ],
+                "todo_state_summary": {"open_repo_actionable_count": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_dir = tmp / "report"
+    return dict(
+        tmp=str(tmp),
+        input_json=str(input_json),
+        output_dir=str(output_dir),
+        synthesis_json=str(synthesis_json),
+        findings=findings,
+    )
+
+
+def invoke_builder(state: dict):
+    code, payload, stderr = run_report_builder(
+        Path(state["input_json"]),
+        Path(state["output_dir"]),
+        Path(state["synthesis_json"]),
+    )
+    state.update(code=code, payload=payload, stderr=stderr)
+    return state
+
+
+def start_artifacts(state: dict):
+    code, payload, stderr, findings = (
+        state[k] for k in ("code", "payload", "stderr", "findings")
+    )
+    if code != 0:
+        findings.append(
+            {"severity": "high", "code": "report_builder_failed", "stderr": stderr}
+        )
+    if payload.get("ok") is not True:
+        findings.append(
+            {
+                "severity": "high",
+                "code": "report_builder_not_ok",
+                "payload": payload,
+            }
+        )
+    summary = payload.get("summary", {})
+    if summary.get("reference_answer_role") != "non_gold_reference_evidence":
+        findings.append(
+            {
+                "severity": "high",
+                "code": "reference_role_not_non_gold",
+                "summary": summary,
+            }
+        )
+    if summary.get("foundations_file_count", 0) < 1:
+        findings.append(
+            {
+                "severity": "high",
+                "code": "foundations_not_included",
+                "summary": summary,
+            }
+        )
+    artifacts = payload.get("artifacts", {})
+    state.update(summary=summary, artifacts=artifacts, phase="artifacts", cursor=0)
+    return state
+
+
+def check_item(state: dict):
+    phase = state["phase"]
+    cursor = state["cursor"]
+    item = CHECK_ITEMS[phase][cursor]
+    findings = state["findings"]
+    if phase == "artifacts":
+        artifacts = state["artifacts"]
+        key = item
+        path_text = artifacts.get(key)
+        if not path_text or not Path(path_text).exists():
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": f"missing_{key}_artifact",
+                    "artifacts": artifacts,
+                }
+            )
+    elif phase == "html":
+        html_text = state["html_text"]
+        marker = item
+        if marker not in html_text:
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "html_marker_missing",
+                    "marker": marker,
+                }
+            )
+    elif phase == "metrics":
+        criteria = state["report_payload"].get("metric_criteria", {})
+        metric = item
+        if metric not in criteria:
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "metric_criterion_missing",
+                    "metric": metric,
+                }
+            )
+    elif phase == "critics":
+        profiles = state["report_payload"].get("critic_profiles", {})
+        critic = item
+        if critic not in profiles:
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "critic_profile_missing",
+                    "critic": critic,
+                }
+            )
+    state["cursor"] += 1
+    return state, state["cursor"] == len(CHECK_ITEMS[phase])
+
+
+def after_artifacts(state: dict):
+    output_dir = Path(state["output_dir"])
+    findings, artifacts = state["findings"], state["artifacts"]
+    cleaned = output_dir / "selected_examples.cleaned.json"
+    if not cleaned.exists() or "mathformerphysics_output" in cleaned.read_text(
+        encoding="utf-8"
+    ):
+        findings.append(
+            {"severity": "high", "code": "obsolete_self_output_not_removed"}
+        )
+    html_path = Path(artifacts.get("html", "")) if artifacts.get("html") else None
+    present = bool(html_path and html_path.exists())
+    if present:
+        state.update(
+            html_text=html_path.read_text(encoding="utf-8"), phase="html", cursor=0
+        )
+    return state, present
+
+
+def report_guard(state: dict):
+    artifacts = state["artifacts"]
+    report_json = Path(artifacts.get("json", "")) if artifacts.get("json") else None
+    return state, bool(report_json and report_json.exists())
+
+
+def start_report(state: dict):
+    report_json = Path(state["artifacts"]["json"])
+    findings = state["findings"]
+    report_payload = json.loads(report_json.read_text(encoding="utf-8"))
+    reviewers = set(report_payload.get("qualitative_reviews", {}))
+    if reviewers != {"theorem_prover_expert", "physics_expert"}:
+        findings.append(
+            {
+                "severity": "high",
+                "code": "qualitative_reviewers_missing",
+                "reviewers": sorted(reviewers),
+            }
+        )
+    state.update(report_payload=report_payload, phase="metrics", cursor=0)
+    return state
+
+
+def start_critics(state: dict):
+    state.update(phase="critics", cursor=0)
+    return state
+
+
+def finish_report(state: dict):
+    report_payload, summary, findings = (
+        state[k] for k in ("report_payload", "summary", "findings")
+    )
+    first_candidate = report_payload.get("cases", [{}])[0].get("candidates", [{}])[0]
+    if "critic_evidence" not in first_candidate:
+        findings.append({"severity": "high", "code": "critic_evidence_missing"})
+    if "invoked_external_dependency_excerpt_count" not in summary:
+        findings.append({"severity": "high", "code": "invoked_excerpt_summary_missing"})
+    if "invoked_external_dependency_excerpts" not in first_candidate.get(
+        "foundations_dependency", {}
+    ):
+        findings.append(
+            {"severity": "high", "code": "invoked_dependency_excerpts_missing"}
+        )
+    if not report_payload.get("judge_synthesis", {}).get("available"):
+        findings.append({"severity": "high", "code": "judge_synthesis_not_loaded"})
+    if report_payload.get("summary", {}).get("judge_synthesis_loaded") is not True:
+        findings.append(
+            {"severity": "high", "code": "judge_synthesis_summary_not_loaded"}
+        )
+    return state
+
+
+def finish(state: dict):
+    summary, findings = state["summary"], state["findings"]
+    return {
+        "schema_version": 1,
+        "ok": not any(item["severity"] == "high" for item in findings),
+        "style": "formalphysics_comparative_report_test",
+        "summary": summary,
+        "findings": findings,
+    }
+
+
+def run_check() -> dict[str, Any]:
+    with tempfile.TemporaryDirectory() as raw_tmp:
+        state = create_fixture(Path(raw_tmp))
+        invoke_builder(state)
+        start_artifacts(state)
+        for _ in CHECK_ITEMS["artifacts"]:
+            check_item(state)
+        _, present = after_artifacts(state)
+        if present:
+            for _ in CHECK_ITEMS["html"]:
+                check_item(state)
+        _, present = report_guard(state)
+        if present:
+            start_report(state)
+            for _ in CHECK_ITEMS["metrics"]:
+                check_item(state)
+            start_critics(state)
+            for _ in CHECK_ITEMS["critics"]:
+                check_item(state)
+            finish_report(state)
+    return finish(state)
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    report = run_check()
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(f"ok: {report['ok']}")
+    return 0 if report["ok"] else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

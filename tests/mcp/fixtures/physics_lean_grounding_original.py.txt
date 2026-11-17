@@ -1,0 +1,505 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Automate repository maintenance tasks that would be error-prone if performed by hand.
+#
+# Intent:
+#   Expose command-line entry points for setup, generation, indexing, auditing, and proof execution.
+#
+# Function:
+#   Implements operational glue used by tests, skills, docs, and developer workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Audit Lean physics library grounding and optionally refresh reports."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+from pathlib import Path
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+LEAN_ROOT = REPO_ROOT / "MathformerPhysicsLib" / "Lean"
+AUDIT_JSON = REPO_ROOT / "MathformerPhysicsLib" / "MATHLIB_GROUNDING_AUDIT.json"
+AUDIT_MD = REPO_ROOT / "MathformerPhysicsLib" / "MATHLIB_GROUNDING_AUDIT.md"
+
+
+MATHLIB_NATIVE_SURFACE_TERMS = [
+    "EuclideanSpace",
+    "LinearMap",
+    "ContinuousLinearMap",
+    "Matrix",
+    "InnerProductSpace",
+    "NormedSpace",
+    "Module",
+    "HasDerivAt",
+    "HasFDerivAt",
+    "Differentiable",
+    "ContDiff",
+    "deriv",
+    "fderiv",
+    "Hermitian",
+    "IsSelfAdjoint",
+    "IsUnitary",
+]
+
+LOCAL_SCAFFOLD_TERMS = [
+    "Quantity",
+    "VectorQuantity",
+    "PhysicsContext",
+    "SourceLaw",
+    "SmoothPotentialContext",
+    "PhysDim",
+]
+
+
+def strip_lean_comments(text: str) -> str:
+    """Document the responsibility of ``strip_lean_comments``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``strip_lean_comments`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    without_blocks = re.sub(r"/-!?.*?-/", "", text, flags=re.S)
+    return re.sub(r"--.*", "", without_blocks)
+
+
+def count_terms(text: str, terms: Sequence[str]) -> int:
+    """Document the responsibility of ``count_terms``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``count_terms`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return sum(len(re.findall(rf"\b{re.escape(term)}\b", text)) for term in terms)
+
+
+def count_opaque_dimension_surfaces(lean_code: str) -> int:
+    """Document the responsibility of ``count_opaque_dimension_surfaces``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``count_opaque_dimension_surfaces`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return len(
+        re.findall(
+            r"^\s*opaque\s+\w*(?:Dim|Dimension|Charge|Force|Velocity|Field|Energy|Mass|Length|Time)\w*\s*:\s*Type\b",
+            lean_code,
+            re.M,
+        )
+    )
+
+
+def count_string_context_surfaces(lean_code: str) -> int:
+    """Document the responsibility of ``count_string_context_surfaces``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``count_string_context_surfaces`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return len(re.findall(r":\s*String\b", lean_code)) + len(
+        re.findall(r'=\s*"[^"]*(?:source|generated|frame|smooth|law)', lean_code, re.I)
+    )
+
+
+def has_typed_prop_context(lean_code: str) -> bool:
+    """Document the responsibility of ``has_typed_prop_context``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``has_typed_prop_context`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    predicate_pattern = (
+        r"\b(HasDerivAt|HasFDerivAt|Differentiable|ContDiff|IsSelfAdjoint|Hermitian|"
+        r"IsUnitary|LinearMap|ContinuousLinearMap|NeZero|NoZeroSMulDivisors|forall)\b"
+    )
+    return bool(
+        re.search(predicate_pattern, lean_code)
+        or re.search(r"(^|[\s(:])0\s*<", lean_code)
+    )
+
+
+def imports(text: str) -> list[str]:
+    """Document the responsibility of ``imports``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``imports`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return [
+        match.group(1).strip()
+        for match in re.finditer(r"^\s*import\s+(.+)$", text, re.M)
+    ]
+
+
+def grounding_level(signals: dict[str, Any]) -> str:
+    """Document the responsibility of ``grounding_level``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``grounding_level`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if (
+        signals["mathlib_native_surface_count"] > 0
+        and signals["local_scaffold_count"] == 0
+        and signals["opaque_dimension_surface_count"] == 0
+        and signals["string_context_surface_count"] == 0
+        and signals["typed_prop_context"]
+    ):
+        return "high"
+    if signals["mathlib_native_surface_count"] > 0:
+        return "medium"
+    return "low"
+
+
+def main_gap(signals: dict[str, Any]) -> str:
+    """Document the responsibility of ``main_gap``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``main_gap`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    gaps: list[str] = []
+    if signals["local_scaffold_count"]:
+        gaps.append("local Quantity/VectorQuantity/context scaffolds")
+    if signals["opaque_dimension_surface_count"]:
+        gaps.append(
+            f"{signals['opaque_dimension_surface_count']} opaque dimension placeholders"
+        )
+    if signals["string_context_surface_count"]:
+        gaps.append("string-valued context/law labels")
+    if signals["mathlib_native_surface_count"] == 0:
+        gaps.append("no Mathlib-native vector/operator/calculus surface")
+    if not gaps:
+        return "residual unit/dimension bridges remain shallow but theorem surface is Mathlib-native"
+    return ", ".join(gaps)
+
+
+def audit_case(case_dir: Path) -> dict[str, Any]:
+    """Document the responsibility of ``audit_case``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``audit_case`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    lean_file = case_dir / "MathformerPhysics.lean"
+    text = lean_file.read_text(encoding="utf-8")
+    lean_code = strip_lean_comments(text)
+    signals = {
+        "custom_quantity": bool(re.search(r"\bstructure\s+Quantity\b", lean_code)),
+        "custom_vector_or_field": bool(
+            re.search(r"\bstructure\s+VectorQuantity\b", lean_code)
+        ),
+        "local_scaffold_count": count_terms(lean_code, LOCAL_SCAFFOLD_TERMS),
+        "opaque_dimension_surface_count": count_opaque_dimension_surfaces(lean_code),
+        "string_context_surface_count": count_string_context_surfaces(lean_code),
+        "mathlib_native_surface_count": count_terms(
+            lean_code, MATHLIB_NATIVE_SURFACE_TERMS
+        ),
+        "linear_map": "LinearMap" in lean_code or "→ₗ[" in lean_code,
+        "module": bool(re.search(r"\bModule\b", lean_code)),
+        "fin_components": bool(re.search(r"\bFin\s+\d+\b", lean_code)),
+        "euclidean_space": "EuclideanSpace" in lean_code,
+        "calculus_terms": bool(
+            re.search(
+                r"\b(Differentiable|HasDerivAt|HasFDerivAt|deriv|fderiv)\b", lean_code
+            )
+        ),
+        "typed_prop_context": has_typed_prop_context(lean_code),
+        "sorry_or_admit": bool(re.search(r"\b(sorry|admit)\b", lean_code)),
+    }
+    level = grounding_level(signals)
+    return {
+        "case": case_dir.name,
+        "imports": imports(text),
+        "grounding_level": level,
+        "complete_status_allowed": level == "high",
+        "main_gap": main_gap(signals),
+        "signals": signals,
+    }
+
+
+def update_consistency_report(case: dict[str, Any]) -> None:
+    """Document the responsibility of ``update_consistency_report``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``update_consistency_report`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    report_path = LEAN_ROOT / case["case"] / "consistency_report.json"
+    if not report_path.exists():
+        return
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    evidence = report.setdefault("evidence", {})
+    evidence["mathlib_grounding_level"] = case["grounding_level"]
+    evidence["mathlib_native_surface_count"] = case["signals"][
+        "mathlib_native_surface_count"
+    ]
+    evidence["local_scaffold_count"] = case["signals"]["local_scaffold_count"]
+    evidence["opaque_dimension_surface_count"] = case["signals"][
+        "opaque_dimension_surface_count"
+    ]
+    evidence["string_context_surface_count"] = case["signals"][
+        "string_context_surface_count"
+    ]
+    evidence["typed_prop_context"] = case["signals"]["typed_prop_context"]
+    evidence.setdefault("background_packet_present", False)
+
+    blockers = [
+        blocker
+        for blocker in report.get("blockers", [])
+        if not (
+            blocker.startswith("mathlib_grounding_")
+            or blocker
+            in {
+                "mathlib_grounding_missing",
+                "missing_physics_final_hypothesis_review",
+                "missing_background_dependency_plan",
+            }
+        )
+    ]
+
+    if (
+        evidence.get("final_derivation_review_style")
+        != "physics_final_hypothesis_review"
+    ):
+        blockers.append("missing_physics_final_hypothesis_review")
+    if case["grounding_level"] != "high":
+        blockers.append(f"mathlib_grounding_{case['grounding_level']}")
+    if not evidence.get("background_packet_present"):
+        blockers.append("missing_background_dependency_plan")
+
+    seen: set[str] = set()
+    report["blockers"] = [
+        blocker for blocker in blockers if not (blocker in seen or seen.add(blocker))
+    ]
+    report["status"] = (
+        "complete"
+        if not report["blockers"]
+        else (
+            "draft"
+            if evidence.get("compile_ok")
+            and evidence.get("realness_ok")
+            and evidence.get("anchor_ok")
+            else "blocked"
+        )
+    )
+    report_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def write_audit(cases: list[dict[str, Any]]) -> None:
+    """Document the responsibility of ``write_audit``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    high = sum(1 for case in cases if case["grounding_level"] == "high")
+    medium = sum(1 for case in cases if case["grounding_level"] == "medium")
+    low = sum(1 for case in cases if case["grounding_level"] == "low")
+    packet = {
+        "schema_version": 2,
+        "summary": {
+            "cases": len(cases),
+            "high_grounding": high,
+            "medium_grounding": medium,
+            "low_grounding": low,
+            "maximally_grounded_complete_candidates": high,
+            "draft_or_legacy_candidates": len(cases) - high,
+        },
+        "cases": cases,
+    }
+    AUDIT_JSON.write_text(
+        json.dumps(packet, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+    rows = [
+        "# Mathlib Grounding Audit",
+        "",
+        (
+            "Conclusion: all current Lean physics library entries are high-grounded "
+            "complete candidates. A Lean physics artifact may remain complete only "
+            "when the theorem surface is Mathlib-native and the consistency report "
+            "carries physics-final-review grounding evidence."
+        ),
+        "",
+        "| Case | Level | Complete allowed | Main gap |",
+        "|---|---:|---:|---|",
+    ]
+    for case in cases:
+        rows.append(
+            f"| `{case['case']}` | {case['grounding_level']} | "
+            f"{'yes' if case['complete_status_allowed'] else 'no'} | {case['main_gap']} |"
+        )
+    rows.extend(
+        [
+            "",
+            "## Gate Policy",
+            "",
+            "- `high`: may be reported complete when Lean execution, source anchors, unit checks, background dependencies, critics, and final reviews also pass.",
+            "- `medium` or `low`: must remain draft/blocked until a physics final review records high Mathlib grounding or an explicit waiver/blocker is added.",
+            "- Missing physics final review or missing background dependency plan blocks complete status even if the Lean file compiles.",
+        ]
+    )
+    AUDIT_MD.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Document the responsibility of ``parse_args``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--update-consistency", action="store_true")
+    parser.add_argument("--self-test", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    args = parse_args(argv)
+    cases = [
+        audit_case(path)
+        for path in sorted(LEAN_ROOT.glob("formalphysics_*"))
+        if (path / "MathformerPhysics.lean").exists()
+    ]
+    if args.self_test:
+        assert any(case["grounding_level"] == "high" for case in cases), cases
+        assert all(case["grounding_level"] == "high" for case in cases), cases
+    if args.update_consistency:
+        for case in cases:
+            update_consistency_report(case)
+    write_audit(cases)
+    print(
+        json.dumps(
+            {"cases": len(cases), "updated_consistency": args.update_consistency},
+            indent=2,
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

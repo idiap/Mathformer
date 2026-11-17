@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Use the development tools resolved in uv.lock. Hooks report issues without
+# rewriting staged work, generated proof artifacts, or vendored snapshots.
+minimum_pre_commit_version: '4.0.0'
+default_stages: [pre-commit]
+exclude: >-
+  ^(artifacts/|vendor/|libraries/|backends/sympy/MathformerSympy/|docs/migrations/portable-repository-adoption/(upstream-v1\.2|evidence)/)
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: Ruff lint
+        entry: uv run --locked --no-sync python -m ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+      - id: black
+        name: Black formatting check
+        entry: uv run --locked --no-sync python -m black --check
+        language: system
+        types_or: [python, pyi]

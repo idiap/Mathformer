@@ -1,0 +1,432 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_adoption_test_contracts_workflow
+version: 1.0.0
+kind: workflow
+description: Execute the native portable-adoption unittest suite through shared staged
+  hub and unittest boundaries.
+aliases:
+- adoption:test-contracts
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+    representation: value
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+    representation: value
+  Bool:
+    schema:
+      type: boolean
+  Boundary:
+    schema:
+      type: object
+      required:
+      - execute
+      - payload
+      - snapshot
+      properties:
+        execute:
+          type: boolean
+        payload:
+          type: object
+        snapshot:
+          type: object
+  SuiteState:
+    schema:
+      type: object
+      required:
+      - shared
+      - remaining
+      - results
+      properties:
+        shared:
+          type: object
+          required:
+          - session
+          - ready
+          properties:
+            session:
+              type: string
+            ready:
+              type: boolean
+          description: MCP-session handle and immutable class-setup guard; empty handle
+            denotes native early return.
+        remaining:
+          type: array
+          maxItems: 11
+          items:
+            type: string
+          description: Default unittest lexicographic method order; fixed source suite
+            without extra argv.
+        results:
+          type: array
+          items:
+            type: object
+          description: Accumulated unittest results, including class-setup errors.
+  TestResult:
+    schema:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          enum:
+          - success
+          - failure
+          - error
+          - skipped
+      description: One unittest result; assertions/errors end that test, and skips
+        retain their reason.
+inputs:
+  context:
+    type: RunContext
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  prepare_boundary:
+    inputs:
+      context:
+        type: RunContext
+    outputs:
+      boundary:
+        type: Boundary
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adoption_tests_prepare
+        operation: mathformer_adoption_tests_prepare
+  early_result:
+    inputs:
+      boundary:
+        type: Boundary
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adoption_tests_early
+        operation: mathformer_adoption_tests_early
+  initialize_suite:
+    inputs:
+      boundary:
+        type: Boundary
+    outputs:
+      state:
+        type: SuiteState
+      ready:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adoption_tests_initialize
+        operation: mathformer_adoption_tests_initialize
+  run_test:
+    inputs:
+      state:
+        type: SuiteState
+    outputs:
+      test:
+        type: TestResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adoption_tests_run
+        operation: mathformer_adoption_tests_run
+  advance_suite:
+    inputs:
+      state:
+        type: SuiteState
+      test:
+        type: TestResult
+    outputs:
+      state:
+        type: SuiteState
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adoption_tests_advance
+        operation: mathformer_adoption_tests_advance
+  setup_failed:
+    inputs:
+      state:
+        type: SuiteState
+    outputs:
+      state:
+        type: SuiteState
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adoption_tests_setup_failed
+        operation: mathformer_adoption_tests_setup_failed
+  finish_boundary:
+    inputs:
+      boundary:
+        type: Boundary
+      state:
+        type: SuiteState
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adoption_tests_finish
+        operation: mathformer_adoption_tests_finish
+flow:
+  kind: sequence
+  steps:
+  - id: prepare
+    kind: call
+    operation: prepare_boundary
+    arguments:
+      context:
+        ref: inputs.context
+  - id: initialize
+    kind: call
+    operation: initialize_suite
+    arguments:
+      boundary:
+        ref: steps.prepare.outputs.boundary
+  - kind: loop
+    state_type: SuiteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 11
+    on_exhausted: fail
+    description: Consume exactly the native 11 cases when setup succeeds. Preflight/dry-run
+      and setup-error states take one inert collection pass; no test or snapshot is
+      executed on early return. Remaining work at the bound fails.
+    body:
+      kind: switch
+      cases:
+      - id: ready
+        when:
+          ref: loop.state.shared.ready
+        body:
+          kind: sequence
+          steps:
+          - id: execute_case
+            kind: call
+            operation: run_test
+            arguments:
+              state:
+                ref: loop.state
+          - id: collect
+            kind: call
+            operation: advance_suite
+            arguments:
+              state:
+                ref: loop.state
+              test:
+                ref: steps.execute_case.outputs.test
+          outputs:
+            state:
+              type: SuiteState
+              value:
+                ref: steps.collect.outputs.state
+            done:
+              type: Bool
+              value:
+                ref: steps.collect.outputs.done
+      default:
+        kind: call
+        operation: setup_failed
+        arguments:
+          state:
+            ref: loop.state
+      outputs:
+        state:
+          type: SuiteState
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: SuiteState
+        value:
+          ref: body.outputs.state
+    id: tests
+  - id: finish
+    kind: switch
+    cases:
+    - id: execute
+      when:
+        ref: steps.prepare.outputs.boundary.execute
+      body:
+        kind: call
+        operation: finish_boundary
+        arguments:
+          boundary:
+            ref: steps.prepare.outputs.boundary
+          state:
+            ref: steps.tests.outputs.state
+    default:
+      kind: call
+      operation: early_result
+      arguments:
+        boundary:
+          ref: steps.prepare.outputs.boundary
+    outputs:
+      result:
+        type: HubResult
+        value:
+          ref: selected.outputs.result
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      - adjacent_PRISM_runtime
+      write:
+      - temporary_test_artifacts
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+    - treat_fake_PRISM_fixture_as_backend_verification
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 25
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Compatibility description only; passing tests or fake-handler execution
+    establishes no scientific result or backend verification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/control/test_portable_adoption.py
+    selector: 'AdoptionTests (entrypoint: unittest.main())'
+    digest: sha256:8ded7f91d98b1fd96f8f9e1b572503e67bcd6ecb348925f8536c637389b32278
+  - path: scripts/mathformer.py
+    selector: build_registry/adoption:test-contracts; preflight; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/test_matrix.json
+    selector: tests/control/test_portable_adoption.py; timeout_seconds=180
+    digest: sha256:0faf5d9e4610bd3a711820f5264aca07cbfbbe4beab57ea5ff43c63197556f6f
+  - path: scripts/adoption_test_contracts_tools.py
+    digest: sha256:0a31a5d096a9afc5645c8afe8ffc226ecc6bc84e2d30af39e9a78101502655fc
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_adoption_test_contracts_workflow_tests.py
+    digest: sha256:92d013bb287a0589c522d8ec14d747bd7d2e09a5aacbd9a2449efec962d00141
+  - path: tests/mcp/fixtures/adoption_tests_boundary.py
+    digest: sha256:a933c4083c133dd06d60cf2abf1e0d254a08800cd1b2234c7721b7ecf3cdcfcb
+  - path: tests/mcp/fixtures/adoption_tests_original.py.txt
+    digest: sha256:b04b0d756380671d6a9b460aa77b6e63c99749c59f276e6611bef466b9c1c036
+  gaps:
+  - Finite case loops and assertions remain inside their owning native unittest methods.
+    Passing fixture tests establishes no backend verification.
+  - Live unittest fixture state is scoped to one MCP session. Resume is disabled.
+  - Native timeout_seconds is null; Lunar enforces the retained workflow wall-time
+    budget. The independent matrix bound is 180 seconds.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: adoption:test-contracts
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: adoption:test-contracts
+      summary: Run portable identity, adapter and PRISM boundary compatibility tests.
+      family: control
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - tests/control/test_portable_adoption.py
+      depends_on: []
+      required_paths: []
+      required_tools: []
+      optional_tools: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: Registered staged MCP tools share native hub preflight/write audit
+      and incremental unittest traversal with the original entrypoint.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Preserve failed preflight, unittest exit and write audit as failure
+      data.
+    scientific_payloads: HubResult is a transport envelope; fixture receipts are not
+      backend evidence.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: adoption:check depends on this action; the matrix independently invokes
+      the same script. Neither is a child execution of this action.
+# REUSE-IgnoreEnd

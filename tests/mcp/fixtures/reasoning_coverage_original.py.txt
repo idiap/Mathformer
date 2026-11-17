@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Reasoning logs are only useful if every skill application has a clear path
+#   to produce them.
+#
+# Intent:
+#   Audit all Mathformer skills and scripts for native logging support,
+#   wrapper-based logging coverage, and agent-side logging coverage.
+#
+# Function:
+#   Classifies each skill as script-logged, agent-logged, workflow-only, or
+#   missing, and reports scripts that still lack native reasoning-log support.
+#
+# Maintenance Notes:
+#   This auditor intentionally treats the shared logged wrapper as valid
+#   coverage. Use `--require-native-script-logging` when planning a stricter
+#   migration of each individual script.
+
+"""Audit reasoning-log coverage across Mathformer skills."""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict
+import json
+from pathlib import Path
+import re
+import sys
+from typing import Any, Dict, List, Optional, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SKILLS_DIR = REPO_ROOT / "skills"
+NATIVE_LOGGING_MARKERS = (
+    "append_reasoning_log_entry",
+    "--reasoning-log-file",
+    "--reasoning-log",
+    "append_skill_start",
+    "append_skill_complete",
+    "append_skill_error",
+)
+
+
+def parse_frontmatter(text: str) -> Dict[str, str]:
+    """Parse the small YAML-like frontmatter block used by SKILL.md files."""
+    if not text.startswith("---"):
+        return {}
+    end = text.find("\n---", 3)
+    if end == -1:
+        return {}
+    result: Dict[str, str] = {}
+    current_key: Optional[str] = None
+    for raw_line in text[3:end].strip().splitlines():
+        if raw_line.startswith(" ") and current_key:
+            result[current_key] = result[current_key] + " " + raw_line.strip()
+            continue
+        if ":" in raw_line:
+            key, value = raw_line.split(":", 1)
+            current_key = key.strip()
+            result[current_key] = value.strip().strip('"')
+    return result
+
+
+def parse_hooks(path: Path) -> Dict[str, Any]:
+    """Extract hook owners and shared runtime scripts from SKILL_HOOKS.yaml."""
+    owner_hooks: Dict[str, List[str]] = defaultdict(list)
+    shared_runtime_scripts: List[str] = []
+    section: Optional[str] = None
+    current_hook: Optional[str] = None
+    list_name: Optional[str] = None
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped in {
+            "runtime_contract:",
+            "hooks:",
+            "direct_request_routing:",
+            "loop_contracts:",
+        }:
+            section = stripped.removesuffix(":")
+            current_hook = None
+            list_name = None
+            continue
+        if section == "runtime_contract" and stripped == "shared_runtime_scripts:":
+            list_name = "shared_runtime_scripts"
+            continue
+        if section == "runtime_contract" and list_name == "shared_runtime_scripts":
+            if stripped.startswith("- "):
+                shared_runtime_scripts.append(stripped[2:].strip())
+            elif stripped.endswith(":"):
+                list_name = None
+            continue
+        hook_match = re.match(r"^-\s+id:\s*(\S+)\s*$", stripped)
+        if section == "hooks" and hook_match:
+            current_hook = hook_match.group(1)
+            continue
+        if section == "hooks" and current_hook and stripped.startswith("owner_skill:"):
+            owner = stripped.split(":", 1)[1].strip()
+            owner_hooks[owner].append(current_hook)
+    return {
+        "owner_hooks": dict(owner_hooks),
+        "shared_runtime_scripts": sorted(set(shared_runtime_scripts)),
+    }
+
+
+def script_has_native_logging(path: Path) -> bool:
+    """Return true when a script already imports or exposes reasoning logging."""
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    return any(marker in text for marker in NATIVE_LOGGING_MARKERS)
+
+
+def audit(skills_dir: Path = SKILLS_DIR) -> Dict[str, Any]:
+    """Build the full reasoning-log coverage report."""
+    hooks = parse_hooks(skills_dir / "SKILL_HOOKS.yaml")
+    owner_hooks = hooks["owner_hooks"]
+    shared_runtime_scripts = set(hooks["shared_runtime_scripts"])
+    wrapper_path = (
+        "skills/control/reasoning-log-schema-guardian/scripts/run_with_reasoning_log.py"
+    )
+    wrapper_available = (REPO_ROOT / wrapper_path).exists()
+
+    skill_reports: List[Dict[str, Any]] = []
+    script_reports: List[Dict[str, Any]] = []
+    for skill_file in sorted(skills_dir.glob("*/*/SKILL.md")):
+        skill_dir = skill_file.parent
+        text = skill_file.read_text(encoding="utf-8")
+        frontmatter = parse_frontmatter(text)
+        name = frontmatter.get("name") or skill_dir.name
+        scripts = (
+            sorted((skill_dir / "scripts").glob("*.py"))
+            if (skill_dir / "scripts").exists()
+            else []
+        )
+        agents = (
+            sorted((skill_dir / "agents").glob("*"))
+            if (skill_dir / "agents").exists()
+            else []
+        )
+        hook_ids = owner_hooks.get(name, [])
+        native_scripts: List[str] = []
+        wrapper_scripts: List[str] = []
+        for script in scripts:
+            rel_script = script.relative_to(REPO_ROOT).as_posix()
+            native = script_has_native_logging(script)
+            if native:
+                native_scripts.append(rel_script)
+            else:
+                wrapper_scripts.append(rel_script)
+            script_reports.append(
+                {
+                    "path": rel_script,
+                    "skill": name,
+                    "native_reasoning_log": native,
+                    "wrapper_reasoning_log": wrapper_available,
+                    "registered_runtime": rel_script in shared_runtime_scripts,
+                }
+            )
+
+        if scripts:
+            logging_class = "script-logged" if wrapper_available else "missing"
+        elif agents:
+            logging_class = "agent-logged"
+        elif hook_ids:
+            logging_class = "workflow-only"
+        else:
+            logging_class = "agent-logged"
+
+        missing_reasons: List[str] = []
+        if logging_class == "missing":
+            missing_reasons.append("no native logging and logged wrapper unavailable")
+        skill_reports.append(
+            {
+                "name": name,
+                "path": skill_file.relative_to(REPO_ROOT).as_posix(),
+                "logging_class": logging_class,
+                "hook_ids": hook_ids,
+                "script_count": len(scripts),
+                "native_logged_script_count": len(native_scripts),
+                "wrapper_logged_script_count": (
+                    len(wrapper_scripts) if wrapper_available else 0
+                ),
+                "agent_manifest_count": len(agents),
+                "native_logged_scripts": native_scripts,
+                "wrapper_logged_scripts": wrapper_scripts if wrapper_available else [],
+                "missing_reasons": missing_reasons,
+            }
+        )
+
+    counts = Counter(item["logging_class"] for item in skill_reports)
+    native_script_count = sum(
+        1 for item in script_reports if item["native_reasoning_log"]
+    )
+    wrapper_script_count = sum(
+        1
+        for item in script_reports
+        if not item["native_reasoning_log"] and item["wrapper_reasoning_log"]
+    )
+    missing_skills = [
+        item
+        for item in skill_reports
+        if item["logging_class"] == "missing" or item["missing_reasons"]
+    ]
+    return {
+        "schema_version": 1,
+        "ok": not missing_skills,
+        "wrapper_available": wrapper_available,
+        "skill_count": len(skill_reports),
+        "script_count": len(script_reports),
+        "logging_class_counts": dict(counts),
+        "native_logged_script_count": native_script_count,
+        "wrapper_logged_script_count": wrapper_script_count,
+        "scripts_without_native_logging_count": wrapper_script_count,
+        "missing_skill_count": len(missing_skills),
+        "missing_skills": missing_skills,
+        "skills": skill_reports,
+        "scripts": script_reports,
+        "policy": {
+            "script_logging": "Scripts are covered when they have native logging or can be run through run_with_reasoning_log.py.",
+            "agent_logging": "No-script skills are covered by the agent-side skill-application packet contract.",
+            "strict_native_migration": "Use --require-native-script-logging to fail on scripts that still need wrapper logging.",
+        },
+    }
+
+
+def render_text(report: Dict[str, Any]) -> str:
+    """Render the audit report as compact text."""
+    lines = [
+        f"ok: {report['ok']}",
+        f"skills: {report['skill_count']}",
+        f"scripts: {report['script_count']}",
+        f"classes: {report['logging_class_counts']}",
+        f"native_logged_scripts: {report['native_logged_script_count']}",
+        f"wrapper_logged_scripts: {report['wrapper_logged_script_count']}",
+        f"missing_skills: {report['missing_skill_count']}",
+    ]
+    for item in report["missing_skills"][:50]:
+        lines.append(f"- missing {item['name']}: {', '.join(item['missing_reasons'])}")
+    return "\n".join(lines)
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--skills-dir", type=Path, default=SKILLS_DIR)
+    parser.add_argument("--output-file", type=Path)
+    parser.add_argument("--require-native-script-logging", action="store_true")
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Run the reasoning-log coverage audit."""
+    args = parse_args(argv)
+    report = audit(args.skills_dir)
+    if args.require_native_script_logging:
+        report["ok"] = (
+            report["ok"] and report["scripts_without_native_logging_count"] == 0
+        )
+    if args.output_file is not None:
+        args.output_file.parent.mkdir(parents=True, exist_ok=True)
+        args.output_file.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(render_text(report))
+    return 3 if args.strict and not report["ok"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

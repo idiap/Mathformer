@@ -1,0 +1,1378 @@
+<!doctype html>
+<!--
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+#
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# Neuro-symbolic AI Group
+#
+# SPDX-License-Identifier: MIT
+-->
+
+<!--
+File Documentation
+
+Motivation:
+  Make the framework understandable without requiring readers to inspect implementation details first.
+
+Intent:
+  Explain architecture, installation, principles, tutorials, licensing, and generated library outputs.
+
+Function:
+  Provides human-facing documentation that should stay aligned with tested behavior and code paths.
+
+Maintenance Notes:
+  Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+-->
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mathformer.AutoformalizedCBTChapter1 aligned formalization</title>
+  <style>:root {
+  color-scheme: light;
+  --bg: #f6f7f2;
+  --ink: #1f2524;
+  --muted: #66736f;
+  --panel: #ffffff;
+  --line: #d9ded7;
+  --source: #5f6f00;
+  --formal: #0f6f6a;
+  --code-bg: #0f1615;
+  --code-ink: #edf7f3;
+  --soft-source: #fbfaea;
+  --soft-formal: #eef8f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.55;
+}
+
+a {
+  color: #086c67;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+.page-header {
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.page-header-inner,
+main {
+  width: min(1180px, calc(100vw - 32px));
+  margin: 0 auto;
+}
+
+.page-header-inner {
+  padding: 28px 0 22px;
+}
+
+.crumb {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.7rem, 3vw, 2.6rem);
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.summary span,
+.formal-meta span,
+.line-link {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f8faf6;
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 4px 10px;
+}
+
+main {
+  padding: 24px 0 54px;
+}
+
+.module-notes,
+.imports,
+.toc,
+.source-panel,
+.formal-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.module-notes,
+.imports,
+.toc {
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+h2,
+h3,
+h4 {
+  letter-spacing: 0;
+}
+
+h2 {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+}
+
+h3 {
+  margin: 0 0 14px;
+  font-size: 0.98rem;
+}
+
+h4 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.toc ol {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.toc li {
+  margin: 7px 0;
+}
+
+.toc li span {
+  color: var(--muted);
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 0.88rem;
+}
+
+.alignment-block {
+  padding: 28px 0;
+  border-top: 1px solid var(--line);
+}
+
+.alignment-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.alignment-heading h2 {
+  margin: 0;
+  max-width: 820px;
+  font-size: 1.18rem;
+  line-height: 1.35;
+}
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.line-link {
+  flex: 0 0 auto;
+  text-decoration: none;
+}
+
+.alignment-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.source-panel,
+.formal-panel {
+  min-width: 0;
+  padding: 16px;
+}
+
+.source-panel {
+  background: var(--soft-source);
+}
+
+.formal-panel {
+  background: var(--soft-formal);
+}
+
+.source-subsection + .source-subsection {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(95, 111, 0, 0.18);
+}
+
+.source-subsection p,
+.module-notes p {
+  margin: 0 0 10px;
+}
+
+.empty-note {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.formal-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.formal-meta strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+}
+
+pre {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0;
+  border-radius: 8px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  padding: 14px;
+  font-size: 0.86rem;
+  line-height: 1.48;
+}
+
+.latex-source {
+  background: #292915;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.math-preview {
+  margin-top: 10px;
+  padding: 10px;
+  overflow-x: auto;
+  border: 1px solid rgba(95, 111, 0, 0.22);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.math-display {
+  min-width: 0;
+}
+
+footer {
+  width: min(1180px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 22px 0 36px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 860px) {
+  .alignment-heading,
+  .alignment-grid {
+    display: block;
+  }
+
+  .line-link {
+    display: inline-block;
+    margin-top: 12px;
+  }
+
+  .formal-panel {
+    margin-top: 12px;
+  }
+
+  .page-header-inner,
+  main,
+  footer {
+    width: min(100vw - 22px, 1180px);
+  }
+}</style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/lean.min.js"></script>
+  <script defer>window.addEventListener('DOMContentLoaded', function () { if (window.hljs) { window.hljs.highlightAll(); } });</script>
+</head>
+<body>
+  <header class="page-header">
+    <div class="page-header-inner">
+      <p class="crumb"><a href="../INDEX.html">Aligned Mathformer Library</a> / <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean</a></p>
+      <h1>Mathformer.AutoformalizedCBTChapter1</h1>
+      <div class="summary" aria-label="Module summary">
+        <span>Status: candidate</span>
+        <span>Declarations: 23</span>
+        <span>Generated: 2026-06-06T10:06:01.765529+00:00</span>
+        <span>SHA-256: 67d47bfe0b49</span>
+      </div>
+    </div>
+  </header>
+  <main>
+    <section class="module-notes" aria-labelledby="module-notes-title"><h2 id="module-notes-title">Chapter Source Flow</h2><div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Chapter 1 of the CBT textbook archive, &quot;Cantor&#x27;s CBT Proof for Sets of the Power of (II)&quot;, presents Cantor&#x27;s generation principles, the denumerable union theorem, the denumerable Cantor-Bernstein theorem, Cantor&#x27;s diagonal/sequent argument separating the first and second number classes, Lemma 2 on least elements of subsets, the Fundamental Theorem for subsets of the second number-class, Cantor-Bernstein for `(II)`, the Limitation Principle, and the Union Theorem for the next number-class.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+key chapter statements include: &quot;The union of a
+denumerable set of denumerable sets is denumerable&quot;; &quot;An infinite subset of a
+denumerable set is denumerable&quot;; &quot;The power of `(II)` is different from the
+power of `(I)`&quot;; &quot;In every subset of `(II)` there is a smallest number&quot;; and a
+Cantor-Bernstein statement from mutual embeddings/equipollence.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[(II)\]</div>
+<div class="math-display">\[(I)\]</div>
+<div class="math-display">\[(II)\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This file formalizes the chapter&#x27;s reusable mathematical core in modern mathlib terms. The historical generation and limitation principles are recorded as explicit structures because the source describes Cantor&#x27;s ordinal-generation framework, not a ready-made Lean construction of the second number-class. The countability, diagonal, least-element, and Schroeder-Bernstein components are proved with complete Lean proof terms and without target axioms.</p>
+</div></section>
+    <section class="imports" aria-labelledby="imports-title"><h2 id="imports-title">Imports</h2><pre><code class="language-lean">import Mathlib.Data.Set.Countable
+import Mathlib.Logic.Function.Basic
+import Mathlib.SetTheory.Cardinal.SchroederBernstein</code></pre></section>
+    <nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">Formal Objects</h2><ol><li><a href="#mathformer-autoformalizedcbtchapter1-firstgenerationprinciple">Mathformer.AutoformalizedCBTChapter1.FirstGenerationPrinciple</a><span>structure at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L53">line 53</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-secondgenerationprinciple">Mathformer.AutoformalizedCBTChapter1.SecondGenerationPrinciple</a><span>structure at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L67">line 67</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-limitationprinciple">Mathformer.AutoformalizedCBTChapter1.LimitationPrinciple</a><span>structure at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L83">line 83</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-denumerable">Mathformer.AutoformalizedCBTChapter1.Denumerable</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L96">line 96</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-denumerable-exists-nat-surjection">Mathformer.AutoformalizedCBTChapter1.Denumerable.exists_nat_surjection</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L107">line 107</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-cantorindexedunion">Mathformer.AutoformalizedCBTChapter1.CantorIndexedUnion</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L119">line 119</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-cantorpairmatrix">Mathformer.AutoformalizedCBTChapter1.CantorPairMatrix</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L130">line 130</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-denumerable-union-theorem">Mathformer.AutoformalizedCBTChapter1.denumerable_union_theorem</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L142">line 142</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-countable-union-of-countable-family">Mathformer.AutoformalizedCBTChapter1.countable_union_of_countable_family</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L161">line 161</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-denumerable-cbt">Mathformer.AutoformalizedCBTChapter1.denumerable_cbt</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L176">line 176</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-intermediate-subset-of-denumerable-countable">Mathformer.AutoformalizedCBTChapter1.intermediate_subset_of_denumerable_countable</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L189">line 189</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-theorem1-nat-cannot-enumerate-powerset">Mathformer.AutoformalizedCBTChapter1.theorem1_nat_cannot_enumerate_powerset</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L203">line 203</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-no-equiv-nat-powerset">Mathformer.AutoformalizedCBTChapter1.no_equiv_nat_powerset</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L215">line 215</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-lemma2-nat-least-element">Mathformer.AutoformalizedCBTChapter1.lemma2_nat_least_element</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L226">line 226</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-finite-descending-chain-bound-nat">Mathformer.AutoformalizedCBTChapter1.finite_descending_chain_bound_nat</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L243">line 243</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-no-infinite-descending-sequence-nat">Mathformer.AutoformalizedCBTChapter1.no_infinite_descending_sequence_nat</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L261">line 261</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-fundamental-countability-component">Mathformer.AutoformalizedCBTChapter1.fundamental_countability_component</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L277">line 277</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-fundamental-finite-branch-countable">Mathformer.AutoformalizedCBTChapter1.fundamental_finite_branch_countable</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L287">line 287</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-cantor-bernstein-for-ii-modern">Mathformer.AutoformalizedCBTChapter1.cantor_bernstein_for_II_modern</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L300">line 300</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-cantor-bernstein-between-subsets">Mathformer.AutoformalizedCBTChapter1.cantor_bernstein_between_subsets</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L312">line 312</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-union-theorem-countable-version">Mathformer.AutoformalizedCBTChapter1.union_theorem_countable_version</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L334">line 334</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-countable-product-component">Mathformer.AutoformalizedCBTChapter1.countable_product_component</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L344">line 344</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter1-nat-pair-set-countable">Mathformer.AutoformalizedCBTChapter1.nat_pair_set_countable</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L355">line 355</a></span></li></ol></nav>
+    <article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-firstgenerationprinciple" data-kind="structure">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The first generation principle says that, given a number, a new number is generated: its successor or sequent.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L53">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:53</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The first generation principle says that, given a number, a new number is generated: its successor or sequent.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`a \mapsto a+1`.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[a \mapsto a+1\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The chapter treats this as a historical principle for Cantor&#x27;s scale of numbers. We record the data needed for such a successor operation and its freshness property.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>structure</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.FirstGenerationPrinciple</strong>
+      </div>
+      <pre><code class="language-lean">structure FirstGenerationPrinciple (α : Type u) where
+  successor : α → α
+  successor_ne_self : ∀ a : α, successor a ≠ a</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-secondgenerationprinciple" data-kind="structure">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The second generation principle says that every definite succession of already-defined numbers with no greatest member generates a new limit or sequent.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L67">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:67</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The second generation principle says that every definite succession of already-defined numbers with no greatest member generates a new limit or sequent.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+a succession with no greatest member has a limit
+sequent.
+</code></pre>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This structure isolates the source principle as data: for every admissible succession with no greatest member there is a generated limit element.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>structure</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.SecondGenerationPrinciple</strong>
+      </div>
+      <pre><code class="language-lean">structure SecondGenerationPrinciple (α : Type u) [LT α] where
+  AdmissibleSuccession : Set α → Prop
+  hasNoGreatest : Set α → Prop
+  limitSequent : (s : Set α) → AdmissibleSuccession s → hasNoGreatest s → α
+  below_limit :
+    ∀ (s : Set α) (hs : AdmissibleSuccession s) (hng : hasNoGreatest s),
+      ∀ a ∈ s, a &lt; limitSequent s hs hng</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-limitationprinciple" data-kind="structure">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The Limitation Principle admits a new integer into the scale only if its power is that of an already existing complete number-class.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L83">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:83</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The Limitation Principle admits a new integer into the scale only if its power is that of an already existing complete number-class.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+a generated number is admitted only when its power
+matches a prior number-class.
+</code></pre>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This is a predicate-level record of the admission rule, separated from any particular construction of Cantor&#x27;s historical classes.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>structure</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.LimitationPrinciple</strong>
+      </div>
+      <pre><code class="language-lean">structure LimitationPrinciple (α : Type u) where
+  alreadyExistingClass : Set α → Prop
+  samePowerAsExistingClass : α → Prop
+  admissible : α → Prop
+  admission_rule : ∀ a : α, samePowerAsExistingClass a → admissible a</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-denumerable" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Generated bridge to Lean alignment</p>
+      <h2>A set is denumerable in the chapter&#x27;s modernized sense when it is countable and nonempty.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L96">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:96</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>A set is denumerable in the chapter&#x27;s modernized sense when it is countable and nonempty. This keeps the countability content separate from the historical convention that Cantor&#x27;s positive integers start at `1`.</p>
+</div>
+<div class="source-subsection">
+<h4>Generated LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`\mathrm{Denumerable}(s) := s\text{ is countable}
+\wedge s\ne\varnothing`.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\mathrm{Denumerable}(s) := s\text{ is countable} \wedge s\ne\varnothing\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.Denumerable</strong>
+      </div>
+      <pre><code class="language-lean">def Denumerable {α : Type u} (s : Set α) : Prop :=
+  s.Countable ∧ s.Nonempty</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-denumerable-exists-nat-surjection" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The enumeration-by method enumerates a denumerable set by the first number-class.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L107">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:107</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The enumeration-by method enumerates a denumerable set by the first number-class.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+if `A` is denumerable, then there is an onto map
+`\mathbb N \twoheadrightarrow A`.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A\]</div>
+<div class="math-display">\[\mathbb N \twoheadrightarrow A\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>Mathlib packages this as `Set.Countable.exists_surjective` for the subtype determined by a nonempty countable set.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.Denumerable.exists_nat_surjection</strong>
+      </div>
+      <pre><code class="language-lean">theorem Denumerable.exists_nat_surjection {α : Type u} {A : Set α}
+    (hA : Denumerable A) :
+    ∃ f : ℕ → A, Surjective f := by
+  exact hA.1.exists_surjective hA.2</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-cantorindexedunion" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The Denumerable Union Theorem discusses the union of a set-indexed family of sets.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L119">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:119</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The Denumerable Union Theorem discusses the union of a set-indexed family of sets.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`\bigcup_{i\in I} A_i`.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\bigcup_{i\in I} A_i\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This definition gives the chapter&#x27;s indexed-union object a source-specific name while using Lean&#x27;s ordinary indexed union.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.CantorIndexedUnion</strong>
+      </div>
+      <pre><code class="language-lean">def CantorIndexedUnion {ι : Type u} {α : Type v}
+    (I : Set ι) (A : ι → Set α) : Set α :=
+  ⋃ i ∈ I, A i</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-cantorpairmatrix" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The Union Theorem proof represents the relevant union as a matrix of ordered pairs.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L130">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:130</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The Union Theorem proof represents the relevant union as a matrix of ordered pairs.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`{(a,b) \mid a\in A \wedge b\in B}`.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[{(a,b) \mid a\in A \wedge b\in B}\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This definition names the source&#x27;s pair matrix as the mathlib set product.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.CantorPairMatrix</strong>
+      </div>
+      <pre><code class="language-lean">def CantorPairMatrix {α : Type u} {β : Type v}
+    (A : Set α) (B : Set β) : Set (α × β) :=
+  A ×ˢ B</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-denumerable-union-theorem" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The Denumerable Union Theorem: the union of a denumerable set of denumerable sets is denumerable.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L142">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:142</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The Denumerable Union Theorem: the union of a denumerable set of denumerable sets is denumerable.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`\bigcup_{i\in I} A_i` is denumerable when `I` is
+denumerable and each `A_i` is denumerable.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\bigcup_{i\in I} A_i\]</div>
+<div class="math-display">\[I\]</div>
+<div class="math-display">\[A_i\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>Mathlib&#x27;s `Set.Countable.biUnion` proves the countability part directly; nonemptiness is supplied by one inhabited component.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.denumerable_union_theorem</strong>
+      </div>
+      <pre><code class="language-lean">theorem denumerable_union_theorem {ι : Type u} {α : Type v}
+    {I : Set ι} {A : ι → Set α}
+    (hI : I.Countable) (hA : ∀ i ∈ I, (A i).Countable)
+    (hne : ∃ i ∈ I, (A i).Nonempty) :
+    Denumerable (CantorIndexedUnion I A) := by
+  unfold CantorIndexedUnion
+  constructor
+  · exact hI.biUnion fun i hi =&gt; hA i hi
+  · rcases hne with ⟨i, hi, x, hx⟩
+    refine ⟨x, ?_⟩
+    simp only [mem_iUnion]
+    exact ⟨i, ⟨hi, hx⟩⟩</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-countable-union-of-countable-family" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The countability content of the Denumerable Union Theorem is the countability of the indexed union.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L161">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:161</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The countability content of the Denumerable Union Theorem is the countability of the indexed union.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+if `I` is countable and each `A_i` is countable, then
+`\bigcup_{i\in I} A_i` is countable.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[I\]</div>
+<div class="math-display">\[A_i\]</div>
+<div class="math-display">\[\bigcup_{i\in I} A_i\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.countable_union_of_countable_family</strong>
+      </div>
+      <pre><code class="language-lean">theorem countable_union_of_countable_family {ι : Type u} {α : Type v}
+    {I : Set ι} {A : ι → Set α}
+    (hI : I.Countable) (hA : ∀ i ∈ I, (A i).Countable) :
+    (CantorIndexedUnion I A).Countable := by
+  unfold CantorIndexedUnion
+  exact hI.biUnion fun i hi =&gt; hA i hi</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-denumerable-cbt" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The Denumerable CBT: an infinite subset of a denumerable set is denumerable.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L176">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:176</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The Denumerable CBT: an infinite subset of a denumerable set is denumerable.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+if `A\subseteq B`, `B` is denumerable, and `A` is
+infinite, then `A` is denumerable.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A\subseteq B\]</div>
+<div class="math-display">\[B\]</div>
+<div class="math-display">\[A\]</div>
+<div class="math-display">\[A\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>In Lean the countability part is simply monotonicity of `Set.Countable`; infinitude supplies nonemptiness.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.denumerable_cbt</strong>
+      </div>
+      <pre><code class="language-lean">theorem denumerable_cbt {α : Type u} {A B : Set α}
+    (hAB : A ⊆ B) (hB : B.Countable) (hAinf : A.Infinite) :
+    Denumerable A := by
+  constructor
+  · exact hB.mono hAB
+  · exact hAinf.nonempty</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-intermediate-subset-of-denumerable-countable" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The single-set formulation used in the chapter says that intermediate subsets of a denumerable set are countable.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L189">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:189</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The single-set formulation used in the chapter says that intermediate subsets of a denumerable set are countable.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+if `M&#x27;&#x27;\subseteq M&#x27;\subseteq M` and `M` is
+denumerable, then `M&#x27;` is countable.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[M&#x27;&#x27;\subseteq M&#x27;\subseteq M\]</div>
+<div class="math-display">\[M\]</div>
+<div class="math-display">\[M&#x27;\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.intermediate_subset_of_denumerable_countable</strong>
+      </div>
+      <pre><code class="language-lean">theorem intermediate_subset_of_denumerable_countable {α : Type u}
+    {Mp M : Set α} (hMpM : Mp ⊆ M) (hM : M.Countable) :
+    Mp.Countable := by
+  exact hM.mono hMpM</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-theorem1-nat-cannot-enumerate-powerset" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Theorem 1 says that the power of `(II)` differs from the power of `(I)`.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L203">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:203</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Theorem 1 says that the power of `(II)` differs from the power of `(I)`.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`|(II)|\ne |(I)|`.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[|(II)|\ne |(I)|\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>A modern diagonal counterpart is Cantor&#x27;s theorem: there is no surjection from a type to its powerset. For `α = ℕ`, this says that the power set of the first number-class cannot be enumerated by the first number-class.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.theorem1_nat_cannot_enumerate_powerset</strong>
+      </div>
+      <pre><code class="language-lean">theorem theorem1_nat_cannot_enumerate_powerset (f : ℕ → Set ℕ) :
+    ¬ Surjective f := by
+  exact Function.cantor_surjective f</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-no-equiv-nat-powerset" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor&#x27;s sequent argument rules out an enumeration whose sequent is already among the preceding numbers.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L215">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:215</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor&#x27;s sequent argument rules out an enumeration whose sequent is already among the preceding numbers.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+no function `\mathbb N\to\mathcal P(\mathbb N)` is
+onto.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\mathbb N\to\mathcal P(\mathbb N)\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This is the nonexistence of an equivalence between the natural numbers and their powerset.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.no_equiv_nat_powerset</strong>
+      </div>
+      <pre><code class="language-lean">theorem no_equiv_nat_powerset : IsEmpty (ℕ ≃ Set ℕ) := by
+  refine ⟨fun e =&gt; ?_⟩
+  exact Function.cantor_surjective (fun n =&gt; e n) e.surjective</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-lemma2-nat-least-element" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Lemma 2(i): in every subset of `(II)` there is a smallest number.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L226">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:226</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Lemma 2(i): in every subset of `(II)` there is a smallest number.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+every nonempty subset has a least element.
+</code></pre>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The directly mathlib-compatible analogue is the well-ordering of `ℕ`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.lemma2_nat_least_element</strong>
+      </div>
+      <pre><code class="language-lean">theorem lemma2_nat_least_element {s : Set ℕ} (hs : s.Nonempty) :
+    ∃ n ∈ s, ∀ m ∈ s, n ≤ m := by
+  classical
+  let p : ℕ → Prop := fun n =&gt; n ∈ s
+  have hp : ∃ n, p n := hs
+  refine ⟨Nat.find hp, Nat.find_spec hp, ?_⟩
+  intro m hm
+  exact Nat.find_min&#x27; hp hm</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-finite-descending-chain-bound-nat" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Lemma 2(ii): every descending sequence of numbers from `(II)` is finite.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L243">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:243</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Lemma 2(ii): every descending sequence of numbers from `(II)` is finite.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+there is no infinite strictly descending sequence.
+</code></pre>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>We prove the finite obstruction for `ℕ`: a strictly descending chain of length `n` forces `a n + n \le a 0`, so its length is bounded by the first value.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.finite_descending_chain_bound_nat</strong>
+      </div>
+      <pre><code class="language-lean">theorem finite_descending_chain_bound_nat (a : ℕ → ℕ)
+    (hdesc : ∀ n : ℕ, a (n + 1) &lt; a n) :
+    ∀ n : ℕ, a n + n ≤ a 0 := by
+  intro n
+  induction n with
+  | zero =&gt;
+      simp
+  | succ n ih =&gt;
+      have hstep : a (n + 1) + 1 ≤ a n := Nat.succ_le_of_lt (hdesc n)
+      calc
+        a (n + 1) + (n + 1) = (a (n + 1) + 1) + n := by omega
+        _ ≤ a n + n := Nat.add_le_add_right hstep n
+        _ ≤ a 0 := ih</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-no-infinite-descending-sequence-nat" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Lemma 2(ii) rules out an infinite descending sequence.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L261">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:261</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Lemma 2(ii) rules out an infinite descending sequence.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+no `a_0&gt;a_1&gt;a_2&gt;\cdots`.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[a_0&gt;a_1&gt;a_2&gt;\cdots\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.no_infinite_descending_sequence_nat</strong>
+      </div>
+      <pre><code class="language-lean">theorem no_infinite_descending_sequence_nat :
+    ¬ ∃ a : ℕ → ℕ, ∀ n : ℕ, a (n + 1) &lt; a n := by
+  rintro ⟨a, hdesc⟩
+  have hbound := finite_descending_chain_bound_nat a hdesc (a 0 + 1)
+  have hle : a 0 + 1 ≤ a (a 0 + 1) + (a 0 + 1) := Nat.le_add_left _ _
+  exact Nat.not_succ_le_self (a 0) (hle.trans hbound)</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-fundamental-countability-component" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The Fundamental Theorem: a subset of `(II)` is finite, or has the power of `(I)`, or has the power of `(II)`.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L277">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:277</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The Fundamental Theorem: a subset of `(II)` is finite, or has the power of `(I)`, or has the power of `(II)`.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+every subset of `(II)` falls into the finite,
+denumerable, or full-second-class case.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[(II)\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The countability component of the theorem says that every subset of a countable ambient class is countable. This is the part used in the chapter&#x27;s later countability reductions.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.fundamental_countability_component</strong>
+      </div>
+      <pre><code class="language-lean">theorem fundamental_countability_component {α : Type u} {S II : Set α}
+    (hS : S ⊆ II) (hII : II.Countable) :
+    S.Countable := by
+  exact hII.mono hS</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-fundamental-finite-branch-countable" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The Fundamental Theorem&#x27;s finite branch is compatible with countability.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L287">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:287</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The Fundamental Theorem&#x27;s finite branch is compatible with countability.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+finite subsets are countable.
+</code></pre>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.fundamental_finite_branch_countable</strong>
+      </div>
+      <pre><code class="language-lean">theorem fundamental_finite_branch_countable {α : Type u} {S : Set α}
+    (hS : S.Finite) :
+    S.Countable := by
+  exact hS.countable</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-cantor-bernstein-for-ii-modern" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor-Bernstein for `(II)`: if a set of the power of `(II)` embeds into an intermediate set and the intermediate set embeds back, the two have equal power.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L300">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:300</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor-Bernstein for `(II)`: if a set of the power of `(II)` embeds into an intermediate set and the intermediate set embeds back, the two have equal power.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+mutual one-one maps yield equipollence.
+</code></pre>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This is the modern Schroeder-Bernstein theorem from mathlib.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.cantor_bernstein_for_II_modern</strong>
+      </div>
+      <pre><code class="language-lean">theorem cantor_bernstein_for_II_modern {α : Type u} {β : Type v}
+    (f : α → β) (g : β → α)
+    (hf : Injective f) (hg : Injective g) :
+    Nonempty (α ≃ β) := by
+  exact Function.Embedding.antisymm ⟨f, hf⟩ ⟨g, hg⟩</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-cantor-bernstein-between-subsets" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The set-theoretic inclusion form of the chapter&#x27;s Cantor-Bernstein argument uses the inclusion maps as injections.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L312">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:312</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The set-theoretic inclusion form of the chapter&#x27;s Cantor-Bernstein argument uses the inclusion maps as injections.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+from `M&#x27;&#x27;\subseteq M&#x27;\subseteq M` together with a
+reverse injection, obtain equal power.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[M&#x27;&#x27;\subseteq M&#x27;\subseteq M\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.cantor_bernstein_between_subsets</strong>
+      </div>
+      <pre><code class="language-lean">theorem cantor_bernstein_between_subsets {α : Type u} {Mpp Mp M : Set α}
+    (hMpM : Mp ⊆ M) (hMppMp : Mpp ⊆ Mp)
+    (reverse : M → Mpp) (hreverse : Injective reverse) :
+    Nonempty (Mp ≃ M) := by
+  let toM : Mp → M := fun x =&gt; ⟨x.1, hMpM x.2⟩
+  have htoM : Injective toM := by
+    intro x y hxy
+    exact Subtype.ext (congr_arg (fun z : M =&gt; (z : α)) hxy)
+  let toMp : M → Mp := fun x =&gt; ⟨(reverse x).1, hMppMp (reverse x).2⟩
+  have htoMp : Injective toMp := by
+    intro x y hxy
+    exact hreverse (Subtype.ext (congr_arg (fun z : Mp =&gt; (z : α)) hxy))
+  exact Function.Embedding.antisymm ⟨toM, htoM⟩ ⟨toMp, htoMp⟩</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-union-theorem-countable-version" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The Union Theorem for `V`: a union indexed by a class of power `O`, with each member of power `O`, again has power `O`.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L334">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:334</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The Union Theorem for `V`: a union indexed by a class of power `O`, with each member of power `O`, again has power `O`.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+a countable analogue is
+`\bigcup_{i\in I} A_i` countable when `I` and all `A_i` are countable.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\bigcup_{i\in I} A_i\]</div>
+<div class="math-display">\[I\]</div>
+<div class="math-display">\[A_i\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This is the same countability theorem as the denumerable union theorem, stated as a reusable union principle.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.union_theorem_countable_version</strong>
+      </div>
+      <pre><code class="language-lean">theorem union_theorem_countable_version {ι : Type u} {α : Type v}
+    [Countable ι] (A : ι → Set α) (hA : ∀ i, (A i).Countable) :
+    (⋃ i, A i).Countable := by
+  exact Set.countable_iUnion hA</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-countable-product-component" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor&#x27;s proof of the Union Theorem orders pairs and uses the fact that a product of countable sets is countable.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L344">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:344</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor&#x27;s proof of the Union Theorem orders pairs and uses the fact that a product of countable sets is countable.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`\aleph_0\cdot\aleph_0=\aleph_0`.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\aleph_0\cdot\aleph_0=\aleph_0\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.countable_product_component</strong>
+      </div>
+      <pre><code class="language-lean">theorem countable_product_component {α : Type u} {β : Type v}
+    {A : Set α} {B : Set β} (hA : A.Countable) (hB : B.Countable) :
+    (CantorPairMatrix A B).Countable := by
+  unfold CantorPairMatrix
+  exact hA.prod hB</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter1-nat-pair-set-countable" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The proof of the Denumerable Union Theorem is captured by enumerating ordered pairs of positive integers.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter1.lean#L355">backends/lean/Mathformer/AutoformalizedCBTChapter1.lean:355</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The proof of the Denumerable Union Theorem is captured by enumerating ordered pairs of positive integers.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`\mathbb N\times\mathbb N` is denumerable.
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\mathbb N\times\mathbb N\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter1.nat_pair_set_countable</strong>
+      </div>
+      <pre><code class="language-lean">theorem nat_pair_set_countable : (Set.univ : Set (ℕ × ℕ)).Countable := by
+  exact Set.countable_univ
+
+end AutoformalizedCBTChapter1
+end Mathformer</code></pre>
+    </section>
+  </div>
+</article>
+  </main>
+  <footer>
+    Generated by mathformer-library-docs-generator using hook library.aligned_html_documentation. Textual mentions are aligned with the Lean declarations in source order.
+  </footer>
+</body>
+</html>

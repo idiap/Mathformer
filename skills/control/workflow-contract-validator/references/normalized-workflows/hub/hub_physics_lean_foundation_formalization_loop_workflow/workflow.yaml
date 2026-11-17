@@ -1,0 +1,723 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_lean_foundation_formalization_loop_workflow
+version: 1.0.0
+kind: workflow
+description: 'One native foundations smoke-test pass: intake, surface design, draft
+  preview, existing-module verification, workbench, nine checks and output.'
+aliases:
+- physics-lean:foundation-formalization-loop
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Flag:
+    schema:
+      type: boolean
+    representation: value
+  Path:
+    schema:
+      type: string
+    representation: value
+  Text:
+    schema:
+      type: string
+    representation: value
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 1
+    representation: value
+  Paths:
+    schema:
+      type: object
+      properties:
+        intake:
+          type: string
+        surface_plan:
+          type: string
+        draft_report:
+          type: string
+        verification_report:
+          type: string
+        workbench:
+          type: string
+      required:
+      - intake
+      - surface_plan
+      - draft_report
+      - verification_report
+      - workbench
+    representation: value
+  ArgvState:
+    schema:
+      type: object
+      properties:
+        argv:
+          type: array
+          items:
+            type: string
+          minItems: 6
+          maxItems: 38
+        cursor:
+          type: integer
+          minimum: 0
+          maximum: 16
+      required:
+      - argv
+      - cursor
+    representation: value
+  IntakeReport:
+    schema:
+      type: object
+      properties:
+        object_count:
+          type: integer
+        objects:
+          type: array
+          items:
+            type: object
+            properties:
+              object_id:
+                type: string
+            required:
+            - object_id
+      required:
+      - object_count
+      - objects
+    representation: value
+  SurfaceReport:
+    schema:
+      type: object
+      properties:
+        terminal_state:
+          type: string
+        surface_count:
+          type: integer
+        accepted_index_imports:
+          type: array
+          items:
+            type: string
+        recursive_policy:
+          type: object
+          properties:
+            recursive:
+              type: boolean
+            initial_surfaces_are_level_0_not_terminal_theory:
+              type: boolean
+          required:
+          - recursive
+          - initial_surfaces_are_level_0_not_terminal_theory
+        recursive_frontier:
+          type: array
+          items:
+            type: object
+            properties:
+              object_id:
+                type: string
+            required:
+            - object_id
+        recursive_frontier_count:
+          type: integer
+      required:
+      - terminal_state
+      - surface_count
+      - accepted_index_imports
+      - recursive_policy
+      - recursive_frontier
+      - recursive_frontier_count
+    representation: value
+  DraftReport:
+    schema:
+      type: object
+      properties:
+        terminal_state:
+          type: string
+      required:
+      - terminal_state
+    representation: value
+  VerificationReport:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        promotion_ready_count:
+          type: integer
+      required:
+      - ok
+      - promotion_ready_count
+    representation: value
+  WorkbenchReport:
+    schema:
+      type: object
+      properties:
+        reuse_count:
+          type: integer
+      required:
+      - reuse_count
+    representation: value
+  Result:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        checks:
+          type: object
+          minProperties: 9
+          maxProperties: 9
+          additionalProperties:
+            type: boolean
+        artifacts:
+          type: object
+          properties:
+            intake:
+              type: string
+            surface_plan:
+              type: string
+            draft_report:
+              type: string
+            verification_report:
+              type: string
+            workbench:
+              type: string
+          required:
+          - intake
+          - surface_plan
+          - draft_report
+          - verification_report
+          - workbench
+        summary:
+          type: object
+          properties:
+            object_count:
+              type: integer
+            surface_count:
+              type: integer
+            verified_modules:
+              type: integer
+            workbench_reuse_count:
+              type: integer
+            recursive_frontier_count:
+              type: integer
+          required:
+          - object_count
+          - surface_count
+          - verified_modules
+          - workbench_reuse_count
+          - recursive_frontier_count
+      required:
+      - ok
+      - checks
+      - artifacts
+      - summary
+    representation: value
+  Context:
+    schema:
+      type: object
+      properties:
+        repository_root:
+          type: string
+          minLength: 1
+        allow_mutating:
+          type: boolean
+      required:
+      - repository_root
+      - allow_mutating
+      additionalProperties: false
+    representation: value
+inputs:
+  json:
+    type: Flag
+  context:
+    type: Context
+outputs:
+  result:
+    type: Result
+    value:
+      ref: flow.outputs.result
+  stdout:
+    type: Text
+    value:
+      ref: flow.outputs.stdout
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  prepare:
+    inputs:
+      context:
+        type: Context
+    outputs:
+      paths:
+        type: Paths
+      state:
+        type: ArgvState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundations_prepare
+        operation: mathformer_foundations_prepare
+  append_concept:
+    inputs:
+      state:
+        type: ArgvState
+    outputs:
+      state:
+        type: ArgvState
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundations_append_concept
+        operation: mathformer_foundations_append_concept
+  intake:
+    inputs:
+      state:
+        type: ArgvState
+      paths:
+        type: Paths
+      context:
+        type: Context
+    outputs:
+      packet:
+        type: Path
+      report:
+        type: IntakeReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundations_intake
+        operation: mathformer_foundations_intake
+  surface:
+    inputs:
+      packet:
+        type: Path
+      paths:
+        type: Paths
+      context:
+        type: Context
+    outputs:
+      plan:
+        type: Path
+      report:
+        type: SurfaceReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundations_surface
+        operation: mathformer_foundations_surface
+  draft:
+    inputs:
+      plan:
+        type: Path
+      paths:
+        type: Paths
+      context:
+        type: Context
+    outputs:
+      report:
+        type: DraftReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundations_draft
+        operation: mathformer_foundations_draft
+  verify:
+    inputs:
+      paths:
+        type: Paths
+      context:
+        type: Context
+    outputs:
+      report:
+        type: VerificationReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundations_verify
+        operation: mathformer_foundations_verify
+  workbench:
+    inputs:
+      packet:
+        type: Path
+      paths:
+        type: Paths
+      context:
+        type: Context
+    outputs:
+      report:
+        type: WorkbenchReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundations_workbench
+        operation: mathformer_foundations_workbench
+  evaluate:
+    inputs:
+      paths:
+        type: Paths
+      intake:
+        type: IntakeReport
+      surface:
+        type: SurfaceReport
+      draft:
+        type: DraftReport
+      verify:
+        type: VerificationReport
+      workbench:
+        type: WorkbenchReport
+      context:
+        type: Context
+    outputs:
+      result:
+        type: Result
+      rendered_result:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundations_evaluate
+        operation: mathformer_foundations_evaluate
+  emit:
+    inputs:
+      result:
+        type: Result
+      json:
+        type: Flag
+      rendered_result:
+        type: Text
+    outputs:
+      stdout:
+        type: Text
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_foundations_emit
+        operation: mathformer_foundations_emit
+flow:
+  kind: sequence
+  steps:
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      context:
+        ref: inputs.context
+  - id: concepts
+    kind: loop
+    description: Only the source's fixed concept-to-argv traversal; no scientific
+      refinement.
+    state_type: ArgvState
+    initial:
+      ref: steps.prepare.outputs.state
+    body:
+      kind: call
+      operation: append_concept
+      arguments:
+        state:
+          ref: loop.state
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 16
+    on_exhausted: fail
+    outputs:
+      state:
+        type: ArgvState
+        value:
+          ref: loop.state
+  - id: intake
+    kind: call
+    operation: intake
+    arguments:
+      state:
+        ref: steps.concepts.outputs.state
+      paths:
+        ref: steps.prepare.outputs.paths
+      context:
+        ref: inputs.context
+  - id: surface
+    kind: call
+    operation: surface
+    arguments:
+      packet:
+        ref: steps.intake.outputs.packet
+      paths:
+        ref: steps.prepare.outputs.paths
+      context:
+        ref: inputs.context
+  - id: draft
+    kind: call
+    operation: draft
+    arguments:
+      plan:
+        ref: steps.surface.outputs.plan
+      paths:
+        ref: steps.prepare.outputs.paths
+      context:
+        ref: inputs.context
+  - id: verify
+    kind: call
+    operation: verify
+    arguments:
+      paths:
+        ref: steps.prepare.outputs.paths
+      context:
+        ref: inputs.context
+  - id: workbench
+    kind: call
+    operation: workbench
+    arguments:
+      packet:
+        ref: steps.intake.outputs.packet
+      paths:
+        ref: steps.prepare.outputs.paths
+      context:
+        ref: inputs.context
+  - id: evaluate
+    kind: call
+    operation: evaluate
+    arguments:
+      paths:
+        ref: steps.prepare.outputs.paths
+      intake:
+        ref: steps.intake.outputs.report
+      surface:
+        ref: steps.surface.outputs.report
+      draft:
+        ref: steps.draft.outputs.report
+      verify:
+        ref: steps.verify.outputs.report
+      workbench:
+        ref: steps.workbench.outputs.report
+      context:
+        ref: inputs.context
+  - id: emit
+    kind: switch
+    cases:
+    - id: json
+      when:
+        ref: inputs.json
+      body:
+        id: json_output
+        kind: call
+        operation: emit
+        arguments:
+          result:
+            ref: steps.evaluate.outputs.result
+          json:
+            literal: true
+          rendered_result:
+            ref: steps.evaluate.outputs.rendered_result
+    default:
+      id: human_output
+      kind: call
+      operation: emit
+      arguments:
+        result:
+          ref: steps.evaluate.outputs.result
+        json:
+          literal: false
+        rendered_result:
+          ref: steps.evaluate.outputs.rendered_result
+    outputs:
+      stdout:
+        type: Text
+        value:
+          ref: selected.outputs.stdout
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+  outputs:
+    result:
+      type: Result
+      value:
+        ref: steps.evaluate.outputs.result
+    stdout:
+      type: Text
+      value:
+        ref: steps.emit.outputs.stdout
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.emit.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/mathformerphysicslib/foundations/
+      - artifacts/workflow_hub/
+      - native_lean_build_cache
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 24
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Native smoke-test execution and deterministic fixture qualification
+    only; completion does not establish scientific truth or authorize artifact promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/physics_lean/run_foundations_workflow.py
+    selector: main; prepare; append_concept; intake; surface; draft; verify; workbench;
+      evaluate; emit; run_json
+    digest: sha256:4210287f342c91859bf7ec88ff6d7737a0c0c14c05204aacbeb5018bb9713492
+  - path: scripts/mathformer.py
+    selector: build_registry; foundations NL route; preflight; run_action; run_leaf_action;
+      finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/test_matrix.json
+    selector: 'command: tests/physics_lean/run_foundations_workflow.py --json'
+    digest: sha256:7bf4d2e9097449f5714c36abbe2c3fc9da6aa3bd525a445904bdf7e7463f418c
+  - path: skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py
+    selector: modules_from_plan; initialize_draft; draft_next; finish_draft; build_draft
+    digest: sha256:d14bb61926812e2d07d4e2982e2ea9d4866688f3af12a4cae946fd1e0622abfc
+  - path: skills/mathformerphysicslib/mathformerphysicslib-foundation-verifier/scripts/verify_foundation_modules.py
+    selector: main; build_report; check_foundation_index_compile
+    digest: sha256:b4125ab1944bf073ef87538d1819efba4c1e133ecd3972966eca52e84c119e8c
+  - path: scripts/foundations_workflow_tools.py
+    selector: register_foundations_workflow_tools; mount; validate_state
+    digest: sha256:9d77719753676c3b7b4368e579b95d0676d1cf362791ce3f586e33787459dd7f
+  - path: scripts/mcp_server.py
+    selector: register_foundations_workflow_tools; service write policy
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: 'inventory: authored foundations workflow'
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: skills/physics-common/physics-foundation-object-intake/scripts/intake_physics_foundation_objects.py
+    selector: main; build_packet
+    digest: sha256:9f2b4c46fc26545adb3d3d4751b2e3e11c0589733185a94a0b7d08fcade8a227
+  - path: skills/mathformerphysicslib/mathformerphysicslib-foundation-surface-designer/scripts/design_foundation_surfaces.py
+    selector: main; build_plan
+    digest: sha256:ac23adcb545f9336065fab38dc0651e7151c718d9bc6ab103db92289674949b0
+  - path: skills/mathformerphysicslib/mathformerphysicslib-object-workbench/scripts/build_mathformerphysicslib_object_workbench.py
+    selector: main; build_plan
+    digest: sha256:4e69286cd1ee8a2ea4e7b7619171243a97577acc28fe1efaa6f376e04fdc7887
+  gaps:
+  - The graph begins at the native main boundary. Hub preflight, dry-run, and post-execution
+    write auditing remain surrounding controls; MCP ports additionally enforce service
+    write policy and an explicit authorized repository mount.
+  - Report types validate parsed stdout projections. File paths retain native JSON
+    handoffs; child implementation details, including drafter template iteration and
+    serialized item history, stay within their owning operations.
+  - The 3600-second wall ceiling and 24-call budget are Lunar limits, not native subprocess
+    timeouts. Native child failures, malformed JSON, missing fields and filesystem
+    errors stop immediately without retry or resume.
+  - Compiler fixtures qualify binding and control behavior only. A real Lean toolchain
+    and foundation module checks are still required for a scientific production run;
+    receipts do not confer promotion authority.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-lean:foundation-formalization-loop
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: physics-lean:foundation-formalization-loop
+      summary: Run the controlled MathformerPhysicsLib foundations workflow over the
+        priority-1 object backlog.
+      family: physics_lean
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/physics_lean/run_foundations_workflow.py
+      - --json
+      depends_on: []
+      writes:
+      - artifacts/mathformerphysicslib/foundations/
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: scripts/mathformer.py run_action -> run_leaf_action launches main with
+      --json; the foundations NL route selects this action. tests/test_matrix.json
+      can invoke main directly.
+    launch_guards: Hub preflight errors or dry_run prevent launch; they do not execute
+      any of the five scientific stages.
+    post_execution: Hub write auditing can mark the action unsuccessful even when
+      main returned zero.
+    failure_policy: run_json raises immediately on nonzero child exit; malformed JSON,
+      missing report fields, launch and filesystem errors propagate. Stop the sequence;
+      retain prior artifacts; no retry, feedback or resume. Failed final checks are
+      printed before exit 1; the hub then reports failure.
+    bounds: Exactly 16 argv append visits complete normally on the last concept. cursor
+      is a contract encoding of the native for iterator; done must be true at visit
+      16, so on_exhausted is unreachable for the fixed source list. No caller-supplied
+      concepts or iteration cap.
+    draft_iteration: Finite modules_from_plan selection (sorted recognized templates,
+      or all templates if none selected), one visit each; no refinement, convergence
+      or exhaustion exception. Recursive-frontier metadata is report content.
+    call_limit: 24 = prepare + 16 appends + five stages + evaluate + one output branch;
+      descriptor accounting only.
+    effects_status: native_subprocess_effects_under_authorized_repository_mount
+    qualification_capability_names_are_not_runtime_grants: true
+    context: Required context.repository_root is the subprocess cwd and artifact root;
+      context.allow_mutating and the MCP service write policy must permit artifacts
+      and build cache writes. Source-owned child programs and foundation modules must
+      be installed in that mount. No provider is configured by these ports.
+    output_history: evaluate exports native insertion-ordered JSON text alongside
+      its structured result; emit verifies equality and preserves exact native stdout
+      despite canonical JSON transport.
+# REUSE-IgnoreEnd

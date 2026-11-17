@@ -1,0 +1,506 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_mathformerphysicslib_coherence_suite_workflow
+version: 1.0.0
+kind: workflow
+description: Ordered nine-child MathformerPhysicsLib coherence smoke suite.
+aliases:
+- mathformerphysicslib:coherence-suite
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../coherence-suite-interface.schema.json#/$defs/RunContext
+  HubResult:
+    schema: ../../coherence-suite-interface.schema.json#/$defs/HubResult
+  Strings:
+    schema:
+      type: array
+      items:
+        type: string
+  Boolean:
+    schema:
+      type: boolean
+  Admission:
+    schema:
+      type: object
+      required:
+      - accepted
+      - status
+      - ancestry
+      additionalProperties: false
+      properties:
+        accepted:
+          type: boolean
+        status:
+          enum:
+          - accepted
+          - unknown_action
+          - dependency_cycle
+          - extra_args_for_sequence
+        ancestry:
+          type: array
+          items:
+            type: string
+  DependencyState:
+    schema:
+      type: object
+      required:
+      - index
+      - children
+      - dependencies_ok
+      - ancestry
+      additionalProperties: false
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          maximum: 9
+        children:
+          type: array
+          maxItems: 9
+          items:
+            type: object
+        dependencies_ok:
+          type: boolean
+        ancestry:
+          type: array
+          items:
+            type: string
+inputs:
+  context:
+    type: RunContext
+  extra_args:
+    type: Strings
+    required: false
+  seen:
+    type: Strings
+    required: false
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  admit:
+    inputs:
+      extra_args:
+        type: Strings
+        required: false
+      seen:
+        type: Strings
+        required: false
+    outputs:
+      admission:
+        type: Admission
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_suite_admit
+        operation: mathformer_coherence_suite_admit
+  reject:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_suite_reject
+        operation: mathformer_coherence_suite_reject
+  initialize:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      state:
+        type: DependencyState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_suite_initialize
+        operation: mathformer_coherence_suite_initialize
+  visit:
+    inputs:
+      context:
+        type: RunContext
+      state:
+        type: DependencyState
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_suite_visit
+        operation: mathformer_coherence_suite_visit
+  advance:
+    inputs:
+      context:
+        type: RunContext
+      state:
+        type: DependencyState
+      child:
+        type: HubResult
+    outputs:
+      state:
+        type: DependencyState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_suite_advance
+        operation: mathformer_coherence_suite_advance
+  finish:
+    inputs:
+      state:
+        type: DependencyState
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_suite_finish
+        operation: mathformer_coherence_suite_finish
+  carry:
+    inputs:
+      state:
+        type: DependencyState
+      result:
+        type: HubResult
+    outputs:
+      state:
+        type: DependencyState
+      done:
+        type: Boolean
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_suite_carry
+        operation: mathformer_coherence_suite_carry
+flow:
+  kind: sequence
+  steps:
+  - id: admission
+    kind: call
+    operation: admit
+    arguments:
+      extra_args:
+        ref: inputs.extra_args
+      seen:
+        ref: inputs.seen
+  - id: dispatch
+    kind: switch
+    cases:
+    - id: accepted
+      when:
+        ref: steps.admission.outputs.admission.accepted
+      body:
+        kind: sequence
+        steps:
+        - id: initial
+          kind: call
+          operation: initialize
+          arguments:
+            admission:
+              ref: steps.admission.outputs.admission
+        outputs:
+          state:
+            type: DependencyState
+            value:
+              ref: steps.initial.outputs.state
+          rejection:
+            type: HubResult
+            value:
+              literal:
+                ok: true
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: reject
+        arguments:
+          admission:
+            ref: steps.admission.outputs.admission
+        id: rejection
+      outputs:
+        state:
+          type: DependencyState
+          value:
+            literal:
+              index: 0
+              children: []
+              dependencies_ok: true
+              ancestry: []
+        rejection:
+          type: HubResult
+          value:
+            ref: steps.rejection.outputs.result
+    outputs:
+      state:
+        type: DependencyState
+        value:
+          ref: selected.outputs.state
+      rejection:
+        type: HubResult
+        value:
+          ref: selected.outputs.rejection
+  - id: dependencies
+    kind: loop
+    state_type: DependencyState
+    initial:
+      ref: steps.dispatch.outputs.state
+    max_iterations: 9
+    on_exhausted: fail
+    body:
+      kind: switch
+      cases:
+      - id: accepted
+        when:
+          ref: steps.admission.outputs.admission.accepted
+        body:
+          kind: sequence
+          steps:
+          - id: child
+            kind: call
+            operation: visit
+            arguments:
+              state:
+                ref: loop.state
+              context:
+                ref: inputs.context
+          - id: advance
+            kind: call
+            operation: advance
+            arguments:
+              state:
+                ref: loop.state
+              child:
+                ref: steps.child.outputs.child
+              context:
+                ref: inputs.context
+          outputs:
+            state:
+              type: DependencyState
+              value:
+                ref: steps.advance.outputs.state
+            done:
+              type: Boolean
+              value:
+                ref: steps.advance.outputs.done
+      default:
+        kind: sequence
+        steps:
+        - kind: call
+          operation: carry
+          arguments:
+            state:
+              ref: loop.state
+            result:
+              ref: steps.dispatch.outputs.rejection
+          id: carry
+        outputs:
+          state:
+            type: DependencyState
+            value:
+              ref: steps.carry.outputs.state
+          done:
+            type: Boolean
+            value:
+              ref: steps.carry.outputs.done
+      outputs:
+        state:
+          type: DependencyState
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: DependencyState
+        value:
+          ref: body.outputs.state
+  - id: completion
+    kind: switch
+    cases:
+    - id: accepted
+      when:
+        ref: steps.admission.outputs.admission.accepted
+      body:
+        id: completion
+        kind: call
+        operation: finish
+        arguments:
+          state:
+            ref: steps.dependencies.outputs.state
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: carry
+        arguments:
+          state:
+            ref: steps.dispatch.outputs.state
+          result:
+            ref: steps.dispatch.outputs.rejection
+        id: carry
+      outputs:
+        result:
+          type: HubResult
+          value:
+            ref: steps.carry.outputs.result
+    outputs:
+      result:
+        type: HubResult
+        value:
+          ref: selected.outputs.result
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.completion.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 22
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked description only; completion establishes no scientific
+    result or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_action (suite defined in build_registry)
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/coherence_suite_tools.py
+    selector: register_coherence_suite_tools
+    digest: sha256:f01f545deae5fdef5acfcfc30fafa39bc7059e66b3184a29f41fb336f3345ace
+  - path: scripts/mcp_server.py
+    selector: register_coherence_suite_tools(mcp)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: mcp_tools
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: skills/control/workflow-contract-validator/references/normalized-workflows/coherence-suite-interface.schema.json
+    digest: sha256:4a91ca964de2b06ef6a6bbadce40eb2035d079c9978e4612b135839c0a052bf5
+    selector: $defs
+  gaps:
+  - Leaf helper internals remain inside visit; child result dictionaries are opaque
+    in carried state.
+  - The 3600-second and 22-call limits are Lunar normalization bounds, not native
+    timeouts or native budgets.
+  - Network/external effects require qualification; mandatory receipts do not upgrade
+    optional native logs.
+  - Fixed suite specialization makes unknown-action admission unreachable through
+    this interface.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: mathformerphysicslib:coherence-suite
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    family: mathformerphysicslib
+    kind: sequence
+    safety: read_only
+  mathformer.composition:
+    ordered_dependencies:
+    - mathformerphysicslib:coherence-inventory
+    - mathformerphysicslib:concept-canonicalize
+    - mathformerphysicslib:mathlib-grounding-audit
+    - mathformerphysicslib:redefinition-critic
+    - mathformerphysicslib:integration-critic
+    - mathformerphysicslib:api-operability-critic
+    - mathformerphysicslib:generative-coherence-critic
+    - mathformerphysicslib:coherence-repair-plan
+    - mathformerphysicslib:coherence-gate
+    command_after_dependencies: false
+    child_mode: Independent --self-test --json subprocesses, executed sequentially.
+  mathformer.native_boundary:
+    admission: Unknown action, cycle, then sequence extra-argument checks; rejection
+      returns failure data without children.
+    leaf: Required paths/tools and argument/mutation preflight; errors return without
+      launch, dry-run returns argv, otherwise capture subprocess output/status and
+      audit changes. Undeclared writes force failure.
+    failure: Child ok=false is data consumed by advance; continued successes never
+      restore aggregate success. Unexpected launch exceptions propagate.
+    timeout_seconds: null
+    bound_behavior: Exactly nine registered children; the ninth advance returns done=true
+      and finishes normally, including when aggregate ok=false.
+    callers: CLI run and run_intent_match via physics-lib:coherence-suite; MCP normalized
+      IDs dispatch through mathformer_run_workflow, mathformer_run_action and hub.run_action
+      under service controls.
+    separate_report: The natural-language coherence route schedules coherence-loop-report
+      afterward; this suite never calls it.
+    execution: Registered mathformer_coherence_suite_* tools call the shared native
+      helpers with build_registry and the full RunContext. Transport-only carry returns
+      rejection unchanged; the top-level loop avoids Lunar scoped-exit limitations.
+# REUSE-IgnoreEnd

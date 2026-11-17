@@ -1,0 +1,416 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Put missing physics objects through a MathformerPhysicsLib-first workbench
+#   before repairing target Lean physics theorem shapes.
+#
+# Intent:
+#   Produce explicit reuse, candidate, or blocker evidence for each detected
+#   object so drift repair does not become hidden theorem patching.
+#
+# Function:
+#   Searches local library files and emits module plans, candidate Lean text,
+#   promotion gates, and target-repair handoff evidence.
+#
+# Maintenance Notes:
+#   Keep candidate module templates conservative and never mark scaffold text as
+#   promoted or accepted.
+
+"""Build MathformerPhysicsLib object workbench plans."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+from pathlib import Path
+from typing import Any, Iterable, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+LIB_ROOTS = [
+    REPO_ROOT / "MathformerPhysicsLib" / "Lean",
+    REPO_ROOT / "MathformerPhysicsLib",
+]
+FOUNDATIONS_ROOT = REPO_ROOT / "MathformerPhysicsLib" / "Lean" / "Foundations"
+
+OBJECT_KEYWORDS = {
+    "quantum_state": ["InnerProductSpace", "Hilbert", "ket", "state", "Quantum"],
+    "quantum_operator": ["LinearMap", "Operator", "Matrix", "adjoint", "unitary"],
+    "commutator": ["commutator", "mul_commutator", "Commute"],
+    "hilbert_space_inner_product": ["InnerProductSpace", "inner", "norm"],
+    "dirac_vacuum_rabi_born_rule": [
+        "TwoLevelRabiStateExpansion",
+        "VacuumRabiAmplitude",
+        "transitionAmplitude_from_twoLevelRabiStateExpansion",
+        "probabilityFromVacuumRabiAmplitude",
+        "vacuumRabiProbabilityFromStateExpansion",
+        "Rabi",
+        "Born",
+        "probabilityFromAmplitude",
+    ],
+    "dirac_hellmann_feynman_expectation": [
+        "parameterizedHilbertExpectation",
+        "ParameterizedEigenstateEquation",
+        "EigenstateExpectationIdentityNear",
+        "energy_eq_parameterizedExpectation_near_of_eigenstate",
+        "DifferentiatedEigenstateEquation",
+        "hellmannFeynmanDerivativeFromDifferentiatedEigenEquation",
+        "energyDerivativeEqExpectationDerivative",
+        "Hellmann",
+        "Feynman",
+        "Hamiltonian",
+        "eigenstate",
+    ],
+    "dirac_position_expectation_integral": [
+        "PositionWavefunction",
+        "positionExpectationIntegrand",
+        "positionExpectationIntegrand_apply",
+        "PositionResolutionIdentityMeasureKernel",
+        "positionExpectationIntegral",
+        "positionExpectationIntegral_apply",
+        "MeasureTheory",
+        "Born",
+        "position expectation",
+    ],
+    "dirac_complex_imaginary_projection": [
+        "diracImaginaryQuotient",
+        "diracImaginaryQuotient_star_eq_im",
+        "diracImaginaryQuotient_eq_im_of_conjugate",
+        "diracImaginaryQuotient_sq_eq_im_sq_of_conjugate",
+        "Complex.im",
+        "conjugate",
+        "imaginary part",
+    ],
+    "unbounded_position_momentum": [
+        "UnboundedHilbertOperator",
+        "PositionMomentumPair",
+        "CommonInvariantCore",
+        "HasDenseDomain",
+        "commutatorValueOnCore",
+    ],
+    "schwartz_l2_position_momentum_model": [
+        "RealSchwartzWavefunction",
+        "SchwartzMap",
+        "realSchwartzDerivative",
+        "SchwartzL2PositionMomentumModel",
+        "canonicalCommutatorExpectationOnSchwartzCore",
+    ],
+    "real_line_l2_position_momentum_instantiation": [
+        "RealLineL2Wavefunction",
+        "MeasureTheory.Lp",
+        "realSchwartzToL2",
+        "realSchwartzToL2_apply_ae",
+        "realSchwartzL2RangeSubmodule",
+        "RealLineL2SchwartzRangeSubmoduleDense",
+        "RealLineMomentumActionIsDerivative",
+        "RealLineSchwartzCanonicalCommutator",
+        "RealLineSchwartzCanonicalCommutatorAsSchwartzMap",
+        "RealLineL2PositionMomentumModel",
+        "RealLineL2PositionMomentumModel.common_core_eq_schwartz_range_submodule",
+        "RealLinePositionRestrictedToSchwartzCore",
+        "RealLineMomentumRestrictedToSchwartzCore",
+        "RealLinePositionSchwartzGraphCoreTarget",
+        "RealLineMomentumSchwartzGraphCoreTarget",
+        "RealLinePositionEssentialSelfAdjointOnSchwartzCoreTarget",
+        "RealLineMomentumEssentialSelfAdjointOnSchwartzCoreTarget",
+        "RealLinePositionSpectralCalculusAvailable",
+        "RealLineMomentumSpectralCalculusAvailable",
+        "RealLineL2ClosureFrontier",
+        "RealLineSchwartzCommutatorTransport",
+        "RealLineSchwartzCanonicalCommutatorTransported",
+        "RealLinePositionEssentialSelfAdjointTarget",
+        "RealLineMomentumEssentialSelfAdjointTarget",
+        "RealLinePositionSpectralCalculusTarget",
+        "RealLineMomentumSpectralCalculusTarget",
+        "RealLineL2SpectralClosureTargets",
+        "canonicalCommutatorExpectationOnRealLineL2SchwartzCore",
+    ],
+    "vector_field": ["VectorField", "EuclideanSpace", "Fin", "field"],
+    "coordinate_frame": ["Frame", "Basis", "coordinate"],
+    "basis_projection": ["Basis", "projection", "inner"],
+    "gradient_divergence_curl": ["gradient", "divergence", "curl", "fderiv"],
+    "integral_or_limit": ["intervalIntegral", "Tendsto", "integral", "limit"],
+    "dimensioned_quantity": ["Quantity", "PhysDim", "dimension"],
+    "unit_bridge": ["Unit", "dimension", "homogeneous"],
+    "physical_law": ["SourceLaw", "law", "Law", "Gauss", "Newton", "Maxwell"],
+    "boundary_or_regime_assumption": ["boundary", "Regime", "Frame", "assumption"],
+}
+
+MODULE_STEMS = {
+    "quantum_state": "QuantumStateSurface",
+    "quantum_operator": "QuantumOperatorSurface",
+    "commutator": "CommutatorSurface",
+    "hilbert_space_inner_product": "HilbertInnerProductSurface",
+    "dirac_vacuum_rabi_born_rule": "DiracVacuumRabiBornRuleSurface",
+    "dirac_hellmann_feynman_expectation": "DiracHellmannFeynmanExpectationSurface",
+    "dirac_position_expectation_integral": "DiracPositionExpectationIntegralSurface",
+    "dirac_complex_imaginary_projection": "DiracComplexImaginaryProjectionSurface",
+    "unbounded_position_momentum": "UnboundedPositionMomentumSurface",
+    "schwartz_l2_position_momentum_model": "SchwartzL2PositionMomentumModelSurface",
+    "real_line_l2_position_momentum_instantiation": "RealLineL2PositionMomentumInstantiationSurface",
+    "vector_field": "VectorFieldSurface",
+    "coordinate_frame": "CoordinateFrameSurface",
+    "basis_projection": "BasisProjectionSurface",
+    "gradient_divergence_curl": "VectorCalculusSurface",
+    "integral_or_limit": "IntegralLimitSurface",
+    "dimensioned_quantity": "DimensionedQuantitySurface",
+    "unit_bridge": "UnitBridgeSurface",
+    "physical_law": "PhysicalLawSurface",
+    "boundary_or_regime_assumption": "BoundaryRegimeSurface",
+}
+
+
+def load_json(path: Path | None) -> dict[str, Any]:
+    """Load optional JSON."""
+    if path is None:
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def rel(path: Path) -> str:
+    """Return a repo-relative path where possible."""
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def iter_lean_files() -> Iterable[Path]:
+    """Yield local MathformerPhysicsLib Lean files."""
+    seen: set[Path] = set()
+    priority_paths = [
+        REPO_ROOT / "MathformerPhysicsLib" / "Lean" / "Foundations.lean",
+        *(
+            sorted(FOUNDATIONS_ROOT.rglob("*.lean"))
+            if FOUNDATIONS_ROOT.exists()
+            else []
+        ),
+    ]
+    for path in priority_paths:
+        resolved = path.resolve()
+        if path.exists() and resolved not in seen:
+            seen.add(resolved)
+            yield path
+    for root in LIB_ROOTS:
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*.lean")):
+            resolved = path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            yield path
+
+
+def search_existing(object_class: str, max_hits: int = 8) -> list[dict[str, Any]]:
+    """Search library text for object-class cues."""
+    keywords = OBJECT_KEYWORDS.get(object_class, [object_class])
+    hits: list[dict[str, Any]] = []
+    for path in iter_lean_files():
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for line_no, raw in enumerate(text.splitlines(), 1):
+            lower = raw.lower()
+            if any(keyword.lower() in lower for keyword in keywords):
+                hits.append(
+                    {"path": rel(path), "line": line_no, "evidence": raw.strip()[:240]}
+                )
+                if len(hits) >= max_hits:
+                    return hits
+    return hits
+
+
+def has_promoted_foundation(hits: list[dict[str, Any]]) -> bool:
+    """Return true when search hits accepted foundation modules."""
+    foundation_prefix = rel(FOUNDATIONS_ROOT)
+    foundation_index = rel(
+        REPO_ROOT / "MathformerPhysicsLib" / "Lean" / "Foundations.lean"
+    )
+    return any(
+        str(hit.get("path", "")).startswith(foundation_prefix)
+        or str(hit.get("path", "")) == foundation_index
+        for hit in hits
+    )
+
+
+def decl_name(object_class: str) -> str:
+    """Build a stable declaration stem."""
+    return re.sub(r"[^A-Za-z0-9]+", "_", object_class).strip("_")
+
+
+def candidate_module(object_class: str) -> str:
+    """Return the planned module path."""
+    stem = MODULE_STEMS.get(
+        object_class, "".join(part.capitalize() for part in object_class.split("_"))
+    )
+    return f"libraries/MathformerPhysicsLib/Lean/ObjectWorkbench/{stem}.lean"
+
+
+def candidate_lean_text(object_class: str, object_item: dict[str, Any]) -> str:
+    """Generate conservative Lean candidate text."""
+    stem = decl_name(object_class)
+    surfaces = ", ".join(object_item.get("required_mathformerphysicslib_surfaces", []))
+    return "\n".join(
+        [
+            "/-!",
+            f"# Object workbench candidate for `{object_class}`",
+            "",
+            "This file is a draft support surface produced by the",
+            "`mathformerphysicslib-object-workbench` skill. It must pass the",
+            "Mathformerlib promotion gate before any target theorem may count it",
+            "as accepted support.",
+            "",
+            f"Required surfaces: {surfaces}",
+            "-/",
+            "",
+            "import Mathlib",
+            "",
+            "namespace MathformerPhysicsLib",
+            "namespace ObjectWorkbench",
+            "",
+            f"/-- Draft proposition naming the required `{object_class}` support surface.",
+            "Replace this Prop-only marker with Mathlib-native definitions and lemmas",
+            "before promotion. -/",
+            f"def {stem}_support_required : Prop := True",
+            "",
+            f"theorem {stem}_support_marker : {stem}_support_required := by",
+            "  trivial",
+            "",
+            "end ObjectWorkbench",
+            "end MathformerPhysicsLib",
+            "",
+        ]
+    )
+
+
+def build_item(object_item: dict[str, Any]) -> dict[str, Any]:
+    """Build one workbench item."""
+    object_class = str(object_item.get("object_class", "unknown_object"))
+    hits = search_existing(object_class)
+    if hits and has_promoted_foundation(hits):
+        status = "mathformer_reused"
+        candidate_path = None
+        candidate_text = None
+        next_action = "import_promoted_foundation_before_target_repair"
+    elif hits:
+        status = "reuse_candidate"
+        candidate_path = None
+        candidate_text = None
+        next_action = "review_existing_hits_then_run_registry_promotion_and_compile_checks_before_target_repair"
+    else:
+        status = "candidate_required"
+        candidate_path = candidate_module(object_class)
+        candidate_text = candidate_lean_text(object_class, object_item)
+        next_action = (
+            "create_candidate_module_then_run_registry_promotion_and_lean_checks"
+        )
+    return {
+        "object_class": object_class,
+        "status": status,
+        "repair_surface": object_item.get("repair_surface"),
+        "existing_hits": hits,
+        "candidate_module_path": candidate_path,
+        "candidate_lean_text": candidate_text,
+        "required_mathlib_surfaces": object_item.get("required_mathlib_surfaces", []),
+        "required_mathformerphysicslib_surfaces": object_item.get(
+            "required_mathformerphysicslib_surfaces", []
+        ),
+        "target_handoff": {
+            "may_edit_target_theorem": status == "mathformer_reused",
+            "blocked_until": (
+                []
+                if status == "mathformer_reused"
+                else [
+                    "candidate module compiles or existing support is accepted",
+                    "mathformerlib registry refreshed",
+                    "mathformerlib promotion gate accepted or explicit blocker recorded",
+                ]
+            ),
+            "target_repair_hint": next_action,
+        },
+    }
+
+
+def build_plan(*, object_packet: dict[str, Any]) -> dict[str, Any]:
+    """Build the full workbench plan."""
+    objects = object_packet.get("objects", [])
+    items = [build_item(item) for item in objects if isinstance(item, dict)]
+    candidate_count = sum(1 for item in items if item["status"] == "candidate_required")
+    reuse_candidate_count = sum(
+        1 for item in items if item["status"] == "reuse_candidate"
+    )
+    reuse_count = sum(1 for item in items if item["status"] == "mathformer_reused")
+    status = "ready" if items else "no_objects"
+    if candidate_count or reuse_candidate_count:
+        status = "library_work_required"
+    return {
+        "style": "mathformerphysicslib_object_workbench_plan",
+        "status": status,
+        "source_packet_id": object_packet.get("packet_id"),
+        "item_count": len(items),
+        "candidate_required_count": candidate_count,
+        "reuse_candidate_count": reuse_candidate_count,
+        "reuse_count": reuse_count,
+        "items": items,
+        "promotion_gates": [
+            "python skills/mathformerlib/mathformerlib-registry-manager/scripts/manage_mathformerlib_registry.py --json",
+            "python skills/mathformerlib/mathformerlib-promotion-gate/scripts/evaluate_mathformerlib_promotion.py --compile --json",
+            "lake build",
+            "python skills/physics-lean/physics-lean-drift-pathology-monitor/scripts/monitor_physics_lean_drift_pathologies.py",
+        ],
+        "library_first_invariant": "Target theorem repair is blocked until each object is reused, candidate-promoted, or explicitly blocked.",
+    }
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--object-packet", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run workbench planning."""
+    args = parse_args(argv)
+    if args.self_test:
+        plan = build_plan(
+            object_packet={
+                "packet_id": "fixture",
+                "objects": [
+                    {
+                        "object_class": "commutator",
+                        "repair_surface": "law_grounding",
+                        "required_mathlib_surfaces": ["Algebra"],
+                        "required_mathformerphysicslib_surfaces": [
+                            "commutator definition"
+                        ],
+                    }
+                ],
+            }
+        )
+        assert plan["item_count"] == 1
+        assert plan["items"][0]["object_class"] == "commutator"
+        assert plan["status"] in {"ready", "library_work_required"}
+    else:
+        plan = build_plan(object_packet=load_json(args.object_packet))
+    output = json.dumps(plan, ensure_ascii=False, indent=2)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output + "\n", encoding="utf-8")
+    if args.json or not args.output:
+        print(output)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

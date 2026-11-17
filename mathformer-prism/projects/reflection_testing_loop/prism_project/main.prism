@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import converted_reasoning
+from reasoning import RefineMathformerWorkflow
+from reflection_testing_loop import MathformerWorkflowTrajectoryEvidence, ProcessDisposition
+
+def main(
+    model_access: ModelGenerate,
+    disclosure: ContextDisclose,
+) -> Result[Generated[ProcessDisposition], ModelFailure] ! {AI.Generate, Context.Disclose}:
+    workflow_source = MathformerWorkflowTrajectoryEvidence(
+        run_identifiers = ["fixture:reflection_testing_loop:run_identifiers"],
+        baseline_digest = "fixture:reflection_testing_loop:baseline_digest",
+        observed_regressions = ["fixture:reflection_testing_loop:observed_regressions"],
+    )
+    flow = converted_reasoning(workflow_source)
+    return solve RefineMathformerWorkflow(workflow_source) using flow

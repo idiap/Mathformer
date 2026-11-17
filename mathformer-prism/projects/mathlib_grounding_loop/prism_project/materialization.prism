@@ -1,0 +1,481 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathlib_grounding_loop import (
+    ApiPlanCase,
+    ConceptModel,
+    GroundingCase,
+    GroundingDisposition,
+    GroundingVerificationBasis,
+    ImportCase,
+    ImportCheck,
+    LeanApiPlan,
+    LeanFormalizationConceptDemand,
+    MathlibCandidateSet,
+    MathlibCoverageCase,
+    MathlibCoverageCheck,
+    MathlibGroundingDisposition,
+    MathlibGroundingEvidence,
+    MathlibGroundingMathlibApiPlanArtifact,
+    MathlibGroundingMathlibCompatibilityLoopArtifact,
+    MathlibGroundingMathlibCoverageArtifact,
+    MathlibGroundingMathlibDiscoveryArtifact,
+    MathlibGroundingMathlibGroundingMaximizeArtifact,
+    MathlibGroundingMathlibHierarchyDeclarationNeighborhoodArtifact,
+    MathlibGroundingMathlibHierarchyModuleTreeArtifact,
+    MathlibGroundingMathlibHierarchyNavigateArtifact,
+    MathlibGroundingMathlibImportPlanArtifact,
+    MathlibGroundingMathlibIndexBuildArtifact,
+    MathlibGroundingMathlibNavigationStateArtifact,
+    MathlibGroundingMathlibOntologyValidateArtifact,
+    MathlibGroundingMathlibResultExistenceSearchArtifact,
+    MathlibGroundingMathlibTermAnnotateArtifact,
+    MathlibGroundingMathlibVerifyArtifact,
+    MathlibGroundingMathlibWebEvidenceArtifact,
+    MathlibGroundingMathlibWebGroundingLoopArtifact,
+    MathlibGroundingMathlibWebStrategyArtifact,
+    MathlibSearchBasis,
+    MathlibSnapshot,
+)
+from material_relations import SynthesizesMathlibCompatibilityLoopCertificate
+from material_relations import GroundsMathlibWebGroundingLoopCertificate
+from material_relations import RecommendsMathlibApiPlanCertificate
+from reasoning import GroundLeanAPIs
+from relations import AssessCoverageCertificate
+from relations import CalibrateGroundingCertificate
+from relations import GroundCandidatesCertificate
+from relations import PlanAPIsCertificate
+from relations import RetrieveCandidatesCertificate
+from relations import TestImportsCertificate
+from generated.mathlib_compatibility_loop_skill import mathlib_compatibility_loop_orchestrator_skill as mathlib_compatibility_loop_skill_binding
+from generated.mathlib_web_grounding_loop_skill import mathlib_web_grounding_orchestrator_skill as mathlib_web_grounding_loop_skill_binding
+from generated.mathlib_api_plan_skill import mathlib_api_compatibility_planner_skill as mathlib_api_plan_skill_binding
+from generated.reasoning_concept_model_1_skill import mathlib_concept_ontology_manager_skill as concept_model_reasoning_skill_1
+from generated.reasoning_concept_model_2_skill import mathlib_term_expansion_annotator_skill as concept_model_reasoning_skill_2
+from generated.reasoning_concept_model_3_skill import mathlib_navigation_state_planner_skill as concept_model_reasoning_skill_3
+from generated.reasoning_mathlib_snapshot_1_skill import mathlib_index_builder_skill as mathlib_snapshot_reasoning_skill_1
+from generated.reasoning_candidates_1_skill import mathlib_result_existence_checker_skill as candidates_reasoning_skill_1
+from generated.reasoning_candidates_2_skill import mathlib_concept_candidate_mapper_skill as candidates_reasoning_skill_2
+from generated.reasoning_candidates_3_skill import mathlib_hierarchy_navigator_skill as candidates_reasoning_skill_3
+from generated.reasoning_candidates_4_skill import mathlib_module_tree_cartographer_skill as candidates_reasoning_skill_4
+from generated.reasoning_candidates_5_skill import mathlib_declaration_neighborhood_navigator_skill as candidates_reasoning_skill_5
+from generated.reasoning_candidates_6_skill import mathlib_web_search_strategist_skill as candidates_reasoning_skill_6
+from generated.reasoning_grounding_evidence_1_skill import mathlib_candidate_verifier_skill as grounding_evidence_reasoning_skill_1
+from generated.reasoning_grounding_evidence_2_skill import mathlib_web_evidence_validator_skill as grounding_evidence_reasoning_skill_2
+from generated.reasoning_grounding_evidence_3_skill import mathlib_web_grounding_orchestrator_skill as grounding_evidence_reasoning_skill_3
+from generated.reasoning_coverage_check_1_skill import mathlib_concept_coverage_reviewer_skill as coverage_check_reasoning_skill_1
+from generated.reasoning_api_plan_1_skill import mathlib_api_compatibility_planner_skill as api_plan_reasoning_skill_1
+from generated.reasoning_api_plan_2_skill import mathlib_import_set_builder_skill as api_plan_reasoning_skill_2
+from generated.reasoning_import_check_1_skill import mathlib_grounding_maximizer_skill as import_check_reasoning_skill_1
+from generated.reasoning_import_check_2_skill import lean_import_context_verifier_skill as import_check_reasoning_skill_2
+from generated.reasoning_grounding_status_1_skill import mathlib_compatibility_loop_orchestrator_skill as grounding_status_reasoning_skill_1
+
+def candidates_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> RetrieveCandidatesCertificate[SourceValue, TargetValue]:
+    return RetrieveCandidatesCertificate(source = source, target = target)
+
+def grounding_evidence_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> GroundCandidatesCertificate[SourceValue, TargetValue]:
+    return GroundCandidatesCertificate(source = source, target = target)
+
+def coverage_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AssessCoverageCertificate[SourceValue, TargetValue]:
+    return AssessCoverageCertificate(source = source, target = target)
+
+def api_plan_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> PlanAPIsCertificate[SourceValue, TargetValue]:
+    return PlanAPIsCertificate(source = source, target = target)
+
+def import_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestImportsCertificate[SourceValue, TargetValue]:
+    return TestImportsCertificate(source = source, target = target)
+
+def grounding_status_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> CalibrateGroundingCertificate[SourceValue, TargetValue]:
+    return CalibrateGroundingCertificate(source = source, target = target)
+
+# Generative interpretation ModelConceptDemand uses skill context selected from material steps: mathlib_ontology_validate, mathlib_term_annotate, mathlib_navigation_state.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathlib-concept-ontology-manager, mathlib-term-expansion-annotator, mathlib-navigation-state-planner.
+agent concept_model_reasoning_agent(
+    task: LeanFormalizationConceptDemand,
+) -> Result[Generated[ConceptModel], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanFormalizationConceptDemand] = [concept_model_reasoning_skill_1, concept_model_reasoning_skill_2, concept_model_reasoning_skill_3]
+
+# Generative interpretation InspectMathlibSnapshot uses skill context selected from material steps: mathlib_index_build.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathlib-index-builder.
+agent mathlib_snapshot_reasoning_agent(
+    task: LeanFormalizationConceptDemand,
+) -> Result[Generated[MathlibSnapshot], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanFormalizationConceptDemand] = [mathlib_snapshot_reasoning_skill_1]
+
+# Generative interpretation RetrieveMathlibCandidates uses skill context selected from material steps: mathlib_result_existence_search, mathlib_discovery, mathlib_hierarchy_navigate, mathlib_hierarchy_module_tree, mathlib_hierarchy_declaration_neighborhood, mathlib_web_strategy.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathlib-result-existence-checker, mathlib-concept-candidate-mapper, mathlib-hierarchy-navigator, mathlib-module-tree-cartographer, mathlib-declaration-neighborhood-navigator, mathlib-web-search-strategist.
+agent candidates_reasoning_agent(
+    task: MathlibSearchBasis,
+) -> Result[Generated[MathlibCandidateSet], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[MathlibSearchBasis] = [candidates_reasoning_skill_1, candidates_reasoning_skill_2, candidates_reasoning_skill_3, candidates_reasoning_skill_4, candidates_reasoning_skill_5, candidates_reasoning_skill_6]
+
+# Generative interpretation VerifyMathlibGrounding uses skill context selected from material steps: mathlib_verify, mathlib_web_evidence, mathlib_web_grounding_loop.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathlib-candidate-verifier, mathlib-web-evidence-validator, mathlib-web-grounding-orchestrator.
+agent grounding_evidence_reasoning_agent(
+    task: GroundingVerificationBasis,
+) -> Result[Generated[MathlibGroundingEvidence], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[GroundingVerificationBasis] = [grounding_evidence_reasoning_skill_1, grounding_evidence_reasoning_skill_2, grounding_evidence_reasoning_skill_3]
+
+# Generative interpretation AssessConceptCoverage uses skill context selected from material steps: mathlib_coverage.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathlib-concept-coverage-reviewer.
+agent coverage_check_reasoning_agent(
+    task: MathlibCoverageCase,
+) -> Result[Generated[MathlibCoverageCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[MathlibCoverageCase] = [coverage_check_reasoning_skill_1]
+
+# Generative interpretation PlanLeanAPIs uses skill context selected from material steps: mathlib_api_plan, mathlib_import_plan.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathlib-api-compatibility-planner, mathlib-import-set-builder.
+agent api_plan_reasoning_agent(
+    task: ApiPlanCase,
+) -> Result[Generated[LeanApiPlan], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ApiPlanCase] = [api_plan_reasoning_skill_1, api_plan_reasoning_skill_2]
+
+# Generative interpretation AssessImportContext uses skill context selected from material steps: mathlib_grounding_maximize, mathlib_import_context.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathlib-grounding-maximizer, lean-import-context-verifier.
+agent import_check_reasoning_agent(
+    task: ImportCase,
+) -> Result[Generated[ImportCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ImportCase] = [import_check_reasoning_skill_1, import_check_reasoning_skill_2]
+
+# Generative interpretation CalibrateGroundingStatus uses skill context selected from material steps: mathlib_compatibility_loop.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathlib-compatibility-loop-orchestrator.
+agent grounding_status_reasoning_agent(
+    task: GroundingCase,
+) -> Result[Generated[GroundingDisposition], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[GroundingCase] = [grounding_status_reasoning_skill_1]
+
+converted_reasoning = GroundLeanAPIs(
+    concept_model = concept_model_reasoning_agent,
+    mathlib_snapshot = mathlib_snapshot_reasoning_agent,
+    candidates = candidates_reasoning_agent,
+    candidates_by = candidates_reasoning_relation_builder,
+    grounding_evidence = grounding_evidence_reasoning_agent,
+    grounding_evidence_by = grounding_evidence_reasoning_relation_builder,
+    coverage_check = coverage_check_reasoning_agent,
+    coverage_check_by = coverage_check_reasoning_relation_builder,
+    api_plan = api_plan_reasoning_agent,
+    api_plan_by = api_plan_reasoning_relation_builder,
+    import_check = import_check_reasoning_agent,
+    import_check_by = import_check_reasoning_relation_builder,
+    grounding_status = grounding_status_reasoning_agent,
+    grounding_status_by = grounding_status_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `mathlib-result-existence-checker`; this does not execute the linked native resource.
+def mathlib_result_existence_search_material_binding(source: LeanFormalizationConceptDemand) -> Computed[MathlibGroundingMathlibResultExistenceSearchArtifact]:
+    artifact = MathlibGroundingMathlibResultExistenceSearchArtifact(
+        subject = "typed material binding for mathlib_result_existence_search",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_result_existence_search")
+
+# Material binding descriptor for `mathlib-concept-candidate-mapper`; this does not execute the linked native resource.
+def mathlib_discovery_material_binding(source: MathlibGroundingMathlibResultExistenceSearchArtifact) -> Computed[MathlibGroundingMathlibDiscoveryArtifact]:
+    artifact = MathlibGroundingMathlibDiscoveryArtifact(
+        subject = "typed material binding for mathlib_discovery",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_discovery")
+
+# Material binding descriptor for `mathlib-concept-ontology-manager`; this does not execute the linked native resource.
+def mathlib_ontology_validate_material_binding(source: MathlibGroundingMathlibDiscoveryArtifact) -> Computed[MathlibGroundingMathlibOntologyValidateArtifact]:
+    artifact = MathlibGroundingMathlibOntologyValidateArtifact(
+        subject = "typed material binding for mathlib_ontology_validate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_ontology_validate")
+
+# Material binding descriptor for `mathlib-index-builder`; this does not execute the linked native resource.
+def mathlib_index_build_material_binding(source: MathlibGroundingMathlibOntologyValidateArtifact) -> Computed[MathlibGroundingMathlibIndexBuildArtifact]:
+    artifact = MathlibGroundingMathlibIndexBuildArtifact(
+        subject = "typed material binding for mathlib_index_build",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_index_build")
+
+# Material binding descriptor for `mathlib-term-expansion-annotator`; this does not execute the linked native resource.
+def mathlib_term_annotate_material_binding(source: MathlibGroundingMathlibIndexBuildArtifact) -> Computed[MathlibGroundingMathlibTermAnnotateArtifact]:
+    artifact = MathlibGroundingMathlibTermAnnotateArtifact(
+        subject = "typed material binding for mathlib_term_annotate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_term_annotate",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_term_annotate")
+
+# Material binding descriptor for `mathlib-navigation-state-planner`; this does not execute the linked native resource.
+def mathlib_navigation_state_material_binding(source: MathlibGroundingMathlibTermAnnotateArtifact) -> Computed[MathlibGroundingMathlibNavigationStateArtifact]:
+    artifact = MathlibGroundingMathlibNavigationStateArtifact(
+        subject = "typed material binding for mathlib_navigation_state",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_navigation_state",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_navigation_state")
+
+# Material binding descriptor for `mathlib-hierarchy-navigator`; this does not execute the linked native resource.
+def mathlib_hierarchy_navigate_material_binding(source: MathlibGroundingMathlibNavigationStateArtifact) -> Computed[MathlibGroundingMathlibHierarchyNavigateArtifact]:
+    artifact = MathlibGroundingMathlibHierarchyNavigateArtifact(
+        subject = "typed material binding for mathlib_hierarchy_navigate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_hierarchy_navigate")
+
+# Material binding descriptor for `mathlib-module-tree-cartographer`; this does not execute the linked native resource.
+def mathlib_hierarchy_module_tree_material_binding(source: MathlibGroundingMathlibHierarchyNavigateArtifact) -> Computed[MathlibGroundingMathlibHierarchyModuleTreeArtifact]:
+    artifact = MathlibGroundingMathlibHierarchyModuleTreeArtifact(
+        subject = "typed material binding for mathlib_hierarchy_module_tree",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_hierarchy_module_tree",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_hierarchy_module_tree")
+
+# Material binding descriptor for `mathlib-declaration-neighborhood-navigator`; this does not execute the linked native resource.
+def mathlib_hierarchy_declaration_neighborhood_material_binding(source: MathlibGroundingMathlibHierarchyModuleTreeArtifact) -> Computed[MathlibGroundingMathlibHierarchyDeclarationNeighborhoodArtifact]:
+    artifact = MathlibGroundingMathlibHierarchyDeclarationNeighborhoodArtifact(
+        subject = "typed material binding for mathlib_hierarchy_declaration_neighborhood",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_hierarchy_declaration_neighborhood",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_hierarchy_declaration_neighborhood")
+
+# Material binding descriptor for `mathlib-candidate-verifier`; this does not execute the linked native resource.
+def mathlib_verify_material_binding(source: MathlibGroundingMathlibHierarchyDeclarationNeighborhoodArtifact) -> Computed[MathlibGroundingMathlibVerifyArtifact]:
+    artifact = MathlibGroundingMathlibVerifyArtifact(
+        subject = "typed material binding for mathlib_verify",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_verify")
+
+# Epistemic occurrence owned by `mathlib-compatibility-loop-orchestrator`; output assurance remains Generated.
+agent mathlib_compatibility_loop_agent(
+    task: MathlibGroundingMathlibVerifyArtifact,
+) -> Result[Generated[MathlibGroundingMathlibCompatibilityLoopArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[MathlibGroundingMathlibVerifyArtifact] = [mathlib_compatibility_loop_skill_binding]
+
+def mathlib_compatibility_loop_relation_builder(
+    source: MathlibGroundingMathlibVerifyArtifact,
+    target: Generated[MathlibGroundingMathlibCompatibilityLoopArtifact],
+) -> SynthesizesMathlibCompatibilityLoopCertificate:
+    return SynthesizesMathlibCompatibilityLoopCertificate(source = source, target = target)
+
+# Material binding descriptor for `mathlib-concept-coverage-reviewer`; this does not execute the linked native resource.
+def mathlib_coverage_material_binding(source: MathlibGroundingMathlibCompatibilityLoopArtifact) -> Computed[MathlibGroundingMathlibCoverageArtifact]:
+    artifact = MathlibGroundingMathlibCoverageArtifact(
+        subject = "typed material binding for mathlib_coverage",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_coverage",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_coverage")
+
+# Material binding descriptor for `mathlib-web-search-strategist`; this does not execute the linked native resource.
+def mathlib_web_strategy_material_binding(source: MathlibGroundingMathlibCoverageArtifact) -> Computed[MathlibGroundingMathlibWebStrategyArtifact]:
+    artifact = MathlibGroundingMathlibWebStrategyArtifact(
+        subject = "typed material binding for mathlib_web_strategy",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_web_strategy")
+
+# Material binding descriptor for `mathlib-web-evidence-validator`; this does not execute the linked native resource.
+def mathlib_web_evidence_material_binding(source: MathlibGroundingMathlibWebStrategyArtifact) -> Computed[MathlibGroundingMathlibWebEvidenceArtifact]:
+    artifact = MathlibGroundingMathlibWebEvidenceArtifact(
+        subject = "typed material binding for mathlib_web_evidence",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_web_evidence",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_web_evidence")
+
+# Epistemic occurrence owned by `mathlib-web-grounding-orchestrator`; output assurance remains Generated.
+agent mathlib_web_grounding_loop_agent(
+    task: MathlibGroundingMathlibWebEvidenceArtifact,
+) -> Result[Generated[MathlibGroundingMathlibWebGroundingLoopArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[MathlibGroundingMathlibWebEvidenceArtifact] = [mathlib_web_grounding_loop_skill_binding]
+
+def mathlib_web_grounding_loop_relation_builder(
+    source: MathlibGroundingMathlibWebEvidenceArtifact,
+    target: Generated[MathlibGroundingMathlibWebGroundingLoopArtifact],
+) -> GroundsMathlibWebGroundingLoopCertificate:
+    return GroundsMathlibWebGroundingLoopCertificate(source = source, target = target)
+
+# Material binding descriptor for `mathlib-grounding-maximizer`; this does not execute the linked native resource.
+def mathlib_grounding_maximize_material_binding(source: MathlibGroundingMathlibWebGroundingLoopArtifact) -> Computed[MathlibGroundingMathlibGroundingMaximizeArtifact]:
+    artifact = MathlibGroundingMathlibGroundingMaximizeArtifact(
+        subject = "typed material binding for mathlib_grounding_maximize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_grounding_maximize")
+
+# Epistemic occurrence owned by `mathlib-api-compatibility-planner`; output assurance remains Generated.
+agent mathlib_api_plan_agent(
+    task: MathlibGroundingMathlibGroundingMaximizeArtifact,
+) -> Result[Generated[MathlibGroundingMathlibApiPlanArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[MathlibGroundingMathlibGroundingMaximizeArtifact] = [mathlib_api_plan_skill_binding]
+
+def mathlib_api_plan_relation_builder(
+    source: MathlibGroundingMathlibGroundingMaximizeArtifact,
+    target: Generated[MathlibGroundingMathlibApiPlanArtifact],
+) -> RecommendsMathlibApiPlanCertificate:
+    return RecommendsMathlibApiPlanCertificate(source = source, target = target)
+
+# Material binding descriptor for `mathlib-import-set-builder`; this does not execute the linked native resource.
+def mathlib_import_plan_material_binding(source: MathlibGroundingMathlibApiPlanArtifact) -> Computed[MathlibGroundingMathlibImportPlanArtifact]:
+    artifact = MathlibGroundingMathlibImportPlanArtifact(
+        subject = "typed material binding for mathlib_import_plan",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_import_plan")
+
+# Material binding descriptor for `lean-import-context-verifier`; this does not execute the linked native resource.
+def mathlib_import_context_material_binding(source: MathlibGroundingMathlibImportPlanArtifact) -> Computed[MathlibGroundingDisposition]:
+    artifact = MathlibGroundingDisposition(
+        subject = "typed material binding for mathlib_import_context",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_import_context",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_import_context")
+
+# local mathlib, MathformerLib, web grounding, import, and compatibility controls before prompts rely on APIs.
+workflow MathlibGroundingLoop(
+    workflow_source: LeanFormalizationConceptDemand,
+) -> Computed[MathlibGroundingDisposition]
+    fails ModelFailure
+    ! {AI.Generate, Context.Disclose}:
+    sequence:
+        [mathlib_result_existence_search: mathlib_result_existence_search_material_binding(workflow_source)]
+        [mathlib_discovery: mathlib_discovery_material_binding(mathlib_result_existence_search.value)]
+        [mathlib_ontology_validate: mathlib_ontology_validate_material_binding(mathlib_discovery.value)]
+        [mathlib_index_build: mathlib_index_build_material_binding(mathlib_ontology_validate.value)]
+        [mathlib_term_annotate: mathlib_term_annotate_material_binding(mathlib_index_build.value)]
+        [mathlib_navigation_state: mathlib_navigation_state_material_binding(mathlib_term_annotate.value)]
+        [mathlib_hierarchy_navigate: mathlib_hierarchy_navigate_material_binding(mathlib_navigation_state.value)]
+        [mathlib_hierarchy_module_tree: mathlib_hierarchy_module_tree_material_binding(mathlib_hierarchy_navigate.value)]
+        [mathlib_hierarchy_declaration_neighborhood: mathlib_hierarchy_declaration_neighborhood_material_binding(mathlib_hierarchy_module_tree.value)]
+        [mathlib_verify: mathlib_verify_material_binding(mathlib_hierarchy_declaration_neighborhood.value)]
+        [mathlib_compatibility_loop: mathlib_compatibility_loop_agent(mathlib_verify.value)]
+        [mathlib_coverage: mathlib_coverage_material_binding(mathlib_compatibility_loop.value)]
+        [mathlib_web_strategy: mathlib_web_strategy_material_binding(mathlib_coverage.value)]
+        [mathlib_web_evidence: mathlib_web_evidence_material_binding(mathlib_web_strategy.value)]
+        [mathlib_web_grounding_loop: mathlib_web_grounding_loop_agent(mathlib_web_evidence.value)]
+        [mathlib_grounding_maximize: mathlib_grounding_maximize_material_binding(mathlib_web_grounding_loop.value)]
+        [mathlib_api_plan: mathlib_api_plan_agent(mathlib_grounding_maximize.value)]
+        [mathlib_import_plan: mathlib_import_plan_material_binding(mathlib_api_plan.value)]
+        [mathlib_import_context: mathlib_import_context_material_binding(mathlib_import_plan.value)]
+    return mathlib_import_context

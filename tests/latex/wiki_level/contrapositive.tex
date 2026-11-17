@@ -1,0 +1,65 @@
+% SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+% SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+% SPDX-License-Identifier: MIT
+% Neuro-symbolic AI Group
+% File Documentation
+%
+% Motivation:
+%   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+%
+% Intent:
+%   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+%
+% Function:
+%   Contains executable tests, fixtures, and manifests used for local and CI validation.
+%
+% Maintenance Notes:
+%   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+% mathformer-case-id: wiki_contrapositive
+% expected-lean-name: WikiLevelGold.wiki_contrapositive
+% controlled-suite: wiki_level_latex_to_lean
+% difficulty: very_easy
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+
+\newtheorem{theorem}{Theorem}
+
+\title{The Contrapositive}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Controlled Origin Annotation}
+This is a synthetic controlled case written in a Wikipedia-style exposition.
+It is intended to test whether the LaTeX-to-Lean pipeline preserves hypotheses,
+local bindings, negation, and implication order.
+
+\section*{Statement and Proof}
+
+\begin{theorem}[Contrapositive]
+Let $P$ and $Q$ be propositions. If $P$ implies $Q$, then not $Q$ implies
+not $P$.
+\end{theorem}
+
+\begin{proof}
+Assume first that $h : P \to Q$. To prove the desired implication, assume
+$\neg Q$ and suppose, for contradiction, that $P$ holds. Applying $h$ to the
+proof of $P$ gives a proof of $Q$, contradicting $\neg Q$. Therefore $P$ is
+impossible, so $\neg P$ holds. Hence $\neg Q \to \neg P$.
+\end{proof}
+
+\section*{Lean Target}
+Formalize the theorem for arbitrary propositions $P$ and $Q$ as
+\[
+  (P \to Q) \to (\neg Q \to \neg P).
+\]
+The expected Lean theorem is \texttt{WikiLevelGold.wiki\_contrapositive}.
+
+\end{document}

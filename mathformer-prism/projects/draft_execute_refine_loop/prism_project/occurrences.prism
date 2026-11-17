@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from draft_execute_refine_loop import (
+    LeanDraft,
+    LeanExecutionEvidence,
+    LeanFormalAssessment,
+    LeanFormalReviewCase,
+    LeanFormalizationDraftBrief,
+    LeanLibraryAssessment,
+    LeanLibraryReviewCase,
+    LeanRefinementDisposition,
+    LeanReviewCase,
+    LeanRevisionCase,
+    LeanSemanticAssessment,
+    RefinementCase,
+    RevisedLeanDraft,
+)
+
+# Select or replay the seed and construct the first source-anchored Lean draft.
+type ProposeLeanDraft = (source: LeanFormalizationDraftBrief) -> Generated[LeanDraft]
+
+# Execute the exact draft and record compiler and source-anchor evidence.
+type ExecuteLeanDraft = (source: LeanDraft) -> Generated[LeanExecutionEvidence]
+
+# Assess mathematical meaning, preservation, logical soundness, and reference-free drift.
+type AssessLeanSemantics = (source: LeanReviewCase) -> Generated[LeanSemanticAssessment]
+
+# Assess syntax and consolidate the formal critique findings.
+type AssessLeanSyntax = (source: LeanFormalReviewCase) -> Generated[LeanFormalAssessment]
+
+# Assess use of applicable mathlib abstractions and imports.
+type AssessMathlibAlignment = (source: LeanLibraryReviewCase) -> Generated[LeanLibraryAssessment]
+
+# Apply formal and semantic repairs, then denoise the revised candidate.
+type ReviseLeanDraft = (source: LeanRevisionCase) -> Generated[RevisedLeanDraft]
+
+# Classify the transition and state whether the revised draft is ready or must run again.
+type CalibrateRefinementStatus = (source: RefinementCase) -> Generated[LeanRefinementDisposition]

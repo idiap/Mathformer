@@ -1,0 +1,418 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_report_formalphysics_comparative_analysis_workflow
+version: 1.0.0
+kind: workflow
+description: Selected native route; smoke-test then attempt the comparative report,
+  preserving ordered results and sticky failure.
+aliases:
+- report.formalphysics.comparative_analysis
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  Flag:
+    schema:
+      type: boolean
+  ActionId:
+    schema:
+      type: string
+      enum:
+      - physics-lean:formalphysics-comparative-report-self-test
+      - physics-lean:formalphysics-comparative-report
+  ActionCount:
+    schema:
+      type: integer
+      const: 2
+  RouteState:
+    schema:
+      type: object
+      required:
+      - ok
+      - children
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+  SelectedMatch:
+    schema:
+      type: object
+      required:
+      - route
+      - score
+      - matched_terms
+      properties:
+        route:
+          type: object
+          required:
+          - route_id
+          - action_ids
+          properties:
+            route_id:
+              const: report.formalphysics.comparative_analysis
+            action_ids:
+              const:
+              - physics-lean:formalphysics-comparative-report-self-test
+              - physics-lean:formalphysics-comparative-report
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+  Registry:
+    schema:
+      type: object
+      additionalProperties:
+        type: object
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: SelectedMatch
+  registry:
+    type: Registry
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_analysis_initialize
+        operation: mathformer_comparative_analysis_initialize
+  select_action:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+    outputs:
+      action:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_analysis_select_action
+        operation: mathformer_comparative_analysis_select_action
+  run_child:
+    inputs:
+      action:
+        type: ActionId
+      context:
+        type: RunContext
+      registry:
+        type: Registry
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_analysis_run_child
+        operation: mathformer_comparative_analysis_run_child
+  advance:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+      action_count:
+        type: ActionCount
+    outputs:
+      state:
+        type: RouteState
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_analysis_advance
+        operation: mathformer_comparative_analysis_advance
+  finish:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_analysis_finish
+        operation: mathformer_comparative_analysis_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: Exactly the two registered actions at most; failed child payloads
+      remain data.
+    state_type: RouteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 2
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select_action
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: run
+        kind: call
+        operation: run_child
+        arguments:
+          action:
+            ref: steps.select.outputs.action
+          context:
+            ref: inputs.context
+          registry:
+            ref: inputs.registry
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.run.outputs.child
+          context:
+            ref: inputs.context
+          action_count:
+            literal: 2
+      outputs:
+        state:
+          type: RouteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RouteState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/formalphysics_comparative_analysis/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 8
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Controller completion establishes neither scientific truth nor promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes; initialize_intent_state; select_intent_action;
+      advance_intent_state; finish_intent_state; run_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mcp_server.py
+    selector: mathformer_ask; mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/physics-common/formalphysics-comparative-analysis-reporter/scripts/build_comparative_report.py
+    selector: build_report; prepare_report; evaluate_report_candidate; main; write_outputs
+    digest: sha256:f28e488e2433e9c2158c3ee8c954de70be0116d62afd277dfe6079dd41896d9c
+  - path: scripts/comparative_analysis_route_tools.py
+    selector: register_comparative_analysis_route_tools; checked_registry; selected_match;
+      check_state
+    digest: sha256:2e6853796b0a8637d02f8e8b42d83282ac97eeff5ce3184be87843b969688cca
+  - path: scripts/physics_coherence_route_tools.py
+    selector: State; Initialized; Invoked; Advanced; Finished
+    digest: sha256:4c58835aced2b4bf548ce8d551289a3f92daaea3c731e4f7fe7377582e0f34fa
+  - path: scripts/adoption_check_tools.py
+    selector: Context
+    digest: sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac
+  - path: skills/physics-common/formalphysics-comparative-analysis-reporter/scripts/prepare_comparison_inputs.py
+    selector: build_manifest
+    digest: sha256:9b5b8c500e1aca198dec3bb9a87d36f4857ec39ef28ad29d9d74d25f850385c0
+  - path: tests/physics_lean/run_formalphysics_comparative_report.py
+    selector: run_check; main
+    digest: sha256:0ecf9d247c88978481f4cc3a4f95e938f0c273ccdd3c90bcc310facb0ae06ecc
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: comparative_analysis_route_descriptor
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Bindings reuse the native controller steps. Report-builder traversal remains opaque
+    inside run_child; coverage is partial at the selected route boundary.
+  - The route passes no extra arguments and its report command lacks --input-json;
+    if reached outside dry-run/preflight rejection, the builder exits with its required-input
+    error.
+  - MCP normalized-route dispatch rejects extra_args; supplying input requires invoking
+    the report action directly.
+  - Report builder traversal remains inside run_child; this graph models the selected
+    route controller.
+  - The retained 3600-second field is a schema-required normalization ceiling, not
+    a native route-wide budget; native overhead is unbounded by that field.
+  - Mandatory v1 receipts and digests are unqualified; native logging is not upgraded
+    by this descriptor.
+  - Complete network/external effects require qualification; capability placeholders
+    grant no runtime access.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: report.formalphysics.comparative_analysis
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: report.formalphysics.comparative_analysis
+      title: Build a FormalPhysics comparative analysis report
+      action_ids:
+      - physics-lean:formalphysics-comparative-report-self-test
+      - physics-lean:formalphysics-comparative-report
+      skill_routes:
+      - formalphysics-comparative-analysis-reporter
+      operator_note: Invoke the report action directly with --input-json PATH and
+        optional --output-dir PATH; add --execute-lean for compile checks.
+  mathformer.native_boundary:
+    execution: MCP tools reuse initialize_intent_state, select_intent_action, run_action,
+      advance_intent_state and finish_intent_state. The caller supplies a checked
+      native registry projection, selected-match evidence and repository mount.
+    callers:
+    - CLI main ask --run
+    - scripts/mcp_server.py:mathformer_ask
+    - scripts/mcp_server.py:mathformer_run_workflow
+    selection: Already selected fixed route; NL scoring and ambiguity resolution remain
+      native.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    scientific_payloads: HubResult is a transport envelope; reports remain subprocess
+      artifacts.
+    bound_behavior: Advance returns done by the second child; reaching two actions
+      returns normally, including a failed aggregate. on_exhausted is unreachable
+      under native invariants.
+  mathformer.report_implementation:
+    source: skills/physics-common/formalphysics-comparative-analysis-reporter/scripts/build_comparative_report.py:build_report
+    preparation: Selected records, current/external candidate packets, Foundations
+      inventory, imported judge results and optional synthesis.
+    state: Case/candidate cursors, phase, current case, accumulated case reports and
+      prompts, result index.
+    traversal: For each manifest case, evaluate its candidates in order, then choose_best
+      and append the case; empty case lists go directly to assembly.
+    candidate: Optional Lean compilation, hygiene/dependency checks, non-gold reference
+      comparison, gates, scores, judge prompts and supplied-result ingestion.
+    stopping: Manifest lengths bound traversal; build_report imposes no record cap.
+      Lean failure/timeout is recorded and candidate traversal continues.
+    lean: Skipped by default; enabled checks use configurable timeout with default
+      60 seconds.
+    assembly: Add role reviews, strategy summary, imported synthesis and aggregate
+      summary.
+    outputs: Main writes comparative JSON/HTML/Markdown, judge prompts, role reviews
+      and strategy summaries; the route exports child payloads.
+    iteration: No iterative repair or judge-execution loop.
+# REUSE-IgnoreEnd

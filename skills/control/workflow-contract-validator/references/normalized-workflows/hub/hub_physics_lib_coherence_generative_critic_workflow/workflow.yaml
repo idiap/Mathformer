@@ -1,0 +1,749 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_lib_coherence_generative_critic_workflow
+version: 1.0.0
+kind: workflow
+description: One-child hub alias for advisory coherence-plan construction, specialized
+  to registered --self-test --json; no probe execution or repair.
+aliases:
+- physics-lib:coherence-generative-critic
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  Bool:
+    schema:
+      type: boolean
+  Admission:
+    schema:
+      type: object
+      properties:
+        accepted:
+          type: boolean
+        status:
+          type: string
+        ancestry:
+          type: array
+          items:
+            type: string
+      required:
+      - accepted
+      - status
+      - ancestry
+      additionalProperties: false
+  DependencyState:
+    schema:
+      type: object
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          maximum: 1
+        children:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+            properties:
+              ok:
+                type: boolean
+            required:
+            - ok
+        dependencies_ok:
+          type: boolean
+        ancestry:
+          type: array
+          items:
+            type: string
+      required:
+      - index
+      - children
+      - dependencies_ok
+      - ancestry
+      additionalProperties: false
+  Boundary:
+    schema:
+      type: object
+      required:
+      - execute
+      - payload
+      - snapshot
+      - repository_root
+      properties:
+        execute:
+          type: boolean
+        payload:
+          type: object
+        snapshot:
+          type: object
+        repository_root:
+          type: string
+  ChildStage:
+    schema:
+      type: object
+      required:
+      - active
+      - state
+      properties:
+        active:
+          type: boolean
+        state:
+          type: object
+          required:
+          - token
+          - reports_json
+          - plan_json
+          - child
+          properties:
+            token:
+              type: string
+            reports_json:
+              type: string
+            plan_json:
+              type: string
+            child:
+              type: object
+      additionalProperties: false
+  Text:
+    schema:
+      type: string
+  Strings:
+    schema:
+      type: array
+      items:
+        type: string
+inputs:
+  context:
+    type: RunContext
+  repository_root:
+    type: Text
+  extra_args:
+    type: Strings
+  seen:
+    type: Strings
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  admit:
+    inputs:
+      extra_args:
+        type: Strings
+      seen:
+        type: Strings
+    outputs:
+      admission:
+        type: Admission
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_admit
+        operation: mathformer_coherence_generative_alias_admit
+  reject:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_reject
+        operation: mathformer_coherence_generative_alias_reject
+  initialize:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      state:
+        type: DependencyState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_initialize
+        operation: mathformer_coherence_generative_alias_initialize
+  prepare_child:
+    inputs:
+      state:
+        type: DependencyState
+      context:
+        type: RunContext
+      repository_root:
+        type: Text
+    outputs:
+      boundary:
+        type: Boundary
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_prepare_child
+        operation: mathformer_coherence_generative_alias_prepare_child
+  reports:
+    inputs:
+      boundary:
+        type: Boundary
+    outputs:
+      stage:
+        type: ChildStage
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_reports
+        operation: mathformer_coherence_generative_alias_reports
+  plan:
+    inputs:
+      stage:
+        type: ChildStage
+    outputs:
+      stage:
+        type: ChildStage
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_plan
+        operation: mathformer_coherence_generative_alias_plan
+  complete_child:
+    inputs:
+      stage:
+        type: ChildStage
+      boundary:
+        type: Boundary
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_complete_child
+        operation: mathformer_coherence_generative_alias_complete_child
+  skip_child:
+    inputs:
+      boundary:
+        type: Boundary
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_skip_child
+        operation: mathformer_coherence_generative_alias_skip_child
+  advance:
+    inputs:
+      state:
+        type: DependencyState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+    outputs:
+      state:
+        type: DependencyState
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_advance
+        operation: mathformer_coherence_generative_alias_advance
+  finish:
+    inputs:
+      state:
+        type: DependencyState
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_finish
+        operation: mathformer_coherence_generative_alias_finish
+  carry:
+    inputs:
+      state:
+        type: DependencyState
+      result:
+        type: HubResult
+    outputs:
+      state:
+        type: DependencyState
+      done:
+        type: Bool
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_carry
+        operation: mathformer_coherence_generative_alias_carry
+  carry_stage:
+    inputs:
+      stage:
+        type: ChildStage
+    outputs:
+      stage:
+        type: ChildStage
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_generative_alias_carry_stage
+        operation: mathformer_coherence_generative_alias_carry_stage
+flow:
+  kind: sequence
+  steps:
+  - id: admission
+    kind: call
+    operation: admit
+    arguments:
+      extra_args:
+        ref: inputs.extra_args
+      seen:
+        ref: inputs.seen
+  - id: dispatch
+    kind: switch
+    cases:
+    - id: accepted
+      when:
+        ref: steps.admission.outputs.admission.accepted
+      body:
+        kind: sequence
+        steps:
+        - id: initial
+          kind: call
+          operation: initialize
+          arguments:
+            admission:
+              ref: steps.admission.outputs.admission
+        outputs:
+          state:
+            type: DependencyState
+            value:
+              ref: steps.initial.outputs.state
+          rejection:
+            type: HubResult
+            value:
+              literal:
+                ok: true
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: reject
+        arguments:
+          admission:
+            ref: steps.admission.outputs.admission
+        id: rejection
+      outputs:
+        state:
+          type: DependencyState
+          value:
+            literal:
+              index: 0
+              children: []
+              dependencies_ok: true
+              ancestry: []
+        rejection:
+          type: HubResult
+          value:
+            ref: steps.rejection.outputs.result
+    outputs:
+      state:
+        type: DependencyState
+        value:
+          ref: selected.outputs.state
+      rejection:
+        type: HubResult
+        value:
+          ref: selected.outputs.rejection
+  - id: dependencies
+    kind: loop
+    state_type: DependencyState
+    initial:
+      ref: steps.dispatch.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: switch
+      cases:
+      - id: accepted
+        when:
+          ref: steps.admission.outputs.admission.accepted
+        body:
+          kind: sequence
+          steps:
+          - id: prepare
+            kind: call
+            operation: prepare_child
+            arguments:
+              state:
+                ref: loop.state
+              context:
+                ref: inputs.context
+              repository_root:
+                ref: inputs.repository_root
+          - id: child
+            kind: switch
+            cases:
+            - id: execute
+              when:
+                ref: steps.prepare.outputs.boundary.execute
+              body:
+                kind: sequence
+                steps:
+                - id: reports
+                  kind: call
+                  operation: reports
+                  arguments:
+                    boundary:
+                      ref: steps.prepare.outputs.boundary
+                - id: planning
+                  kind: switch
+                  cases:
+                  - id: reports_ready
+                    when:
+                      ref: steps.reports.outputs.stage.active
+                    body:
+                      kind: sequence
+                      steps:
+                      - id: plan
+                        kind: call
+                        operation: plan
+                        arguments:
+                          stage:
+                            ref: steps.reports.outputs.stage
+                      outputs:
+                        stage:
+                          type: ChildStage
+                          value:
+                            ref: steps.plan.outputs.stage
+                  default:
+                    kind: call
+                    operation: carry_stage
+                    arguments:
+                      stage:
+                        ref: steps.reports.outputs.stage
+                  outputs:
+                    stage:
+                      type: ChildStage
+                      value:
+                        ref: selected.outputs.stage
+                - id: complete
+                  kind: call
+                  operation: complete_child
+                  arguments:
+                    stage:
+                      ref: steps.planning.outputs.stage
+                    boundary:
+                      ref: steps.prepare.outputs.boundary
+                outputs:
+                  result:
+                    type: HubResult
+                    value:
+                      ref: steps.complete.outputs.result
+            default:
+              kind: sequence
+              steps:
+              - id: skip
+                kind: call
+                operation: skip_child
+                arguments:
+                  boundary:
+                    ref: steps.prepare.outputs.boundary
+              outputs:
+                result:
+                  type: HubResult
+                  value:
+                    ref: steps.skip.outputs.result
+            outputs:
+              result:
+                type: HubResult
+                value:
+                  ref: selected.outputs.result
+          - id: advance
+            kind: call
+            operation: advance
+            arguments:
+              state:
+                ref: loop.state
+              child:
+                ref: steps.child.outputs.result
+              context:
+                ref: inputs.context
+          outputs:
+            state:
+              type: DependencyState
+              value:
+                ref: steps.advance.outputs.state
+            done:
+              type: Bool
+              value:
+                ref: steps.advance.outputs.done
+      default:
+        kind: sequence
+        steps:
+        - kind: call
+          operation: carry
+          arguments:
+            state:
+              ref: loop.state
+            result:
+              ref: steps.dispatch.outputs.rejection
+          id: carry
+        outputs:
+          state:
+            type: DependencyState
+            value:
+              ref: steps.carry.outputs.state
+          done:
+            type: Bool
+            value:
+              ref: steps.carry.outputs.done
+      outputs:
+        state:
+          type: DependencyState
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: DependencyState
+        value:
+          ref: body.outputs.state
+  - id: completion
+    kind: switch
+    cases:
+    - id: accepted
+      when:
+        ref: steps.admission.outputs.admission.accepted
+      body:
+        id: completion
+        kind: call
+        operation: finish
+        arguments:
+          state:
+            ref: steps.dependencies.outputs.state
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: carry
+        arguments:
+          state:
+            ref: steps.dispatch.outputs.state
+          result:
+            ref: steps.dispatch.outputs.rejection
+        id: carry
+      outputs:
+        result:
+          type: HubResult
+          value:
+            ref: steps.carry.outputs.result
+    outputs:
+      result:
+        type: HubResult
+        value:
+          ref: selected.outputs.result
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.completion.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+    - execute_advisory_probes
+    - promote_generated_findings
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 10
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Advisory plan only; completion establishes neither scientific truth
+    nor promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/mathformerphysicslib/mathformerphysicslib-generative-coherence-critic/scripts/build_generative_coherence_critic_plan.py
+    selector: main; default_reports; __main__.observe
+    digest: sha256:2f11a606d61a20e5d844711bb071aff11c2bd517cce8decf4e724b6f2b008495
+  - path: skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/coherence_common.py
+    selector: self_test_payload; canonicalize; generative_plan; compact_findings;
+      report_digest
+    digest: sha256:e1da9d47b82e23be26335e4476ba442aa58aedafe245034709d2868909deb125
+  - path: scripts/mathformer.py
+    selector: build_registry; run_action; prepare_action; admit_action; initialize_dependencies;
+      advance_dependencies; prepare_leaf_boundary; complete_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/generative_critic_tools.py
+    selector: register_generative_critic_tools; Child
+    digest: sha256:afbde78d17fd15f38aeb4964adc511f6a8dcc889f54fa108dbe41bda676816b8
+  - path: scripts/coherence_generative_alias_tools.py
+    selector: register_coherence_generative_alias_tools
+    digest: sha256:994df91346c52b2812895ef5fd264a8da1b68acf3aff07f3aea97cdb10da027a
+  - path: scripts/mcp_server.py
+    selector: MCP registration
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/coherence_suite_tools.py
+    selector: typed ports
+    digest: sha256:f01f545deae5fdef5acfcfc30fafa39bc7059e66b3184a29f41fb336f3345ace
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: tests/mcp/run_coherence_generative_alias_workflow_tests.py
+    selector: AliasTests
+    digest: sha256:80ce1313eddf7d0af1d9dd59a77a61247aba392ef7ae70a57ad1bff3f35d1a1a
+  - path: tests/mcp/run_generative_critic_workflow_tests.py
+    selector: GenerativeTests.test_original_cli_and_full_scan_before_slice
+    digest: sha256:d423de51445c3ce6a56d8b23bc7a3ead1f5bca26401f21e9300c992c8560b38e
+  - path: tests/mcp/fixtures/generative_critic_original.py.txt
+    selector: original CLI baseline
+    digest: sha256:dfc03752aeb8d9b6329436ea70362aaac568974cf3609c2e9b643a30cb590df9
+  - path: tests/mcp/fixtures/coherence_canonicalize_alias_compiler.py
+    selector: deterministic external compiler boundary fixture
+    digest: sha256:c65a5ab788c7f9704444d00a4c1ce384ac2611ef2f15f629fd2b8043c2ad6e0b
+  - path: scripts/workflow_write_audit.py
+    selector: snapshot_repository; audit_snapshots
+    digest: sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Fixed registered invocation excludes repeated --report, repository-inventory default
+    and optional --output branches; these remain in the native CLI. No coherence-loop
+    caller is invoked.
+  - Native timeout is null; Lunar enforces the retained 3600-second and ten-operation
+    budgets. Abandoned paused children are reaped when their MCP service exits. Required
+    receipts and digests are host-owned; optional enclosing hub report publication
+    remains controller-owned.
+  - Known registered alias has one child. The top-level loop and transport-only carry
+    preserve rejection without visiting a dependency; this places Lunar exhaustion
+    handling outside branch-local scope. Unknown-action rejection remains unreachable
+    for this fixed registry specialization.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-lib:coherence-generative-critic
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: physics-lib:coherence-generative-critic
+      summary: Alias for MathformerPhysicsLib generative coherence critic.
+      family: mathformerphysicslib
+      kind: sequence
+      safety: read_only
+      command: []
+      depends_on:
+      - mathformerphysicslib:generative-coherence-critic
+      required_paths: []
+      required_tools: []
+      optional_tools: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: One native child subprocess; stage calls describe its internals, never
+      separate launches.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    - repository_root
+    - extra_args
+    - seen
+    effects_status: native write audit plus host receipts
+    failure_policy: Preserve native failure payloads, aggregate failure and write
+      auditing; failed children do not become accepted plans.
+    scientific_payloads: Plan JSON is captured in child stdout within HubResult, not
+      a separate theorem or proof artifact.
+    optional_staged_transport: reports and plan observers pause the SAME child until
+      matching acknowledgments; closed/mismatched acknowledgments fail it. Callbacks
+      stay within owning stages; no durable resume.
+    adapter: Registered MCP tools reuse hub helpers and the existing staged child
+      transport. carry_stage carries inactive child output; carry transports rejected
+      admissions through the top-level loop without native work.
+  mathformer.composition:
+    ordered_dependencies:
+    - mathformerphysicslib:generative-coherence-critic
+    dependency_workflows:
+    - hub_mathformerphysicslib_generative_coherence_critic_workflow
+    command_after_dependencies: false
+    keep_going_semantics: Stop on failed child unless keep_going; aggregate failure
+      persists. Single dependency means both branches finish after one visit.
+    extra_args_for_sequence: rejected by run_action
+    modeling: Dependency traversal only; no iterative scientific refinement or retry.
+# REUSE-IgnoreEnd

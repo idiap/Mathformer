@@ -1,0 +1,478 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+"""Plan bounded Mathlib navigation from probable annotations."""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import sys
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+INDEX_SCRIPTS = REPO_ROOT / "skills" / "mathlib" / "mathlib-index-builder" / "scripts"
+ANNOTATOR_SCRIPTS = (
+    REPO_ROOT / "skills" / "mathlib" / "mathlib-term-expansion-annotator" / "scripts"
+)
+for path in (INDEX_SCRIPTS, ANNOTATOR_SCRIPTS):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
+
+from annotate_mathlib_terms import annotate_text  # noqa: E402
+from mathlib_index_common import (
+    DEFAULT_INDEX,
+    DEFAULT_MATHLIB_ROOT,
+    load_index,
+    parse_mathlib,
+    rel,
+)  # noqa: E402
+
+OUTPUT_PATH = REPO_ROOT / "artifacts" / "mathlib_index" / "navigation_state.json"
+GAP_LEDGER_PATH = REPO_ROOT / "artifacts" / "mathlib_index" / "gap_ledger.json"
+MONOTONIC_PATH = (
+    REPO_ROOT / "artifacts" / "mathlib_index" / "monotonic_refinement_report.json"
+)
+SELF_TEST_PATH = (
+    REPO_ROOT / "artifacts" / "mathlib_index" / "navigation_state_self_test.json"
+)
+OPERATION_CATALOG = [
+    "descend",
+    "inspect_sibling",
+    "query_declarations",
+    "verify_candidate",
+    "mark_gap",
+]
+
+
+BASELINES = [
+    {
+        "id": "compact_topology_baseline",
+        "text": "Let K be a compact set with an open cover.",
+        "expected_concept": "topology.compact_set",
+        "forbidden_top_decl_contains": "Operator",
+    },
+    {
+        "id": "finite_intersection_baseline",
+        "text": "Every finite subfamily has nonempty intersection.",
+        "expected_any": [
+            "set.finite_intersection_family",
+            "topology.finite_intersection_property",
+        ],
+    },
+    {
+        "id": "convex_baseline",
+        "text": "A convex set in a vector space contains every segment.",
+        "expected_concept": "analysis.convex_set",
+    },
+]
+
+
+def ensure_index(
+    path: Path,
+    *,
+    max_files: int | None = 220,
+    mathlib_root: Path = DEFAULT_MATHLIB_ROOT,
+) -> dict[str, Any]:
+    if path.exists():
+        return load_index(path)
+    index = parse_mathlib(mathlib_root, max_files=max_files)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(index, indent=2, sort_keys=True), encoding="utf-8")
+    return index
+
+
+def text_terms(value: str) -> set[str]:
+    return {
+        token.lower()
+        for token in value.replace("_", " ").replace(".", " ").split()
+        if token
+    }
+
+
+def score_declaration(
+    annotation: dict[str, Any], decl: dict[str, Any], graph: dict[str, list[str]]
+) -> dict[str, Any]:
+    candidate = annotation["normalized_candidates"][0]
+    concept_terms = set()
+    for key in ("concept_id", "lean_shape_guess"):
+        concept_terms |= text_terms(str(candidate.get(key, "")))
+    for key in ("lean_objects", "preferred_declarations"):
+        for item in candidate.get(key, []):
+            concept_terms |= text_terms(str(item))
+    decl_terms = (
+        set(decl.get("declaration_tokens", []))
+        | set(decl.get("namespace_tokens", []))
+        | text_terms(decl.get("signature", ""))
+    )
+    overlap = sorted(concept_terms & decl_terms)
+    module_bonus = (
+        3 if decl.get("module") in candidate.get("preferred_modules", []) else 0
+    )
+    preferred_bonus = (
+        4
+        if decl.get("short_name") in candidate.get("preferred_declarations", [])
+        or decl.get("qualified_name") in candidate.get("preferred_declarations", [])
+        else 0
+    )
+    shape_bonus = 1 if decl.get("theorem_shape", {}).get("conclusion_head") else 0
+    neighborhood = graph.get(decl["qualified_name"], [])
+    score = (
+        len(overlap)
+        + module_bonus
+        + preferred_bonus
+        + shape_bonus
+        - min(int(decl.get("import_cost", 0)) // 20, 3)
+    )
+    return {
+        "qualified_name": decl["qualified_name"],
+        "short_name": decl["short_name"],
+        "module": decl["module"],
+        "kind": decl["kind"],
+        "source_ref": decl["source_ref"],
+        "score": score,
+        "explanation": {
+            "term_overlap": overlap,
+            "module_bonus": module_bonus,
+            "preferred_decl_bonus": preferred_bonus,
+            "theorem_shape": decl.get("theorem_shape", {}),
+            "doc_comment_present": bool(decl.get("doc_comment")),
+            "neighborhood_size": len(neighborhood),
+            "import_cost": decl.get("import_cost", 0),
+        },
+        "neighborhood": neighborhood[:8],
+        "intended_import_set": [decl["module"]],
+        "verification_state": (
+            "decl_checked"
+            if decl.get("lean_check_status") == "checked"
+            else "unverified"
+        ),
+    }
+
+
+def candidate_declarations(
+    annotation: dict[str, Any], index: dict[str, Any], *, limit: int = 8
+) -> list[dict[str, Any]]:
+    if not annotation.get("normalized_candidates"):
+        return []
+    candidate = annotation["normalized_candidates"][0]
+    preferred_modules = set(candidate.get("preferred_modules", []))
+    preferred_decls = set(candidate.get("preferred_declarations", []))
+    concept_terms = set(text_terms(candidate.get("concept_id", "")))
+    for item in candidate.get("lean_objects", []) + candidate.get(
+        "preferred_declarations", []
+    ):
+        concept_terms |= text_terms(item)
+    rows = []
+    for decl in index.get("declarations", []):
+        module_match = decl.get("module") in preferred_modules
+        decl_match = (
+            decl.get("short_name") in preferred_decls
+            or decl.get("qualified_name") in preferred_decls
+        )
+        token_match = bool(
+            concept_terms
+            & (
+                set(decl.get("declaration_tokens", []))
+                | set(decl.get("namespace_tokens", []))
+            )
+        )
+        if module_match or decl_match or token_match:
+            rows.append(
+                score_declaration(annotation, decl, index.get("declaration_graph", {}))
+            )
+    return sorted(
+        rows,
+        key=lambda row: (
+            -row["score"],
+            row["import_cost"] if "import_cost" in row else 0,
+            row["qualified_name"],
+        ),
+    )[:limit]
+
+
+def report_path(context: dict[str, str] | None, native: Path) -> Path:
+    """Resolve explicit runtime report context; CLI defaults retain native paths."""
+    return Path(context["output_directory"]) / native.name if context else native
+
+
+def plan_navigation(
+    text: str,
+    *,
+    index_path: Path = DEFAULT_INDEX,
+    context: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    index = ensure_index(
+        index_path,
+        mathlib_root=Path(context["mathlib_root"]) if context else DEFAULT_MATHLIB_ROOT,
+    )
+    annotations = annotate_text(
+        text, **({"profile_path": Path(context["profile_path"])} if context else {})
+    )
+    states = []
+    gaps = []
+    if not annotations["annotations"]:
+        gaps.append(
+            {
+                "gap_id": "mathlib_gap.0.unmapped_source",
+                "source_span": {"start": 0, "end": len(text)},
+                "surface_term": text[:80],
+                "attempted_domains": [],
+                "failed_candidates": [],
+                "next_action": "add ontology surface terms or query broader Mathlib index",
+            }
+        )
+    for idx, annotation in enumerate(annotations["annotations"]):
+        declarations = candidate_declarations(annotation, index)
+        allowed_next_operation = "mark_gap"
+        if annotation["verification_state"] == "unverified" and declarations:
+            allowed_next_operation = "verify_candidate"
+        elif annotation["verification_state"] == "ambiguous":
+            allowed_next_operation = "query_declarations"
+        elif annotation["verification_state"] == "gap":
+            allowed_next_operation = "mark_gap"
+        candidate = (
+            annotation["normalized_candidates"][0]
+            if annotation["normalized_candidates"]
+            else {}
+        )
+        frontier = [
+            {
+                "module": module,
+                "score": 5 if module in candidate.get("preferred_modules", []) else 1,
+                "domain_tags": candidate.get("domain_tags", []),
+            }
+            for module in candidate.get("preferred_modules", [])
+        ]
+        state = {
+            "state_id": f"nav.{idx}.{annotation['surface_term'].replace(' ', '_')}",
+            "current_source_term": annotation["surface_term"],
+            "current_concept_id": annotation.get("selected_concept_id")
+            or candidate.get("concept_id"),
+            "candidate_modules": frontier,
+            "candidate_declarations": declarations,
+            "allowed_next_operation": allowed_next_operation,
+            "available_operations": OPERATION_CATALOG,
+            "operation_transition_policy": {
+                "descend": "inspect child module or namespace when preferred modules remain too broad",
+                "inspect_sibling": "inspect nearby declaration families before expanding global search",
+                "query_declarations": "search declarations when annotation is ambiguous or frontier is empty",
+                "verify_candidate": "run a Lean or import-context check before promotion",
+                "mark_gap": "record missing or ambiguous concept evidence with stable source span",
+            },
+            "budget": {
+                "breadth_remaining": max(0, 8 - len(frontier)),
+                "depth_remaining": 4,
+                "declaration_checks_remaining": max(
+                    0,
+                    5
+                    - len(
+                        [
+                            row
+                            for row in declarations
+                            if row["verification_state"] == "decl_checked"
+                        ]
+                    ),
+                ),
+                "fallback_searches_remaining": 2,
+            },
+            "stop_reason": (
+                "candidate_ready" if declarations else "gap_or_needs_broader_index"
+            ),
+            "annotation": annotation,
+        }
+        states.append(state)
+        if allowed_next_operation == "mark_gap" or not declarations:
+            gaps.append(
+                {
+                    "gap_id": f"mathlib_gap.{idx}.{annotation['surface_term'].replace(' ', '_')}",
+                    "source_span": annotation["source_span"],
+                    "surface_term": annotation["surface_term"],
+                    "attempted_domains": sorted(
+                        {
+                            tag
+                            for cand in annotation.get("normalized_candidates", [])
+                            for tag in cand.get("domain_tags", [])
+                        }
+                    ),
+                    "failed_candidates": [
+                        cand.get("concept_id")
+                        for cand in annotation.get("normalized_candidates", [])
+                    ],
+                    "next_action": "add ontology clues or expand index frontier",
+                }
+            )
+    report = {
+        "schema_version": "mathformer.mathlib_navigation_state.v0.1",
+        "generated_at_utc": datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "ok": True,
+        "source_text": text,
+        "index": rel(index_path),
+        "states": states,
+        "gap_ledger": gaps,
+        "allowed_operations_seen": sorted(
+            {state["allowed_next_operation"] for state in states}
+        ),
+        "operation_catalog": OPERATION_CATALOG,
+    }
+    report_path(context, OUTPUT_PATH).parent.mkdir(parents=True, exist_ok=True)
+    report_path(context, OUTPUT_PATH).write_text(
+        json.dumps(report, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    report_path(context, GAP_LEDGER_PATH).write_text(
+        json.dumps(
+            {"schema_version": 1, "gaps": gaps, "ok": True}, indent=2, sort_keys=True
+        ),
+        encoding="utf-8",
+    )
+    return report
+
+
+def monotonic_check(*, context: dict[str, str] | None = None) -> dict[str, Any]:
+    results = []
+    for case in BASELINES:
+        report = plan_navigation(
+            case["text"],
+            **(
+                {"index_path": Path(context["default_index"]), "context": context}
+                if context
+                else {}
+            ),
+        )
+        concepts = [state.get("current_concept_id") for state in report["states"]]
+        top_decls = [
+            decl["qualified_name"]
+            for state in report["states"]
+            for decl in state.get("candidate_declarations", [])[:1]
+        ]
+        ok = True
+        if "expected_concept" in case:
+            ok = case["expected_concept"] in concepts
+        if "expected_any" in case:
+            ok = any(item in concepts for item in case["expected_any"])
+        if "forbidden_top_decl_contains" in case:
+            ok = ok and not any(
+                case["forbidden_top_decl_contains"] in decl for decl in top_decls[:1]
+            )
+        results.append(
+            {
+                "id": case["id"],
+                "ok": ok,
+                "concepts": concepts,
+                "top_declarations": top_decls,
+            }
+        )
+    payload = {
+        "schema_version": 1,
+        "style": "mathlib_monotonic_index_refinement_report",
+        "ok": all(row["ok"] for row in results),
+        "results": results,
+    }
+    report_path(context, MONOTONIC_PATH).parent.mkdir(parents=True, exist_ok=True)
+    report_path(context, MONOTONIC_PATH).write_text(
+        json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    return payload
+
+
+def self_test(*, context: dict[str, str] | None = None) -> dict[str, Any]:
+    options = (
+        {"index_path": Path(context["default_index"]), "context": context}
+        if context
+        else {}
+    )
+    report = plan_navigation(
+        "A compact set has the finite intersection property and a convex subset is measurable.",
+        **options,
+    )
+    gap_report = plan_navigation(
+        "A quasinormal pseudostructure has a spectral cocompactness invariant.",
+        **options,
+    )
+    mono = monotonic_check(**({"context": context} if context else {}))
+    return finish_self_test(report, gap_report, mono, context=context)
+
+
+def finish_self_test(
+    report: dict[str, Any],
+    gap_report: dict[str, Any],
+    mono: dict[str, Any],
+    *,
+    context: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Shared native aggregation and report side effect after the ordered fixtures."""
+    operations = set(report["allowed_operations_seen"])
+    payload = {
+        "schema_version": 1,
+        "style": "mathlib_navigation_state_self_test",
+        "ok": bool(report["states"])
+        and bool(gap_report["gap_ledger"])
+        and mono["ok"]
+        and set(report["operation_catalog"]) == set(OPERATION_CATALOG)
+        and operations <= set(OPERATION_CATALOG),
+        "state_count": len(report["states"]),
+        "allowed_operations_seen": sorted(operations),
+        "operation_catalog": OPERATION_CATALOG,
+        "gap_count": len(gap_report["gap_ledger"]),
+        "gap_fixture": gap_report["gap_ledger"],
+        "monotonic": mono,
+    }
+    report_path(context, SELF_TEST_PATH).parent.mkdir(parents=True, exist_ok=True)
+    report_path(context, SELF_TEST_PATH).write_text(
+        json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    return payload
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--text", default="")
+    parser.add_argument("--index", type=Path, default=DEFAULT_INDEX)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--monotonic-check", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    if args.self_test:
+        payload = self_test()
+    elif args.monotonic_check:
+        payload = monotonic_check()
+    else:
+        payload = plan_navigation(require_text(args.text), index_path=args.index)
+    return emit(payload, args.json)
+
+
+def require_text(text: str) -> str:
+    if not text:
+        raise SystemExit("provide --text, --self-test, or --monotonic-check")
+    return text
+
+
+def emit(payload: dict[str, Any], json_output: bool) -> int:
+    if json_output:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(
+            "PASS mathlib navigation state"
+            if payload.get("ok")
+            else "FAIL mathlib navigation state"
+        )
+    return 0 if payload.get("ok") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

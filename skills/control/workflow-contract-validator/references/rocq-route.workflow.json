@@ -1,0 +1,549 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_formalize_rocq_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected formalize.rocq route through its single controlled hub action.",
+  "aliases": [
+    "formalize.rocq"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "SelectedMatch": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "properties": {
+              "route_id": {
+                "const": "formalize.rocq"
+              },
+              "action_ids": {
+                "const": [
+                  "rocq:wiki-suite"
+                ]
+              }
+            }
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "description": "Native action registry supplied by the caller; values retain WorkflowAction metadata."
+      }
+    },
+    "Root": {
+      "schema": {
+        "type": "string",
+        "description": "Optional repository mount; omission preserves the native repository default."
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "rocq:wiki-suite"
+        ]
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "description": "Ordered native child result envelopes."
+            }
+          }
+        }
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "ActionCount": {
+      "schema": {
+        "type": "integer",
+        "const": 1
+      }
+    }
+  },
+  "inputs": {
+    "match": {
+      "type": "SelectedMatch"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "context": {
+      "type": "RunContext"
+    },
+    "repository_root": {
+      "type": "Root",
+      "required": false
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_rocq_route_initialize",
+          "operation": "mathformer_rocq_route_initialize"
+        }
+      }
+    },
+    "select": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_rocq_route_select",
+          "operation": "mathformer_rocq_route_select"
+        }
+      }
+    },
+    "run": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "repository_root": {
+          "type": "Root",
+          "required": false
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_rocq_route_run",
+          "operation": "mathformer_rocq_route_run"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "action_count": {
+          "type": "ActionCount"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_rocq_route_advance",
+          "operation": "mathformer_rocq_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_rocq_route_finish",
+          "operation": "mathformer_rocq_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "Exactly one registered action; normal completion occurs on the first iteration, including failed children.",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "run",
+              "kind": "call",
+              "operation": "run",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.run.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "action_count": {
+                  "literal": 1
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/rocq_wiki_level/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Route completion establishes no scientific truth, semantic preservation, promotion or compiler availability."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "intent_run_completed",
+      "intent_run_failed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action; run_leaf_action; build_intent_routes",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/rocq/run_wiki_suite.py",
+        "selector": "run_suite; prepare_suite; draft_suite; check_suite; aggregate_suite",
+        "digest": "sha256:50f6ea4e7452745bd0e73e0718d8ca48990e137d8d6b0d56ea09c436b433d3d7"
+      },
+      {
+        "path": "skills/rocq/rocq-execution-runner/scripts/check_rocq_file.py",
+        "selector": "run_validation; structural_pass; external_pass; aggregate_validation",
+        "digest": "sha256:31df31ec4979898572f90fa951fb4fe5ee06f7f5c54876094d4da97583bff6c2"
+      },
+      {
+        "path": "scripts/rocq_route_tools.py",
+        "selector": "register_rocq_route_tools; selected_match; checked_registry; check_state",
+        "digest": "sha256:dc874e117865845331edc15053778da78fc58cca1154bd438f1e76248c01a7a7"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_rocq_route_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "rocq_route_descriptor",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "backends/rocq/MathformerRocq/autoformalize.py",
+        "selector": "draft_manifest; draft_case; validate_file; run_external_check",
+        "digest": "sha256:f9c9d219a34c1e02c9cad4259613f1235122d3f389ac3cdfebb7c858d18bee23"
+      },
+      {
+        "path": "skills/rocq/rocq-autoformalization-drafter/scripts/draft_rocq_wiki_case.py",
+        "selector": "main",
+        "digest": "sha256:43d7e5270ed6a58d0be0be9efba3bac634fd5e8705b39edfba379591c1c91fe4"
+      }
+    ],
+    "gaps": [
+      "The native run_action boundary and suite internals remain source-owned calls; route accumulator steps are exposed as typed MCP ports, without expanding every helper or file pass.",
+      "The 3600-second limit and five-block call ceiling are normalization declarations; the native hub leaf has no overall timeout.",
+      "Mandatory v1 receipts, digests and provenance require runtime support; optional native logs do not establish them.",
+      "Existing network/external capability placeholders and complete effects require qualification; they confer no runtime grants."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "formalize.rocq",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "formalize.rocq",
+        "title": "Generate or validate Rocq proof scripts",
+        "action_ids": [
+          "rocq:wiki-suite"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "scripts/mathformer.py run_intent_match; generated YAML is a dispatch descriptor, not the execution implementation.",
+      "callers": [
+        "CLI main ask --run",
+        "scripts/mcp_server.py mathformer_ask",
+        "scripts/mcp_server.py mathformer_run_workflow"
+      ],
+      "failure_policy": "Failed child payloads still reach finish; unexpected exceptions terminate execution."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "rocq:wiki-suite"
+      ],
+      "action_workflows": [
+        "hub_rocq_wiki_suite_workflow"
+      ],
+      "selection": "Already selected route; NL scoring and ambiguity resolution remain native.",
+      "bounds": "No retries or refinement; keep_going cannot add work. done is true after the only append, so exhaustion is unreachable and the bound returns normally.",
+      "suite_order": "Prepare output paths, draft, check even after reported drafting failure, then aggregate command/report success, five expected filenames and the expected theorem-name union.",
+      "checking": "All discovered files receive a structural pass followed by a compiler pass, including structurally failed files; missing compilers are accepted as skipped because require_compiler=false.",
+      "timing": "Draft and check subprocesses each default to 120 seconds; compiler calls also receive 120 seconds inside the checking subprocess."
+    }
+  }
+}

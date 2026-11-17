@@ -1,0 +1,744 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "loop_reflection_testing_loop_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "One-pass reflection observer; emits proposed refinements and regression commands.",
+  "aliases": [
+    "reflection_testing_loop"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Argv": {
+      "schema": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Loaded": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "report",
+          "baseline",
+          "monitor",
+          "paths",
+          "max_opportunities",
+          "write_baseline",
+          "json",
+          "halted"
+        ],
+        "properties": {
+          "report": {
+            "type": "object"
+          },
+          "baseline": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "monitor": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "paths": {
+            "type": "object",
+            "description": "Resolved report/log/hooks/output/observer/baseline paths."
+          },
+          "max_opportunities": {
+            "type": "integer",
+            "default": 8
+          },
+          "write_baseline": {
+            "type": "boolean"
+          },
+          "json": {
+            "type": "boolean"
+          },
+          "halted": {
+            "type": "boolean",
+            "description": "True only for native argparse help; no input files loaded."
+          }
+        }
+      }
+    },
+    "Observation": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "log_validation",
+          "reasoning_summary",
+          "baseline_comparison",
+          "commands"
+        ],
+        "properties": {
+          "log_validation": {
+            "type": "object"
+          },
+          "reasoning_summary": {
+            "type": "object"
+          },
+          "baseline_comparison": {
+            "type": "object"
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Opportunities": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "id",
+            "priority",
+            "evidence",
+            "proposed_refinement",
+            "monotonicity_gate",
+            "apply_mode"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "string",
+              "enum": [
+                "P0",
+                "P1",
+                "P2",
+                "P3"
+              ]
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "proposed_refinement": {
+              "type": "string"
+            },
+            "monotonicity_gate": {
+              "type": "object"
+            },
+            "apply_mode": {
+              "const": "manual_review_required"
+            }
+          }
+        }
+      }
+    },
+    "Packet": {
+      "schema": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "required": [
+          "ok",
+          "output_file",
+          "summary",
+          "baseline_comparison",
+          "reference_free_monitor",
+          "reasoning_log_validation",
+          "reasoning_event_summary",
+          "monotonicity_contract",
+          "opportunities",
+          "gate_decision",
+          "todos"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "output_file": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "object"
+          },
+          "baseline_comparison": {
+            "type": "object"
+          },
+          "reference_free_monitor": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "reasoning_log_validation": {
+            "type": "object"
+          },
+          "reasoning_event_summary": {
+            "type": "object"
+          },
+          "monotonicity_contract": {
+            "type": "object"
+          },
+          "opportunities": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "gate_decision": {
+            "type": "object"
+          },
+          "todos": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          3
+        ]
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Argv"
+    }
+  },
+  "outputs": {
+    "packet": {
+      "type": "Packet",
+      "value": {
+        "ref": "flow.outputs.packet"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "load": {
+      "inputs": {
+        "argv": {
+          "type": "Argv"
+        }
+      },
+      "outputs": {
+        "loaded": {
+          "type": "Loaded"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reflection_load",
+          "operation": "mathformer_reflection_load"
+        }
+      }
+    },
+    "observe": {
+      "inputs": {
+        "loaded": {
+          "type": "Loaded"
+        }
+      },
+      "outputs": {
+        "observation": {
+          "type": "Observation"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reflection_observe",
+          "operation": "mathformer_reflection_observe"
+        }
+      }
+    },
+    "propose": {
+      "inputs": {
+        "loaded": {
+          "type": "Loaded"
+        },
+        "observation": {
+          "type": "Observation"
+        }
+      },
+      "outputs": {
+        "opportunities": {
+          "type": "Opportunities"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reflection_propose",
+          "operation": "mathformer_reflection_propose"
+        }
+      }
+    },
+    "pack": {
+      "inputs": {
+        "loaded": {
+          "type": "Loaded"
+        },
+        "observation": {
+          "type": "Observation"
+        },
+        "opportunities": {
+          "type": "Opportunities"
+        }
+      },
+      "outputs": {
+        "packet": {
+          "type": "Packet"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reflection_pack",
+          "operation": "mathformer_reflection_pack"
+        }
+      }
+    },
+    "persist": {
+      "inputs": {
+        "loaded": {
+          "type": "Loaded"
+        },
+        "packet": {
+          "type": "Packet"
+        }
+      },
+      "outputs": {},
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reflection_persist",
+          "operation": "mathformer_reflection_persist"
+        }
+      }
+    },
+    "finish_with_baseline": {
+      "inputs": {
+        "loaded": {
+          "type": "Loaded"
+        },
+        "packet": {
+          "type": "Packet"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reflection_finish_with_baseline",
+          "operation": "mathformer_reflection_finish_with_baseline"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "loaded": {
+          "type": "Loaded"
+        },
+        "packet": {
+          "type": "Packet"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reflection_finish",
+          "operation": "mathformer_reflection_finish"
+        }
+      }
+    },
+    "help": {
+      "inputs": {
+        "loaded": {
+          "type": "Loaded"
+        }
+      },
+      "outputs": {
+        "packet": {
+          "type": "Packet"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reflection_help",
+          "operation": "mathformer_reflection_help"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "load_inputs",
+        "kind": "call",
+        "operation": "load",
+        "description": "Parse argv (null uses process arguments), resolve paths, append start event, load required report then optional baseline and monitor only when paths exist. Missing optional files become null; malformed supplied files still abort. Pack parsed flags and loaded values; preserve all CLI defaults.\n Native --help prints usage and stops successfully before any file access; invalid arguments abort.",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          }
+        }
+      },
+      {
+        "id": "run_or_help",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "parser_help",
+            "when": {
+              "ref": "steps.load_inputs.outputs.loaded.halted"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "help",
+              "arguments": {
+                "loaded": {
+                  "ref": "steps.load_inputs.outputs.loaded"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "observe_inputs",
+              "kind": "call",
+              "operation": "observe",
+              "description": "Validate reasoning log with strict=true; read and summarize events; compare baseline; build command strings; append observation event. Lost successful cases and decreased numeric compatibility are regressions; numeric difficulty rising by more than five points is only a warning. Null baseline disables comparison; null monitor supplies no critic evidence.\n",
+              "arguments": {
+                "loaded": {
+                  "ref": "steps.load_inputs.outputs.loaded"
+                }
+              }
+            },
+            {
+              "id": "propose_changes",
+              "kind": "call",
+              "operation": "propose",
+              "description": "Collect source-defined repair/improvement evidence. If no opportunities exist and report.summary.passed is truthy, suggest suite expansion. Stable-sort priorities P0..P3 and return Python slice [:max_opportunities], default 8, retaining zero/negative slice behavior. Emit retained-item events. Finite evidence scans and event loops stay internal; no refinement iteration.\n",
+              "arguments": {
+                "loaded": {
+                  "ref": "steps.load_inputs.outputs.loaded"
+                },
+                "observation": {
+                  "ref": "steps.observe_inputs.outputs.observation"
+                }
+              }
+            },
+            {
+              "id": "evaluate_and_pack",
+              "kind": "call",
+              "operation": "pack",
+              "description": "Build monotonicity contract, then decide four blocking checks: report passed, strict reasoning log valid, no baseline regressions, no dictionary-valued supplied critic regressions. Append gate event; pack timestamp, paths, evidence, opportunities, gate decision, TODOs, then build summary. A false gate is packet.ok=false, not an early execution failure.\n",
+              "arguments": {
+                "loaded": {
+                  "ref": "steps.load_inputs.outputs.loaded"
+                },
+                "observation": {
+                  "ref": "steps.observe_inputs.outputs.observation"
+                },
+                "opportunities": {
+                  "ref": "steps.propose_changes.outputs.opportunities"
+                }
+              }
+            },
+            {
+              "id": "write_packet",
+              "kind": "call",
+              "operation": "persist",
+              "description": "Create parent directories and write packet before any baseline write, even when gate fails.",
+              "arguments": {
+                "loaded": {
+                  "ref": "steps.load_inputs.outputs.loaded"
+                },
+                "packet": {
+                  "ref": "steps.evaluate_and_pack.outputs.packet"
+                }
+              }
+            },
+            {
+              "id": "finish_run",
+              "kind": "switch",
+              "cases": [
+                {
+                  "id": "baseline_requested",
+                  "when": {
+                    "ref": "steps.load_inputs.outputs.loaded.write_baseline"
+                  },
+                  "body": {
+                    "kind": "call",
+                    "operation": "finish_with_baseline",
+                    "description": "If baseline path is null, raise ValueError after packet was written. Otherwise write baseline_snapshot(report), even on gate failure. Then append completion event, print JSON or rendered text according to parsed json flag, return 0 if packet.ok else 3.\n",
+                    "arguments": {
+                      "loaded": {
+                        "ref": "steps.load_inputs.outputs.loaded"
+                      },
+                      "packet": {
+                        "ref": "steps.evaluate_and_pack.outputs.packet"
+                      }
+                    }
+                  }
+                }
+              ],
+              "default": {
+                "kind": "call",
+                "operation": "finish",
+                "description": "Append completion event; print JSON or text; return 0 if packet.ok else 3.",
+                "arguments": {
+                  "loaded": {
+                    "ref": "steps.load_inputs.outputs.loaded"
+                  },
+                  "packet": {
+                    "ref": "steps.evaluate_and_pack.outputs.packet"
+                  }
+                }
+              },
+              "outputs": {
+                "exit_code": {
+                  "type": "ExitCode",
+                  "value": {
+                    "ref": "selected.outputs.exit_code"
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "packet": {
+              "type": "Packet",
+              "value": {
+                "ref": "steps.evaluate_and_pack.outputs.packet"
+              }
+            },
+            "exit_code": {
+              "type": "ExitCode",
+              "value": {
+                "ref": "steps.finish_run.outputs.exit_code"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "packet": {
+            "type": "Packet",
+            "value": {
+              "ref": "selected.outputs.packet"
+            }
+          },
+          "exit_code": {
+            "type": "ExitCode",
+            "value": {
+              "ref": "selected.outputs.exit_code"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "packet": {
+        "type": "Packet",
+        "value": {
+          "ref": "steps.run_or_help.outputs.packet"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.run_or_help.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "supplied_input_files"
+        ],
+        "write": [
+          "packet_file",
+          "observer_log",
+          "requested_baseline_file"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "inspect_declared_contract",
+        "observe_artifacts",
+        "propose_refinements",
+        "write_observation_artifacts"
+      ],
+      "forbidden": [
+        "execute_regression_commands",
+        "apply_refinements",
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 6
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Observation and proposals only; no accepted refinement, proof, promotion or runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/autoformalization/autoformalization-reflective-refinement-loop/scripts/observe_autoformalization_process.py",
+        "selector": "main(argv: Optional[Sequence[str]] = None) -> int",
+        "digest": "sha256:dc5d991f03d51e0beb028b5f061d3c7e93d89265c99a5ef592ad50d6aca61653"
+      },
+      {
+        "path": "skills/SKILL_HOOKS.yaml",
+        "selector": "loop_contracts[reflection_testing_loop]",
+        "digest": "sha256:6a4370a206d71da4550b976e50fd1d4863881b3f920820a3ea7b49e8de39a353"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "audit_pack_sources: imported reflection observer MCP helper",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/reflection_observer_tools.py",
+        "selector": "register_reflection_observer_tools",
+        "digest": "sha256:b5b1e8d3142dd2fb36f8703a43d876c4493cb557c58a9ef3cb68f7b337976297"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_reflection_observer_tools(mcp, _analysis_write_policy, ...)",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory: reflection_testing_loop authored projection",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "The selected executable is the reflection observer only; hook membership supplies no end-to-end refinement schedule.",
+      "Required receipts and artifact digests are supplied by the Lunar host, in addition to native observer events."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "loop",
+      "native_id": "reflection_testing_loop",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md"
+    },
+    "mathformer.membership": {
+      "required_hooks_are_not_an_execution_schedule": true,
+      "owner_skills": [
+        "reference-free-critic-monitor",
+        "reference-free-descriptive-evaluator",
+        "autoformalization-reflective-refinement-loop",
+        "skill-test-program-orchestrator",
+        "workflow-contract-validator",
+        "skill-hook-coverage-maximizer"
+      ],
+      "runtime_accounting": {}
+    },
+    "mathformer.execution": {
+      "component_owner": "autoformalization-reflective-refinement-loop",
+      "cross_invocation_state": "Explicit baseline snapshot of successful-case flags and metrics; never a checkpoint.",
+      "iteration": "One pass; finite local accumulation only, with no retries, convergence driver or exhaustion signal.",
+      "failures": "Uncaught input/I/O errors abort; partial files and observer events may remain.",
+      "limits": "Descriptor host ceilings; native main has no timeout. The slow-test caller alone uses 90 seconds.",
+      "callers": "Slow deterministic tests and a matrix help smoke check; PRISM projections are separate entrypoints.",
+      "parser": "Null argv retains argparse process-argument semantics; supply an explicit argv array for a portable invocation. Native help yields null packet and exit 0; parser errors fail the bound operation."
+    }
+  }
+}

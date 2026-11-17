@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import converted_reasoning
+from reasoning import ReviewLeanArtifact
+from artifact_acceptance_loop import LeanArtifactAcceptanceRequest, ArtifactDisposition
+
+def run_reasoning(
+    workflow_source: LeanArtifactAcceptanceRequest,
+    model_access: ModelGenerate,
+    disclosure: ContextDisclose,
+) -> Result[Generated[ArtifactDisposition], ModelFailure] ! {AI.Generate, Context.Disclose}:
+    flow = converted_reasoning(workflow_source)
+    return solve ReviewLeanArtifact(workflow_source) using flow

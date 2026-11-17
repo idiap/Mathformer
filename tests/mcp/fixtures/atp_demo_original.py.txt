@@ -1,0 +1,428 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Frozen original source oracle, before continuation extraction.
+def _prove_generated_lemmas(
+    *,
+    problem: ATPProblem,
+    selected: Sequence[PremiseCandidate],
+    artifact_root: Path,
+    runner: VampireRunner,
+    time_limit: int,
+) -> tuple[list[PremiseCandidate], dict[str, Any], str]:
+    """Document the responsibility of ``_prove_generated_lemmas``.
+
+    Motivation:
+        Bridge informal theorem statements and first-order automated theorem proving in a traceable way.
+
+    Intent:
+        Provide the local operation named ``_prove_generated_lemmas`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    generated_lemmas = generate_candidate_lemmas(problem, list(selected))
+    lemma_root = artifact_root / "premise_generation"
+    lemma_root.mkdir(parents=True, exist_ok=True)
+    promoted: list[PremiseCandidate] = []
+
+    for index, generated in enumerate(generated_lemmas, start=1):
+        if not generated.attempt_proof:
+            continue
+        lemma_problem_id = f"{problem.problem_id}__lemma__{generated.id}"
+        safe_id = re.sub(r"[^A-Za-z0-9_]+", "_", generated.id).strip("_")
+        problem_path = lemma_root / f"{index:02d}_{safe_id}.p"
+        result_path = lemma_root / f"{index:02d}_{safe_id}.result.json"
+        proof_path = lemma_root / f"{index:02d}_{safe_id}.proof.tstp"
+        lemma_problem = _lemma_problem(
+            problem,
+            selected,
+            generated.candidate,
+            problem_id=lemma_problem_id,
+        )
+        result = runner.run_problem(
+            lemma_problem, output_path=problem_path, time_limit=time_limit
+        )
+        result.write_json(result_path)
+        if result.formal_proof:
+            proof_path.write_text(result.formal_proof + "\n", encoding="utf-8")
+        generated.problem_path = str(problem_path)
+        generated.result_path = str(result_path)
+        generated.elapsed_seconds = result.elapsed_seconds
+        if result.proof_found:
+            generated.proof_status = result.status or "proved"
+            generated.promoted = True
+            generated.proof_path = str(proof_path)
+            generated.candidate.premise_type = "proved_generated_lemma"
+            generated.candidate.formula_role = "axiom"
+            generated.candidate.provenance = (
+                f"proved generated lemma from {lemma_problem_id}; proof at {proof_path}"
+            )
+            generated.candidate.rejected_reason = None
+            promoted.append(generated.candidate)
+        else:
+            generated.proof_status = result.status or "not_proved"
+            generated.promoted = False
+            generated.rejection_reason = "Vampire did not prove this generated lemma."
+            generated.candidate.premise_type = "rejected_generated_lemma"
+            generated.candidate.rejected_reason = generated.rejection_reason
+
+    report = build_generation_report(problem.problem_id, generated_lemmas)
+    report_path = artifact_root / "premise_generation_report.json"
+    _write_json(report_path, report.to_dict())
+    return promoted, report.to_dict(), str(report_path)
+
+def _minimize_premises(
+    *,
+    problem: ATPProblem,
+    premises: Sequence[PremiseCandidate],
+    artifact_root: Path,
+    runner: VampireRunner,
+    time_limit: int,
+    enabled: bool,
+) -> tuple[list[PremiseCandidate], list[dict[str, Any]], str | None]:
+    """Document the responsibility of ``_minimize_premises``.
+
+    Motivation:
+        Bridge informal theorem statements and first-order automated theorem proving in a traceable way.
+
+    Intent:
+        Provide the local operation named ``_minimize_premises`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if not enabled:
+        return list(premises), [], None
+
+    current = list(premises)
+    attempts: list[dict[str, Any]] = []
+    min_root = artifact_root / "premise_minimization"
+    min_root.mkdir(parents=True, exist_ok=True)
+
+    for index, candidate in enumerate(list(premises), start=1):
+        if candidate not in current:
+            continue
+        trial = [item for item in current if item.id != candidate.id]
+        trial_problem = _problem_from_premises(
+            problem,
+            trial,
+            problem_id=f"{problem.problem_id}__minimize_without__{candidate.id}",
+            metadata={
+                "proof_obligation": "premise_minimization",
+                "removed_premise_id": candidate.id,
+                "trial_premise_ids": [item.id for item in trial],
+            },
+        )
+        safe_id = re.sub(r"[^A-Za-z0-9_]+", "_", candidate.id).strip("_")
+        problem_path = min_root / f"{index:02d}_without_{safe_id}.p"
+        result_path = min_root / f"{index:02d}_without_{safe_id}.result.json"
+        minimization_time_limit = max(1, min(time_limit, 1))
+        result = runner.run_problem(
+            trial_problem,
+            output_path=problem_path,
+            time_limit=minimization_time_limit,
+            proof=False,
+        )
+        result.write_json(result_path)
+        if result.proof_found:
+            current = trial
+        attempts.append(
+            {
+                "removed_premise_id": candidate.id,
+                "ok_without_premise": result.proof_found,
+                "kept": not result.proof_found,
+                "status": result.status,
+                "problem_path": str(problem_path),
+                "result_path": str(result_path),
+            }
+        )
+
+    report = {
+        "problem_id": problem.problem_id,
+        "initial_premise_ids": [candidate.id for candidate in premises],
+        "final_premise_ids": [candidate.id for candidate in current],
+        "attempts": attempts,
+        "notes": [
+            "A premise is removed only when Vampire still proves the theorem without it.",
+            "Generated lemmas are eligible for the final set only after separate proof promotion.",
+        ],
+    }
+    report_path = artifact_root / "premise_minimization_report.json"
+    _write_json(report_path, report)
+    return current, attempts, str(report_path)
+
+def _run_premise_guided_attempt(
+    *,
+    problem: ATPProblem,
+    artifact_root: Path,
+    candidate_index: int,
+    runner: VampireRunner,
+    time_limit: int,
+    premise_budget: str,
+    generate_premises: bool,
+    minimize_premises: bool,
+) -> dict[str, Any]:
+    """Document the responsibility of ``_run_premise_guided_attempt``.
+
+    Motivation:
+        Bridge informal theorem statements and first-order automated theorem proving in a traceable way.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    registry = build_premise_registry(problem)
+    selection_report = select_premises(problem, registry, budget=premise_budget)
+    selected = selected_candidates(selection_report)
+    selection_report_path = artifact_root / "premise_selection_report.json"
+    _write_json(selection_report_path, selection_report.to_dict())
+
+    promoted: list[PremiseCandidate] = []
+    generation_report: dict[str, Any] | None = None
+    generation_report_path: str | None = None
+    if generate_premises:
+        promoted, generation_report, generation_report_path = _prove_generated_lemmas(
+            problem=problem,
+            selected=selected,
+            artifact_root=artifact_root,
+            runner=runner,
+            time_limit=time_limit,
+        )
+    else:
+        generation_report = {
+            "problem_id": problem.problem_id,
+            "generated_count": 0,
+            "attempted_count": 0,
+            "proved_count": 0,
+            "promoted_ids": [],
+            "generated_lemmas": [],
+            "notes": ["Premise generation disabled for this attempt."],
+        }
+
+    augmented = selected + promoted
+    minimized, minimization_attempts, minimization_report_path = _minimize_premises(
+        problem=problem,
+        premises=augmented,
+        artifact_root=artifact_root,
+        runner=runner,
+        time_limit=time_limit,
+        enabled=minimize_premises,
+    )
+    final_metadata = {
+        "premise_loop": {
+            "enabled": True,
+            "budget": premise_budget,
+            "selected_premise_ids": [candidate.id for candidate in selected],
+            "promoted_generated_lemma_ids": [candidate.id for candidate in promoted],
+            "final_premise_ids": [candidate.id for candidate in minimized],
+            "generation_enabled": generate_premises,
+            "minimization_enabled": minimize_premises,
+        }
+    }
+    final_problem = _problem_from_premises(problem, minimized, metadata=final_metadata)
+
+    problem_path = (
+        artifact_root / f"candidate_{candidate_index:02d}_{problem.problem_id}.p"
+    )
+    result_path = (
+        artifact_root
+        / f"candidate_{candidate_index:02d}_{problem.problem_id}.result.json"
+    )
+    proof_path = (
+        artifact_root
+        / f"candidate_{candidate_index:02d}_{problem.problem_id}.proof.tstp"
+    )
+    informal_path = (
+        artifact_root
+        / f"candidate_{candidate_index:02d}_{problem.problem_id}.informal.md"
+    )
+    informal_json_path = (
+        artifact_root
+        / f"candidate_{candidate_index:02d}_{problem.problem_id}.informal.json"
+    )
+    result = runner.run_problem(
+        final_problem, output_path=problem_path, time_limit=time_limit
+    )
+    _persist_result_artifacts(
+        result=result,
+        result_path=result_path,
+        proof_path=proof_path,
+        informal_path=informal_path,
+        informal_json_path=informal_json_path,
+    )
+
+    return {
+        "problem": final_problem,
+        "result": result,
+        "problem_path": problem_path,
+        "result_path": result_path,
+        "proof_path": proof_path if result.formal_proof else None,
+        "formal_proof_path": proof_path if result.formal_proof else None,
+        "informal_proof_path": informal_path if result.informal_proof else None,
+        "informal_proof_json_path": (
+            informal_json_path if result.informal_proof else None
+        ),
+        "premise_selection_report": selection_report.to_dict(),
+        "premise_selection_report_path": str(selection_report_path),
+        "premise_generation_report": generation_report,
+        "premise_generation_report_path": generation_report_path,
+        "premise_minimization_attempts": minimization_attempts,
+        "premise_minimization_report_path": minimization_report_path,
+        "final_premise_ids": [candidate.id for candidate in minimized],
+    }
+
+def discover_proof(
+    informal_statement: str,
+    *,
+    artifact_root: Path,
+    source_url: str | None = None,
+    time_limit: int = 10,
+    runner: VampireRunner | None = None,
+    premise_loop: bool = False,
+    premise_budget: str = "medium",
+    generate_premises: bool = True,
+    minimize_premises: bool = True,
+) -> dict[str, Any]:
+    """Autoformalize an informal statement, run Vampire, and persist the first proof found."""
+
+    runner = runner or VampireRunner()
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    candidates = aggressive_autoformalize(informal_statement, source_url=source_url)
+    attempts: list[dict[str, Any]] = []
+    winning_result: ATPResult | None = None
+    winning_problem: ATPProblem | None = None
+    winning_attempt: dict[str, Any] | None = None
+    for index, problem in enumerate(candidates, start=1):
+        if premise_loop:
+            raw_attempt = _run_premise_guided_attempt(
+                problem=problem,
+                artifact_root=artifact_root,
+                candidate_index=index,
+                runner=runner,
+                time_limit=time_limit,
+                premise_budget=premise_budget,
+                generate_premises=generate_premises,
+                minimize_premises=minimize_premises,
+            )
+        else:
+            raw_attempt = _run_direct_attempt(
+                problem=problem,
+                artifact_root=artifact_root,
+                candidate_index=index,
+                runner=runner,
+                time_limit=time_limit,
+            )
+        result = raw_attempt["result"]
+        final_problem = raw_attempt["problem"]
+        attempt = {
+            "problem": final_problem.to_dict(),
+            "original_problem": problem.to_dict(),
+            "problem_path": str(raw_attempt["problem_path"]),
+            "result_path": str(raw_attempt["result_path"]),
+            "proof_path": (
+                str(raw_attempt["proof_path"]) if raw_attempt["proof_path"] else None
+            ),
+            "formal_proof_path": (
+                str(raw_attempt["formal_proof_path"])
+                if raw_attempt["formal_proof_path"]
+                else None
+            ),
+            "informal_proof_path": (
+                str(raw_attempt["informal_proof_path"])
+                if raw_attempt["informal_proof_path"]
+                else None
+            ),
+            "informal_proof_json_path": (
+                str(raw_attempt["informal_proof_json_path"])
+                if raw_attempt["informal_proof_json_path"]
+                else None
+            ),
+            "premise_selection_report_path": raw_attempt.get(
+                "premise_selection_report_path"
+            ),
+            "premise_generation_report_path": raw_attempt.get(
+                "premise_generation_report_path"
+            ),
+            "premise_minimization_report_path": raw_attempt.get(
+                "premise_minimization_report_path"
+            ),
+            "premise_selection_report": raw_attempt.get("premise_selection_report"),
+            "premise_generation_report": raw_attempt.get("premise_generation_report"),
+            "premise_minimization_attempts": raw_attempt.get(
+                "premise_minimization_attempts", []
+            ),
+            "final_premise_ids": raw_attempt.get("final_premise_ids", []),
+            "result": result.to_dict(),
+        }
+        attempts.append(attempt)
+        if result.proof_found and winning_result is None:
+            winning_result = result
+            winning_problem = final_problem
+            winning_attempt = attempt
+            break
+    report = {
+        "backend": "vampire",
+        "style": "tptp_fof_atp_search",
+        "generated_at": now(),
+        "ok": winning_result is not None and winning_result.proof_found,
+        "source_url": source_url,
+        "informal_statement": informal_statement,
+        "premise_loop": {
+            "enabled": premise_loop,
+            "budget": premise_budget,
+            "generation_enabled": generate_premises,
+            "minimization_enabled": minimize_premises,
+        },
+        "candidate_count": len(candidates),
+        "attempt_count": len(attempts),
+        "winner": winning_problem.to_dict() if winning_problem else None,
+        "winning_status": winning_result.status if winning_result else None,
+        "winning_formal_proof": winning_result.formal_proof if winning_result else None,
+        "winning_informal_proof": (
+            winning_result.informal_proof.to_dict()
+            if winning_result and winning_result.informal_proof
+            else None
+        ),
+        "winning_formal_proof_path": (
+            winning_attempt.get("formal_proof_path") if winning_attempt else None
+        ),
+        "winning_informal_proof_path": (
+            winning_attempt.get("informal_proof_path") if winning_attempt else None
+        ),
+        "winning_premise_selection_report_path": (
+            winning_attempt.get("premise_selection_report_path")
+            if winning_attempt
+            else None
+        ),
+        "winning_premise_generation_report_path": (
+            winning_attempt.get("premise_generation_report_path")
+            if winning_attempt
+            else None
+        ),
+        "winning_premise_minimization_report_path": (
+            winning_attempt.get("premise_minimization_report_path")
+            if winning_attempt
+            else None
+        ),
+        "winning_final_premise_ids": (
+            winning_attempt.get("final_premise_ids") if winning_attempt else []
+        ),
+        "attempts": attempts,
+        "vampire_version": runner.version(),
+    }
+    (artifact_root / "discovery_report.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return report

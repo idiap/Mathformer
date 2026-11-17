@@ -1,0 +1,807 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lean_formalphysics_comparative_report_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Finite native FormalPhysics report: ordered preparation, candidate evaluation, selection, assembly and output; optional native self-test.",
+  "aliases": [
+    "physics-lean:formalphysics-comparative-report"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Argv": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Args": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "self_test",
+          "has_input_json",
+          "options"
+        ],
+        "properties": {
+          "self_test": {
+            "type": "boolean"
+          },
+          "has_input_json": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "object",
+            "description": "All parsed argparse values; timeout defaults to 60 and execute_lean to false."
+          }
+        }
+      }
+    },
+    "CasesState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "has_cases",
+          "phase",
+          "native_json"
+        ],
+        "properties": {
+          "has_cases": {
+            "type": "boolean"
+          },
+          "native_json": {
+            "type": "string",
+            "description": "Lossless JSON of native options, indices, manifest, cursors, current case, accumulated cases and prompts. Preserves dictionary insertion order exposed by native renderers."
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "open",
+              "candidate",
+              "close"
+            ]
+          }
+        }
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "manifest",
+          "cases",
+          "summary",
+          "qualitative_reviews",
+          "strategy_comparison_summary",
+          "codex_exec_judge_prompts",
+          "judge_synthesis"
+        ],
+        "properties": {
+          "manifest": {
+            "type": "object"
+          },
+          "cases": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "type": "object"
+            }
+          },
+          "summary": {
+            "type": "object"
+          },
+          "qualitative_reviews": {
+            "type": "object"
+          },
+          "strategy_comparison_summary": {
+            "type": "object"
+          },
+          "codex_exec_judge_prompts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "judge_synthesis": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "Completion": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "exit_code",
+          "payload"
+        ],
+        "properties": {
+          "exit_code": {
+            "const": 0
+          },
+          "payload": {
+            "type": "object",
+            "description": "Native main result; report branch includes ok/style/summary/artifacts; self-test returns its own result."
+          }
+        }
+      }
+    },
+    "ReportText": {
+      "schema": {
+        "type": "string",
+        "description": "Lossless native report JSON; prevents transport key canonicalization from changing rendered output order."
+      }
+    }
+  },
+  "inputs": {
+    "extra_args": {
+      "type": "Argv"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Completion",
+      "value": {
+        "ref": "steps.dispatch.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "parse": {
+      "inputs": {
+        "argv": {
+          "type": "Argv"
+        }
+      },
+      "outputs": {
+        "args": {
+          "type": "Args"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_comparative_report_parse",
+          "operation": "mathformer_comparative_report_parse"
+        }
+      }
+    },
+    "test": {
+      "inputs": {
+        "args": {
+          "type": "Args"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Completion"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_comparative_report_test",
+          "operation": "mathformer_comparative_report_test"
+        }
+      }
+    },
+    "prepare": {
+      "inputs": {
+        "args": {
+          "type": "Args"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "CasesState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_comparative_report_prepare",
+          "operation": "mathformer_comparative_report_prepare"
+        }
+      }
+    },
+    "open_case": {
+      "inputs": {
+        "state": {
+          "type": "CasesState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "CasesState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_comparative_report_open_case",
+          "operation": "mathformer_comparative_report_open_case"
+        }
+      }
+    },
+    "candidate": {
+      "inputs": {
+        "state": {
+          "type": "CasesState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "CasesState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_comparative_report_candidate",
+          "operation": "mathformer_comparative_report_candidate"
+        }
+      }
+    },
+    "close_case": {
+      "inputs": {
+        "state": {
+          "type": "CasesState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "CasesState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_comparative_report_close_case",
+          "operation": "mathformer_comparative_report_close_case"
+        }
+      }
+    },
+    "assemble": {
+      "inputs": {
+        "state": {
+          "type": "CasesState"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "report_text": {
+          "type": "ReportText"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_comparative_report_assemble",
+          "operation": "mathformer_comparative_report_assemble"
+        }
+      }
+    },
+    "write": {
+      "inputs": {
+        "args": {
+          "type": "Args"
+        },
+        "report_text": {
+          "type": "ReportText"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Completion"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_comparative_report_write",
+          "operation": "mathformer_comparative_report_write"
+        }
+      }
+    },
+    "empty": {
+      "inputs": {
+        "args": {
+          "type": "Args"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "CasesState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_comparative_report_empty",
+          "operation": "mathformer_comparative_report_empty"
+        }
+      }
+    },
+    "retain": {
+      "inputs": {
+        "state": {
+          "type": "CasesState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "CasesState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_comparative_report_retain",
+          "operation": "mathformer_comparative_report_retain"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "kind": "call",
+        "operation": "parse",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.extra_args"
+          }
+        },
+        "id": "parse"
+      },
+      {
+        "id": "initialize",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "self_test",
+            "when": {
+              "ref": "steps.parse.outputs.args.self_test"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "empty",
+              "arguments": {
+                "args": {
+                  "ref": "steps.parse.outputs.args"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "kind": "call",
+              "operation": "prepare",
+              "arguments": {
+                "args": {
+                  "ref": "steps.parse.outputs.args"
+                }
+              },
+              "id": "prepare"
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "CasesState",
+              "value": {
+                "ref": "steps.prepare.outputs.state"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "state": {
+            "type": "CasesState",
+            "value": {
+              "ref": "selected.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "traverse",
+        "kind": "loop",
+        "state_type": "CasesState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 4000,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "open_case",
+              "when": {
+                "all": [
+                  {
+                    "ref": "loop.state.has_cases"
+                  },
+                  {
+                    "eq": [
+                      {
+                        "ref": "loop.state.phase"
+                      },
+                      {
+                        "literal": "open"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "body": {
+                "kind": "call",
+                "operation": "open_case",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            },
+            {
+              "id": "candidate",
+              "when": {
+                "all": [
+                  {
+                    "ref": "loop.state.has_cases"
+                  },
+                  {
+                    "eq": [
+                      {
+                        "ref": "loop.state.phase"
+                      },
+                      {
+                        "literal": "candidate"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "body": {
+                "kind": "call",
+                "operation": "candidate",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            },
+            {
+              "id": "close_case",
+              "when": {
+                "all": [
+                  {
+                    "ref": "loop.state.has_cases"
+                  },
+                  {
+                    "eq": [
+                      {
+                        "ref": "loop.state.phase"
+                      },
+                      {
+                        "literal": "close"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "body": {
+                "kind": "call",
+                "operation": "close_case",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "retain",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "CasesState",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "not": {
+            "ref": "body.outputs.state.has_cases"
+          }
+        },
+        "outputs": {
+          "state": {
+            "type": "CasesState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "self_test",
+            "when": {
+              "ref": "steps.parse.outputs.args.self_test"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "test",
+              "arguments": {
+                "args": {
+                  "ref": "steps.parse.outputs.args"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "kind": "call",
+              "operation": "assemble",
+              "arguments": {
+                "state": {
+                  "ref": "steps.traverse.outputs.state"
+                }
+              },
+              "id": "assemble"
+            },
+            {
+              "kind": "call",
+              "operation": "write",
+              "arguments": {
+                "args": {
+                  "ref": "steps.parse.outputs.args"
+                },
+                "report_text": {
+                  "ref": "steps.assemble.outputs.report_text"
+                }
+              },
+              "id": "write"
+            }
+          ],
+          "outputs": {
+            "result": {
+              "type": "Completion",
+              "value": {
+                "ref": "steps.write.outputs.result"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "Completion",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Completion",
+        "value": {
+          "ref": "steps.dispatch.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/formalphysics_comparative_analysis/",
+          "artifacts/workflow_hub/",
+          "native_temporary_files"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "produce_comparative_report",
+        "optionally_compile_lean",
+        "ingest_supplied_judgments",
+        "run_native_self_test"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "execute_generative_judges",
+        "infer_scientific_truth_from_completion",
+        "promote_artifacts"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 900,
+      "max_operation_calls": 4004
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Report evidence and candidate ranking; completion establishes neither proof nor promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/physics-common/formalphysics-comparative-analysis-reporter/scripts/build_comparative_report.py",
+        "selector": "main (delegates to build_report and write_outputs)",
+        "digest": "sha256:f28e488e2433e9c2158c3ee8c954de70be0116d62afd277dfe6079dd41896d9c"
+      },
+      {
+        "path": "skills/physics-common/formalphysics-comparative-analysis-reporter/scripts/prepare_comparison_inputs.py",
+        "selector": "build_manifest; build_foundations_inventory; clean_record; candidate packet builders",
+        "digest": "sha256:9b5b8c500e1aca198dec3bb9a87d36f4857ec39ef28ad29d9d74d25f850385c0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "physics-lean:formalphysics-comparative-report; run_action; run_leaf_action; prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/physics_lean/run_formalphysics_comparative_report.py",
+        "selector": "direct builder invocation",
+        "digest": "sha256:0ecf9d247c88978481f4cc3a4f95e938f0c273ccdd3c90bcc310facb0ae06ecc"
+      },
+      {
+        "path": "scripts/comparative_report_tools.py",
+        "selector": "register_comparative_report_tools",
+        "digest": "sha256:d446633b262e26fd7be9327459b9317c1b65587aa2177b05b3f1b357ae696dad"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "comparative report MCP registration",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "authored comparative report contract",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_comparative_report_workflow_tests.py",
+        "selector": "native parity and real MCP/Lunar/PRISM execution",
+        "digest": "sha256:e5f9ec79d0b9e2c08d192f1e1169b361843bbb8e610ba8ef7e0b6769b74b5543"
+      },
+      {
+        "path": "tests/mcp/fixtures/comparative_report_builder_original.py.txt",
+        "selector": "original selected entrypoint oracle",
+        "digest": "sha256:1406a97c121723143ff123c5ec1fab9a12e218fa5b80df1e3aa99c385a4c3249"
+      },
+      {
+        "path": "tests/mcp/fixtures/comparative_report_boundaries.py",
+        "selector": "deterministic external compiler/provider boundaries",
+        "digest": "sha256:d30835f295e76f5c431e9144fa13bdfb2e7730caefbcd347c95e305a4a6d4991"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "mcp.comparative_report.workflow",
+        "digest": "sha256:7bf4d2e9097449f5714c36abbe2c3fc9da6aa3bd525a445904bdf7e7463f418c"
+      }
+    ],
+    "gaps": [
+      "Bounded specialization admits at most 1000 records; native CLI has no record-count cap. The actual --input-json file is read by native preparation; argv carries all path and compiler context.",
+      "Nested case/candidate loops are lowered to ordered open/candidate/close phases because Lunar rejects branch-local loop exhaustion. Empty/self-test traversal performs one identity transition without evaluating candidates. Native review/render traversals remain within their owning operations.",
+      "Lunar supplies mandatory receipts/digests in addition to native printing and report artifacts; the 900-second ceiling is the hub/runtime policy rather than a direct-main timeout."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lean:formalphysics-comparative-report",
+      "owner_skill": "skills/physics-common/formalphysics-comparative-analysis-reporter/SKILL.md",
+      "contract": {
+        "id": "physics-lean:formalphysics-comparative-report",
+        "family": "physics_lean",
+        "kind": "render",
+        "safety": "writes_artifacts",
+        "depends_on": [],
+        "allows_extra_args": true,
+        "timeout_seconds": 900
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Dependency-free hub leaf forwards extra arguments through run_action and run_leaf_action; graph models selected Python main only.",
+      "failure_policy": "Hub preflight or dry-run can prevent execution; timeout/nonzero exit/undeclared writes makes hub unsuccessful. Direct main returns zero after writing even for blocked candidates; invalid input/unhandled errors abort.",
+      "timeout": "Lean timeout defaults to 60 seconds per candidate and is configurable; 900 seconds is the hub limit, not a direct-main limit."
+    },
+    "mathformer.source_semantics": {
+      "preparation": "Inventory finite discovered Foundations files/declarations; remove obsolete self-output unless retained; accumulate cleaned records/totals and write selected_examples.cleaned.json. Candidate order is external when supplied, then repository.",
+      "evaluation": "Load code; skip compile for unavailable/non-Lean candidates or without --execute-lean; external compile uses a temporary file. Then hygiene, dependency evidence, reference delta, gates, critic evidence, scores, aggregate. Compile failure/timeout remains evidence and iteration continues; unexpected errors abort.",
+      "prompts_and_selection": "Eight prompts per candidate are generated and optionally joined with supplied results; no judge execution. choose_best uses accepted, then provisional, then remaining Lean candidates, maximizing mean_score with source-order ties.",
+      "termination": "Empty cases bypass traversal. Each loop visits its finite collection once; the final allowed iteration exits normally when no items remain. Exhaustion is unreachable for admitted input and one-or-two candidate packets; no refinement, retry or convergence algorithm.",
+      "outputs": "JSON/HTML/Markdown report; prompt JSON; qualitative-review JSON and per-role Markdown; strategy JSON/Markdown. Review/render traversals stay inside their owning operations; no standalone manifest/todos write is performed here."
+    },
+    "mathformer.runtime": {
+      "tools": "scripts/comparative_report_tools.py",
+      "state": "JSON-safe native options, manifest, original-record index, supplied-result index, synthesis, cursors, accumulated cases/prompts and current case context. JSON keys replace native tuple/integer index keys without changing lookup semantics. State native_json and report_text preserve native insertion order across PRISM canonicalization.",
+      "bound": "At most four traversal calls per case: open, one or two candidate evaluations, close. Exact 4000th iteration stops normally. No retries or refinement. Errors abort; compiler failure/timeout remain evidence.",
+      "input": "extra_args is the native argv; --input-json, --repo-root, --lean-cwd, --output-dir and supplied results/synthesis paths are consumed without an independent artifact override."
+    }
+  }
+}

@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathformerphysicslib_coherence_grounding_loop import (
+    ApiOperabilityReview,
+    ApiReviewBasis,
+    CoherenceDecisionCase,
+    CoherenceRepairActions,
+    CoherenceRepairCase,
+    GenerativeCoherenceProbe,
+    GenerativeReviewBasis,
+    IntegrationReview,
+    IntegrationReviewBasis,
+    MathformerPhysicsLibrarySnapshot,
+    MathlibReuseAudit,
+    PhysicsGroundingCase,
+    PhysicsLibraryGateReport,
+    PhysicsLibraryInventory,
+    PhysicsOwnershipMap,
+    RedefinitionReview,
+    RedefinitionReviewBasis,
+)
+
+# Record modules, concepts, and canonical ownership.
+type InventoryPhysicsLibrary = (source: MathformerPhysicsLibrarySnapshot) -> Generated[PhysicsLibraryInventory]
+
+# Identify canonical concepts, aliases, and unresolved ownership conflicts.
+type CanonicalizePhysicsConcepts = (source: PhysicsLibraryInventory) -> Generated[PhysicsOwnershipMap]
+
+# Establish scope-bound applicability of existing mathlib declarations.
+type GroundPhysicsInMathlib = (source: PhysicsGroundingCase) -> Generated[MathlibReuseAudit]
+
+# Assess duplication, shadowing, and redefinition spread.
+type AssessRedefinitionRisk = (source: RedefinitionReviewBasis) -> Generated[RedefinitionReview]
+
+# Assess imports, dependency structure, and discoverability.
+type AssessLibraryIntegration = (source: IntegrationReviewBasis) -> Generated[IntegrationReview]
+
+# Assess whether the public physics API is usable in its declared scope.
+type AssessPhysicsApi = (source: ApiReviewBasis) -> Generated[ApiOperabilityReview]
+
+# Probe coherence claims while retaining the bounded authority of generative evidence.
+type ProbeLibraryCoherence = (source: GenerativeReviewBasis) -> Generated[GenerativeCoherenceProbe]
+
+# Propose monotone repairs and explicit revalidation obligations.
+type PlanCoherenceRepairs = (source: CoherenceRepairCase) -> Generated[CoherenceRepairActions]
+
+# Gate the current library and proposed actions without representing the repair plan itself as repaired code.
+type GatePhysicsLibrary = (source: CoherenceDecisionCase) -> Generated[PhysicsLibraryGateReport]

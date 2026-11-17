@@ -1,0 +1,505 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_test_family_docs_workflow
+version: 1.0.0
+kind: workflow
+description: Fixed docs-family runner; prepare, traverse every selected row, finalize,
+  and publish.
+aliases:
+- test:family:docs
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Domain:
+    schema:
+      type: object
+      description: Admitted canonical matrices select at most 4096 docs rows; this
+        constraint is not a CLI argument.
+      properties:
+        max_selected_rows:
+          const: 4096
+      required:
+      - max_selected_rows
+      additionalProperties: false
+  Args:
+    schema:
+      type: object
+      properties:
+        module_family:
+          const:
+          - docs
+        profile:
+          const: workstation
+        fail_on_warning:
+          const: false
+        changed_files_only:
+          const: false
+        emit_dependency_map_only:
+          const: false
+        validate_matrix:
+          const: false
+        json:
+          const: true
+        write_jsonl:
+          type: 'null'
+        write_junit:
+          type: 'null'
+        run_id:
+          type: string
+        output_file:
+          type: string
+      required:
+      - module_family
+      - profile
+      - fail_on_warning
+      - changed_files_only
+      - emit_dependency_map_only
+      - validate_matrix
+      - json
+      - write_jsonl
+      - write_junit
+      - run_id
+      - output_file
+  State:
+    schema:
+      type: object
+      properties:
+        matrix:
+          type: array
+          items:
+            type: object
+        selected:
+          type: array
+          maxItems: 4096
+          items:
+            type: object
+        families:
+          type: array
+          items:
+            type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 4096
+        results:
+          type: array
+          items:
+            type: object
+      required:
+      - matrix
+      - selected
+      - families
+      - index
+      - results
+      additionalProperties: false
+  Bool:
+    schema:
+      type: boolean
+  Report:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        results:
+          type: array
+          items:
+            type: object
+        summary:
+          type: object
+        capability_ledger:
+          type: object
+        schema_errors:
+          type: array
+        matrix_errors:
+          type: array
+        dependency_map:
+          type: string
+      required:
+      - ok
+      - results
+      - summary
+      - capability_ledger
+      - schema_errors
+      - matrix_errors
+      - dependency_map
+  Publication:
+    schema:
+      type: object
+      properties:
+        exit_code:
+          type: integer
+          enum:
+          - 0
+          - 3
+        output_file:
+          type: string
+      required:
+      - exit_code
+      - output_file
+  RuntimeContext:
+    schema:
+      type: object
+      properties:
+        handle:
+          type: string
+      required:
+      - handle
+      additionalProperties: false
+inputs:
+  domain:
+    type: Domain
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+  publication:
+    type: Publication
+    value:
+      ref: flow.outputs.publication
+operations:
+  prepare:
+    inputs:
+      domain:
+        type: Domain
+    outputs:
+      args:
+        type: Args
+      state:
+        type: State
+      context:
+        type: RuntimeContext
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_family_prepare
+        operation: mathformer_docs_family_prepare
+  cursor_done:
+    inputs:
+      state:
+        type: State
+      context:
+        type: RuntimeContext
+    outputs:
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_family_cursor_done
+        operation: mathformer_docs_family_cursor_done
+  advance:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+      context:
+        type: RuntimeContext
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_family_advance
+        operation: mathformer_docs_family_advance
+  finalize:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+      context:
+        type: RuntimeContext
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_family_finalize
+        operation: mathformer_docs_family_finalize
+  publish:
+    inputs:
+      report:
+        type: Report
+      args:
+        type: Args
+      context:
+        type: RuntimeContext
+    outputs:
+      publication:
+        type: Publication
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_family_publish
+        operation: mathformer_docs_family_publish
+  retain_empty:
+    inputs:
+      state:
+        type: State
+      context:
+        type: RuntimeContext
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_docs_family_retain_empty
+        operation: mathformer_docs_family_retain_empty
+flow:
+  kind: sequence
+  steps:
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      domain:
+        ref: inputs.domain
+  - id: initial_guard
+    kind: call
+    operation: cursor_done
+    arguments:
+      state:
+        ref: steps.prepare.outputs.state
+      context:
+        ref: steps.prepare.outputs.context
+  - kind: loop
+    state_type: State
+    initial:
+      ref: steps.prepare.outputs.state
+    max_iterations: 4096
+    on_exhausted: fail
+    body:
+      kind: switch
+      cases:
+      - id: empty
+        when:
+          ref: steps.initial_guard.outputs.done
+        body:
+          kind: call
+          operation: retain_empty
+          arguments:
+            state:
+              ref: loop.state
+            context:
+              ref: steps.prepare.outputs.context
+      default:
+        kind: sequence
+        steps:
+        - id: advance
+          kind: call
+          operation: advance
+          arguments:
+            state:
+              ref: loop.state
+            args:
+              ref: steps.prepare.outputs.args
+            context:
+              ref: steps.prepare.outputs.context
+        - id: next_guard
+          kind: call
+          operation: cursor_done
+          arguments:
+            state:
+              ref: steps.advance.outputs.state
+            context:
+              ref: steps.prepare.outputs.context
+        outputs:
+          state:
+            type: State
+            value:
+              ref: steps.advance.outputs.state
+          done:
+            type: Bool
+            value:
+              ref: steps.next_guard.outputs.done
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: State
+        value:
+          ref: body.outputs.state
+    id: traverse
+  - id: finalize
+    kind: call
+    operation: finalize
+    arguments:
+      state:
+        ref: steps.traverse.outputs.state
+      args:
+        ref: steps.prepare.outputs.args
+      context:
+        ref: steps.prepare.outputs.context
+  - id: publish
+    kind: call
+    operation: publish
+    arguments:
+      report:
+        ref: steps.finalize.outputs.report
+      args:
+        ref: steps.prepare.outputs.args
+      context:
+        ref: steps.prepare.outputs.context
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finalize.outputs.report
+    publication:
+      type: Publication
+      value:
+        ref: steps.publish.outputs.publication
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 8196
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source description only; completion establishes no scientific truth
+    or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: run
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: prepare_checks; advance_check; run_check; finalize_checks; main; parse_args;
+      publish_report
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: scripts/mathformer.py
+    selector: build_registry/action:test:family:docs; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/docs_family_workflow_tools.py
+    selector: register_docs_family_tools
+    digest: sha256:85b05533fe56c8e2ec598d4ac92903a4434e5321b5222d5a0075813111b38dc4
+  - path: scripts/comprehensive_strict_tools.py
+    selector: source_runner
+    digest: sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd
+  - path: scripts/mcp_server.py
+    selector: register_docs_family_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Fixed hub arguments exclude dependency-map-only, changed-file selection, strict
+    and optional report branches.
+  - Domain and State constrain docs selections to 4096 rows; larger matrices are outside
+    this specialization.
+  - At 4096 rows the last advance makes done true and returns normally; exhaustion
+    is unreachable for admitted states.
+  - The 3600-second contract budget is not the native 900-second hub subprocess timeout;
+    call budget is a projection.
+  - Hub preflight, dry-run, subprocess capture and post-write audit remain the outer
+    source-owned boundary.
+  - Effect ceilings remain native declarations; runtime receipts are supplied by Lunar
+    and do not certify scientific validity.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: test:family:docs
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: test:family:docs
+      summary: Run the comprehensive test matrix for the docs module family.
+      family: docs
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/test_program/run_comprehensive_tests.py
+      - --module-family
+      - docs
+      - --json
+      depends_on: []
+      required_paths:
+      - tests/test_program/run_comprehensive_tests.py
+      - tests/test_matrix.json
+      required_tools: []
+      optional_tools: []
+      writes:
+      - artifacts/
+      allows_extra_args: false
+      timeout_seconds: 900
+      notes: ''
+  mathformer.native_boundary:
+    execution: run_action to run_leaf_action; preflight and dry-run before subprocess,
+      then write audit.
+    failure_policy: Preserve native failure payloads; preflight, timeout or audit
+      failure cannot become acceptance.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+# REUSE-IgnoreEnd

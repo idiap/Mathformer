@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import converted_reasoning
+from reasoning import ReconstructInIsabelle
+from isabelle_physics_derivation_trace_loop import PhysicsIsabelleDerivationRequest, IsabellePhysicsDisposition
+
+def run_reasoning(
+    workflow_source: PhysicsIsabelleDerivationRequest,
+    model_access: ModelGenerate,
+    disclosure: ContextDisclose,
+) -> Result[Generated[IsabellePhysicsDisposition], ModelFailure] ! {AI.Generate, Context.Disclose}:
+    flow = converted_reasoning(workflow_source)
+    return solve ReconstructInIsabelle(workflow_source) using flow

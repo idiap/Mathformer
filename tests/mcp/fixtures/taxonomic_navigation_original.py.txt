@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Select visible workflows by typed coordinates before broad natural-language
+#   prose matching.
+#
+# Intent:
+#   Provide a deterministic meta-skill navigation report with accepted and
+#   rejected candidates.
+#
+# Function:
+#   Scores user requests against taxonomy coordinates and writes a report.
+#
+# Maintenance Notes:
+#   Keep keyword mapping conservative and explain rejected alternatives.
+
+"""Navigate Mathformer meta-skill workflow taxonomy."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import re
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+TAXONOMY_PATH = REPO_ROOT / "meta_skills" / "taxonomy" / "workflow_taxonomy.json"
+REPORT_PATH = (
+    REPO_ROOT / "artifacts" / "meta_skills" / "taxonomic_navigation_report.json"
+)
+
+
+KEYWORDS = {
+    "autoformalization": ["autoformalize", "formalize", "foundations", "concepts"],
+    "grounding": ["mathlib", "ground", "grounding", "reuse"],
+    "coherence_audit": ["coherence", "audit", "gate", "critic"],
+    "pathology_repair": ["repair", "pathology", "pathologies", "recursive", "drift"],
+    "workflow_governance": [
+        "meta",
+        "meta-skill",
+        "workflow",
+        "validate",
+        "registry",
+        "help",
+    ],
+    "runtime_observability": ["trace", "runtime", "evolution", "observability"],
+    "promotion_control": ["promotion", "generated skill", "lifecycle"],
+    "mcp_boundary": ["mcp", "service", "deploy"],
+    "physics_foundations": ["physics foundations", "foundation", "object"],
+    "physics_pathologies": ["lean physics", "pathology", "drift"],
+    "controlled_workflows": [
+        "workflow",
+        "controlled",
+        "router",
+        "one sample",
+        "single sample",
+    ],
+    "formalphysics_samples": ["formalphysics", "formal physics", "sample", "case"],
+    "generated_skills": ["generated skill", "promotion", "lifecycle"],
+    "runtime_traces": ["trace", "runtime"],
+}
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def score_request(request: str, row: dict[str, Any]) -> tuple[int, list[str]]:
+    text = request.lower()
+    matched: list[str] = []
+    score = 0
+    if row.get("workflow_id") == "physics_lean.goal_sample.recursive_autoformalization":
+        sample_scope = re.search(
+            r"formalphysics_\d{4}|\b\d{4}\b|formal physics|formalphysics|one sample|single sample|\bsample\b|\bcase\b",
+            text,
+        )
+        if not sample_scope:
+            return 0, []
+    fields = (
+        row["reasoning_types"]
+        + row["object_domains"]
+        + row["backend_families"]
+        + row["risk_classes"]
+    )
+    for field in fields:
+        field_terms = [field.replace("_", " ")] + KEYWORDS.get(field, [])
+        hits = [term for term in field_terms if term in text]
+        if hits:
+            matched.append(field)
+            score += len(hits) + 1
+    if (
+        row["task_id"].replace("-", " ") in text
+        or row["workflow_id"].replace("_", " ") in text
+    ):
+        matched.append(row["task_id"])
+        score += 5
+    return score, sorted(set(matched))
+
+
+def navigate(request: str) -> dict[str, Any]:
+    taxonomy = load_json(TAXONOMY_PATH)
+    candidates = []
+    for row in taxonomy["workflow_coordinates"]:
+        score, matched = score_request(request, row)
+        candidates.append(
+            {
+                "workflow_id": row["workflow_id"],
+                "task_id": row["task_id"],
+                "score": score,
+                "matched_coordinates": matched,
+                "rejected_reason": (
+                    "" if score else "no taxonomy coordinate matched request"
+                ),
+            }
+        )
+    ranked = sorted(candidates, key=lambda row: (-row["score"], row["workflow_id"]))
+    selected = ranked[0] if ranked and ranked[0]["score"] > 0 else None
+    return {
+        "schema_version": 1,
+        "style": "mathformer_meta_taxonomic_navigation_report",
+        "ok": selected is not None,
+        "request": request,
+        "selected": selected,
+        "candidates": ranked,
+        "rejected_alternatives": [
+            row
+            for row in ranked[1:]
+            if row["score"] <= (selected or {}).get("score", 0)
+        ],
+    }
+
+
+def self_test() -> dict[str, Any]:
+    taxonomy = load_json(TAXONOMY_PATH)
+    cases = taxonomy.get("navigation_examples", [])
+    results = []
+    for case in cases:
+        report = navigate(case["request"])
+        got = (report.get("selected") or {}).get("workflow_id")
+        results.append(
+            {
+                "request": case["request"],
+                "expected": case["expected_workflow_id"],
+                "got": got,
+                "ok": got == case["expected_workflow_id"],
+            }
+        )
+    payload = {
+        "schema_version": 1,
+        "style": "mathformer_meta_taxonomic_navigation_self_test",
+        "ok": all(row["ok"] for row in results),
+        "results": results,
+    }
+    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    REPORT_PATH.write_text(
+        json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    return payload
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--request")
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    if args.self_test:
+        payload = self_test()
+    elif args.request:
+        payload = navigate(args.request)
+        REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        REPORT_PATH.write_text(
+            json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+        )
+    else:
+        raise SystemExit("provide --request or --self-test")
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(
+            "PASS taxonomy navigation" if payload["ok"] else "FAIL taxonomy navigation"
+        )
+    return 0 if payload["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

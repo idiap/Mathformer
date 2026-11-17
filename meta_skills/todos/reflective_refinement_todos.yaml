@@ -1,0 +1,619 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Turn the skill-independent reflective-refinement design into independently
+#   actionable implementation tasks with explicit evidence and validation.
+#
+# Intent:
+#   Cover ontology, ERFL projection, runtime identity, meta-skill bindings,
+#   governance, documentation, adversarial testing, and a controlled pilot.
+#
+# Function:
+#   Provides the implementation backlog for docs/architecture/
+#   REFLECTIVE_REFINEMENT.md.
+#
+# Maintenance Notes:
+#   A TODO is complete only when all acceptance evidence exists and every
+#   validation command succeeds or has a reviewed waiver artifact.
+
+schema_version: mathformer.reflective_refinement.todo.v0.1
+architecture: docs/architecture/REFLECTIVE_REFINEMENT.md
+
+todo_policy:
+  status_values:
+    - pending
+    - in_progress
+    - complete
+    - blocked
+  self_contained_rule: >
+    Each TODO names its objective, rationale, dependencies, target paths,
+    implementation steps, non-goals, acceptance evidence, validation commands,
+    risks, and controls so that it can be executed without recovering design
+    decisions from chat history.
+  completion_rule: >
+    A TODO is complete only when every acceptance_evidence item exists, all
+    acceptance_criteria hold, and every validation_command succeeds or has an
+    explicit reviewed waiver artifact.
+  semantic_boundary: >
+    Canonical reasoning specifications and revision records must not contain
+    skill, hook, action, command, tool, agent, or repository-path identifiers.
+    Those identifiers are allowed only in materialization bindings and
+    execution-provenance records.
+
+todos:
+  - id: RR-001
+    status: pending
+    title: Make higher-order reflective-refinement subjects normative
+    objective: >
+      Define reasoning specifications, trajectories, revisions, refinement
+      contracts, evaluation cases, adoption policies, meta-depths, refinement
+      subjects, and authority ceilings as orthogonal specializations of the
+      existing ERFL operation and output ontology.
+    rationale: >
+      Reflective refinement cannot be validated while reasoning itself remains
+      an unnamed Bundle or Model. The framework needs stable subject semantics
+      without adding one atomic operation for every meta-level concern.
+    dependencies: []
+    target_paths:
+      - docs/architecture/REFLECTIVE_REFINEMENT.md
+      - docs/architecture/REASONING_FLOW_LANGUAGE.md
+      - skills/control/reasoning-flow-language/references/erfl-0.3.json
+      - skills/REASONING_TYPES.yaml
+      - skills/OUTPUT_TYPES.yaml
+    implementation_steps:
+      - Add normative definitions for ReasoningSpecification,
+        ReasoningTrajectory, ReasoningRevision, RefinementContract,
+        EvaluationCase, and AdoptionPolicy.
+      - Define the object, process, governance, and language meta-depths.
+      - Define refinement_subject values for flow structure, decomposition,
+        selection, stopping, criteria, interfaces, memory, warrant,
+        governance, and language ontology.
+      - State that subject parameters specialize existing Model, Evidence,
+        Relation, Constraint, Delta, Assessment, and Decision roots.
+      - Add non-coercions separating reflection, revision proposal, candidate
+        construction, evaluation, adoption decision, and operational commit.
+      - Check that no new operation code is introduced merely to mean meta-level.
+    non_goals:
+      - Classifying repository skills.
+      - Implementing active-version mutation.
+      - Defining recursive loop-carried state.
+    acceptance_criteria:
+      - Every subject and meta-depth has a definition, admissible root kinds,
+        authority ceiling, and at least one example.
+      - The ontology distinguishes implementation refinement from epistemic
+        reasoning refinement.
+      - The normative definitions contain no repository skill identifiers.
+      - Existing object-level operation meanings remain unchanged.
+    acceptance_evidence:
+      - docs/architecture/REFLECTIVE_REFINEMENT.md
+      - skills/control/reasoning-flow-language/references/erfl-0.3.json
+      - artifacts/meta_skills/reflective_refinement_registry_validation.json
+    validation_commands:
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py --self-test --json
+      - python scripts/mathformer.py audit --strict --json
+    risks:
+      - A second reasoning ontology duplicates REASONING_TYPES or OUTPUT_TYPES.
+      - Generic subjects are mistaken for new sources of authority.
+    controls:
+      - Keep subject type, operation type, output function, and trust state as
+        separate facets.
+      - State explicitly that generic specialization never raises a claim ceiling.
+
+  - id: RR-002
+    status: in_progress
+    title: Replace the incomplete trajectory-reflection profile
+    objective: >
+      Represent a process-changing refinement with an explicit baseline
+      reasoning specification, typed delta, immutable candidate, revision
+      relation, candidate evidence, comparison, assessment, and disposition.
+    rationale: >
+      The current trajectory_reflection_and_process_improvement profile tests an
+      improvement claim but never produces a revised reasoning identity. It
+      represents reflection about change, not the change to reasoning itself.
+    dependencies:
+      - RR-001
+    target_paths:
+      - examples/reasoning_flows/trajectory_reflection_and_process_improvement.rflow
+      - skills/REASONING_TYPES.yaml
+      - docs/architecture/ALL_REASONING_FLOWS.md
+    implementation_steps:
+      - Decide whether to retain the existing flow id as a compatibility name
+        or split observational reflection from reflective_reasoning_refinement.
+      - Implement the L-X-F-P-L-R-E projection from the architecture document.
+      - Type the baseline, delta, successor, revision relation, evidence,
+        contracts, assessment, and decision ports explicitly.
+      - Replace global monotonic_improvement status with scoped adoption,
+        experiment, rejection, blocked, and rollback-compatible dispositions.
+      - State in the profile boundary comment that accept authorizes a
+        disposition but does not mutate the active process.
+      - Regenerate the conceptual flow catalogue after the renderer separation
+        in RR-007, or record a temporary synchronization dependency.
+    non_goals:
+      - Binding occurrences to skills or hooks.
+      - Automatically applying an accepted candidate.
+      - Encoding multiple candidate generations in one repeat block.
+    acceptance_criteria:
+      - The profile contains no skill, hook, action, command, agent, or tool ids.
+      - Baseline and candidate reasoning handles are explicit and distinct.
+      - Candidate evidence occurs after candidate construction.
+      - Critical assessment and external adoption policy precede terminal E.
+      - The profile passes strict ERFL and cross-registry validation.
+    acceptance_evidence:
+      - examples/reasoning_flows/trajectory_reflection_and_process_improvement.rflow
+      - artifacts/meta_skills/reflective_refinement_flow_validation.json
+    validation_commands:
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py examples/reasoning_flows/*.rflow --strict --check-registries --json
+      - python skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py --check --json
+    risks:
+      - Replacing the profile loses a useful reflection-only style.
+      - An accept handler is misread as an automatic commit.
+    controls:
+      - Preserve a separate observational profile if it has independent value.
+      - Keep commit outside ERFL and require an exact accepted decision record.
+
+  - id: RR-003
+    status: pending
+    title: Make generic ERFL subjects type-safe
+    objective: >
+      Parse and conserve complete generic port kinds so that a reasoning handle
+      cannot silently change subject while retaining the same root kind.
+    rationale: >
+      ERFL 0.3 currently compares only root kinds. A handle can change from
+      Model<ReasoningSpecification> to Model<Artifact> without a validation
+      error, defeating higher-order subject safety.
+    dependencies:
+      - RR-001
+    target_paths:
+      - skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py
+      - skills/control/reasoning-flow-language/references/erfl-0.3.json
+      - skills/control/reasoning-flow-language/references/
+    implementation_steps:
+      - Replace the unstructured generic suffix with a parsed root-and-arguments
+        representation.
+      - Define the allowed generic subjects and permitted nesting depth.
+      - Compare complete normalized kinds during handle reuse, alternative
+        interface equality, and parallel joins.
+      - Preserve readable diagnostics that identify the handle and both kinds.
+      - Add positive fixtures for generic conservation and negative fixtures
+        for subject drift, malformed nesting, and unknown subjects.
+      - Retain compatibility for unparameterized existing kinds.
+    non_goals:
+      - General-purpose dependent types.
+      - Inferring a subject from a handle name.
+      - Raising authority based on generic parameters.
+    acceptance_criteria:
+      - Model<ReasoningSpecification> cannot become Model<Artifact> under one
+        handle.
+      - Alternative branches must expose the same full generic interface.
+      - Existing unparameterized canonical flows continue to validate.
+      - Error output distinguishes unknown root kinds from unknown subjects.
+    acceptance_evidence:
+      - skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py
+      - artifacts/meta_skills/erfl_generic_kind_self_test.json
+    validation_commands:
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py --self-test --json
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py examples/reasoning_flows/*.rflow --strict --check-registries --json
+    risks:
+      - Greedy generic parsing accepts malformed nested kinds.
+      - Stricter checks break descriptive historical profiles.
+    controls:
+      - Use a small explicit grammar and bounded nesting.
+      - Add a documented migration diagnostic rather than silent coercion.
+
+  - id: RR-004
+    status: pending
+    title: Define immutable reasoning revision and evaluation records
+    objective: >
+      Add skill-independent runtime schemas for the baseline/delta/candidate
+      relation, paired evaluation evidence, scoped adoption, stale-evidence
+      invalidation, and rollback.
+    rationale: >
+      Current workflow-evolution and refinement packets identify owners and
+      prose actions but cannot reproduce a reasoning successor or prove which
+      candidate and evaluation contract a decision assessed.
+    dependencies:
+      - RR-001
+      - RR-003
+    target_paths:
+      - meta_skills/schemas/reasoning_revision.schema.json
+      - meta_skills/schemas/reasoning_evaluation.schema.json
+      - meta_skills/schemas/reasoning_adoption.schema.json
+      - meta_skills/registry/reasoning_specs/
+      - meta_skills/scripts/validate_reasoning_revisions.py
+      - tests/meta_skills/run_meta_skill_suite.py
+    implementation_steps:
+      - Define immutable identifiers, versions, and digests for predecessor and
+        successor reasoning specifications.
+      - Define a normalized delta with target subject, selector, operation,
+        before and after forms, trigger evidence, expected effect, protected
+        invariants, opened obligations, and rollback identity.
+      - Require exact reconstruction of the successor from predecessor plus delta.
+      - Bind every trial to specification, case-set, evaluator, environment,
+        backend, model, seed, and replicate digests where applicable.
+      - Record invalidated, preserved, and newly required evidence explicitly.
+      - Define adoption scope, decision subject, policy digest, expiry or review
+        condition, and rollback target.
+      - Reject skill_id, owner_skill, hook_id, action_id, command, tool, agent,
+        and repository path fields in the core records.
+      - Add standard-library validation and positive/adversarial fixtures.
+    non_goals:
+      - Recording which implementation executed the revision.
+      - Storing raw chain-of-thought or unbounded model output.
+      - Mutating an active-version pointer.
+    acceptance_criteria:
+      - A successor is reproducibly related to one exact predecessor and delta.
+      - Evidence cannot be reassigned to a different specification or contract.
+      - Every adoption decision has a declared scope and rollback target.
+      - Mutable aliases such as latest are never accepted as evidence identities.
+    acceptance_evidence:
+      - meta_skills/schemas/reasoning_revision.schema.json
+      - meta_skills/schemas/reasoning_evaluation.schema.json
+      - meta_skills/schemas/reasoning_adoption.schema.json
+      - meta_skills/scripts/validate_reasoning_revisions.py
+      - artifacts/meta_skills/reasoning_revision_validation.json
+    validation_commands:
+      - python meta_skills/scripts/validate_reasoning_revisions.py --self-test --json
+      - python tests/meta_skills/run_meta_skill_suite.py --json
+      - python scripts/mathformer.py audit --strict --json
+    risks:
+      - The record becomes too burdensome for small experiments.
+      - Content digests create false reproducibility when environments differ.
+    controls:
+      - Define a minimal required core plus optional backend-specific extensions.
+      - Bind evidence to environment and evaluator identities as well as content.
+
+  - id: RR-005
+    status: pending
+    title: Link epistemic occurrences to materializations and provenance
+    objective: >
+      Join skill-independent reasoning revisions to current skills, hooks,
+      actions, and runtime traces without inserting those operational ids into
+      the reasoning specification or core revision record.
+    rationale: >
+      The framework needs both implementation independence and auditability.
+      Removing skill ids everywhere would lose provenance; retaining them in
+      semantic flows would make the ontology implementation-dependent.
+    dependencies:
+      - RR-002
+      - RR-004
+    target_paths:
+      - skills/REASONING_MATERIALIZATIONS.yaml
+      - meta_skills/schemas/runtime_skill_application.schema.json
+      - skills/control/reasoning-log-schema-guardian/references/schema.md
+      - meta_skills/scripts/record_skill_application.py
+      - meta_skills/scripts/validate_runtime_traces.py
+    implementation_steps:
+      - Define a materialization binding keyed by reasoning specification,
+        flow, occurrence, and binding version.
+      - Move or project current skill_options, infrastructure skills, and
+        control bindings into that registry without deleting coverage.
+      - Extend runtime provenance with reasoning_specification_id,
+        reasoning_specification_digest, occurrence_id, revision_id,
+        evaluation_contract_digest, and binding_id.
+      - Retain skill_id and hook_id only in the binding and provenance layers.
+      - >
+        Validate both directions: every binding references a semantic
+        occurrence, and every executable occurrence has an admissible binding.
+      - Distinguish allowed alternative materializations from actual execution.
+    non_goals:
+      - Requiring one unique skill per occurrence.
+      - Treating a declared binding as execution evidence.
+      - Removing operational identifiers from runtime traces.
+    acceptance_criteria:
+      - A reasoning specification remains valid if every implementation is
+        renamed or replaced.
+      - An execution trace can still identify exactly which binding ran.
+      - One occurrence may have many admissible materializations.
+      - Binding coverage and actual-run provenance remain separately queryable.
+    acceptance_evidence:
+      - skills/REASONING_MATERIALIZATIONS.yaml
+      - artifacts/meta_skills/reasoning_materialization_coverage.json
+      - artifacts/meta_skills/runtime_trace_refinement_binding_validation.json
+    validation_commands:
+      - python meta_skills/scripts/validate_runtime_traces.py --json
+      - python skills/control/skill-hook-coverage-maximizer/scripts/audit_skill_hook_coverage.py --strict --json
+      - python scripts/mathformer.py audit --strict --json
+    risks:
+      - The binding registry becomes a second workflow router.
+      - Moving mappings temporarily reduces documentation coverage.
+    controls:
+      - Keep scripts/mathformer.py authoritative for operational action routing.
+      - Validate migration completeness before removing old embedded mappings.
+
+  - id: RR-006
+    status: pending
+    title: Classify all meta-capabilities by epistemic function and authority
+    objective: >
+      Classify every current meta_skills artifact and every repository
+      meta-controller by what it reasons about, what meta-function it performs,
+      and how much change authority it has.
+    rationale: >
+      Meta-skill is an operational composition role, not an epistemic primitive.
+      Without orthogonal axes, observers, validators, reflectors, routers,
+      promotion gates, and mutators can be incorrectly treated as equivalent.
+    dependencies:
+      - RR-001
+    target_paths:
+      - skills/SKILL_TYPES.yaml
+      - meta_skills/taxonomy/meta_capability_types.json
+      - meta_skills/taxonomy/skill_projection_cards.json
+      - meta_skills/scripts/build_skill_projections.py
+      - meta_skills/scripts/navigate_workflow_taxonomy.py
+      - docs/architecture/META_SKILLS.md
+    implementation_steps:
+      - Add classification axes for meta_subject, meta_function, meta_depth,
+        change_scope, change_authority, evaluation_independence,
+        self_modification_boundary, persistence_scope, and rollback_support.
+      - Use meta_function values for observe, model, compare, diagnose,
+        propose_revision, construct_candidate, test, verify, govern_adopt,
+        record_learn, route, and coordinate.
+      - Use change_authority values observe, propose, test, decide, apply, and
+        escalate; require an explicit ceiling for every capability.
+      - Inventory all 39 current source artifacts under meta_skills and the
+        existing router, log guardian, contract validator, coverage auditor,
+        test orchestrator, gate controller, reference-free evaluators, and
+        reflective-refinement implementation.
+      - Keep execution posture and composition role independent from epistemic
+        function and change authority.
+      - Generate coverage and ambiguity reports, including capabilities with
+        multiple functions and those lacking rollback support.
+    non_goals:
+      - Declaring every orchestrator reflective.
+      - Granting apply authority from a capability name or deterministic posture.
+      - Adding new epistemic primitives for operational roles.
+    acceptance_criteria:
+      - Every in-scope meta-capability has a subject, function, depth, authority
+        ceiling, independence status, persistence scope, and rollback status.
+      - No observer, evaluator, or reflector implicitly acquires apply authority.
+      - Reflective classification requires actual comparison or change reasoning.
+      - Classification coverage and ambiguities are machine-reported.
+    acceptance_evidence:
+      - meta_skills/taxonomy/meta_capability_types.json
+      - artifacts/meta_skills/meta_capability_classification_report.json
+      - docs/architecture/META_SKILLS.md
+    validation_commands:
+      - python meta_skills/scripts/build_skill_projections.py --json
+      - python meta_skills/scripts/navigate_workflow_taxonomy.py --self-test --json
+      - python tests/meta_skills/run_meta_skill_suite.py --json
+    risks:
+      - Scope expands from true meta-capabilities to every orchestrator.
+      - One flat enum recreates the taxonomy problem already solved for skills.
+    controls:
+      - Require evidence that the capability acts on a process, policy, trace,
+        registry, test surface, or reasoning specification.
+      - Preserve a product of orthogonal axes rather than a single meta-skill type.
+
+  - id: RR-007
+    status: complete
+    title: Separate semantic flow catalogues from operational materializations
+    objective: >
+      Make the canonical all-flows document completely skill-independent while
+      retaining the full skill, hook, action, and operational-loop crosswalk in
+      a separately generated document.
+    rationale: >
+      The current renderer reintroduces skill materialization tables and
+      skill-overlap affinities into the conceptual flow catalogue. That makes
+      the core language depend on current implementations even though ERFL is
+      explicitly defined to abstract them away.
+    dependencies:
+      - RR-005
+    target_paths:
+      - skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py
+      - docs/architecture/ALL_REASONING_FLOWS.md
+      - docs/architecture/REASONING_FLOW_MATERIALIZATIONS.md
+      - skills/control/reasoning-flow-language/SKILL.md
+      - docs/architecture/REASONING_FLOW_LANGUAGE.md
+    implementation_steps:
+      - Split the renderer into semantic and materialization projections, or add
+        explicit output modes with separate source dependencies.
+      - Make ALL_REASONING_FLOWS derive only from ERFL profiles and semantic
+        registries.
+      - Move occurrence-to-skill mappings, hook overlap, and loop affinities to
+        REASONING_FLOW_MATERIALIZATIONS.
+      - Replace canonical .rflow comments that say they project skill mappings
+        with skill-independent interpretation-boundary comments.
+      - Add synchronization checks for both generated files.
+      - Add a negative check that the semantic catalogue contains no canonical
+        skill, hook, or action identifiers.
+    non_goals:
+      - Deleting materialization information.
+      - Making operational mappings normative epistemic evidence.
+    acceptance_criteria:
+      - The semantic catalogue is understandable and valid without loading the
+        skill, hook, or workflow action registries.
+      - The materialization catalogue retains exhaustive one-to-many mappings.
+      - Both documents are reproducibly generated and checked in CI.
+    acceptance_evidence:
+      - docs/architecture/ALL_REASONING_FLOWS.md
+      - docs/architecture/REASONING_FLOW_MATERIALIZATIONS.md
+      - artifacts/meta_skills/reasoning_flow_catalogue_separation.json
+    validation_commands:
+      - python skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py --check --json
+      - python scripts/mathformer.py audit --strict --json
+    risks:
+      - Users lose a convenient single-document crosswalk.
+      - Two generated files drift or duplicate explanations.
+    controls:
+      - Cross-link the documents and generate both from one command.
+      - Keep semantic explanations in one source and reference them operationally.
+
+  - id: RR-008
+    status: pending
+    title: Enforce independent adoption, commit, and rollback
+    objective: >
+      Ensure that a candidate reasoning revision cannot approve or activate
+      itself, and that every operational commit is bound to an exact external
+      decision, candidate digest, scope, and rollback target.
+    rationale: >
+      Reflection, assessment, and calibration produce epistemic or governance
+      outputs. They must not silently become repository mutation or active
+      process state change, especially when the candidate alters its evaluator
+      or adoption policy.
+    dependencies:
+      - RR-004
+      - RR-005
+    target_paths:
+      - skills/SKILL_HOOKS.yaml
+      - scripts/mathformer.py
+      - meta_skills/schemas/workflow_evolution.schema.json
+      - meta_skills/scripts/validate_workflow_evolution.py
+      - meta_skills/lifecycle/generated_skill_lifecycle_policy.json
+      - tests/meta_skills/
+    implementation_steps:
+      - Define separate proposal, construction, trial, assessment,
+        adoption-decision, commit, rollback, and expiry/review phases.
+      - Require an unchanged higher-level trust anchor when a candidate changes
+        its evaluator, refinement contract, gate, or promotion policy.
+      - Escalate changes to the adoption policy or ERFL language ontology to an
+        explicitly external authority.
+      - Make operational commit require the exact accepted decision id,
+        candidate digest, policy digest, scope, and rollback target.
+      - Invalidate stale decisions when the candidate, evidence, cases,
+        evaluator, or policy digest changes.
+      - Record active-version transitions separately from immutable revision
+        and adoption records.
+      - Add dry-run, stale-decision, self-approval, rollback, and expiry fixtures.
+    non_goals:
+      - Treating a gate decision as object-level evidence.
+      - Letting ERFL perform repository mutation.
+      - Defining an infinite hierarchy of evaluators.
+    acceptance_criteria:
+      - Advisory output cannot mutate the active reasoning specification.
+      - A candidate cannot weaken its own evaluation and self-authorize.
+      - A stale or out-of-scope decision cannot commit.
+      - Rollback restores the previous active identity without deleting history.
+    acceptance_evidence:
+      - artifacts/meta_skills/reflective_refinement_governance_self_test.json
+      - artifacts/meta_skills/reflective_refinement_rollback_self_test.json
+      - skills/SKILL_HOOKS.yaml
+    validation_commands:
+      - python tests/meta_skills/run_meta_skill_suite.py --json
+      - python skills/control/workflow-contract-validator/scripts/validate_skill_hooks.py --strict --json
+      - python scripts/mathformer.py audit --strict --json
+    risks:
+      - Governance becomes circular or impossible to satisfy.
+      - Rollback metadata exists but the transition is not reproducible.
+    controls:
+      - Terminate the hierarchy at an explicitly declared trust anchor.
+      - Test rollback from immutable predecessor and successor identities.
+
+  - id: RR-009
+    status: pending
+    title: Add adversarial reflective-refinement fixtures
+    objective: >
+      Prove that the language, schemas, bindings, and governance reject the
+      characteristic failure modes of self-modifying reasoning.
+    rationale: >
+      Positive examples do not expose circular authorization, evidence reuse,
+      criterion drift, aggregate-score gaming, or false identity changes.
+    dependencies:
+      - RR-003
+      - RR-004
+      - RR-008
+    target_paths:
+      - skills/control/reasoning-flow-language/references/
+      - tests/meta_skills/fixtures/reflective_refinement/
+      - tests/meta_skills/run_meta_skill_suite.py
+    implementation_steps:
+      - Add a same-handle in-place revision fixture.
+      - Add equal predecessor/successor digest and replay-as-delta fixtures.
+      - Add generic-subject drift and malformed generic fixtures.
+      - Add candidate-assessed-with-predecessor-evidence and evidence-reuse fixtures.
+      - Add baseline/candidate case-set, metric, threshold, environment, and
+        evaluator drift fixtures.
+      - Add aggregate improvement hiding protected-case regression.
+      - Add diagnosis/evaluation leakage and missing holdout separation.
+      - Add candidate-controlled evaluator and adoption-policy self-approval.
+      - Add adoption without scope, expiry/review, or rollback information.
+      - Require precise, stable diagnostic ids for each rejected fixture.
+    non_goals:
+      - Claiming exhaustive protection against all strategic behavior.
+      - Replacing domain backend tests.
+    acceptance_criteria:
+      - Every listed fixture fails for the intended diagnostic and no unrelated
+        parser error.
+      - Positive baseline-to-candidate and paired-trial fixtures pass.
+      - Per-case protected regressions remain visible despite aggregate gains.
+    acceptance_evidence:
+      - tests/meta_skills/fixtures/reflective_refinement/
+      - artifacts/meta_skills/reflective_refinement_adversarial_suite.json
+    validation_commands:
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py --self-test --json
+      - python tests/meta_skills/run_meta_skill_suite.py --json
+    risks:
+      - Fixtures test field presence rather than the intended invariant.
+      - Diagnostics become brittle under harmless wording changes.
+    controls:
+      - Assert stable diagnostic ids and semantic conditions, not full messages.
+      - Include one minimal fixture per invariant plus integrated attack cases.
+
+  - id: RR-010
+    status: pending
+    title: Pilot one immutable reasoning refinement and defer native recursion
+    objective: >
+      Exercise the full contract on one existing reflective workflow using a
+      single baseline-to-candidate transition before adding loop-carried state
+      to ERFL.
+    rationale: >
+      ERFL 0.3 repeat blocks have bounded control but no explicit recurrence
+      binding from candidate_i to baseline_i+1. A one-step pilot can validate
+      identity, evidence, comparison, adoption, and rollback without pretending
+      static handle reuse expresses evolving reasoning versions.
+    dependencies:
+      - RR-002
+      - RR-004
+      - RR-005
+      - RR-008
+      - RR-009
+    target_paths:
+      - examples/reasoning_flows/trajectory_reflection_and_process_improvement.rflow
+      - artifacts/meta_skills/reflective_refinement_pilot/
+      - docs/architecture/REFLECTIVE_REFINEMENT.md
+      - skills/control/reasoning-flow-language/references/erfl-0.4-draft.md
+    implementation_steps:
+      - Select one stable baseline reasoning specification and freeze its digest.
+      - Freeze evaluation cases, protected properties, comparison rules,
+        evaluator identity, environment, and adoption policy.
+      - Produce one typed delta and reproducible successor identity.
+      - Replay baseline and candidate under matched conditions or document each
+        controlled difference.
+      - Record per-case evidence, comparison, stale-evidence decisions, critical
+        assessment, scoped disposition, and rollback target.
+      - Exercise a dry-run commit and rollback without deleting either identity.
+      - Document lessons for an ERFL 0.4 carry binding that explicitly maps the
+        adopted candidate of iteration i to the baseline of iteration i+1.
+      - Do not reinterpret ordinary handle reuse or indentation as recurrence.
+    non_goals:
+      - Production self-modification.
+      - Automatic promotion after one successful trial.
+      - Implementing recursive carry in ERFL 0.3.
+    acceptance_criteria:
+      - The pilot produces complete revision, evaluation, adoption, binding,
+        and provenance records.
+      - No skill id appears in the ERFL profile or core revision record.
+      - Baseline and candidate evidence use frozen or explicitly controlled
+        conditions and expose all protected per-case results.
+      - Dry-run rollback reconstructs the prior active identity.
+      - ERFL 0.4 notes specify recurrence semantics without changing 0.3.
+    acceptance_evidence:
+      - artifacts/meta_skills/reflective_refinement_pilot/revision.json
+      - artifacts/meta_skills/reflective_refinement_pilot/evaluation.json
+      - artifacts/meta_skills/reflective_refinement_pilot/adoption.json
+      - artifacts/meta_skills/reflective_refinement_pilot/provenance.jsonl
+      - artifacts/meta_skills/reflective_refinement_pilot/pilot_report.md
+      - skills/control/reasoning-flow-language/references/erfl-0.4-draft.md
+    validation_commands:
+      - python meta_skills/scripts/validate_reasoning_revisions.py artifacts/meta_skills/reflective_refinement_pilot --json
+      - python tests/meta_skills/run_meta_skill_suite.py --json
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py examples/reasoning_flows/*.rflow --strict --check-registries --json
+      - python scripts/mathformer.py audit --strict --json
+    risks:
+      - The pilot overfits one workflow or evaluation suite.
+      - A one-step success is mistaken for permission to self-modify broadly.
+    controls:
+      - Keep adoption scoped and require future repeated-use evidence.
+      - Preserve a rollback target and all immutable trial records.

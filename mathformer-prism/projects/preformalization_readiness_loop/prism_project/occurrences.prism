@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from preformalization_readiness_loop import (
+    BindingCheck,
+    CompletenessCheck,
+    DraftingBasis,
+    DraftingDisposition,
+    ExpandedTheory,
+    ExpansionBasis,
+    ExpansionNeeds,
+    ExpansionSupport,
+    PaperEvidence,
+    PaperFormalizationSourceSelection,
+    ReadinessCase,
+    SourceAlignmentCase,
+    TheoryMap,
+)
+
+# Extract provenance-bearing paper structure without endorsing its mathematical claims.
+type ExtractPaperLayout = (source: PaperFormalizationSourceSelection) -> Generated[PaperEvidence]
+
+# Identify target results, support units, dependencies, and formalizable source spans.
+type LocalizePaperTheory = (source: PaperEvidence) -> Generated[TheoryMap]
+
+# Expose missing assumptions, intermediate results, and proof-support obligations.
+type PlanTheoryExpansion = (source: TheoryMap) -> Generated[ExpansionNeeds]
+
+# Retrieve source-backed support while preserving unresolved uncertainty.
+type ResearchProofDependencies = (source: ExpansionNeeds) -> Generated[ExpansionSupport]
+
+# Construct an explicit expanded theory while retaining unresolved dependencies.
+type ExpandPaperTheory = (source: ExpansionBasis) -> Generated[ExpandedTheory]
+
+# Assess assumptions, prerequisites, side conditions, and conclusion preservation.
+type ReviewExpansionCompleteness = (source: ExpandedTheory) -> Generated[CompletenessCheck]
+
+# Assess identifier binding, domains, quantification, and binding drift.
+type ReviewExpansionBindings = (source: ExpandedTheory) -> Generated[BindingCheck]
+
+# Align source spans with stable Lean-facing drafting surfaces.
+type BuildLeanDraftPacket = (source: SourceAlignmentCase) -> Generated[DraftingBasis]
+
+# Combine expansion review and prior-result checks into a proceed, reuse, revise, or blocked disposition.
+type DecideReuseOrDraft = (source: ReadinessCase) -> Generated[DraftingDisposition]

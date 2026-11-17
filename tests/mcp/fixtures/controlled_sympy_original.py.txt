@@ -1,0 +1,105 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Frozen pre-extraction controlled_suite implementation.
+def controlled_suite(
+    output_root: Path, include_details: bool = False
+) -> Dict[str, Any]:
+    """Document the responsibility of ``controlled_suite``.
+
+    Motivation:
+        Keep symbolic mathematics and physics derivations executable and inspectable in Python/SymPy.
+
+    Intent:
+        Provide the local operation named ``controlled_suite`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    cases = []
+    output_root.mkdir(parents=True, exist_ok=True)
+    for case_id in controlled_case_ids():
+        case_root = output_root / case_id
+        artifact = (
+            case_root
+            / f"Autoformalized{''.join(part.title() for part in case_id.split('_'))}.py"
+        )
+        draft = write_artifact(case_id, artifact)
+        report = consistency_report(case_id, artifact_path=artifact)
+        validation = validate_controlled_case(case_id, report)
+        case_root.mkdir(parents=True, exist_ok=True)
+        write_markdown(report, case_root / "physics_consistency_report.md")
+        write_html(report, case_root / "physics_consistency_report.html")
+        equational_path = case_root / "equational_derivation.md"
+        write_equational_derivation(case_id, equational_path)
+        write_equational_derivation_html(
+            equational_path, case_root / "equational_derivation.html"
+        )
+        (case_root / "physics_consistency_report.json").write_text(
+            json.dumps(report, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        (case_root / "controlled_expectations.json").write_text(
+            json.dumps(
+                validation["expectations"], ensure_ascii=False, indent=2, default=str
+            ),
+            encoding="utf-8",
+        )
+        (case_root / "controlled_validation.json").write_text(
+            json.dumps(validation, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        case_summary = {
+            "case_id": case_id,
+            "artifact": str(artifact.relative_to(REPO_ROOT)),
+            "report_dir": str(case_root.relative_to(REPO_ROOT)),
+            "status": report["status"],
+            "controlled_validation_ok": validation["ok"],
+            "failed_controlled_checks": [
+                check["id"] for check in validation["failed_checks"]
+            ],
+            "expectation_path": str(
+                (case_root / "controlled_expectations.json").relative_to(REPO_ROOT)
+            ),
+            "validation_path": str(
+                (case_root / "controlled_validation.json").relative_to(REPO_ROOT)
+            ),
+            "consistency_report_path": str(
+                (case_root / "physics_consistency_report.json").relative_to(REPO_ROOT)
+            ),
+            "equational_derivation_path": str(
+                (case_root / "equational_derivation.md").relative_to(REPO_ROOT)
+            ),
+            "equational_derivation_html_path": str(
+                (case_root / "equational_derivation.html").relative_to(REPO_ROOT)
+            ),
+        }
+        if include_details:
+            case_summary.update(
+                {
+                    "draft": draft,
+                    "consistency": report,
+                    "controlled_validation": validation,
+                }
+            )
+        cases.append(case_summary)
+    suite = {
+        "backend": "sympy",
+        "style": STYLE,
+        "phase": "phase15_controlled_physics_test_suite",
+        "generated_at": now(),
+        "ok": all(
+            case["status"] == "complete" and case["controlled_validation_ok"]
+            for case in cases
+        ),
+        "case_count": len(cases),
+        "controlled_case_ids": controlled_case_ids(),
+        "wiki_level_cases_after_controlled_pass": WIKI_LEVEL_PHYSICS_CASES,
+        "cases": cases,
+    }
+    (output_root / "suite_report.json").write_text(
+        json.dumps(suite, ensure_ascii=False, indent=2, default=str), encoding="utf-8"
+    )
+    return suite

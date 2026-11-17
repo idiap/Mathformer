@@ -1,0 +1,47 @@
+{
+  "schema_version": "mathformer.meta_skills.generated_skill_lifecycle_policy.v0.1",
+  "states": [
+    "draft",
+    "task_local_validated",
+    "repeated_use_candidate",
+    "promoted",
+    "quarantined",
+    "deprecated"
+  ],
+  "promotion_rules": [
+    {
+      "from": "draft",
+      "to": "task_local_validated",
+      "requires": [
+        "SKILL.md",
+        "QUALITY_CARD.json",
+        "EVAL.json",
+        "EVOLUTION_LOG.md",
+        "run_trace.jsonl",
+        "seeded_defect_result.json"
+      ]
+    },
+    {
+      "from": "task_local_validated",
+      "to": "repeated_use_candidate",
+      "requires": [
+        "two_distinct_successful_runs",
+        "no_open_critical_failure_modes"
+      ]
+    },
+    {
+      "from": "repeated_use_candidate",
+      "to": "promoted",
+      "requires": [
+        "quality_card_promoted",
+        "hub_or_hook_route",
+        "comprehensive_test_coverage"
+      ]
+    }
+  ],
+  "quarantine_rules": [
+    "critical seeded defect accepted",
+    "promotion evidence fabricated or missing",
+    "generated skill bypasses controlled hub"
+  ]
+}

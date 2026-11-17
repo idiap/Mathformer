@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "probes": [
+    {
+      "probe_id": "latex_expansion.missing_assumption",
+      "family": "latex_expansion",
+      "source_excerpt": "The map f is continuous. Therefore f attains a maximum.",
+      "expected_blocker_class": "missing_compactness_assumption",
+      "forbidden_claims": ["complete proof", "compactness follows automatically"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "latex-expansion-completeness-reviewer"
+    },
+    {
+      "probe_id": "lean_drafting.already_in_mathlib",
+      "family": "lean_drafting",
+      "source_excerpt": "Every finite set has finite cardinality.",
+      "expected_blocker_class": "possible_existing_mathlib_result",
+      "forbidden_claims": ["new theorem required without search"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "mathlib-result-existence-checker"
+    },
+    {
+      "probe_id": "paper_localization.experimental_claim",
+      "family": "paper_theory_localization",
+      "source_excerpt": "Our experiments show a 3% improvement. Theorem 1 defines the loss decomposition.",
+      "expected_blocker_class": "experimental_claim_nonformalizable",
+      "forbidden_claims": ["formalize empirical improvement as theorem"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "paper-main-theory-localizer"
+    },
+    {
+      "probe_id": "reflective_refinement.metric_drift",
+      "family": "reflective_refinement",
+      "source_excerpt": "Compile success improves from 0 to 1, but anchor coverage drops from 1 to 0.6.",
+      "expected_blocker_class": "protected_dimension_regression",
+      "forbidden_claims": ["monotone improvement accepted"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "reference-free-critic-monitor"
+    },
+    {
+      "probe_id": "sympy.strengthened_assumption",
+      "family": "sympy",
+      "source_excerpt": "For real x, prove x^2 >= 0. The draft assumes x > 0.",
+      "expected_blocker_class": "hidden_strengthening",
+      "forbidden_claims": ["assumption faithful"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "sympy-assumption-modeler"
+    },
+    {
+      "probe_id": "lean_physics.raw_scalar_erasure",
+      "family": "lean_physics_critique",
+      "source_excerpt": "A vector force field in an inertial frame satisfies F = m a with force, mass, and acceleration dimensions.",
+      "expected_blocker_class": "raw_scalar_physics_erasure",
+      "forbidden_claims": ["dimensionally complete", "physics preserved by raw reals alone"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "physics-lean-generative-critic-orchestrator"
+    },
+    {
+      "probe_id": "lean_physics.hidden_context_assumption",
+      "family": "lean_physics_critique",
+      "source_excerpt": "Derive the relation in a stated coordinate frame. The Lean statement adds positivity and nonzero denominator hypotheses without source labels.",
+      "expected_blocker_class": "hidden_contextual_strengthening",
+      "forbidden_claims": ["assumption faithful", "complete without labels"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "physics-lean-assumption-critic"
+    },
+    {
+      "probe_id": "lean_physics.math_pipeline_parity",
+      "family": "lean_physics_orchestration",
+      "source_excerpt": "The Lean physics loop is compared against the mathematical autoformalization pipeline. Physics-specific critics are present, but semantic preservation and shared mathlib/source/consistency gates must still be inherited explicitly.",
+      "expected_blocker_class": "missing_mathematical_pipeline_parity",
+      "forbidden_claims": ["physics critics replace semantic preservation", "mathlib grounding is optional"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "physics-lean-workflow-orchestrator"
+    },
+    {
+      "probe_id": "physics_informal.missing_elicitation_context",
+      "family": "physics_informal_preformalization",
+      "source_excerpt": "The problem asks to derive a force relation but omits frame, units, and side assumptions.",
+      "expected_blocker_class": "missing_informal_physics_context",
+      "forbidden_claims": ["all assumptions source-backed", "ready for formalization"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "physics-informal-derivation-elicitor"
+    },
+    {
+      "probe_id": "physics_informal.unreviewed_generated_bridge",
+      "family": "physics_informal_preformalization",
+      "source_excerpt": "A derivation jumps between two equations; the expansion inserts an unstated calculus bridge without law provenance or unit checks.",
+      "expected_blocker_class": "unreviewed_generated_support",
+      "forbidden_claims": ["literal source step", "ready for backend drafting"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "physics-informal-derivation-readiness-reviewer"
+    },
+    {
+      "probe_id": "lean_physics.final_review_quantifier_loss",
+      "family": "lean_physics_final_review",
+      "source_excerpt": "For every admissible state there exists a unique energy minimizer, but the Lean statement proves only True.",
+      "expected_blocker_class": "final_hypothesis_shape_loss",
+      "forbidden_claims": ["complete final review", "acceptable weakening"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "final-derivation-review-orchestrator"
+    },
+    {
+      "probe_id": "lean_physics.review_refinement_nonlocal",
+      "family": "lean_physics_final_review",
+      "source_excerpt": "Final review fails for one missing projection bridge; a proposed repair rewrites unrelated declarations and drops passing source anchors.",
+      "expected_blocker_class": "non_monotonic_review_refinement",
+      "forbidden_claims": ["safe broad rewrite", "anchors can be dropped"],
+      "minimum_source_anchor_evidence": 1,
+      "required_handoff_skill": "physics-lean-review-refinement-router"
+    }
+  ]
+}

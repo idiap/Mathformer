@@ -1,0 +1,1485 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Build an interpretive synthesis from a FormalPhysics comparative report."""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+import html
+import json
+from pathlib import Path
+import re
+import tempfile
+from typing import Any, Sequence
+
+STYLE = "formalphysics_judge_synthesis_report"
+
+KNOWN_CODEX_JUDGES = (
+    "physicist_semantics_judge",
+    "lean_tp_judge",
+    "mathlib_grounding_judge",
+    "formal_modeling_completeness_judge",
+    "naming_reviewability_judge",
+    "invoked_dependency_excerpt_judge",
+    "foundations_dependency_judge_llm",
+    "adversarial_reference_judge",
+)
+
+ASPECTS = {
+    "functional_lean": {
+        "label": "Functional Lean",
+        "metrics": ("proof_integrity",),
+        "focus": "Compilation, hard gates, proof integrity, placeholder hygiene, and non-vacuity.",
+    },
+    "source_and_derivation": {
+        "label": "Source And Derivation",
+        "metrics": (
+            "source_semantic_preservation",
+            "derivation_coverage",
+            "reference_delta_quality",
+        ),
+        "focus": "Preservation of source intent, derivation steps, and non-gold reference deltas.",
+    },
+    "physics_completeness": {
+        "label": "Physics Completeness",
+        "metrics": (
+            "physics_object_fidelity",
+            "physics_representation_completeness",
+            "assumption_transparency",
+        ),
+        "focus": "Physical quantities, assumptions, units, dimensions, operators, and represented complexity.",
+    },
+    "grounding_depth": {
+        "label": "Grounding Depth",
+        "metrics": (
+            "mathlib_concept_grounding",
+            "foundations_dependency_quality",
+            "formal_physics_modeling_depth",
+        ),
+        "focus": "Mathlib concept families, Foundations reuse, invoked dependency excerpts, and typed modeling depth.",
+    },
+    "reviewability_and_names": {
+        "label": "Reviewability And Names",
+        "metrics": (
+            "variable_naming_quality",
+            "reviewability_clarity",
+            "maintainability",
+            "reportability",
+        ),
+        "focus": "Names, comments, source-step annotations, bridge lemmas, and machine-processable evidence.",
+    },
+}
+
+
+def read_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def parse_json_object_text(text: str) -> Any | None:
+    value = text.strip()
+    if not value:
+        return None
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        pass
+    start = value.find("{")
+    end = value.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            return json.loads(value[start : end + 1])
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def iter_result_files(paths: Sequence[Path]) -> list[Path]:
+    files: list[Path] = []
+    for path in paths:
+        if path.is_dir():
+            files.extend(
+                sorted(
+                    item
+                    for item in path.rglob("*")
+                    if item.suffix.lower() in {".json", ".jsonl"}
+                )
+            )
+        elif path.exists():
+            files.append(path)
+    return files
+
+
+def unwrap_result_record(record: Any) -> dict[str, Any] | None:
+    if not isinstance(record, dict):
+        return None
+    if isinstance(record.get("result"), dict):
+        result = dict(record["result"])
+        for key in ("judge_id", "case_id", "candidate_id"):
+            result.setdefault(key, record.get(key))
+        result.setdefault(
+            "raw_wrapper",
+            {
+                key: record.get(key)
+                for key in ("status", "result_status")
+                if key in record
+            },
+        )
+        return result
+    for key in ("final_message", "stdout", "output", "content", "message"):
+        if isinstance(record.get(key), str):
+            parsed = parse_json_object_text(record[key])
+            if isinstance(parsed, dict):
+                result = unwrap_result_record(parsed) or parsed
+                for ident in ("judge_id", "case_id", "candidate_id"):
+                    result.setdefault(ident, record.get(ident))
+                return result
+    return record
+
+
+def load_result_file(path: Path) -> list[dict[str, Any]]:
+    suffix = path.suffix.lower()
+    if suffix == ".jsonl":
+        records: list[dict[str, Any]] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            parsed = parse_json_object_text(line)
+            if isinstance(parsed, dict):
+                unwrapped = unwrap_result_record(parsed)
+                if unwrapped:
+                    records.append(unwrapped)
+        return records
+    payload = read_json(path)
+    if isinstance(payload, list):
+        raw_records = payload
+    elif isinstance(payload, dict):
+        for key in (
+            "results",
+            "judge_results",
+            "codex_exec_results",
+            "codex_exec_judge_results",
+        ):
+            if isinstance(payload.get(key), list):
+                raw_records = payload[key]
+                break
+        else:
+            raw_records = [payload]
+    else:
+        raw_records = []
+    records = []
+    for record in raw_records:
+        unwrapped = unwrap_result_record(record)
+        if unwrapped:
+            records.append(unwrapped)
+    return records
+
+
+def load_codex_result_records(paths: Sequence[Path]) -> dict[str, Any]:
+    records: list[dict[str, Any]] = []
+    files = iter_result_files(paths)
+    errors = []
+    for path in files:
+        try:
+            records.extend(load_result_file(path))
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            errors.append({"path": str(path), "error": str(exc)})
+    return {
+        "records": records,
+        "files": [str(path) for path in files],
+        "errors": errors,
+    }
+
+
+def normalize_judge_id(judge_id: Any) -> str | None:
+    if judge_id is None:
+        return None
+    value = str(judge_id)
+    for known in KNOWN_CODEX_JUDGES:
+        if (
+            value == known
+            or value.startswith(f"{known}.")
+            or value.startswith(f"{known}_")
+        ):
+            return known
+    return value
+
+
+def result_key(item: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
+    return (
+        item.get("case_id"),
+        item.get("candidate_id"),
+        normalize_judge_id(item.get("judge_id")),
+    )
+
+
+def apply_codex_results(
+    report: dict[str, Any], result_records: list[dict[str, Any]]
+) -> dict[str, Any]:
+    result_index = {
+        result_key(record): record
+        for record in result_records
+        if all(result_key(record))
+    }
+    matched_keys: set[tuple[str | None, str | None, str | None]] = set()
+
+    def attach(prompt: dict[str, Any]) -> None:
+        key = result_key(prompt)
+        if key in result_index:
+            prompt["result_status"] = "completed"
+            prompt["result"] = result_index[key]
+            matched_keys.add(key)
+        else:
+            prompt.setdefault("result_status", "pending_codex_exec")
+
+    for prompt in report.get("codex_exec_judge_prompts", []):
+        if isinstance(prompt, dict):
+            attach(prompt)
+    for case in report.get("cases", []):
+        for candidate in case.get("candidates", []):
+            prompts = candidate.get("generative_judges", {}).get("prompts", [])
+            for prompt in prompts:
+                if isinstance(prompt, dict):
+                    attach(prompt)
+            if prompts:
+                candidate.setdefault("generative_judges", {})["status"] = (
+                    "results_ingested"
+                    if any(
+                        prompt.get("result")
+                        for prompt in prompts
+                        if isinstance(prompt, dict)
+                    )
+                    else "prompts_ready_pending_codex_exec"
+                )
+    unmatched = [
+        record for key, record in result_index.items() if key not in matched_keys
+    ]
+    report["codex_exec_result_ingestion"] = {
+        "provided_result_count": len(result_records),
+        "matched_result_count": len(matched_keys),
+        "unmatched_result_count": len(unmatched),
+        "unmatched_results": unmatched[:25],
+    }
+    return report
+
+
+def write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def compact(text: str, limit: int = 260) -> str:
+    value = re.sub(r"\s+", " ", str(text)).strip()
+    if len(value) <= limit:
+        return value
+    return value[: limit - 3] + "..."
+
+
+def candidate_ids(report: dict[str, Any]) -> list[str]:
+    ids = []
+    for case in report.get("cases", []):
+        for candidate in case.get("candidates", []):
+            cid = candidate.get("candidate_id")
+            if cid and cid not in ids:
+                ids.append(cid)
+    return ids
+
+
+def score(candidate: dict[str, Any], metric: str) -> float:
+    return float(candidate.get("scores", {}).get(metric, {}).get("score", 0))
+
+
+def mean(values: list[float]) -> float:
+    return round(sum(values) / len(values), 2) if values else 0.0
+
+
+def aspect_score(candidate: dict[str, Any], aspect_id: str) -> float:
+    metrics = ASPECTS[aspect_id]["metrics"]
+    return mean([score(candidate, metric) for metric in metrics])
+
+
+def candidates_for(report: dict[str, Any], candidate_id: str) -> list[dict[str, Any]]:
+    found = []
+    for case in report.get("cases", []):
+        for candidate in case.get("candidates", []):
+            if candidate.get("candidate_id") == candidate_id:
+                found.append(candidate)
+    return found
+
+
+def role_preference_counts(report: dict[str, Any], candidate_id: str) -> dict[str, int]:
+    counts = {}
+    for role_id, review in report.get("qualitative_reviews", {}).items():
+        total = 0
+        for case_review in review.get("cases", []):
+            if case_review.get("preference", {}).get("candidate_id") == candidate_id:
+                total += 1
+        counts[role_id] = total
+    return counts
+
+
+def generative_judge_counts(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    by_status: Counter[str] = Counter()
+    by_judge: dict[str, Counter[str]] = defaultdict(Counter)
+    completed_results = 0
+    for candidate in candidates:
+        for prompt in candidate.get("generative_judges", {}).get("prompts", []):
+            status = str(prompt.get("result_status", prompt.get("status", "unknown")))
+            judge_id = str(prompt.get("judge_id", "unknown"))
+            by_status[status] += 1
+            by_judge[judge_id][status] += 1
+            completed_results += int("result" in prompt)
+    return {
+        "by_status": dict(by_status),
+        "by_judge": {
+            judge: dict(counter) for judge, counter in sorted(by_judge.items())
+        },
+        "completed_result_count": completed_results,
+        "pending_count": sum(
+            count for status, count in by_status.items() if "pending" in status
+        ),
+    }
+
+
+def evidence_counters(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    mathlib_families: Counter[str] = Counter()
+    physics_families: Counter[str] = Counter()
+    blockers: Counter[str] = Counter()
+    invoked_paths: Counter[str] = Counter()
+    invoked_names: Counter[str] = Counter()
+    source_step_annotations = 0
+    modeling_declarations = 0
+    invoked_excerpt_count = 0
+    for candidate in candidates:
+        blockers.update(candidate.get("aggregate", {}).get("hard_blockers", []))
+        mathlib = candidate.get("critic_evidence", {}).get(
+            "mathlib_grounding_critic", {}
+        )
+        physics = candidate.get("critic_evidence", {}).get(
+            "physics_completeness_critic", {}
+        )
+        naming = candidate.get("critic_evidence", {}).get(
+            "naming_reviewability_critic", {}
+        )
+        formality = candidate.get("critic_evidence", {}).get(
+            "formality_depth_critic", {}
+        )
+        excerpt = candidate.get("critic_evidence", {}).get(
+            "invoked_dependency_excerpt_critic", {}
+        )
+        mathlib_families.update(mathlib.get("matched_mathlib_concept_families", []))
+        physics_families.update(physics.get("physics_complexity_hits", []))
+        source_step_annotations += int(naming.get("source_step_annotation_count", 0))
+        modeling_declarations += int(formality.get("modeling_declaration_count", 0))
+        invoked_excerpt_count += int(
+            excerpt.get("invoked_external_dependency_excerpt_count", 0)
+        )
+        invoked_paths.update(excerpt.get("invoked_external_dependency_paths", []))
+        invoked_names.update(excerpt.get("invoked_external_dependency_names", []))
+    return {
+        "hard_blockers": dict(blockers),
+        "mathlib_concept_families": dict(mathlib_families),
+        "physics_complexity_families": dict(physics_families),
+        "source_step_annotation_count": source_step_annotations,
+        "modeling_declaration_count": modeling_declarations,
+        "invoked_external_dependency_excerpt_count": invoked_excerpt_count,
+        "invoked_external_dependency_paths": dict(invoked_paths),
+        "top_invoked_external_dependency_names": dict(invoked_names.most_common(20)),
+    }
+
+
+def numeric_score_value(item: Any) -> float | None:
+    if isinstance(item, (int, float)):
+        return float(item)
+    if isinstance(item, dict):
+        value = item.get("score", item.get("value"))
+        if isinstance(value, (int, float)):
+            return float(value)
+    return None
+
+
+def score_mean_from_result(result: dict[str, Any]) -> float | None:
+    for key in ("overall_score", "score"):
+        value = numeric_score_value(result.get(key))
+        if value is not None:
+            return round(value, 2)
+    scores = result.get("scores")
+    if not isinstance(scores, dict):
+        return None
+    values = [
+        value
+        for value in (numeric_score_value(item) for item in scores.values())
+        if value is not None
+    ]
+    return round(sum(values) / len(values), 2) if values else None
+
+
+def deterministic_mean(candidate: dict[str, Any]) -> float | None:
+    value = candidate.get("aggregate", {}).get("mean_score")
+    if isinstance(value, (int, float)):
+        return round(float(value), 2)
+    values = [score(candidate, metric) for metric in candidate.get("scores", {})]
+    return mean(values) if values else None
+
+
+def candidate_lookup(
+    report: dict[str, Any],
+) -> dict[tuple[str | None, str | None], dict[str, Any]]:
+    lookup = {}
+    for case in report.get("cases", []):
+        for candidate in case.get("candidates", []):
+            lookup[(case.get("case_id"), candidate.get("candidate_id"))] = candidate
+    return lookup
+
+
+def collect_completed_judge_results(report: dict[str, Any]) -> list[dict[str, Any]]:
+    seen: set[tuple[str | None, str | None, str | None]] = set()
+    results = []
+    prompts = [
+        prompt
+        for prompt in report.get("codex_exec_judge_prompts", [])
+        if isinstance(prompt, dict)
+    ]
+    prompts.extend(
+        prompt
+        for case in report.get("cases", [])
+        for candidate in case.get("candidates", [])
+        for prompt in candidate.get("generative_judges", {}).get("prompts", [])
+        if isinstance(prompt, dict)
+    )
+    for prompt in prompts:
+        if not isinstance(prompt, dict) or "result" not in prompt:
+            continue
+        key = result_key(prompt)
+        if key in seen:
+            continue
+        seen.add(key)
+        result = dict(prompt["result"])
+        for ident in ("judge_id", "case_id", "candidate_id"):
+            result.setdefault(ident, prompt.get(ident))
+        results.append(result)
+    return results
+
+
+def summarize_completed_result(
+    result: dict[str, Any],
+    candidates: dict[tuple[str | None, str | None], dict[str, Any]],
+) -> dict[str, Any]:
+    case_id, candidate_id, judge_id = result_key(result)
+    candidate = candidates.get((case_id, candidate_id), {})
+    generated_mean = score_mean_from_result(result)
+    det_mean = deterministic_mean(candidate)
+    delta = (
+        round(generated_mean - det_mean, 2)
+        if generated_mean is not None and det_mean is not None
+        else None
+    )
+    hard_gate_findings = result.get("hard_gate_findings", [])
+    if isinstance(hard_gate_findings, dict):
+        hard_gate_summary = {
+            key: hard_gate_findings[key] for key in sorted(hard_gate_findings)
+        }
+        hard_gate_count = len(hard_gate_findings)
+    elif isinstance(hard_gate_findings, list):
+        hard_gate_summary = hard_gate_findings[:10]
+        hard_gate_count = len(hard_gate_findings)
+    else:
+        hard_gate_summary = (
+            compact(hard_gate_findings, 180) if hard_gate_findings else ""
+        )
+        hard_gate_count = int(bool(hard_gate_findings))
+    return {
+        "judge_id": judge_id,
+        "case_id": case_id,
+        "candidate_id": candidate_id,
+        "generated_score_mean": generated_mean,
+        "deterministic_score_mean": det_mean,
+        "score_delta_generated_minus_deterministic": delta,
+        "uncertainty": result.get("uncertainty"),
+        "hard_gate_finding_count": hard_gate_count,
+        "hard_gate_findings": hard_gate_summary,
+        "repair_suggestion_count": (
+            len(result.get("repair_suggestions", []))
+            if isinstance(result.get("repair_suggestions"), list)
+            else int(bool(result.get("repair_suggestions")))
+        ),
+    }
+
+
+def summarize_codex_exec_results(report: dict[str, Any]) -> dict[str, Any]:
+    prompts = [
+        prompt
+        for prompt in report.get("codex_exec_judge_prompts", [])
+        if isinstance(prompt, dict)
+    ]
+    status_counts = Counter(
+        str(prompt.get("result_status", prompt.get("status", "unknown")))
+        for prompt in prompts
+    )
+    completed_results = collect_completed_judge_results(report)
+    candidates = candidate_lookup(report)
+    result_summaries = [
+        summarize_completed_result(result, candidates) for result in completed_results
+    ]
+    by_judge: dict[str, Counter[str]] = defaultdict(Counter)
+    for prompt in prompts:
+        by_judge[str(prompt.get("judge_id", "unknown"))][
+            str(prompt.get("result_status", prompt.get("status", "unknown")))
+        ] += 1
+
+    case_best = {
+        case.get("case_id"): case.get("best_solution", {}).get("candidate_id")
+        for case in report.get("cases", [])
+    }
+    result_scores = {
+        result_key(result): score_mean_from_result(result)
+        for result in completed_results
+        if score_mean_from_result(result) is not None
+    }
+    pairwise_rows = []
+    by_case_judge: dict[
+        tuple[str | None, str | None], list[tuple[str | None, float]]
+    ] = defaultdict(list)
+    for (case_id, candidate_id, judge_id), value in result_scores.items():
+        if value is not None:
+            by_case_judge[(case_id, judge_id)].append((candidate_id, value))
+    agreement_counts = Counter()
+    for (case_id, judge_id), values in sorted(by_case_judge.items()):
+        if len(values) < 2:
+            agreement_counts["partial_result_set"] += 1
+            continue
+        ranked = sorted(values, key=lambda item: item[1], reverse=True)
+        winner, winner_score = ranked[0]
+        runner_up_score = ranked[1][1]
+        deterministic_best = case_best.get(case_id)
+        agreement = (
+            "agrees_with_deterministic_best"
+            if winner == deterministic_best
+            else "disagrees_with_deterministic_best"
+        )
+        agreement_counts[agreement] += 1
+        pairwise_rows.append(
+            {
+                "case_id": case_id,
+                "judge_id": judge_id,
+                "judge_winner": winner,
+                "judge_winner_score": winner_score,
+                "runner_up_score": runner_up_score,
+                "deterministic_best": deterministic_best,
+                "agreement": agreement,
+                "score_gap": round(winner_score - runner_up_score, 2),
+            }
+        )
+    score_delta_rows = [
+        summary
+        for summary in result_summaries
+        if summary.get("score_delta_generated_minus_deterministic") is not None
+        and abs(float(summary["score_delta_generated_minus_deterministic"])) >= 1.0
+    ]
+    return {
+        "prompt_readiness": {
+            "total_prompt_count": len(prompts),
+            "by_status": dict(status_counts),
+            "by_judge": {
+                judge: dict(counter) for judge, counter in sorted(by_judge.items())
+            },
+            "pending_count": sum(
+                count for status, count in status_counts.items() if "pending" in status
+            ),
+            "completed_count": status_counts.get("completed", 0),
+        },
+        "completed_result_count": len(completed_results),
+        "result_summaries": result_summaries,
+        "disagreement_patterns": {
+            "pairwise_judge_vs_deterministic_best": pairwise_rows,
+            "agreement_counts": dict(agreement_counts),
+            "large_generated_vs_deterministic_score_deltas": score_delta_rows,
+        },
+        "ingestion": report.get(
+            "codex_exec_result_ingestion",
+            {
+                "provided_result_count": 0,
+                "matched_result_count": 0,
+                "unmatched_result_count": 0,
+            },
+        ),
+    }
+
+
+def summarize_approach(report: dict[str, Any], candidate_id: str) -> dict[str, Any]:
+    cands = candidates_for(report, candidate_id)
+    total = len(cands)
+    aggregate_statuses = Counter(
+        candidate.get("aggregate", {}).get("status", "unknown") for candidate in cands
+    )
+    compile_statuses = Counter(
+        candidate.get("hard_gates", {}).get("lean_compiles", "unknown")
+        for candidate in cands
+    )
+    best_count = sum(
+        1
+        for case in report.get("cases", [])
+        if case.get("best_solution", {}).get("candidate_id") == candidate_id
+    )
+    aspect_scores = {
+        aspect_id: mean([aspect_score(candidate, aspect_id) for candidate in cands])
+        for aspect_id in ASPECTS
+    }
+    metric_scores = {}
+    for metric in report.get("metric_criteria", {}):
+        values = [
+            score(candidate, metric)
+            for candidate in cands
+            if metric in candidate.get("scores", {})
+        ]
+        metric_scores[metric] = mean(values)
+    return {
+        "candidate_id": candidate_id,
+        "case_count": total,
+        "best_solution_count": best_count,
+        "aggregate_statuses": dict(aggregate_statuses),
+        "compile_statuses": dict(compile_statuses),
+        "accepted_count": aggregate_statuses.get("accepted", 0),
+        "blocked_count": aggregate_statuses.get("blocked", 0),
+        "provisional_count": aggregate_statuses.get("provisional_pending_compile", 0),
+        "aspect_scores": aspect_scores,
+        "metric_scores": metric_scores,
+        "role_preferences": role_preference_counts(report, candidate_id),
+        "generative_judges": generative_judge_counts(cands),
+        "evidence_counters": evidence_counters(cands),
+    }
+
+
+def compare_aspects(approaches: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = []
+    ids = list(approaches)
+    for aspect_id, spec in ASPECTS.items():
+        values = {
+            cid: approaches[cid]["aspect_scores"].get(aspect_id, 0.0) for cid in ids
+        }
+        sorted_values = sorted(values.items(), key=lambda item: item[1], reverse=True)
+        best_id, best_value = sorted_values[0]
+        runner_up = sorted_values[1][1] if len(sorted_values) > 1 else best_value
+        gap = round(best_value - runner_up, 2)
+        if gap >= 0.75:
+            interpretation = (
+                f"{best_id} has a clear advantage for {spec['label'].lower()}."
+            )
+        elif gap > 0:
+            interpretation = f"{best_id} is slightly ahead for {spec['label'].lower()}."
+        else:
+            interpretation = f"The approaches are tied for {spec['label'].lower()}."
+        rows.append(
+            {
+                "aspect_id": aspect_id,
+                "label": spec["label"],
+                "focus": spec["focus"],
+                "scores": values,
+                "winner": best_id,
+                "gap": gap,
+                "interpretation": interpretation,
+            }
+        )
+    return rows
+
+
+def approach_strengths(
+    summary: dict[str, Any], aspect_comparison: list[dict[str, Any]]
+) -> list[str]:
+    cid = summary["candidate_id"]
+    strengths = []
+    if summary["accepted_count"] == summary["case_count"] and summary["case_count"]:
+        strengths.append("All cases pass hard gates as accepted Lean artifacts.")
+    elif summary["accepted_count"] > 0:
+        strengths.append(
+            f"{summary['accepted_count']} of {summary['case_count']} cases are accepted after hard gates."
+        )
+    if summary["best_solution_count"]:
+        strengths.append(
+            f"Selected as best solution in {summary['best_solution_count']} case(s)."
+        )
+    for aspect in aspect_comparison:
+        value = aspect["scores"].get(cid, 0.0)
+        if value >= 4.0:
+            strengths.append(
+                f"Strong {aspect['label'].lower()} evidence (mean {value}/5)."
+            )
+        if aspect["winner"] == cid and aspect["gap"] >= 0.75:
+            strengths.append(
+                f"Clear comparative advantage in {aspect['label'].lower()} (gap {aspect['gap']})."
+            )
+    role_total = sum(summary.get("role_preferences", {}).values())
+    if role_total:
+        strengths.append(
+            f"Preferred by role reviewers {role_total} time(s) across theorem-prover and physics lenses."
+        )
+    invoked = summary["evidence_counters"].get(
+        "invoked_external_dependency_excerpt_count", 0
+    )
+    if invoked:
+        strengths.append(
+            f"Imports {invoked} invoked external dependency excerpt(s) into the comparison evidence."
+        )
+    return strengths[:10] or [
+        "No strong positive pattern detected by the synthesis rules."
+    ]
+
+
+def approach_weaknesses(
+    summary: dict[str, Any], aspect_comparison: list[dict[str, Any]]
+) -> list[str]:
+    cid = summary["candidate_id"]
+    weaknesses = []
+    if summary["blocked_count"]:
+        blockers = summary["evidence_counters"].get("hard_blockers", {})
+        detail = (
+            ", ".join(f"{name}={count}" for name, count in sorted(blockers.items()))
+            or "unspecified blockers"
+        )
+        weaknesses.append(
+            f"{summary['blocked_count']} case(s) are blocked after hard gates ({detail})."
+        )
+    if summary["provisional_count"]:
+        weaknesses.append(
+            f"{summary['provisional_count']} case(s) are provisional because compile checks are pending."
+        )
+    for aspect in aspect_comparison:
+        value = aspect["scores"].get(cid, 0.0)
+        if value < 3.0:
+            weaknesses.append(
+                f"Weak {aspect['label'].lower()} evidence (mean {value}/5)."
+            )
+        if aspect["winner"] != cid and aspect["gap"] >= 0.75:
+            weaknesses.append(
+                f"Comparative deficit in {aspect['label'].lower()} (gap {aspect['gap']})."
+            )
+    pending = summary.get("generative_judges", {}).get("pending_count", 0)
+    if pending:
+        weaknesses.append(
+            f"{pending} Codex-exec generative judge prompt(s) are pending without ingested results."
+        )
+    invoked = summary["evidence_counters"].get(
+        "invoked_external_dependency_excerpt_count", 0
+    )
+    if invoked == 0:
+        weaknesses.append(
+            "No invoked external dependency excerpts were detected for this approach."
+        )
+    return weaknesses[:10] or ["No major weakness detected by the synthesis rules."]
+
+
+def synthesize_cases(
+    report: dict[str, Any], approach_ids: list[str]
+) -> list[dict[str, Any]]:
+    case_rows = []
+    for case in report.get("cases", []):
+        cands = {
+            candidate.get("candidate_id"): candidate
+            for candidate in case.get("candidates", [])
+        }
+        metric_deltas = {}
+        if len(approach_ids) >= 2:
+            left = cands.get(approach_ids[0], {})
+            right = cands.get(approach_ids[1], {})
+            for aspect_id in ASPECTS:
+                metric_deltas[aspect_id] = round(
+                    aspect_score(left, aspect_id) - aspect_score(right, aspect_id), 2
+                )
+        role_preferences = {}
+        for role_id, review in report.get("qualitative_reviews", {}).items():
+            match = next(
+                (
+                    item
+                    for item in review.get("cases", [])
+                    if item.get("case_id") == case.get("case_id")
+                ),
+                {},
+            )
+            role_preferences[role_id] = match.get("preference", {}).get("candidate_id")
+        case_rows.append(
+            {
+                "case_id": case.get("case_id"),
+                "best_solution": case.get("best_solution", {}),
+                "candidate_statuses": {
+                    cid: {
+                        "aggregate": cands.get(cid, {}).get("aggregate", {}),
+                        "hard_gates": cands.get(cid, {}).get("hard_gates", {}),
+                    }
+                    for cid in approach_ids
+                },
+                "aspect_delta_first_minus_second": metric_deltas,
+                "role_preferences": role_preferences,
+            }
+        )
+    return case_rows
+
+
+def is_repo_actionable(candidate_id: str) -> bool:
+    return candidate_id.startswith("current_") or candidate_id.startswith("mathformer")
+
+
+def todo_status_for_candidate(candidate_id: str, default: str = "open") -> str:
+    return (
+        default
+        if is_repo_actionable(candidate_id)
+        else "external_reference_not_repo_actionable"
+    )
+
+
+def todo_item(
+    *,
+    item_id: str,
+    title: str,
+    detail: str,
+    candidate_id: str,
+    status: str,
+    actionability: str,
+    category: str,
+) -> dict[str, str]:
+    return {
+        "id": item_id,
+        "title": title,
+        "detail": detail,
+        "candidate_id": candidate_id,
+        "status": status,
+        "actionability": actionability,
+        "category": category,
+    }
+
+
+def build_todos(
+    approaches: dict[str, dict[str, Any]], aspect_comparison: list[dict[str, Any]]
+) -> list[dict[str, str]]:
+    todos = []
+    counter = 1
+    for cid, summary in approaches.items():
+        if summary.get("blocked_count", 0):
+            status = todo_status_for_candidate(cid)
+            todos.append(
+                todo_item(
+                    item_id=f"FPSYN-{counter:03d}",
+                    title=f"Repair hard-gate blockers for {cid}",
+                    detail=f"Blocked cases: {summary['blocked_count']}; blockers: {summary['evidence_counters'].get('hard_blockers', {})}.",
+                    candidate_id=cid,
+                    status=status,
+                    actionability=(
+                        "repo_actionable"
+                        if status == "open"
+                        else "reference_candidate_only"
+                    ),
+                    category="hard_gate_repair",
+                )
+            )
+            counter += 1
+        if summary.get("generative_judges", {}).get("pending_count", 0):
+            todos.append(
+                todo_item(
+                    item_id=f"FPSYN-{counter:03d}",
+                    title=f"Ingest pending Codex-exec judges for {cid}",
+                    detail=f"Pending prompts: {summary['generative_judges']['pending_count']}. Run or supply completed judge-result JSON, then regenerate synthesis with --codex-results-json or --codex-results-dir.",
+                    candidate_id=cid,
+                    status="waiting_for_codex_exec_results",
+                    actionability="external_input_required",
+                    category="judge_result_ingestion",
+                )
+            )
+            counter += 1
+        if (
+            summary["evidence_counters"].get(
+                "invoked_external_dependency_excerpt_count", 0
+            )
+            == 0
+        ):
+            status = todo_status_for_candidate(cid)
+            todos.append(
+                todo_item(
+                    item_id=f"FPSYN-{counter:03d}",
+                    title=f"Add dependency-context evidence for {cid}",
+                    detail="No invoked external dependency excerpts were detected; inspect whether the artifact is self-contained or missing grounding context.",
+                    candidate_id=cid,
+                    status=status,
+                    actionability=(
+                        "repo_actionable"
+                        if status == "open"
+                        else "reference_candidate_only"
+                    ),
+                    category="dependency_context",
+                )
+            )
+            counter += 1
+    for aspect in aspect_comparison:
+        if aspect["gap"] >= 0.75:
+            losers = [
+                cid
+                for cid, value in aspect["scores"].items()
+                if cid != aspect["winner"]
+            ]
+            for loser in losers:
+                status = todo_status_for_candidate(loser)
+                todos.append(
+                    todo_item(
+                        item_id=f"FPSYN-{counter:03d}",
+                        title=f"Improve {aspect['label'].lower()} for {loser}",
+                        detail=f"{aspect['winner']} leads this aspect by {aspect['gap']}. Focus: {aspect['focus']}",
+                        candidate_id=loser,
+                        status=status,
+                        actionability=(
+                            "repo_actionable"
+                            if status == "open"
+                            else "reference_candidate_only"
+                        ),
+                        category=f"aspect_{aspect['aspect_id']}",
+                    )
+                )
+                counter += 1
+    return todos
+
+
+def summarize_todo_state(todos: list[dict[str, str]]) -> dict[str, Any]:
+    by_status = Counter(todo.get("status", "unknown") for todo in todos)
+    by_actionability = Counter(todo.get("actionability", "unknown") for todo in todos)
+    return {
+        "total_count": len(todos),
+        "open_repo_actionable_count": sum(
+            1
+            for todo in todos
+            if todo.get("status") == "open"
+            and todo.get("actionability") == "repo_actionable"
+        ),
+        "by_status": dict(by_status),
+        "by_actionability": dict(by_actionability),
+    }
+
+
+def build_synthesis(report: dict[str, Any]) -> dict[str, Any]:
+    ids = candidate_ids(report)
+    approaches = {cid: summarize_approach(report, cid) for cid in ids}
+    aspect_comparison = compare_aspects(approaches)
+    for summary in approaches.values():
+        summary["strengths"] = approach_strengths(summary, aspect_comparison)
+        summary["weaknesses"] = approach_weaknesses(summary, aspect_comparison)
+    todos = build_todos(approaches, aspect_comparison)
+    codex_exec = summarize_codex_exec_results(report)
+    judge_status = Counter()
+    for prompt in report.get("codex_exec_judge_prompts", []):
+        judge_status[
+            str(prompt.get("result_status", prompt.get("status", "unknown")))
+        ] += 1
+    return {
+        "schema_version": 1,
+        "style": STYLE,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "source_report": {
+            "style": report.get("style"),
+            "created_at": report.get("created_at"),
+            "input_json": report.get("input_json"),
+            "summary": report.get("summary", {}),
+        },
+        "policy": {
+            "reference_answer_role": report.get("policy", {}).get(
+                "reference_answer_role"
+            ),
+            "reference_answer_is_gold": report.get("policy", {}).get(
+                "reference_answer_is_gold", False
+            ),
+            "synthesis_unit": "all_cases_all_approaches_all_judges_and_role_reviewers",
+        },
+        "aspect_definitions": ASPECTS,
+        "approaches": approaches,
+        "aspect_comparison": aspect_comparison,
+        "case_synthesis": synthesize_cases(report, ids),
+        "judge_review_synthesis": {
+            "role_review_aggregates": {
+                role_id: review.get("aggregate", {})
+                for role_id, review in report.get("qualitative_reviews", {}).items()
+            },
+            "codex_exec_prompt_statuses": dict(judge_status),
+            "codex_exec_prompt_readiness": codex_exec["prompt_readiness"],
+            "codex_exec_completed_result_summaries": codex_exec["result_summaries"],
+            "codex_exec_disagreement_patterns": codex_exec["disagreement_patterns"],
+            "codex_exec_result_ingestion": codex_exec["ingestion"],
+            "codex_exec_results_ingested": codex_exec["completed_result_count"],
+            "codex_exec_prompts_total": len(report.get("codex_exec_judge_prompts", [])),
+        },
+        "synthesis_todos": todos,
+        "todo_state_summary": summarize_todo_state(todos),
+    }
+
+
+def render_markdown(synthesis: dict[str, Any]) -> str:
+    lines = [
+        "# FormalPhysics Judge Synthesis",
+        "",
+        f"- Source report style: `{synthesis['source_report'].get('style')}`",
+        f"- Cases: `{synthesis['source_report'].get('summary', {}).get('case_count', 0)}`",
+        f"- Candidates: `{synthesis['source_report'].get('summary', {}).get('candidate_count', 0)}`",
+        f"- Reference role: `{synthesis['policy'].get('reference_answer_role')}`",
+        f"- Codex-exec prompts: `{synthesis['judge_review_synthesis']['codex_exec_prompts_total']}`",
+        f"- Codex-exec results ingested: `{synthesis['judge_review_synthesis']['codex_exec_results_ingested']}`",
+        f"- Open repo-actionable TODOs: `{synthesis.get('todo_state_summary', {}).get('open_repo_actionable_count', 0)}`",
+        "",
+        "## Approach Synthesis",
+        "",
+    ]
+    for cid, summary in synthesis["approaches"].items():
+        lines.extend(
+            [
+                f"### {cid}",
+                "",
+                f"- Accepted: `{summary['accepted_count']}/{summary['case_count']}`",
+                f"- Blocked: `{summary['blocked_count']}`",
+                f"- Best-solution count: `{summary['best_solution_count']}`",
+                f"- Role preferences: `{summary['role_preferences']}`",
+                "",
+                "**Strengths**",
+                "",
+            ]
+        )
+        lines.extend(f"- {item}" for item in summary["strengths"])
+        lines.extend(["", "**Weaknesses**", ""])
+        lines.extend(f"- {item}" for item in summary["weaknesses"])
+        lines.append("")
+    lines.extend(["## Aspect Comparison", ""])
+    for aspect in synthesis["aspect_comparison"]:
+        lines.append(
+            f"- `{aspect['aspect_id']}`: winner `{aspect['winner']}`, gap `{aspect['gap']}`. {aspect['interpretation']}"
+        )
+    readiness = synthesis["judge_review_synthesis"].get(
+        "codex_exec_prompt_readiness", {}
+    )
+    disagreement = synthesis["judge_review_synthesis"].get(
+        "codex_exec_disagreement_patterns", {}
+    )
+    lines.extend(
+        [
+            "",
+            "## Codex-Exec Judge Outcomes",
+            "",
+            f"- Prompt readiness: `{readiness.get('by_status', {})}`",
+            f"- Completed results: `{synthesis['judge_review_synthesis']['codex_exec_results_ingested']}`",
+            f"- Judge/deterministic agreement counts: `{disagreement.get('agreement_counts', {})}`",
+            f"- Large generated-vs-deterministic score deltas: `{len(disagreement.get('large_generated_vs_deterministic_score_deltas', []))}`",
+        ]
+    )
+    todo_state = synthesis.get("todo_state_summary", {})
+    lines.extend(["", "## Action Register", ""])
+    lines.append(f"- Status counts: `{todo_state.get('by_status', {})}`")
+    lines.append(f"- Actionability counts: `{todo_state.get('by_actionability', {})}`")
+    lines.extend(["", "## TODOs", ""])
+    for todo in synthesis["synthesis_todos"]:
+        lines.append(
+            f"- `{todo.get('status', 'unknown')}` `{todo['id']}`: {todo['title']} - {todo['detail']}"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def badge(text: str) -> str:
+    cls = re.sub(r"[^a-z0-9_-]+", "-", text.lower())
+    return f"<span class='badge {cls}'>{html.escape(text)}</span>"
+
+
+def render_html(synthesis: dict[str, Any]) -> str:
+    approach_cards = []
+    for cid, summary in synthesis["approaches"].items():
+        strengths = "".join(
+            f"<li>{html.escape(item)}</li>" for item in summary["strengths"]
+        )
+        weaknesses = "".join(
+            f"<li>{html.escape(item)}</li>" for item in summary["weaknesses"]
+        )
+        aspect_rows = "".join(
+            "<tr>"
+            f"<td>{html.escape(synthesis['aspect_definitions'][aspect_id]['label'])}</td>"
+            f"<td>{summary['aspect_scores'][aspect_id]}</td>"
+            "</tr>"
+            for aspect_id in synthesis["aspect_definitions"]
+        )
+        approach_cards.append(
+            "<section class='card'>"
+            f"<h2>{html.escape(cid)}</h2>"
+            f"<p>{badge(str(summary['accepted_count']) + ' accepted')} {badge(str(summary['blocked_count']) + ' blocked')} {badge(str(summary['best_solution_count']) + ' best')}</p>"
+            f"<h3>Strengths</h3><ul>{strengths}</ul>"
+            f"<h3>Weaknesses</h3><ul>{weaknesses}</ul>"
+            f"<table><thead><tr><th>Aspect</th><th>Mean</th></tr></thead><tbody>{aspect_rows}</tbody></table>"
+            "</section>"
+        )
+    comparison_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(item['label'])}</td>"
+        f"<td>{html.escape(item['winner'])}</td>"
+        f"<td>{item['gap']}</td>"
+        f"<td>{html.escape(item['interpretation'])}</td>"
+        "</tr>"
+        for item in synthesis["aspect_comparison"]
+    )
+    readiness = synthesis["judge_review_synthesis"].get(
+        "codex_exec_prompt_readiness", {}
+    )
+    disagreement = synthesis["judge_review_synthesis"].get(
+        "codex_exec_disagreement_patterns", {}
+    )
+    agreement_rows = "".join(
+        f"<tr><td>{html.escape(key)}</td><td>{value}</td></tr>"
+        for key, value in sorted(disagreement.get("agreement_counts", {}).items())
+    )
+    if not agreement_rows:
+        agreement_rows = "<tr><td colspan='2'>No completed pairwise Codex-exec results ingested yet.</td></tr>"
+    todo_state = synthesis.get("todo_state_summary", {})
+    todo_items = "".join(
+        f"<li><strong>{html.escape(todo['id'])}</strong> {badge(todo.get('status', 'unknown'))} {badge(todo.get('actionability', 'unknown'))}: {html.escape(todo['title'])}<br><span>{html.escape(todo['detail'])}</span></li>"
+        for todo in synthesis["synthesis_todos"]
+    )
+    data_json = html.escape(json.dumps(synthesis, ensure_ascii=False))
+    css = """
+body { margin: 0; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f7f8fb; color: #162033; }
+header { background: #fff; border-bottom: 1px solid #d9deea; padding: 28px 36px; }
+main { padding: 24px 36px 48px; }
+h1 { margin: 0 0 8px; }
+.subtitle { color: #5c677a; max-width: 980px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; align-items: start; }
+.card { background: #fff; border: 1px solid #d9deea; border-radius: 8px; padding: 16px; }
+.badge { display: inline-flex; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 700; background: #edf0f5; color: #26354d; margin: 0 4px 4px 0; }
+table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d9deea; border-radius: 8px; overflow: hidden; }
+th, td { padding: 9px 11px; border-bottom: 1px solid #d9deea; text-align: left; vertical-align: top; }
+th { background: #eef2f8; }
+li { margin: 7px 0; }
+span { color: #5c677a; }
+pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow: auto; }
+"""
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FormalPhysics Judge Synthesis</title>
+<style>{css}</style>
+</head>
+<body>
+<header>
+<h1>FormalPhysics Judge Synthesis</h1>
+<div class="subtitle">Aspect-wise synthesis of deterministic judges, Codex-exec judge status, and theorem-prover/physics role reviews across all cases and compared approaches.</div>
+</header>
+<main>
+<section class="grid">{''.join(approach_cards)}</section>
+<section class="card">
+<h2>Aspect Comparison</h2>
+<table><thead><tr><th>Aspect</th><th>Winner</th><th>Gap</th><th>Interpretation</th></tr></thead><tbody>{comparison_rows}</tbody></table>
+</section>
+<section class="card">
+<h2>Judge And Reviewer Outcomes</h2>
+<h3>Prompt Readiness</h3>
+<pre>{html.escape(json.dumps(readiness, ensure_ascii=False, indent=2))}</pre>
+<h3>Completed Result Disagreements</h3>
+<table><thead><tr><th>Pattern</th><th>Count</th></tr></thead><tbody>{agreement_rows}</tbody></table>
+<details><summary>Machine-readable judge synthesis</summary><pre>{html.escape(json.dumps(synthesis['judge_review_synthesis'], ensure_ascii=False, indent=2))}</pre></details>
+</section>
+<section class="card">
+<h2>Action Register</h2>
+<p>{badge(str(todo_state.get('open_repo_actionable_count', 0)) + ' open repo-actionable')} {badge(str(todo_state.get('total_count', 0)) + ' total')}</p>
+<ul>{todo_items}</ul>
+</section>
+</main>
+<script type="application/json" id="synthesis-data">{data_json}</script>
+</body>
+</html>
+"""
+
+
+def render_todos(synthesis: dict[str, Any]) -> str:
+    todo_state = synthesis.get("todo_state_summary", {})
+    lines = [
+        "# FormalPhysics Judge Synthesis Action Register",
+        "",
+        f"- Open repo-actionable items: `{todo_state.get('open_repo_actionable_count', 0)}`",
+        f"- Status counts: `{todo_state.get('by_status', {})}`",
+        f"- Actionability counts: `{todo_state.get('by_actionability', {})}`",
+        "",
+    ]
+    for todo in synthesis["synthesis_todos"]:
+        lines.append(
+            f"- `{todo.get('status', 'unknown')}` `{todo['id']}`: {todo['title']}"
+        )
+        lines.append(f"  - Candidate: `{todo.get('candidate_id', 'unknown')}`")
+        lines.append(f"  - Actionability: `{todo.get('actionability', 'unknown')}`")
+        lines.append(f"  - Category: `{todo.get('category', 'unknown')}`")
+        lines.append(f"  - {todo['detail']}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_outputs(synthesis: dict[str, Any], output_dir: Path) -> dict[str, str]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "json": output_dir / "synthesis_report.json",
+        "markdown": output_dir / "synthesis_report.md",
+        "html": output_dir / "synthesis_report.html",
+        "todos": output_dir / "synthesis_todos.md",
+    }
+    write_json(paths["json"], synthesis)
+    paths["markdown"].write_text(render_markdown(synthesis), encoding="utf-8")
+    paths["html"].write_text(render_html(synthesis), encoding="utf-8")
+    paths["todos"].write_text(render_todos(synthesis), encoding="utf-8")
+    return {key: str(path) for key, path in paths.items()}
+
+
+def minimal_candidate(
+    candidate_id: str, *, accepted: bool, source: int, grounding: int, review: int
+) -> dict[str, Any]:
+    status = "accepted" if accepted else "blocked"
+    blockers = [] if accepted else ["no_unsound_placeholders"]
+    scores = {
+        "proof_integrity": {"score": 5 if accepted else 2},
+        "source_semantic_preservation": {"score": source},
+        "derivation_coverage": {"score": source},
+        "reference_delta_quality": {"score": source},
+        "physics_object_fidelity": {"score": source},
+        "physics_representation_completeness": {"score": source},
+        "assumption_transparency": {"score": max(1, source - 1)},
+        "mathlib_concept_grounding": {"score": grounding},
+        "foundations_dependency_quality": {"score": grounding},
+        "formal_physics_modeling_depth": {"score": grounding},
+        "variable_naming_quality": {"score": review},
+        "reviewability_clarity": {"score": review},
+        "maintainability": {"score": review},
+        "reportability": {"score": 5},
+    }
+    return {
+        "candidate_id": candidate_id,
+        "scores": scores,
+        "aggregate": {"status": status, "hard_blockers": blockers, "mean_score": 4.0},
+        "hard_gates": {
+            "lean_compiles": "pass",
+            "no_unsound_placeholders": "pass" if accepted else "fail",
+            "non_vacuous_target": "pass",
+        },
+        "critic_evidence": {
+            "mathlib_grounding_critic": {
+                "matched_mathlib_concept_families": ["real_complex_scalars"],
+                "used_foundation_declaration_count": grounding,
+            },
+            "physics_completeness_critic": {
+                "physics_complexity_hits": ["fields_and_operators"],
+                "missing_source_terms": [],
+            },
+            "naming_reviewability_critic": {"source_step_annotation_count": review},
+            "formality_depth_critic": {
+                "modeling_declaration_count": grounding,
+                "single_claim_solution_shape": False,
+            },
+            "invoked_dependency_excerpt_critic": {
+                "invoked_external_dependency_excerpt_count": grounding,
+                "invoked_external_dependency_names": (
+                    ["UnitDimensionCompatible"] if grounding else []
+                ),
+                "invoked_external_dependency_paths": (
+                    ["libraries/MathformerPhysicsLib/Lean/Foundations/Units.lean"]
+                    if grounding
+                    else []
+                ),
+            },
+        },
+        "generative_judges": {
+            "prompts": [
+                {
+                    "judge_id": "physicist_semantics_judge",
+                    "case_id": "formalphysics_0000",
+                    "candidate_id": candidate_id,
+                    "result_status": "pending_codex_exec",
+                },
+                {
+                    "judge_id": "lean_tp_judge",
+                    "case_id": "formalphysics_0000",
+                    "candidate_id": candidate_id,
+                    "result_status": "pending_codex_exec",
+                },
+            ]
+        },
+    }
+
+
+def self_test() -> dict[str, Any]:
+    with tempfile.TemporaryDirectory() as raw_tmp:
+        tmp = Path(raw_tmp)
+        report = {
+            "style": "formalphysics_comparative_analysis_report",
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "input_json": "selected_examples.json",
+            "policy": {
+                "reference_answer_role": "non_gold_reference_evidence",
+                "reference_answer_is_gold": False,
+            },
+            "summary": {"case_count": 1, "candidate_count": 2},
+            "metric_criteria": {
+                metric: metric
+                for metric in minimal_candidate(
+                    "x", accepted=True, source=5, grounding=5, review=5
+                )["scores"]
+            },
+            "cases": [
+                {
+                    "case_id": "formalphysics_0000",
+                    "best_solution": {
+                        "candidate_id": "current_mathformer_lean",
+                        "status": "functional_best",
+                    },
+                    "candidates": [
+                        minimal_candidate(
+                            "current_mathformer_lean",
+                            accepted=True,
+                            source=5,
+                            grounding=5,
+                            review=5,
+                        ),
+                        minimal_candidate(
+                            "external_formaldiscovery",
+                            accepted=False,
+                            source=3,
+                            grounding=0,
+                            review=2,
+                        ),
+                    ],
+                }
+            ],
+            "qualitative_reviews": {
+                "theorem_prover_expert": {
+                    "aggregate": {"preference_counts": {"current_mathformer_lean": 1}},
+                    "cases": [
+                        {
+                            "case_id": "formalphysics_0000",
+                            "preference": {"candidate_id": "current_mathformer_lean"},
+                        }
+                    ],
+                },
+                "physics_expert": {
+                    "aggregate": {"preference_counts": {"current_mathformer_lean": 1}},
+                    "cases": [
+                        {
+                            "case_id": "formalphysics_0000",
+                            "preference": {"candidate_id": "current_mathformer_lean"},
+                        }
+                    ],
+                },
+            },
+        }
+        report["codex_exec_judge_prompts"] = [
+            prompt
+            for case in report["cases"]
+            for candidate in case["candidates"]
+            for prompt in candidate.get("generative_judges", {}).get("prompts", [])
+        ]
+        report = apply_codex_results(
+            report,
+            [
+                {
+                    "judge_id": "physicist_semantics_judge",
+                    "case_id": "formalphysics_0000",
+                    "candidate_id": "current_mathformer_lean",
+                    "scores": {"overall": {"score": 5}},
+                    "hard_gate_findings": [],
+                    "uncertainty": "low",
+                    "repair_suggestions": [],
+                }
+            ],
+        )
+        synthesis = build_synthesis(report)
+        paths = write_outputs(synthesis, tmp)
+        html_text = Path(paths["html"]).read_text(encoding="utf-8")
+        assert synthesis["approaches"]["current_mathformer_lean"]["strengths"]
+        assert synthesis["approaches"]["external_formaldiscovery"]["weaknesses"]
+        assert synthesis["synthesis_todos"]
+        assert synthesis["judge_review_synthesis"]["codex_exec_results_ingested"] == 1
+        assert synthesis["todo_state_summary"]["open_repo_actionable_count"] == 0
+        assert "Aspect Comparison" in html_text
+        assert "Action Register" in html_text
+        return {
+            "ok": True,
+            "style": STYLE,
+            "artifacts": paths,
+            "todo_count": len(synthesis["synthesis_todos"]),
+        }
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--comparative-report", type=Path)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("artifacts/formalphysics_judge_synthesis/latest"),
+    )
+    parser.add_argument(
+        "--codex-results-json",
+        type=Path,
+        action="append",
+        default=[],
+        help="JSON or JSONL file with completed Codex-exec judge results; may be repeated.",
+    )
+    parser.add_argument(
+        "--codex-results-dir",
+        type=Path,
+        action="append",
+        default=[],
+        help="Directory recursively scanned for .json/.jsonl completed Codex-exec judge results; may be repeated.",
+    )
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    if args.self_test:
+        result = self_test()
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"ok: {result['ok']}")
+        return 0
+    if args.comparative_report is None:
+        raise SystemExit("--comparative-report is required unless --self-test is used")
+    report = read_json(args.comparative_report)
+    result_paths = [*args.codex_results_json, *args.codex_results_dir]
+    loaded_results = load_codex_result_records(result_paths)
+    if result_paths:
+        report = apply_codex_results(report, loaded_results["records"])
+        report.setdefault("codex_exec_result_ingestion", {}).update(
+            {
+                "loaded_files": loaded_results["files"],
+                "load_errors": loaded_results["errors"],
+            }
+        )
+    synthesis = build_synthesis(report)
+    paths = write_outputs(synthesis, args.output_dir)
+    result = {
+        "ok": True,
+        "style": STYLE,
+        "summary": {
+            "approach_count": len(synthesis["approaches"]),
+            "aspect_count": len(synthesis["aspect_comparison"]),
+            "todo_count": len(synthesis["synthesis_todos"]),
+            "codex_exec_prompts_total": synthesis["judge_review_synthesis"][
+                "codex_exec_prompts_total"
+            ],
+            "codex_exec_results_ingested": synthesis["judge_review_synthesis"][
+                "codex_exec_results_ingested"
+            ],
+            "open_repo_actionable_todo_count": synthesis["todo_state_summary"][
+                "open_repo_actionable_count"
+            ],
+        },
+        "artifacts": paths,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(f"wrote: {paths['html']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

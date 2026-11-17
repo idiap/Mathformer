@@ -1,0 +1,656 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_test_family_source_workflow
+version: 1.0.0
+kind: workflow
+description: Source-family check traversal in run(args), followed by native report
+  publication.
+aliases:
+- test:family:source
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Args:
+    schema:
+      type: object
+      required:
+      - module_family
+      - profile
+      - changed_files_only
+      - validate_matrix
+      - emit_dependency_map_only
+      - fail_on_warning
+      - run_id
+      - output_file
+      - write_jsonl
+      - write_junit
+      - json
+      additionalProperties: false
+      properties:
+        module_family:
+          const:
+          - source
+        profile:
+          const: workstation
+        changed_files_only:
+          const: false
+        validate_matrix:
+          const: false
+        emit_dependency_map_only:
+          const: false
+        fail_on_warning:
+          const: false
+        run_id:
+          type: string
+        output_file:
+          const: artifacts/test_program/deterministic_tests.json
+        write_jsonl:
+          type: 'null'
+        write_junit:
+          type: 'null'
+        json:
+          const: true
+  MatrixFile:
+    representation: file
+    media_type: application/json
+    schema:
+      type: object
+      required:
+      - schema_version
+      - tests
+      properties:
+        schema_version:
+          const: 2
+        tests:
+          type: array
+          minItems: 1
+          items:
+            type: object
+          contains:
+            type: object
+            required:
+            - module_family
+            properties:
+              module_family:
+                const: source
+          minContains: 0
+          maxContains: 4
+  CheckState:
+    schema:
+      type: object
+      required:
+      - matrix
+      - selected
+      - families
+      - index
+      - results
+      additionalProperties: false
+      properties:
+        matrix:
+          type: array
+          items:
+            type: object
+        selected:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+        families:
+          type: array
+          items:
+            type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 4
+        results:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+  Bool:
+    schema:
+      type: boolean
+  Report:
+    schema:
+      type: object
+      required:
+      - run_id
+      - ok
+      - families
+      - summary
+      - results
+      - schema_errors
+      - matrix_errors
+      properties:
+        run_id:
+          type: string
+        ok:
+          type: boolean
+        families:
+          type: array
+          items:
+            type: string
+        summary:
+          type: object
+          additionalProperties:
+            type: integer
+        results:
+          type: array
+          items:
+            type: object
+        schema_errors:
+          type: array
+          items:
+            type: string
+        matrix_errors:
+          type: array
+          items:
+            type: string
+        capability_ledger:
+          type: object
+        dependency_map:
+          type: string
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+  Context:
+    schema:
+      type: object
+      required:
+      - handle
+      additionalProperties: false
+      properties:
+        handle:
+          type: string
+          minLength: 1
+  Publication:
+    schema:
+      type: object
+      required:
+      - report_path
+      - stdout
+      additionalProperties: false
+      properties:
+        report_path:
+          type: string
+        stdout:
+          type: string
+  Cursor:
+    schema:
+      type: object
+      required:
+      - state
+      - pending
+      additionalProperties: false
+      properties:
+        state:
+          type: object
+          required:
+          - matrix
+          - selected
+          - families
+          - index
+          - results
+          additionalProperties: false
+          properties:
+            matrix:
+              type: array
+              items:
+                type: object
+            selected:
+              type: array
+              maxItems: 4
+              items:
+                type: object
+            families:
+              type: array
+              items:
+                type: string
+            index:
+              type: integer
+              minimum: 0
+              maximum: 4
+            results:
+              type: array
+              maxItems: 4
+              items:
+                type: object
+        pending:
+          type: boolean
+inputs:
+  args:
+    type: Args
+  matrix:
+    type: MatrixFile
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  publication:
+    type: Publication
+    value:
+      ref: flow.outputs.publication
+operations:
+  enter:
+    inputs:
+      args:
+        type: Args
+    outputs:
+      snapshot_only:
+        type: Bool
+      context:
+        type: Context
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_source_family_enter
+        operation: mathformer_source_family_enter
+  prepare:
+    inputs:
+      args:
+        type: Args
+      matrix:
+        type: MatrixFile
+      context:
+        type: Context
+    outputs:
+      state:
+        type: CheckState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_source_family_prepare
+        operation: mathformer_source_family_prepare
+  pending:
+    inputs:
+      state:
+        type: CheckState
+      context:
+        type: Context
+    outputs:
+      pending:
+        type: Bool
+      cursor:
+        type: Cursor
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_source_family_pending
+        operation: mathformer_source_family_pending
+  advance:
+    inputs:
+      state:
+        type: CheckState
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      state:
+        type: CheckState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_source_family_advance
+        operation: mathformer_source_family_advance
+  finalize:
+    inputs:
+      state:
+        type: CheckState
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_source_family_finalize
+        operation: mathformer_source_family_finalize
+  publish:
+    inputs:
+      report:
+        type: Report
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      exit_code:
+        type: ExitCode
+      publication:
+        type: Publication
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_source_family_publish
+        operation: mathformer_source_family_publish
+  retain_empty:
+    inputs:
+      cursor:
+        type: Cursor
+      context:
+        type: Context
+    outputs:
+      cursor:
+        type: Cursor
+      pending:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_source_family_retain_empty
+        operation: mathformer_source_family_retain_empty
+flow:
+  kind: sequence
+  steps:
+  - id: enter
+    kind: call
+    operation: enter
+    arguments:
+      args:
+        ref: inputs.args
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      args:
+        ref: inputs.args
+      matrix:
+        ref: inputs.matrix
+      context:
+        ref: steps.enter.outputs.context
+  - id: initial_guard
+    kind: call
+    operation: pending
+    arguments:
+      state:
+        ref: steps.prepare.outputs.state
+      context:
+        ref: steps.enter.outputs.context
+  - id: traverse
+    kind: loop
+    state_type: Cursor
+    initial:
+      ref: steps.initial_guard.outputs.cursor
+    max_iterations: 4
+    on_exhausted: fail
+    description: One check per pending cursor; retain_empty carries zero checks without
+      invoking run_check. The fourth advance normally stops after its false guard.
+    body:
+      kind: switch
+      cases:
+      - id: pending
+        when:
+          ref: loop.state.pending
+        body:
+          kind: sequence
+          steps:
+          - id: advance
+            kind: call
+            operation: advance
+            arguments:
+              state:
+                ref: loop.state.state
+              args:
+                ref: inputs.args
+              context:
+                ref: steps.enter.outputs.context
+          - id: guard
+            kind: call
+            operation: pending
+            arguments:
+              state:
+                ref: steps.advance.outputs.state
+              context:
+                ref: steps.enter.outputs.context
+          outputs:
+            cursor:
+              type: Cursor
+              value:
+                ref: steps.guard.outputs.cursor
+            pending:
+              type: Bool
+              value:
+                ref: steps.guard.outputs.pending
+      default:
+        kind: call
+        operation: retain_empty
+        arguments:
+          cursor:
+            ref: loop.state
+          context:
+            ref: steps.enter.outputs.context
+      outputs:
+        cursor:
+          type: Cursor
+          value:
+            ref: selected.outputs.cursor
+        pending:
+          type: Bool
+          value:
+            ref: selected.outputs.pending
+    next_state:
+      ref: body.outputs.cursor
+    until:
+      not:
+        ref: body.outputs.pending
+    outputs:
+      state:
+        type: CheckState
+        value:
+          ref: loop.state.state
+  - id: finalize
+    kind: call
+    operation: finalize
+    arguments:
+      state:
+        ref: steps.traverse.outputs.state
+      args:
+        ref: inputs.args
+      context:
+        ref: steps.enter.outputs.context
+  - id: publish
+    kind: call
+    operation: publish
+    arguments:
+      report:
+        ref: steps.finalize.outputs.report
+      args:
+        ref: inputs.args
+      context:
+        ref: steps.enter.outputs.context
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finalize.outputs.report
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.publish.outputs.exit_code
+    publication:
+      type: Publication
+      value:
+        ref: steps.publish.outputs.publication
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 16
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked description only; completion is not scientific truth,
+    runtime qualification or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: run
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: enter_checks; snapshot_report; prepare_checks; checks_pending; advance_check;
+      run_check; finalize_checks; publish_report; main
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: scripts/mathformer.py
+    selector: build_registry; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/test_matrix.json
+    selector: tests[module_family=source] in canonical order
+    digest: sha256:d4c98046613f686a2affceb6290419448ce02acdb50f2a3c6c4997555dc9858c
+  - path: scripts/source_family_workflow_tools.py
+    selector: register_source_family_tools
+    digest: sha256:33f97c21c396421036c497e4fcfbf17aa0d3b20d3a7dae06a0c35fd870d7c22b
+  - path: scripts/comprehensive_strict_tools.py
+    selector: source_runner
+    digest: sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd
+  - path: scripts/mcp_server.py
+    selector: register_source_family_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: 'inventory: test:family:source authored contract'
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/fixtures/source_family_original.py.txt
+    selector: 'selected original execution source: run; main'
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: tests/mcp/fixtures/source_family_boundary.py
+    selector: isolated external compiler/provider boundary
+    digest: sha256:46f4f660375470201a4a23c02c027c35c9313e14ca95e91ac72bb5471f4970a9
+  - path: tests/mcp/run_source_family_workflow_tests.py
+    selector: 'SourceFamilyTests: actual MCP/Lunar/PRISM fixture execution'
+    digest: sha256:756fcab0bad3b68039fc0bed8ca7d48d149fe45e35664170d9cbfac47c8d3503
+  gaps:
+  - The constant false dependency-map-only argument makes the candidate early branch
+    unreachable. Its native enter/snapshot functions and MCP snapshot tool remain
+    available and are tested separately; the active hub graph specializes that branch
+    away.
+  - Specialization uses registered workstation defaults and the canonical matrix with
+    at most four source rows. Other profiles and larger selections remain outside
+    this contract.
+  - Hub admission, preflight, dry-run and its final repository write audit remain
+    outside this run(args) graph; native per-check audits and 120-second row timeouts
+    remain inside run_check.
+  - Network and external capabilities remain subject to service qualification. Lunar
+    supplies execution receipts; native reports, fingerprints, dependency snapshots
+    and publication stdout are preserved.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: test:family:source
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: test:family:source
+      family: source
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/test_program/run_comprehensive_tests.py
+      - --module-family
+      - source
+      - --json
+      depends_on: []
+      allows_extra_args: false
+      writes:
+      - artifacts/
+      timeout_seconds: 900
+  mathformer.native_boundary:
+    execution: run_action then run_leaf_action; preflight failure/dry-run returns
+      before launch, otherwise subprocess and final write audit.
+    failure_policy: Hub timeout or undeclared writes forces failure independently
+      of the report; unexpected source exceptions propagate.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    block_execution: MCP tools call shared native functions, recheck service policy
+      and verify server-owned invocation/state/report and phase on every call. Publication
+      returns native stdout separately from JSON-RPC.
+  mathformer.specialization:
+    matrix_input: Exact native file tests/test_matrix.json; no alternative manifest
+      or injected rows.
+    bound: Root loop carries Cursor(state,pending). Empty selection invokes no checks.
+      At most four advances; preparation rejects larger selections before executing
+      any check. Fourth false guard completes normally.
+    native_limit: Native loop has no numeric cap; on_exhausted=fail is unreachable
+      for admitted inputs. The old 3600-second normalization bound was not the native
+      900-second hub timeout.
+    checks: Four canonical source self-checks in matrix order, each with 120-second
+      timeout.
+    check_semantics: Missing optional dependencies skip unless fail-on-warning/strict;
+      exit mismatch or undeclared writes fails the check. run_check owns subprocess,
+      snapshots, timing, logs and fingerprints; timeout results continue without retry.
+    success: Zero failed checks and no schema errors; strict additionally requires
+      capability readiness. Matrix coverage and strict mode are disabled by registered
+      defaults.
+    context: enter parses registered arguments with the requested run_id once. Other
+      tools require its opaque context handle. The matrix port asserts the canonical
+      file payload; it never supplies executable rows.
+    operation_calls: 13 calls at four rows; existing 16-call ceiling retained.
+# REUSE-IgnoreEnd

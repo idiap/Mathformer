@@ -1,0 +1,115 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+def invoke(identity: str, inputs: dict, output_dir: Path | None = None):
+    """Invoke a bounded adapter; arbitrary metadata cannot authorize execution."""
+    data, _ = load_contract()
+    surface, operation = resolve(identity, data)
+    oid = operation["id"]
+    if not isinstance(inputs, dict):
+        raise ValueError("adapter inputs must be an object")
+    allowed = {
+        "router:resolve": {"request", "limit", "family"},
+        "control:workflow-contract": set(),
+        "control:reasoning-log-summary": {"log_file"},
+        "reasoning-log:validate": {"log_file"},
+        "artifact_acceptance_loop:public": set(),
+        "artifact_acceptance_loop:material": set(),
+    }
+    if oid not in allowed:
+        raise ValueError("use the documented native binding for this operation")
+    if set(inputs) - allowed[oid]:
+        raise ValueError("unknown adapter inputs")
+    meta = snapshot(surface, operation, data)
+
+    def perform():
+        if oid == "router:resolve":
+            if not isinstance(inputs.get("request"), str):
+                raise ValueError("request must be a string")
+            hub = module_at(ROOT / "scripts/mathformer.py")
+            return json.loads(
+                json.dumps(
+                    [
+                        asdict(item)
+                        for item in hub.resolve_intent(
+                            inputs["request"],
+                            hub.build_registry(),
+                            limit=inputs.get("limit", 5),
+                            family=inputs.get("family"),
+                        )
+                    ],
+                    allow_nan=False,
+                )
+            )
+        if oid == "control:workflow-contract":
+            hub = module_at(ROOT / "scripts/mathformer.py")
+            # The already registered leaf owns invocation, preflight and write checks.
+            return hub.run_action(
+                oid,
+                hub.build_registry(),
+                hub.RunContext(json_output=True),
+                extra_args=(),
+            )
+        if oid in {"control:reasoning-log-summary", "reasoning-log:validate"}:
+            if not isinstance(inputs.get("log_file"), str):
+                raise ValueError("log_file must be a path string")
+            log_file = Path(inputs["log_file"])
+            if oid == "control:reasoning-log-summary":
+                return module_at(LOG_SCRIPTS / "summarize_reasoning_log.py").summarize(
+                    log_file, hooks_file=ROOT / "skills/SKILL_HOOKS.yaml"
+                )
+            return module_at(
+                LOG_SCRIPTS / "validate_reasoning_log.py"
+            ).validate_reasoning_log(
+                log_file, hooks_file=ROOT / "skills/SKILL_HOOKS.yaml"
+            )
+        project = ROOT / surface["owner"]
+        prism_bin = ROOT.parent / "to_prism/.venv/bin/prism"
+        if not prism_bin.is_file():
+            raise FileNotFoundError("existing adjacent PRISM executable unavailable")
+        with tempfile.TemporaryDirectory(
+            prefix="mathformer-adoption-prism-"
+        ) as temporary:
+            result = Path(temporary) / "result.json"
+            env = dict(os.environ, PRISM_BIN=str(prism_bin))
+            command = [
+                str(project / "prism"),
+                "run",
+                Path(operation["binding"]["path"]).name,
+                "--handler",
+                "fake",
+                "--output",
+                str(result),
+            ]
+            run = subprocess.run(
+                command, cwd=project, env=env, capture_output=True, text=True
+            )
+            if run.returncode:
+                raise RuntimeError(
+                    "PRISM fixture invocation failed (exit %d)" % run.returncode
+                )
+            checked = subprocess.run(
+                [
+                    str(project / "prism"),
+                    "verify-run",
+                    str(result),
+                    "--mode",
+                    "offline",
+                ],
+                cwd=project,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            if checked.returncode:
+                raise RuntimeError("PRISM offline trace verification failed")
+            return {
+                "fixture": True,
+                "handler": "fake",
+                "backend_verified": False,
+                "authority": operation["typing"]["output_authority"],
+                "result": json.loads(result.read_text()),
+            }
+
+    if oid.startswith("artifact_acceptance_loop:"):
+        meta.update(fixture=True, execution_mode="fake_handler")
+    return invoke_recorded(perform, meta, output_dir)

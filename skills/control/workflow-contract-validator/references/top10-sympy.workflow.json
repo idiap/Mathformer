@@ -1,0 +1,643 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_formalphysics_top10_sympy_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Ordered ten-case SymPy generation, specialized to registered hub defaults.",
+  "aliases": [
+    "formalphysics:top10-sympy"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Options": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "promote_lib",
+          "json"
+        ],
+        "properties": {
+          "promote_lib": {
+            "type": "boolean",
+            "const": false
+          },
+          "json": {
+            "type": "boolean",
+            "const": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "cursor",
+          "summaries",
+          "summaries_json"
+        ],
+        "properties": {
+          "cursor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "summaries": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 10
+          },
+          "summaries_json": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Case": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "id",
+          "spec"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "spec": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Summary": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "status",
+          "artifact",
+          "reports"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "artifact": {
+            "type": "string"
+          },
+          "reports": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Aggregate": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "backend",
+          "style",
+          "case_count",
+          "ok",
+          "summaries"
+        ],
+        "properties": {
+          "backend": {
+            "const": "sympy"
+          },
+          "style": {
+            "type": "string"
+          },
+          "case_count": {
+            "type": "integer",
+            "const": 10
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "summaries": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "minItems": 10,
+            "maxItems": 10
+          }
+        }
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          3
+        ]
+      }
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "dry_run",
+          "json_output",
+          "keep_going",
+          "allow_mutating",
+          "write_report"
+        ],
+        "properties": {
+          "dry_run": {
+            "type": "boolean"
+          },
+          "json_output": {
+            "type": "boolean"
+          },
+          "keep_going": {
+            "type": "boolean"
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          },
+          "write_report": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "options": {
+      "type": "Options"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Aggregate",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    },
+    "stdout": {
+      "type": "Text",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_top10_sympy_initialize",
+          "operation": "mathformer_top10_sympy_initialize"
+        }
+      }
+    },
+    "select_case": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "case": {
+          "type": "Case"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_top10_sympy_select_case",
+          "operation": "mathformer_top10_sympy_select_case"
+        }
+      }
+    },
+    "write_case": {
+      "inputs": {
+        "case": {
+          "type": "Case"
+        },
+        "options": {
+          "type": "Options"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "summary": {
+          "type": "Summary"
+        },
+        "summary_json": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_top10_sympy_write_case",
+          "operation": "mathformer_top10_sympy_write_case"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "summary": {
+          "type": "Summary"
+        },
+        "summary_json": {
+          "type": "Text"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_top10_sympy_advance",
+          "operation": "mathformer_top10_sympy_advance"
+        }
+      }
+    },
+    "aggregate": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Aggregate"
+        },
+        "result_json": {
+          "type": "Text"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_top10_sympy_aggregate",
+          "operation": "mathformer_top10_sympy_aggregate"
+        }
+      }
+    },
+    "emit_paths": {
+      "inputs": {
+        "result": {
+          "type": "Aggregate"
+        }
+      },
+      "outputs": {
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_top10_sympy_emit_paths",
+          "operation": "mathformer_top10_sympy_emit_paths"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "start",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "traverse",
+        "kind": "loop",
+        "description": "Exactly ten ordered iterations, one per CASES entry. main ignores advance's done flag; its fixed for-loop supplies the bound. Here done is equivalent to completion of iteration ten, never summary completeness. The tenth iteration exits normally; exhaustion is unreachable for this source.",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.start.outputs.state"
+        },
+        "max_iterations": 10,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select_case",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                }
+              }
+            },
+            {
+              "id": "generate",
+              "kind": "call",
+              "operation": "write_case",
+              "arguments": {
+                "case": {
+                  "ref": "steps.select.outputs.case"
+                },
+                "options": {
+                  "ref": "inputs.options"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            },
+            {
+              "id": "append",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "summary": {
+                  "ref": "steps.generate.outputs.summary"
+                },
+                "summary_json": {
+                  "ref": "steps.generate.outputs.summary_json"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.append.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "steps.append.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "collect",
+        "kind": "call",
+        "operation": "aggregate",
+        "arguments": {
+          "state": {
+            "ref": "steps.traverse.outputs.state"
+          }
+        }
+      },
+      {
+        "id": "emit",
+        "kind": "call",
+        "operation": "emit_paths",
+        "arguments": {
+          "result": {
+            "ref": "steps.collect.outputs.result"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Aggregate",
+        "value": {
+          "ref": "steps.collect.outputs.result"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.collect.outputs.exit_code"
+        }
+      },
+      "stdout": {
+        "type": "Text",
+        "value": {
+          "ref": "steps.emit.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/",
+          "backends/sympy/MathformerSympyPhysics/",
+          "libraries/MathformerPhysicsLib/SymPy/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 33
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Completion establishes no scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/generate_formalphysics_original_two_sympy.py",
+        "selector": "main",
+        "digest": "sha256:472e64b1c7af4fb1b698bcb7bb140ee49a5d6e3fd7b3a7a27aaaec2b03fd302a"
+      },
+      {
+        "path": "scripts/generate_formalphysics_original_two_sympy.py",
+        "selector": "initialize; select_case; write_case; run_tool; advance; aggregate; emit_paths",
+        "digest": "sha256:472e64b1c7af4fb1b698bcb7bb140ee49a5d6e3fd7b3a7a27aaaec2b03fd302a"
+      },
+      {
+        "path": "scripts/generate_formalphysics_top10_sympy.py",
+        "selector": "__main__; runpy.run_path",
+        "digest": "sha256:4bcffdc577064dbfeed52bd4560da8f01ceca4d707bbdd5ecf1e504a747f54c0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:formalphysics:top10-sympy; preflight; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/formalphysics_top10_sympy_tools.py",
+        "selector": "register_top10_sympy_tools",
+        "digest": "sha256:70acb130d0ce2c3cf98c3fbe27f53ec591c02ac090d026227c83c3d30dc1cfaf"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_top10_sympy_tools; _analysis_write_policy",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Hub defaults constrain promote_lib=false and json=false; standalone CLI alternatives are outside this specialization.",
+      "Helpers remain opaque inside owning operations; scientific payload schemas are partial structural projections.",
+      "This graph exposes main through guarded MCP steps, not the hub subprocess envelope: hub dry-run, write audit and optional hub reports remain owned by mathformer_run_workflow.",
+      "Lunar enforces contract budgets and runtime receipts; native CLI execution and its external-tool runner have no timeout. External effects retain the candidate qualification declarations."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "formalphysics:top10-sympy",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "formalphysics:top10-sympy",
+        "family": "physics_sympy",
+        "kind": "generation",
+        "safety": "writes_repo",
+        "command": [
+          "{python}",
+          "scripts/generate_formalphysics_top10_sympy.py"
+        ],
+        "depends_on": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Hub preflight blocks failures; dry-run skips main; wrapper uses runpy for authoritative implementation.",
+      "failure_policy": "Hub audits writes afterward; undeclared writes can fail the result despite subprocess success.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "scientific_payloads": "Aggregate and process exit code describe main; hub status is a separate envelope."
+    }
+  }
+}

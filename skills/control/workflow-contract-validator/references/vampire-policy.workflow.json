@@ -1,0 +1,863 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_example_vampire_policy_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Direct candidate search for the fixed policy-chain example within native hub controls.",
+  "aliases": [
+    "example:vampire-policy"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext",
+      "representation": "value"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult",
+      "representation": "value"
+    },
+    "Bool": {
+      "schema": {
+        "type": "boolean"
+      },
+      "representation": "value"
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      },
+      "representation": "value"
+    },
+    "Plan": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "token",
+          "execute"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "execute": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Service-owned native hub boundary. execute=false preserves dry-run and rejected preflight payloads."
+      },
+      "representation": "value"
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "token",
+          "revision",
+          "evidence"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "evidence": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Single-use service-local continuation over discover_proof_steps. Native candidates, index, attempts, winner fields and runner stay in the suspended generator; evidence is the exact native stage observation. No restart or replay."
+      },
+      "representation": "value"
+    },
+    "RawAttempt": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "token",
+          "revision",
+          "evidence"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "evidence": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Single-use final_attempt continuation, with native proof_found and final_premise_ids evidence; raw native attempt remains in the generator."
+      },
+      "representation": "value"
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "attempts",
+          "winning_informal_proof",
+          "winning_formal_proof"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "winning_informal_proof": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "winning_formal_proof": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "description": "Native discovery_report.json payload including winner, statuses, counts and artifact paths."
+      },
+      "representation": "value"
+    },
+    "Outcome": {
+      "schema": {
+        "type": "object",
+        "description": "Native process outcome including exit code, output or exception, or dry-run skip outcome; not scientific acceptance."
+      },
+      "representation": "value"
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "preflight": {
+      "inputs": {
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "plan": {
+          "type": "Plan"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_policy_preflight",
+          "operation": "mathformer_policy_preflight"
+        }
+      }
+    },
+    "read_statement": {
+      "inputs": {
+        "plan": {
+          "type": "Plan"
+        }
+      },
+      "outputs": {
+        "statement": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_policy_read_statement",
+          "operation": "mathformer_policy_read_statement"
+        }
+      }
+    },
+    "initialize": {
+      "inputs": {
+        "statement": {
+          "type": "Text"
+        },
+        "plan": {
+          "type": "Plan"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_policy_initialize",
+          "operation": "mathformer_policy_initialize"
+        }
+      }
+    },
+    "direct_attempt": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "attempt": {
+          "type": "RawAttempt"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_policy_direct_attempt",
+          "operation": "mathformer_policy_direct_attempt"
+        }
+      }
+    },
+    "carry": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "attempt": {
+          "type": "RawAttempt"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_policy_carry",
+          "operation": "mathformer_policy_carry"
+        }
+      }
+    },
+    "write_report": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_policy_write_report",
+          "operation": "mathformer_policy_write_report"
+        }
+      }
+    },
+    "finish_example": {
+      "inputs": {
+        "report": {
+          "type": "Report"
+        },
+        "statement": {
+          "type": "Text"
+        }
+      },
+      "outputs": {
+        "outcome": {
+          "type": "Outcome"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_policy_finish_example",
+          "operation": "mathformer_policy_finish_example"
+        }
+      }
+    },
+    "skip": {
+      "inputs": {
+        "plan": {
+          "type": "Plan"
+        }
+      },
+      "outputs": {
+        "outcome": {
+          "type": "Outcome"
+        },
+        "state": {
+          "type": "State"
+        },
+        "statement": {
+          "type": "Text"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_policy_skip",
+          "operation": "mathformer_policy_skip"
+        }
+      }
+    },
+    "audit": {
+      "inputs": {
+        "plan": {
+          "type": "Plan"
+        },
+        "outcome": {
+          "type": "Outcome"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_policy_audit",
+          "operation": "mathformer_policy_audit"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "preflight",
+        "kind": "call",
+        "operation": "preflight",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "initialize",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "execute",
+            "when": {
+              "ref": "steps.preflight.outputs.plan.execute"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "read",
+                  "kind": "call",
+                  "operation": "read_statement",
+                  "arguments": {
+                    "plan": {
+                      "ref": "steps.preflight.outputs.plan"
+                    }
+                  }
+                },
+                {
+                  "id": "initialize",
+                  "kind": "call",
+                  "operation": "initialize",
+                  "arguments": {
+                    "statement": {
+                      "ref": "steps.read.outputs.statement"
+                    },
+                    "plan": {
+                      "ref": "steps.preflight.outputs.plan"
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "state": {
+                  "type": "State",
+                  "value": {
+                    "ref": "steps.initialize.outputs.state"
+                  }
+                },
+                "statement": {
+                  "type": "Text",
+                  "value": {
+                    "ref": "steps.read.outputs.statement"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "skip",
+              "kind": "call",
+              "operation": "skip",
+              "arguments": {
+                "plan": {
+                  "ref": "steps.preflight.outputs.plan"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.skip.outputs.state"
+              }
+            },
+            "statement": {
+              "type": "Text",
+              "value": {
+                "ref": "steps.skip.outputs.statement"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "selected.outputs.state"
+            }
+          },
+          "statement": {
+            "type": "Text",
+            "value": {
+              "ref": "selected.outputs.statement"
+            }
+          }
+        }
+      },
+      {
+        "id": "search",
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 2,
+        "on_exhausted": "fail",
+        "description": "Finite ordered portfolio: one candidate for supplied invoice policy, at most two in current templates. No retries. done=true on final candidate even without proof, so portfolio exhaustion returns normally; on_exhausted is unreachable within this specialization.",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "execute",
+              "when": {
+                "ref": "steps.preflight.outputs.plan.execute"
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "attempt",
+                    "kind": "call",
+                    "operation": "direct_attempt",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      }
+                    }
+                  },
+                  {
+                    "id": "carry",
+                    "kind": "call",
+                    "operation": "carry",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      },
+                      "attempt": {
+                        "ref": "steps.attempt.outputs.attempt"
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "state": {
+                    "type": "State",
+                    "value": {
+                      "ref": "steps.carry.outputs.state"
+                    }
+                  },
+                  "done": {
+                    "type": "Bool",
+                    "value": {
+                      "ref": "steps.carry.outputs.done"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "sequence",
+            "steps": [
+              {
+                "id": "skip",
+                "kind": "call",
+                "operation": "skip",
+                "arguments": {
+                  "plan": {
+                    "ref": "steps.preflight.outputs.plan"
+                  }
+                }
+              }
+            ],
+            "outputs": {
+              "state": {
+                "type": "State",
+                "value": {
+                  "ref": "steps.skip.outputs.state"
+                }
+              },
+              "done": {
+                "type": "Bool",
+                "value": {
+                  "ref": "steps.skip.outputs.done"
+                }
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Bool",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "execute",
+            "when": {
+              "ref": "steps.preflight.outputs.plan.execute"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "report",
+                  "kind": "call",
+                  "operation": "write_report",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.search.outputs.state"
+                    }
+                  }
+                },
+                {
+                  "id": "finish",
+                  "kind": "call",
+                  "operation": "finish_example",
+                  "arguments": {
+                    "report": {
+                      "ref": "steps.report.outputs.report"
+                    },
+                    "statement": {
+                      "ref": "steps.initialize.outputs.statement"
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "outcome": {
+                  "type": "Outcome",
+                  "value": {
+                    "ref": "steps.finish.outputs.outcome"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "skip",
+              "kind": "call",
+              "operation": "skip",
+              "arguments": {
+                "plan": {
+                  "ref": "steps.preflight.outputs.plan"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "outcome": {
+              "type": "Outcome",
+              "value": {
+                "ref": "steps.skip.outputs.outcome"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "outcome": {
+            "type": "Outcome",
+            "value": {
+              "ref": "selected.outputs.outcome"
+            }
+          }
+        }
+      },
+      {
+        "id": "audit",
+        "kind": "call",
+        "operation": "audit",
+        "arguments": {
+          "plan": {
+            "ref": "steps.preflight.outputs.plan"
+          },
+          "outcome": {
+            "ref": "steps.dispatch.outputs.outcome"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.audit.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/vampire_atp/policy_chain_example/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 180,
+      "max_operation_calls": 11
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Native staged execution of the fixed policy example; completion does not establish scientific acceptance or theorem promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "backends/atp/MathformerATP/vampire.py",
+        "selector": "discover_proof_steps; discover_proof; _drain_steps; _run_direct_attempt; VampireRunner; aggressive_autoformalize",
+        "digest": "sha256:8b7d92bed2c701f704e124507d567c068969f4db6990a9ff0a906a180373bb2a"
+      },
+      {
+        "path": "examples/vampire_informal_to_proofs.py",
+        "selector": "main; finish_example",
+        "digest": "sha256:990d27b1e7f5e527ad87eabc338cbec51837d4b507f771a18189b2278d53e7f3"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:example:vampire-policy; prepare_leaf_boundary; finish_leaf_boundary; preflight; write_report",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/vampire_policy_tools.py",
+        "selector": "register_vampire_policy_tools",
+        "digest": "sha256:1900a79e71f6045a28c22d78d2fc19d778cfb253753fdb535942c16f54a47797"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_vampire_policy_tools; _policy_example_guard",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory/example:vampire-policy",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Only the fixed example direct branch is modeled. premise_loop=false leaves premise generation and minimization inactive; other caller settings are outside this contract.",
+      "Native generator state is service-owned and single-use, transported by opaque revision handles. It cannot be resumed after service loss.",
+      "A service-owned process enforces the hub cumulative 180-second timeout across native stages; native Vampire receives --time_limit 10 and has no Python subprocess timeout. Source exceptions retain native post-process write audit and fail their operation; native no-winner printing failure is captured as process exit 1 and then write-audited.",
+      "Complete external capability qualification is host-owned; this contract retains the original effect and authority ceilings."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "example:vampire-policy",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "example:vampire-policy",
+        "summary": "Run the policy-chain informal-to-Vampire example.",
+        "family": "atp",
+        "kind": "demo",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "examples/vampire_informal_to_proofs.py"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "examples/vampire_informal_to_proofs.py"
+        ],
+        "required_tools": [],
+        "optional_tools": [
+          "vampire"
+        ],
+        "writes": [
+          "artifacts/vampire_atp/policy_chain_example/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": 180,
+        "notes": ""
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered MCP tools resume the authoritative native generator at its existing yields, share the CLI print/check implementation, and reuse native hub preflight and write audit. A service-owned process preserves the hub cumulative 180-second timeout and terminates the child prover on timeout.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report"
+      ],
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "failure_policy": "Preserve preflight rejection and dry-run envelopes. Source search exceptions run the native post-process write audit, then fail the calling operation without retries. Capture native example print/check exceptions as nonzero process outcomes and preserve write audit failures.",
+      "scientific_payloads": "HubResult is the transport envelope; Report is the backend discovery payload."
+    },
+    "mathformer.search": {
+      "specialization": "Fixed input file; artifact_root=artifacts/vampire_atp/policy_chain_example/; time_limit=10; premise_loop=false. Current templates return 1..2 candidates, constrained by State.candidates; supplied policy returns one.",
+      "proof_found": "SZS Theorem, Unsatisfiable or ContradictoryAxioms, independently of subprocess return code. First proof_found wins and immediately stops candidate search.",
+      "bounds": "Vampire commands receive --time_limit 10; subprocess.run has no Python timeout, including version probing. Hub enforces 180 seconds on example process; 3600 seconds is not a native bound.",
+      "failure": "No winner still produces discovery_report.json; example then raises while indexing null informal_proof. Exceptions and hub timeout remain process failures.",
+      "call_budget": "11 is a descriptor ceiling sufficient for two candidates; native code has no equivalent operation-call budget.",
+      "guard_lowering": "Root-level bounded loop carries an inactive continuation for dry-run/preflight rejection. Guarded loop body and finalization skip all native search operations when execute=false."
+    }
+  }
+}

@@ -1,0 +1,1005 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lean_new_qm_source_only_batch_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Source-only deprecated QM scaffold batch; models main and the gated process_case path.",
+  "aliases": [
+    "physics-lean:new-qm-source-only-batch"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Arguments": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "BatchState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "records",
+          "position",
+          "cases",
+          "run_gates",
+          "json_output"
+        ],
+        "properties": {
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20
+          },
+          "cases": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object"
+            }
+          },
+          "run_gates": {
+            "type": "boolean"
+          },
+          "json_output": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "CaseWork": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "result",
+          "paths"
+        ],
+        "properties": {
+          "result": {
+            "type": "object",
+            "required": [
+              "case_id",
+              "source_index",
+              "lean_path",
+              "source_record",
+              "required_terms"
+            ],
+            "properties": {
+              "case_id": {
+                "type": "string"
+              },
+              "source_index": {
+                "type": "integer"
+              },
+              "lean_path": {
+                "type": "string"
+              },
+              "source_record": {
+                "type": "string"
+              },
+              "required_terms": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "paths": {
+            "type": "object",
+            "required": [
+              "lean",
+              "source",
+              "packets"
+            ],
+            "properties": {
+              "lean": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "packets": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "CommandResult": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "command",
+          "returncode",
+          "ok",
+          "stdout_tail",
+          "stderr_tail",
+          "json"
+        ],
+        "properties": {
+          "command": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "returncode": {
+            "type": "integer"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "stdout_tail": {
+            "type": "string"
+          },
+          "stderr_tail": {
+            "type": "string"
+          },
+          "json": {}
+        }
+      }
+    },
+    "BatchReport": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "style",
+          "source_policy",
+          "case_count",
+          "cases",
+          "mathlib_grounding_audit",
+          "mathlib_grounding_audit_ok",
+          "ok"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "style": {
+            "const": "new_qm_source_only_recursive_batch_report"
+          },
+          "source_policy": {
+            "const": "question_answer_only_dataset_solution_forbidden"
+          },
+          "case_count": {
+            "const": 20
+          },
+          "cases": {
+            "type": "array",
+            "minItems": 20,
+            "maxItems": 20,
+            "items": {
+              "type": "object"
+            }
+          },
+          "mathlib_grounding_audit": {
+            "type": "string"
+          },
+          "mathlib_grounding_audit_ok": {
+            "type": "boolean"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Path": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          1
+        ]
+      }
+    },
+    "RuntimeContext": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "repository_root",
+          "allow_mutating"
+        ],
+        "properties": {
+          "repository_root": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Arguments"
+    },
+    "context": {
+      "type": "RuntimeContext"
+    }
+  },
+  "outputs": {
+    "summary": {
+      "type": "BatchReport",
+      "value": {
+        "ref": "flow.outputs.summary"
+      }
+    },
+    "report_path": {
+      "type": "Path",
+      "value": {
+        "ref": "flow.outputs.report_path"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {
+        "argv": {
+          "type": "Arguments"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "BatchState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_new_qm_initialize",
+          "operation": "mathformer_new_qm_initialize"
+        }
+      }
+    },
+    "generate": {
+      "inputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "work": {
+          "type": "CaseWork"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_new_qm_generate",
+          "operation": "mathformer_new_qm_generate"
+        }
+      }
+    },
+    "initial_plan": {
+      "inputs": {
+        "work": {
+          "type": "CaseWork"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "work": {
+          "type": "CaseWork"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_new_qm_initial_plan",
+          "operation": "mathformer_new_qm_initial_plan"
+        }
+      }
+    },
+    "compile": {
+      "inputs": {
+        "work": {
+          "type": "CaseWork"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "work": {
+          "type": "CaseWork"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_new_qm_compile",
+          "operation": "mathformer_new_qm_compile"
+        }
+      }
+    },
+    "completeness": {
+      "inputs": {
+        "work": {
+          "type": "CaseWork"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "work": {
+          "type": "CaseWork"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_new_qm_completeness",
+          "operation": "mathformer_new_qm_completeness"
+        }
+      }
+    },
+    "repair_plans": {
+      "inputs": {
+        "work": {
+          "type": "CaseWork"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "work": {
+          "type": "CaseWork"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_new_qm_repair_plans",
+          "operation": "mathformer_new_qm_repair_plans"
+        }
+      }
+    },
+    "final_plan": {
+      "inputs": {
+        "work": {
+          "type": "CaseWork"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "work": {
+          "type": "CaseWork"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_new_qm_final_plan",
+          "operation": "mathformer_new_qm_final_plan"
+        }
+      }
+    },
+    "append_case": {
+      "inputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "work": {
+          "type": "CaseWork"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "done": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_new_qm_append_case",
+          "operation": "mathformer_new_qm_append_case"
+        }
+      }
+    },
+    "grounding_audit": {
+      "inputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "audit": {
+          "type": "CommandResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_new_qm_grounding_audit",
+          "operation": "mathformer_new_qm_grounding_audit"
+        }
+      }
+    },
+    "report": {
+      "inputs": {
+        "state": {
+          "type": "BatchState"
+        },
+        "audit": {
+          "type": "CommandResult"
+        },
+        "context": {
+          "type": "RuntimeContext"
+        }
+      },
+      "outputs": {
+        "summary": {
+          "type": "BatchReport"
+        },
+        "report_path": {
+          "type": "Path"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_new_qm_report",
+          "operation": "mathformer_new_qm_report"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "cases",
+        "kind": "loop",
+        "state_type": "BatchState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 20,
+        "on_exhausted": "fail",
+        "description": "Fixed ordered source iteration; done is true on the twentieth append, so normal completion precedes exhaustion.",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "generate",
+              "kind": "call",
+              "operation": "generate",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            },
+            {
+              "id": "gates",
+              "kind": "switch",
+              "cases": [
+                {
+                  "id": "enabled",
+                  "when": {
+                    "ref": "loop.state.run_gates"
+                  },
+                  "body": {
+                    "kind": "sequence",
+                    "steps": [
+                      {
+                        "id": "initial_plan",
+                        "kind": "call",
+                        "operation": "initial_plan",
+                        "arguments": {
+                          "work": {
+                            "ref": "steps.generate.outputs.work"
+                          },
+                          "context": {
+                            "ref": "inputs.context"
+                          }
+                        }
+                      },
+                      {
+                        "id": "compile",
+                        "kind": "call",
+                        "operation": "compile",
+                        "arguments": {
+                          "work": {
+                            "ref": "steps.initial_plan.outputs.work"
+                          },
+                          "context": {
+                            "ref": "inputs.context"
+                          }
+                        }
+                      },
+                      {
+                        "id": "completeness",
+                        "kind": "call",
+                        "operation": "completeness",
+                        "arguments": {
+                          "work": {
+                            "ref": "steps.compile.outputs.work"
+                          },
+                          "context": {
+                            "ref": "inputs.context"
+                          }
+                        }
+                      },
+                      {
+                        "id": "repair_plans",
+                        "kind": "call",
+                        "operation": "repair_plans",
+                        "arguments": {
+                          "work": {
+                            "ref": "steps.completeness.outputs.work"
+                          },
+                          "context": {
+                            "ref": "inputs.context"
+                          }
+                        }
+                      },
+                      {
+                        "id": "final_plan",
+                        "kind": "call",
+                        "operation": "final_plan",
+                        "arguments": {
+                          "work": {
+                            "ref": "steps.repair_plans.outputs.work"
+                          },
+                          "context": {
+                            "ref": "inputs.context"
+                          }
+                        }
+                      },
+                      {
+                        "id": "append_gated",
+                        "kind": "call",
+                        "operation": "append_case",
+                        "arguments": {
+                          "state": {
+                            "ref": "loop.state"
+                          },
+                          "work": {
+                            "ref": "steps.final_plan.outputs.work"
+                          }
+                        }
+                      }
+                    ],
+                    "outputs": {
+                      "state": {
+                        "type": "BatchState",
+                        "value": {
+                          "ref": "steps.append_gated.outputs.state"
+                        }
+                      },
+                      "done": {
+                        "type": "Boolean",
+                        "value": {
+                          "ref": "steps.append_gated.outputs.done"
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "default": {
+                "kind": "call",
+                "operation": "append_case",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  },
+                  "work": {
+                    "ref": "steps.generate.outputs.work"
+                  }
+                }
+              },
+              "outputs": {
+                "state": {
+                  "type": "BatchState",
+                  "value": {
+                    "ref": "selected.outputs.state"
+                  }
+                },
+                "done": {
+                  "type": "Boolean",
+                  "value": {
+                    "ref": "selected.outputs.done"
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "BatchState",
+              "value": {
+                "ref": "steps.gates.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Boolean",
+              "value": {
+                "ref": "steps.gates.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "BatchState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "grounding",
+        "kind": "call",
+        "operation": "grounding_audit",
+        "arguments": {
+          "state": {
+            "ref": "steps.cases.outputs.state"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "report",
+        "kind": "call",
+        "operation": "report",
+        "arguments": {
+          "state": {
+            "ref": "steps.cases.outputs.state"
+          },
+          "audit": {
+            "ref": "steps.grounding.outputs.audit"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "summary": {
+        "type": "BatchReport",
+        "value": {
+          "ref": "steps.report.outputs.summary"
+        }
+      },
+      "report_path": {
+        "type": "Path",
+        "value": {
+          "ref": "steps.report.outputs.report_path"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.report.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/physics_lean/new_qm_source_only/",
+          "artifacts/workflow_hub/",
+          "libraries/MathformerPhysicsLib/Lean/formalphysics_*/",
+          "MathformerPhysicsLib/Lean/formalphysics_*/",
+          "artifacts/physics_lean/grounded_sample_thoroughness/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 900,
+      "max_operation_calls": 143
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Generated wrappers, packets and successful commands do not establish scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/physics-lean/physics-lean-goal-sample-autoformalizer/scripts/run_new_qm_source_only_batch.py",
+        "selector": "main; initialize; generate_next; generate_case; process_case; initial_plan; compile_case; check_completeness; repair_plans; final_plan; append_case; grounding_audit; report; run",
+        "digest": "sha256:7d052f8494559ae114f2ef8c3bb4a8ad8e6e05a69d91ce53257ca8499b83840c"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:physics-lean:new-qm-source-only-batch; run_action; run_leaf_action; preflight; launch_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/new_qm_source_only_tools.py",
+        "selector": "native implementation, shared steps, registration or authored inventory projection",
+        "digest": "sha256:1ae9be2c04afe8dbbee1d3b22b68cb81ab42b67beeeb36a6d02a85e6704ec24b"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "native implementation, shared steps, registration or authored inventory projection",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "native implementation, shared steps, registration or authored inventory projection",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "skills/physics-lean/physics-lean-goal-sample-autoformalizer/scripts/plan_goal_sample_autoformalization.py",
+        "selector": "native implementation, shared steps, registration or authored inventory projection",
+        "digest": "sha256:c842136ab5a097f4f86f7ba2507fbdcb92167f0ea2dbf8a0ce98cb903ca3d931"
+      },
+      {
+        "path": "skills/physics-lean/physics-lean-derivation-completeness-checker/scripts/check_derivation_completeness.py",
+        "selector": "native implementation, shared steps, registration or authored inventory projection",
+        "digest": "sha256:e0583725510d24378fc99eb74caeba2827be462e7365c415c6e740355f3be01f"
+      },
+      {
+        "path": "skills/physics-lean/physics-lean-repair-expansion-cartographer/scripts/map_repair_expansion.py",
+        "selector": "native implementation, shared steps, registration or authored inventory projection",
+        "digest": "sha256:3519c73936c5eb22eb50c9e6a09de14daab9c93b3af8a15eb40439a6a3c17b1f"
+      },
+      {
+        "path": "skills/physics-lean/physics-lean-recursive-repair-loop-controller/scripts/control_recursive_repair_loop.py",
+        "selector": "native implementation, shared steps, registration or authored inventory projection",
+        "digest": "sha256:b2fb4a4973181f6fd8cc9a920aa0d947c216ee80db9f7384f06e290e30bc68ab"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-mathlib-grounding-auditor/scripts/audit_mathlib_grounding.py",
+        "selector": "native implementation, shared steps, registration or authored inventory projection",
+        "digest": "sha256:ca4ae1f3f477164a1506946b2cb5f29e24ddcff56e2b05bacfa8fe5043156c0a"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/coherence_common.py",
+        "selector": "native implementation, shared steps, registration or authored inventory projection",
+        "digest": "sha256:e1da9d47b82e23be26335e4476ba442aa58aedafe245034709d2868909deb125"
+      },
+      {
+        "path": "libraries/MathformerPhysicsLib/release_status.py",
+        "selector": "native implementation, shared steps, registration or authored inventory projection",
+        "digest": "sha256:d10f70157f9b44923ad8ed3fda743b70133ea890ace3d1c509638704dfc81d59"
+      },
+      {
+        "path": "tests/physics_lean/run_grounded_sample_thoroughness.py",
+        "selector": "native implementation, shared steps, registration or authored inventory projection",
+        "digest": "sha256:4c2910e1a78b95a7215146cbe03f33b122efb68137cb4c00dcec5937516b7271"
+      }
+    ],
+    "gaps": [
+      "All main graph operations have registered MCP ports and share native implementation. Child-program internals remain native. Compilation is not a scientific validity claim.",
+      "The graph begins at runner argv. Hub admission, dry-run, 900-second subprocess deadline, capture and post-run write auditing remain the surrounding native boundary. MCP initialize reuses hub preflight and requires explicit mutation authorization; service write-root policy applies to writing ports. Outputs are native batch results, not HubResult audit attestations.",
+      "Context relocates repository input/output paths and native helper paths. Deployment must qualify repository mounts and the declared effects; capability labels are not runtime grants. Child timeouts remain 240 seconds. The contract also enforces its 900-second wall budget and 143-call limit."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lean:new-qm-source-only-batch",
+      "owner_skill": "skills/physics-lean/physics-lean-goal-sample-autoformalizer/SKILL.md",
+      "contract": {
+        "id": "physics-lean:new-qm-source-only-batch",
+        "family": "physics_lean",
+        "kind": "generation",
+        "safety": "writes_repo",
+        "depends_on": [],
+        "allows_extra_args": true,
+        "timeout_seconds": 900
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Shared native runner steps through scripts/new_qm_source_only_tools.py registered in scripts/mcp_server.py; original hub action remains available.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report"
+      ],
+      "argv_prefix": [
+        "--acknowledge-deprecated-batch-scaffold",
+        "--json"
+      ],
+      "admission": "Mutation authorization required unless dry-run; preflight checks required paths; dry-run does not enter main.",
+      "completion": "Capture native exit/stdout/stderr; timeout becomes failed hub result; undeclared writes can override hub success independently of summary.ok.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "step_context": [
+        "repository_root",
+        "allow_mutating"
+      ],
+      "observability": "Native report formatting goes to MCP stderr; command records and artifact paths are unchanged. Lunar supplies workflow receipts."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "selected_cases": [
+        4,
+        9,
+        12,
+        19,
+        23,
+        25,
+        32,
+        34,
+        35,
+        37,
+        39,
+        41,
+        43,
+        44,
+        45,
+        47,
+        48,
+        49,
+        53,
+        56
+      ],
+      "bounds": "20 fixed case iterations; controller max-iterations=8 is an argument, not an enclosing repair loop; 143 calls is the derived graph ceiling.",
+      "timing": "Each direct runner child has 240 seconds; 900 seconds bounds the hub runner subprocess, not native main in isolation; 3600 is not a native bound.",
+      "failure": "Exceptions, child timeouts, non-QM records and check=True nonzero exits abort before reporting; recorded command failures continue; unsuccessful summary is emitted before exit 1.",
+      "bindings": "Every call uses a real registered MCP tool over shared source functions. No external boundary substitution exists in production."
+    },
+    "mathformer.steps": {
+      "initialize": "main: parse argv; reject missing acknowledgement and invalid arguments; load FormalPhysics.json; initialize cases=[], position=0 and parsed flags. run_gates and json_output default false.",
+      "generate": "main selection and process_case before run_gates: index SELECTED_CASES at position; reject non-QM; pass only field/question/answer. Write fixed-template Lean wrapper, source_record.json, predetermined packets and skill_usage_ledger.json; initialize fresh result and paths. Ledger statuses do not prove execution.",
+      "initial_plan": "process_case goal_plan_before_gates: plan --case --json to goal_plan_initial.json; append command result; check=True, timeout=240.",
+      "compile": "process_case lean_compile: lake env lean using work paths; append result; check=False, timeout=240; nonzero exit continues.",
+      "completeness": "process_case completeness: check Lean and source record with recursive-frontier-count=0, expect-complete and JSON output to derivation_completeness.json; append result; check=False, timeout=240; nonzero exit continues.",
+      "repair_plans": "process_case expansion_map then recursive_control: cartographer consumes predetermined packet paths and writes repair_expansion_map.json; controller consumes that map once with iteration=1, max-iterations=8, no history, writing recursive_control_plan.json. Append both results; each check=True and timeout=240. Record decisions without following them or repairing.",
+      "final_plan": "process_case goal_plan_after_gates: plan --case --run-gates --json to goal_plan_final.json with compile/thoroughness gates; append result; check=False, timeout=240; nonzero exit continues.",
+      "append_case": "main cases.append(process_case(...)) and for advancement: pack state with work.result appended and position advanced once; compute done iff all 20 SELECTED_CASES consumed. Preserve records and flags; discard local case paths. No cross-case frontier, signature history or repair state.",
+      "grounding_audit": "main after all cases: always run GROUNDING_AUDITOR --output mathlib_grounding_audit.json --json; check=False, timeout=240. Nonzero exit is recorded; exceptions/timeouts still abort.",
+      "report": "main summary and reporting: gated ok requires every lean_compile.ok and completeness.ok and completeness.json.ok is True; ungated ok=True. Ignore final-plan and grounding-audit failures for this predicate. Write artifacts/physics_lean/new_qm_source_only/batch_report.json, print JSON or native human summary, return 0 iff ok else 1."
+    }
+  }
+}

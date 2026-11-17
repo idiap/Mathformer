@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Canonical epistemic projection; not an execution trace.
+erfl 0.3
+reasoning critic_driven_recursive_repair {
+  goal "produce a calibrated artifact assessment after bounded repair"
+    -> repair_status
+  steps
+    r:R[artifact::Bundle,evidence::Evidence->assessment::Assessment] -calibrate> ...
+    e:E[
+      artifact::Bundle,
+      assessment::Assessment
+      -> repair_status::Decision
+    ]
+  repeat 1..4 [
+    x:X[artifact::Bundle,assessment::Assessment->repair::Plan] -revise> ...
+    f:F[
+      artifact::Bundle,
+      repair::Plan
+      -> revised_artifact::Bundle
+    ] -test> ...
+    p:P[revised_artifact::Bundle->revised_evidence::Evidence] -assess> ...
+    r2:R[
+      revised_artifact::Bundle,
+      revised_evidence::Evidence
+      -> revised_assessment::Assessment
+    ] -calibrate> ...
+    e2:E[
+      revised_artifact::Bundle,
+      revised_assessment::Assessment
+      -> iteration_status::Decision
+    ]
+  ] until e2.accepted measure unresolved_findings
+  on e.accepted => accept
+  on e.repair_required => stop
+  on e.blocked => stop
+}

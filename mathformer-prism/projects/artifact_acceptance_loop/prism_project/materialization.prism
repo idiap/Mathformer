@@ -1,0 +1,470 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from artifact_acceptance_loop import (
+    ArtifactAcceptanceAnnotateLineCommentGuardArtifact,
+    ArtifactAcceptanceArtifactRealnessGateArtifact,
+    ArtifactAcceptanceArtifactStatisticsArtifact,
+    ArtifactAcceptanceAuditCompatibilityArtifact,
+    ArtifactAcceptanceCase,
+    ArtifactAcceptanceConsistencyCrossFileConceptsArtifact,
+    ArtifactAcceptanceConsistencyDeclarationShapeArtifact,
+    ArtifactAcceptanceConsistencyNonvacuityArtifact,
+    ArtifactAcceptanceConsistencyUnifiedReportArtifact,
+    ArtifactAcceptanceEvaluationRfdeReportArtifact,
+    ArtifactAcceptanceLibraryDocumentationArtifact,
+    ArtifactAcceptanceMathlibGroundingMaximizeArtifact,
+    ArtifactAcceptanceMathlibImportMinimizeArtifact,
+    ArtifactAcceptancePostformalizationInformalConsistencyArtifact,
+    ArtifactAcceptancePostformalizationInformalInternalConsistencyArtifact,
+    ArtifactAcceptancePostformalizationInformalizeArtifact,
+    ArtifactDisposition,
+    ArtifactMathlibGrounding,
+    CompatibilityCase,
+    CompatibilityCheck,
+    CorpusCheck,
+    LeanArtifactAcceptanceDecision,
+    LeanArtifactAcceptanceRequest,
+    LeanMeaning,
+    NonvacuityCheck,
+    NonvacuityReviewCase,
+    ProofCheck,
+    ProofReviewCase,
+    ReviewArtifact,
+    ShapeCheck,
+    ShapeReviewCase,
+    SourceCheck,
+    SourceReviewCase,
+)
+from reasoning import ReviewLeanArtifact
+from relations import AssessCompatibilityCertificate
+from relations import CalibrateAcceptanceCertificate
+from relations import GroundAPIsCertificate
+from relations import ModelLeanMeaningCertificate
+from relations import TestCorpusCertificate
+from relations import TestFidelityCertificate
+from relations import TestNonvacuityCertificate
+from relations import TestProofCertificate
+from relations import TestShapeCertificate
+from generated.reasoning_review_artifact_1_skill import lean_line_annotation_skill as review_artifact_reasoning_skill_1
+from generated.reasoning_review_artifact_2_skill import mathlib_import_minimizer_skill as review_artifact_reasoning_skill_2
+from generated.reasoning_mathlib_grounding_1_skill import mathlib_grounding_maximizer_skill as mathlib_grounding_reasoning_skill_1
+from generated.reasoning_compatibility_check_1_skill import mathlib_abstraction_auditor_skill as compatibility_check_reasoning_skill_1
+from generated.reasoning_lean_meaning_1_skill import lean_informalization_extractor_skill as lean_meaning_reasoning_skill_1
+from generated.reasoning_shape_check_1_skill import lean_declaration_shape_consistency_checker_skill as shape_check_reasoning_skill_1
+from generated.reasoning_proof_check_1_skill import lean_informal_proof_internal_consistency_verifier_skill as proof_check_reasoning_skill_1
+from generated.reasoning_source_check_1_skill import lean_informal_consistency_verifier_skill as source_check_reasoning_skill_1
+from generated.reasoning_nonvacuity_check_1_skill import lean_nonvacuity_consistency_checker_skill as nonvacuity_check_reasoning_skill_1
+from generated.reasoning_corpus_check_1_skill import lean_cross_file_concept_consistency_indexer_skill as corpus_check_reasoning_skill_1
+from generated.reasoning_acceptance_status_1_skill import lean_consistency_report_orchestrator_skill as acceptance_status_reasoning_skill_1
+from generated.reasoning_acceptance_status_2_skill import autoformalization_result_realness_verifier_skill as acceptance_status_reasoning_skill_2
+from generated.reasoning_acceptance_status_3_skill import autoformalization_workflow_orchestrator_skill as acceptance_status_reasoning_skill_3
+from generated.reasoning_acceptance_status_4_skill import reference_free_descriptive_evaluator_skill as acceptance_status_reasoning_skill_4
+from generated.reasoning_acceptance_status_5_skill import mathformer_library_docs_generator_skill as acceptance_status_reasoning_skill_5
+
+def mathlib_grounding_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> GroundAPIsCertificate[SourceValue, TargetValue]:
+    return GroundAPIsCertificate(source = source, target = target)
+
+def compatibility_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AssessCompatibilityCertificate[SourceValue, TargetValue]:
+    return AssessCompatibilityCertificate(source = source, target = target)
+
+def lean_meaning_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ModelLeanMeaningCertificate[SourceValue, TargetValue]:
+    return ModelLeanMeaningCertificate(source = source, target = target)
+
+def shape_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestShapeCertificate[SourceValue, TargetValue]:
+    return TestShapeCertificate(source = source, target = target)
+
+def proof_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestProofCertificate[SourceValue, TargetValue]:
+    return TestProofCertificate(source = source, target = target)
+
+def source_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestFidelityCertificate[SourceValue, TargetValue]:
+    return TestFidelityCertificate(source = source, target = target)
+
+def nonvacuity_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestNonvacuityCertificate[SourceValue, TargetValue]:
+    return TestNonvacuityCertificate(source = source, target = target)
+
+def corpus_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestCorpusCertificate[SourceValue, TargetValue]:
+    return TestCorpusCertificate(source = source, target = target)
+
+def acceptance_status_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> CalibrateAcceptanceCertificate[SourceValue, TargetValue]:
+    return CalibrateAcceptanceCertificate(source = source, target = target)
+
+# Generative interpretation PrepareLeanArtifact uses skill context selected from material steps: annotate_line_comment_guard, mathlib_import_minimize.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-line-annotation, mathlib-import-minimizer.
+agent review_artifact_reasoning_agent(
+    task: LeanArtifactAcceptanceRequest,
+) -> Result[Generated[ReviewArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanArtifactAcceptanceRequest] = [review_artifact_reasoning_skill_1, review_artifact_reasoning_skill_2]
+
+# Generative interpretation MaximizeMathlibGrounding uses skill context selected from material steps: mathlib_grounding_maximize.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathlib-grounding-maximizer.
+agent mathlib_grounding_reasoning_agent(
+    task: ReviewArtifact,
+) -> Result[Generated[ArtifactMathlibGrounding], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ReviewArtifact] = [mathlib_grounding_reasoning_skill_1]
+
+# Generative interpretation AuditAbstractionCompatibility uses skill context selected from material steps: audit_compatibility.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathlib-abstraction-auditor.
+agent compatibility_check_reasoning_agent(
+    task: CompatibilityCase,
+) -> Result[Generated[CompatibilityCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[CompatibilityCase] = [compatibility_check_reasoning_skill_1]
+
+# Generative interpretation InformalizeLeanArtifact uses skill context selected from material steps: postformalization_informalize.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-informalization-extractor.
+agent lean_meaning_reasoning_agent(
+    task: ReviewArtifact,
+) -> Result[Generated[LeanMeaning], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ReviewArtifact] = [lean_meaning_reasoning_skill_1]
+
+# Generative interpretation CheckDeclarationShape uses skill context selected from material steps: consistency_declaration_shape.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-declaration-shape-consistency-checker.
+agent shape_check_reasoning_agent(
+    task: ShapeReviewCase,
+) -> Result[Generated[ShapeCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ShapeReviewCase] = [shape_check_reasoning_skill_1]
+
+# Generative interpretation CheckInformalProof uses skill context selected from material steps: postformalization_informal_internal_consistency.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-informal-proof-internal-consistency-verifier.
+agent proof_check_reasoning_agent(
+    task: ProofReviewCase,
+) -> Result[Generated[ProofCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ProofReviewCase] = [proof_check_reasoning_skill_1]
+
+# Generative interpretation CheckSourceFidelity uses skill context selected from material steps: postformalization_informal_consistency.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-informal-consistency-verifier.
+agent source_check_reasoning_agent(
+    task: SourceReviewCase,
+) -> Result[Generated[SourceCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SourceReviewCase] = [source_check_reasoning_skill_1]
+
+# Generative interpretation CheckNonvacuity uses skill context selected from material steps: consistency_nonvacuity.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-nonvacuity-consistency-checker.
+agent nonvacuity_check_reasoning_agent(
+    task: NonvacuityReviewCase,
+) -> Result[Generated[NonvacuityCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[NonvacuityReviewCase] = [nonvacuity_check_reasoning_skill_1]
+
+# Generative interpretation CheckArtifactCorpus uses skill context selected from material steps: consistency_cross_file_concepts.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-cross-file-concept-consistency-indexer.
+agent corpus_check_reasoning_agent(
+    task: ReviewArtifact,
+) -> Result[Generated[CorpusCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ReviewArtifact] = [corpus_check_reasoning_skill_1]
+
+# Generative interpretation IssueAcceptanceDecision uses skill context selected from material steps: consistency_unified_report, artifact_realness_gate, artifact_statistics, evaluation_rfde_report, library_documentation, library_aligned_html_documentation.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-consistency-report-orchestrator, autoformalization-result-realness-verifier, autoformalization-workflow-orchestrator, reference-free-descriptive-evaluator, mathformer-library-docs-generator.
+agent acceptance_status_reasoning_agent(
+    task: ArtifactAcceptanceCase,
+) -> Result[Generated[ArtifactDisposition], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ArtifactAcceptanceCase] = [acceptance_status_reasoning_skill_1, acceptance_status_reasoning_skill_2, acceptance_status_reasoning_skill_3, acceptance_status_reasoning_skill_4, acceptance_status_reasoning_skill_5]
+
+converted_reasoning = ReviewLeanArtifact(
+    review_artifact = review_artifact_reasoning_agent,
+    mathlib_grounding = mathlib_grounding_reasoning_agent,
+    mathlib_grounding_by = mathlib_grounding_reasoning_relation_builder,
+    compatibility_check = compatibility_check_reasoning_agent,
+    compatibility_check_by = compatibility_check_reasoning_relation_builder,
+    lean_meaning = lean_meaning_reasoning_agent,
+    lean_meaning_by = lean_meaning_reasoning_relation_builder,
+    shape_check = shape_check_reasoning_agent,
+    shape_check_by = shape_check_reasoning_relation_builder,
+    proof_check = proof_check_reasoning_agent,
+    proof_check_by = proof_check_reasoning_relation_builder,
+    source_check = source_check_reasoning_agent,
+    source_check_by = source_check_reasoning_relation_builder,
+    nonvacuity_check = nonvacuity_check_reasoning_agent,
+    nonvacuity_check_by = nonvacuity_check_reasoning_relation_builder,
+    corpus_check = corpus_check_reasoning_agent,
+    corpus_check_by = corpus_check_reasoning_relation_builder,
+    acceptance_status = acceptance_status_reasoning_agent,
+    acceptance_status_by = acceptance_status_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `lean-line-annotation`; this does not execute the linked native resource.
+def annotate_line_comment_guard_material_binding(source: LeanArtifactAcceptanceRequest) -> Computed[ArtifactAcceptanceAnnotateLineCommentGuardArtifact]:
+    artifact = ArtifactAcceptanceAnnotateLineCommentGuardArtifact(
+        subject = "typed material binding for annotate_line_comment_guard",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation annotate_line_comment_guard",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: annotate_line_comment_guard")
+
+# Material binding descriptor for `mathlib-import-minimizer`; this does not execute the linked native resource.
+def mathlib_import_minimize_material_binding(source: ArtifactAcceptanceAnnotateLineCommentGuardArtifact) -> Computed[ArtifactAcceptanceMathlibImportMinimizeArtifact]:
+    artifact = ArtifactAcceptanceMathlibImportMinimizeArtifact(
+        subject = "typed material binding for mathlib_import_minimize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_import_minimize",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_import_minimize")
+
+# Material binding descriptor for `mathlib-grounding-maximizer`; this does not execute the linked native resource.
+def mathlib_grounding_maximize_material_binding(source: ArtifactAcceptanceMathlibImportMinimizeArtifact) -> Computed[ArtifactAcceptanceMathlibGroundingMaximizeArtifact]:
+    artifact = ArtifactAcceptanceMathlibGroundingMaximizeArtifact(
+        subject = "typed material binding for mathlib_grounding_maximize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_grounding_maximize")
+
+# Material binding descriptor for `mathlib-abstraction-auditor`; this does not execute the linked native resource.
+def audit_compatibility_material_binding(source: ArtifactAcceptanceMathlibGroundingMaximizeArtifact) -> Computed[ArtifactAcceptanceAuditCompatibilityArtifact]:
+    artifact = ArtifactAcceptanceAuditCompatibilityArtifact(
+        subject = "typed material binding for audit_compatibility",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: audit_compatibility")
+
+# Material binding descriptor for `lean-informalization-extractor`; this does not execute the linked native resource.
+def postformalization_informalize_material_binding(source: ArtifactAcceptanceAuditCompatibilityArtifact) -> Computed[ArtifactAcceptancePostformalizationInformalizeArtifact]:
+    artifact = ArtifactAcceptancePostformalizationInformalizeArtifact(
+        subject = "typed material binding for postformalization_informalize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: postformalization_informalize")
+
+# Material binding descriptor for `lean-declaration-shape-consistency-checker`; this does not execute the linked native resource.
+def consistency_declaration_shape_material_binding(source: ArtifactAcceptancePostformalizationInformalizeArtifact) -> Computed[ArtifactAcceptanceConsistencyDeclarationShapeArtifact]:
+    artifact = ArtifactAcceptanceConsistencyDeclarationShapeArtifact(
+        subject = "typed material binding for consistency_declaration_shape",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_declaration_shape")
+
+# Material binding descriptor for `lean-informal-proof-internal-consistency-verifier`; this does not execute the linked native resource.
+def postformalization_informal_internal_consistency_material_binding(source: ArtifactAcceptanceConsistencyDeclarationShapeArtifact) -> Computed[ArtifactAcceptancePostformalizationInformalInternalConsistencyArtifact]:
+    artifact = ArtifactAcceptancePostformalizationInformalInternalConsistencyArtifact(
+        subject = "typed material binding for postformalization_informal_internal_consistency",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: postformalization_informal_internal_consistency")
+
+# Material binding descriptor for `lean-informal-consistency-verifier`; this does not execute the linked native resource.
+def postformalization_informal_consistency_material_binding(source: ArtifactAcceptancePostformalizationInformalInternalConsistencyArtifact) -> Computed[ArtifactAcceptancePostformalizationInformalConsistencyArtifact]:
+    artifact = ArtifactAcceptancePostformalizationInformalConsistencyArtifact(
+        subject = "typed material binding for postformalization_informal_consistency",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: postformalization_informal_consistency")
+
+# Material binding descriptor for `lean-nonvacuity-consistency-checker`; this does not execute the linked native resource.
+def consistency_nonvacuity_material_binding(source: ArtifactAcceptancePostformalizationInformalConsistencyArtifact) -> Computed[ArtifactAcceptanceConsistencyNonvacuityArtifact]:
+    artifact = ArtifactAcceptanceConsistencyNonvacuityArtifact(
+        subject = "typed material binding for consistency_nonvacuity",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_nonvacuity")
+
+# Material binding descriptor for `lean-cross-file-concept-consistency-indexer`; this does not execute the linked native resource.
+def consistency_cross_file_concepts_material_binding(source: ArtifactAcceptanceConsistencyNonvacuityArtifact) -> Computed[ArtifactAcceptanceConsistencyCrossFileConceptsArtifact]:
+    artifact = ArtifactAcceptanceConsistencyCrossFileConceptsArtifact(
+        subject = "typed material binding for consistency_cross_file_concepts",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_cross_file_concepts")
+
+# Material binding descriptor for `lean-consistency-report-orchestrator`; this does not execute the linked native resource.
+def consistency_unified_report_material_binding(source: ArtifactAcceptanceConsistencyCrossFileConceptsArtifact) -> Computed[ArtifactAcceptanceConsistencyUnifiedReportArtifact]:
+    artifact = ArtifactAcceptanceConsistencyUnifiedReportArtifact(
+        subject = "typed material binding for consistency_unified_report",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_unified_report")
+
+# Material binding descriptor for `autoformalization-result-realness-verifier`; this does not execute the linked native resource.
+def artifact_realness_gate_material_binding(source: ArtifactAcceptanceConsistencyUnifiedReportArtifact) -> Computed[ArtifactAcceptanceArtifactRealnessGateArtifact]:
+    artifact = ArtifactAcceptanceArtifactRealnessGateArtifact(
+        subject = "typed material binding for artifact_realness_gate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        considered_dispositions = ["pass", "warn", "fail", "blocked"],
+        selected_disposition = "not_tested",
+        rationale = "native execution is outside this structural PRISM fixture",
+    )
+    return compute(artifact, procedure = "linked material binding: artifact_realness_gate")
+
+# Material binding descriptor for `autoformalization-workflow-orchestrator`; this does not execute the linked native resource.
+def artifact_statistics_material_binding(source: ArtifactAcceptanceArtifactRealnessGateArtifact) -> Computed[ArtifactAcceptanceArtifactStatisticsArtifact]:
+    artifact = ArtifactAcceptanceArtifactStatisticsArtifact(
+        subject = "typed material binding for artifact_statistics",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation artifact_statistics",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: artifact_statistics")
+
+# Material binding descriptor for `reference-free-descriptive-evaluator`; this does not execute the linked native resource.
+def evaluation_rfde_report_material_binding(source: ArtifactAcceptanceArtifactStatisticsArtifact) -> Computed[ArtifactAcceptanceEvaluationRfdeReportArtifact]:
+    artifact = ArtifactAcceptanceEvaluationRfdeReportArtifact(
+        subject = "typed material binding for evaluation_rfde_report",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation evaluation_rfde_report",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: evaluation_rfde_report")
+
+# Material binding descriptor for `mathformer-library-docs-generator`; this does not execute the linked native resource.
+def library_documentation_material_binding(source: ArtifactAcceptanceEvaluationRfdeReportArtifact) -> Computed[ArtifactAcceptanceLibraryDocumentationArtifact]:
+    artifact = ArtifactAcceptanceLibraryDocumentationArtifact(
+        subject = "typed material binding for library_documentation",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation library_documentation",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_documentation")
+
+# Material binding descriptor for `mathformer-library-docs-generator`; this does not execute the linked native resource.
+def library_aligned_html_documentation_material_binding(source: ArtifactAcceptanceLibraryDocumentationArtifact) -> Computed[LeanArtifactAcceptanceDecision]:
+    artifact = LeanArtifactAcceptanceDecision(
+        subject = "typed material binding for library_aligned_html_documentation",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation library_aligned_html_documentation",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: library_aligned_html_documentation")
+
+# post-generation import minimization, compatibility audit, reverse informalization consistency, declaration-shape/non-vacuity/cross-file consistency, line-comment guard, realness gate, unified consistency report, and statistics.
+workflow ArtifactAcceptanceLoop(
+    workflow_source: LeanArtifactAcceptanceRequest,
+) -> Computed[LeanArtifactAcceptanceDecision]:
+    sequence:
+        [annotate_line_comment_guard: annotate_line_comment_guard_material_binding(workflow_source)]
+        [mathlib_import_minimize: mathlib_import_minimize_material_binding(annotate_line_comment_guard.value)]
+        [mathlib_grounding_maximize: mathlib_grounding_maximize_material_binding(mathlib_import_minimize.value)]
+        [audit_compatibility: audit_compatibility_material_binding(mathlib_grounding_maximize.value)]
+        [postformalization_informalize: postformalization_informalize_material_binding(audit_compatibility.value)]
+        [consistency_declaration_shape: consistency_declaration_shape_material_binding(postformalization_informalize.value)]
+        [postformalization_informal_internal_consistency: postformalization_informal_internal_consistency_material_binding(consistency_declaration_shape.value)]
+        [postformalization_informal_consistency: postformalization_informal_consistency_material_binding(postformalization_informal_internal_consistency.value)]
+        [consistency_nonvacuity: consistency_nonvacuity_material_binding(postformalization_informal_consistency.value)]
+        [consistency_cross_file_concepts: consistency_cross_file_concepts_material_binding(consistency_nonvacuity.value)]
+        [consistency_unified_report: consistency_unified_report_material_binding(consistency_cross_file_concepts.value)]
+        [artifact_realness_gate: artifact_realness_gate_material_binding(consistency_unified_report.value)]
+        [artifact_statistics: artifact_statistics_material_binding(artifact_realness_gate.value)]
+        [evaluation_rfde_report: evaluation_rfde_report_material_binding(artifact_statistics.value)]
+        [library_documentation: library_documentation_material_binding(evaluation_rfde_report.value)]
+        [library_aligned_html_documentation: library_aligned_html_documentation_material_binding(library_documentation.value)]
+    return library_aligned_html_documentation

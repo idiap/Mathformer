@@ -1,0 +1,966 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+# File Documentation
+#
+# Motivation:
+#   Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+#
+# Intent:
+#   Tell coding agents what context to load, what invariants to preserve, and how to validate their work.
+#
+# Function:
+#   Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Generate a 500-entry famous theorem/axiom corpus for backends.premise_kb.MathformerKB."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import re
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from backends.premise_kb.MathformerKB.canonicalize import (
+    canonical_hash,
+    populate_canonical_fields,
+)
+from backends.premise_kb.MathformerKB.ingest import (
+    now,
+)
+from backends.premise_kb.MathformerKB.schema import (
+    KBEntry,
+    ProvenanceRecord,
+)
+
+DOMAIN_CATALOG: dict[str, dict[str, object]] = {
+    "algebra": {
+        "tags": ["algebra"],
+        "label": "algebra",
+        "names": [
+            "Cayley's theorem",
+            "Lagrange's theorem",
+            "First Sylow theorem",
+            "Second Sylow theorem",
+            "Third Sylow theorem",
+            "Cauchy's group theorem",
+            "Jordan-Hölder theorem",
+            "Noether isomorphism theorem",
+            "Chinese remainder theorem",
+            "Hilbert basis theorem",
+            "Wedderburn little theorem",
+            "Artin-Wedderburn theorem",
+            "Maschke's theorem",
+            "Krull-Schmidt theorem",
+            "Nakayama lemma",
+            "Hilbert Nullstellensatz",
+            "Buchberger criterion",
+            "Gauss lemma",
+            "Eisenstein criterion",
+            "Structure theorem for finite abelian groups",
+        ],
+    },
+    "number_theory": {
+        "tags": ["number_theory", "arithmetic"],
+        "label": "number theory",
+        "names": [
+            "Euclid's theorem on infinitely many primes",
+            "Fundamental theorem of arithmetic",
+            "Fermat's little theorem",
+            "Euler's theorem",
+            "Wilson's theorem",
+            "Chinese remainder theorem for integers",
+            "Quadratic reciprocity",
+            "Dirichlet theorem on arithmetic progressions",
+            "Prime number theorem",
+            "Green-Tao theorem",
+            "Fermat's last theorem",
+            "Mordell theorem",
+            "Faltings theorem",
+            "Chebotarev density theorem",
+            "Hasse-Minkowski theorem",
+            "Hensel's lemma",
+            "Thue-Siegel-Roth theorem",
+            "Linnik's theorem",
+            "Vinogradov's theorem",
+            "Baker's theorem on linear forms in logarithms",
+        ],
+    },
+    "real_functional_analysis": {
+        "tags": ["analysis", "functional_analysis"],
+        "label": "real and functional analysis",
+        "names": [
+            "Bolzano-Weierstrass theorem",
+            "Intermediate value theorem",
+            "Extreme value theorem",
+            "Mean value theorem",
+            "Rolle's theorem",
+            "Fundamental theorem of calculus",
+            "Taylor's theorem",
+            "Heine-Borel theorem",
+            "Baire category theorem",
+            "Banach fixed-point theorem",
+            "Arzelà-Ascoli theorem",
+            "Dini's theorem",
+            "Stone-Weierstrass theorem",
+            "Riesz representation theorem",
+            "Hahn-Banach theorem",
+            "Uniform boundedness principle",
+            "Open mapping theorem",
+            "Closed graph theorem",
+            "Dominated convergence theorem",
+            "Monotone convergence theorem",
+        ],
+    },
+    "complex_analysis": {
+        "tags": ["analysis", "complex_analysis"],
+        "label": "complex analysis",
+        "names": [
+            "Cauchy integral theorem",
+            "Cauchy integral formula",
+            "Liouville's theorem",
+            "Fundamental theorem of algebra",
+            "Morera's theorem",
+            "Identity theorem",
+            "Maximum modulus principle",
+            "Residue theorem",
+            "Rouché's theorem",
+            "Argument principle",
+            "Schwarz lemma",
+            "Open mapping theorem for holomorphic functions",
+            "Little Picard theorem",
+            "Great Picard theorem",
+            "Mittag-Leffler theorem",
+            "Weierstrass factorization theorem",
+            "Runge's theorem",
+            "Riemann mapping theorem",
+            "Casorati-Weierstrass theorem",
+            "Phragmén-Lindelöf principle",
+        ],
+    },
+    "topology": {
+        "tags": ["topology"],
+        "label": "topology",
+        "names": [
+            "Urysohn lemma",
+            "Tietze extension theorem",
+            "Tychonoff theorem",
+            "Brouwer fixed-point theorem",
+            "Borsuk-Ulam theorem",
+            "Seifert-van Kampen theorem",
+            "Jordan curve theorem",
+            "Classification theorem for compact surfaces",
+            "Invariance of domain theorem",
+            "Stone-Čech compactification theorem",
+            "Alexander duality",
+            "Mayer-Vietoris sequence",
+            "Excision theorem",
+            "Hurewicz theorem",
+            "Whitehead theorem",
+            "Sard's theorem",
+            "Lefschetz fixed-point theorem",
+            "Poincaré duality",
+            "Universal coefficient theorem",
+            "Künneth theorem",
+        ],
+    },
+    "geometry": {
+        "tags": ["geometry"],
+        "label": "geometry",
+        "names": [
+            "Pythagorean theorem",
+            "Thales' theorem",
+            "Euclid's parallel postulate",
+            "Ceva's theorem",
+            "Menelaus' theorem",
+            "Desargues' theorem",
+            "Pappus's hexagon theorem",
+            "Pascal's theorem",
+            "Brianchon's theorem",
+            "Euler line theorem",
+            "Nine-point circle theorem",
+            "Morley's trisector theorem",
+            "Gauss-Bonnet theorem",
+            "Hopf-Rinow theorem",
+            "Nash embedding theorem",
+            "Bonnet-Myers theorem",
+            "Cartan-Hadamard theorem",
+            "Bishop-Gromov comparison theorem",
+            "Rauch comparison theorem",
+            "Uniformization theorem",
+        ],
+    },
+    "combinatorics_graphs": {
+        "tags": ["combinatorics", "graph_theory"],
+        "label": "combinatorics and graph theory",
+        "names": [
+            "Ramsey's theorem",
+            "Turán's theorem",
+            "Hall's marriage theorem",
+            "Kőnig's theorem",
+            "Menger's theorem",
+            "Euler polyhedron formula",
+            "Kuratowski's theorem",
+            "Four color theorem",
+            "Brooks' theorem",
+            "Dirac's theorem",
+            "Ore's theorem",
+            "Erdős-Ko-Rado theorem",
+            "Sperner's theorem",
+            "Dilworth's theorem",
+            "Mirsky's theorem",
+            "Pólya enumeration theorem",
+            "Burnside lemma",
+            "Principle of inclusion and exclusion",
+            "Lovász local lemma",
+            "Szemerédi regularity lemma",
+        ],
+    },
+    "probability_statistics": {
+        "tags": ["probability", "statistics"],
+        "label": "probability and statistics",
+        "names": [
+            "Weak law of large numbers",
+            "Strong law of large numbers",
+            "Central limit theorem",
+            "Bayes' theorem",
+            "Markov's inequality",
+            "Chebyshev's inequality",
+            "Jensen's inequality",
+            "Hoeffding's inequality",
+            "Azuma-Hoeffding inequality",
+            "Chernoff bound",
+            "Borel-Cantelli lemma",
+            "Kolmogorov zero-one law",
+            "Doob optional stopping theorem",
+            "Martingale convergence theorem",
+            "Glivenko-Cantelli theorem",
+            "Donsker's theorem",
+            "Cramér's theorem",
+            "Slutsky's theorem",
+            "Fisher-Neyman factorization theorem",
+            "Cramér-Rao bound",
+        ],
+    },
+    "logic_set_theory": {
+        "tags": ["logic", "set_theory", "foundations"],
+        "label": "logic and set theory",
+        "names": [
+            "Axiom of extensionality",
+            "Axiom of foundation",
+            "Axiom of pairing",
+            "Axiom of union",
+            "Axiom of power set",
+            "Axiom of infinity",
+            "Axiom schema of separation",
+            "Axiom schema of replacement",
+            "Axiom of choice",
+            "Peano induction axiom",
+            "Gödel completeness theorem",
+            "Compactness theorem",
+            "Löwenheim-Skolem theorem",
+            "First incompleteness theorem",
+            "Second incompleteness theorem",
+            "Tarski undefinability theorem",
+            "Cantor's theorem",
+            "Schroeder-Bernstein theorem",
+            "Zorn's lemma",
+            "Well-ordering theorem",
+        ],
+    },
+    "linear_algebra": {
+        "tags": ["linear_algebra", "matrix_theory"],
+        "label": "linear algebra",
+        "names": [
+            "Rank-nullity theorem",
+            "Spectral theorem",
+            "Cayley-Hamilton theorem",
+            "Jordan canonical form theorem",
+            "Singular value decomposition theorem",
+            "Schur decomposition theorem",
+            "Perron-Frobenius theorem",
+            "Gershgorin circle theorem",
+            "Sylvester's law of inertia",
+            "Cauchy interlacing theorem",
+            "Multiplicativity of determinants",
+            "Cramer's rule",
+            "Gram-Schmidt process",
+            "QR decomposition theorem",
+            "Polar decomposition theorem",
+            "Matrix determinant lemma",
+            "Woodbury matrix identity",
+            "Binet-Cauchy formula",
+            "Frobenius normal form theorem",
+            "Courant-Fischer min-max theorem",
+        ],
+    },
+    "ode_dynamics": {
+        "tags": ["differential_equations", "dynamical_systems"],
+        "label": "ordinary differential equations and dynamical systems",
+        "names": [
+            "Picard-Lindelöf theorem",
+            "Peano existence theorem",
+            "Gronwall's inequality",
+            "Sturm comparison theorem",
+            "Sturm-Liouville theorem",
+            "Poincaré-Bendixson theorem",
+            "Hartman-Grobman theorem",
+            "Stable manifold theorem",
+            "Liouville theorem for Hamiltonian systems",
+            "Noether's theorem",
+            "Lyapunov stability theorem",
+            "Floquet theorem",
+            "Cauchy-Kowalevski theorem",
+            "Lax-Milgram theorem",
+            "Maximum principle",
+            "Harnack inequality",
+            "Fredholm alternative",
+            "Schauder fixed-point theorem",
+            "Leray-Schauder theorem",
+            "Kolmogorov-Arnold-Moser theorem",
+        ],
+    },
+    "category_homological": {
+        "tags": ["category_theory", "homological_algebra"],
+        "label": "category theory and homological algebra",
+        "names": [
+            "Yoneda lemma",
+            "Adjoint functor theorem",
+            "Freyd adjoint functor theorem",
+            "Barr-Beck theorem",
+            "Eilenberg-Zilber theorem",
+            "Mac Lane coherence theorem",
+            "Kan extension theorem",
+            "Gabriel-Ulmer duality",
+            "Mitchell embedding theorem",
+            "Brown representability theorem",
+            "Giraud's theorem",
+            "Grothendieck existence theorem",
+            "Beck monadicity theorem",
+            "Tannaka duality",
+            "Eilenberg-Watts theorem",
+            "Freyd-Mitchell embedding theorem",
+            "Gabriel-Popescu theorem",
+            "Dold-Kan correspondence",
+            "Snake lemma",
+            "Five lemma",
+        ],
+    },
+    "algebraic_geometry": {
+        "tags": ["algebraic_geometry", "commutative_algebra"],
+        "label": "algebraic geometry and commutative algebra",
+        "names": [
+            "Hilbert Nullstellensatz",
+            "Hilbert syzygy theorem",
+            "Dimension theorem",
+            "Generic freeness lemma",
+            "Zariski's main theorem",
+            "Chevalley constructibility theorem",
+            "Valuative criterion for properness",
+            "Serre duality",
+            "Riemann-Roch theorem",
+            "Riemann-Hurwitz formula",
+            "Bertini theorem",
+            "Bézout's theorem",
+            "Chow's theorem",
+            "Grothendieck-Riemann-Roch theorem",
+            "Hodge index theorem",
+            "Kodaira vanishing theorem",
+            "Serre vanishing theorem",
+            "Noether normalization lemma",
+            "Krull principal ideal theorem",
+            "Artin approximation theorem",
+        ],
+    },
+    "differential_geometry": {
+        "tags": ["differential_geometry", "manifolds"],
+        "label": "differential geometry",
+        "names": [
+            "Frobenius theorem",
+            "de Rham theorem",
+            "Stokes' theorem",
+            "Poincaré lemma",
+            "Hodge theorem",
+            "Atiyah-Singer index theorem",
+            "Cartan theorem A",
+            "Cartan theorem B",
+            "Ambrose-Singer theorem",
+            "Lie's third theorem",
+            "Cartan closed subgroup theorem",
+            "Exponential map theorem",
+            "Myers-Steenrod theorem",
+            "Mostow rigidity theorem",
+            "Chern-Weil theorem",
+            "Gauss lemma",
+            "Riemannian center of mass theorem",
+            "Bonnet theorem",
+            "Cartan-Ambrose-Hicks theorem",
+            "Ricci flow short-time existence theorem",
+        ],
+    },
+    "order_lattice": {
+        "tags": ["order_theory", "lattice_theory"],
+        "label": "order and lattice theory",
+        "names": [
+            "Knaster-Tarski theorem",
+            "Zorn's lemma",
+            "Hausdorff maximal principle",
+            "Well-ordering theorem",
+            "Dilworth's theorem",
+            "Birkhoff representation theorem",
+            "Stone representation theorem",
+            "Boolean prime ideal theorem",
+            "Tarski-Seidenberg theorem",
+            "Szpilrajn extension theorem",
+            "Cantor-Bendixson theorem",
+            "De Morgan laws",
+            "Distributive lattice axioms",
+            "Modular law",
+            "Zermelo well-ordering theorem",
+            "Fixed-point induction theorem",
+            "Scott continuity theorem",
+            "Kleene fixed-point theorem",
+            "MacNeille completion theorem",
+            "Galois connection theorem",
+        ],
+    },
+    "theoretical_computer_science": {
+        "tags": ["computer_science", "logic", "complexity_theory"],
+        "label": "theoretical computer science",
+        "names": [
+            "Cook-Levin theorem",
+            "Rice's theorem",
+            "Halting problem undecidability theorem",
+            "Church-Turing thesis",
+            "Myhill-Nerode theorem",
+            "Pumping lemma for regular languages",
+            "Pumping lemma for context-free languages",
+            "Kleene's theorem",
+            "Savitch's theorem",
+            "Immerman-Szelepcsényi theorem",
+            "Post correspondence problem undecidability theorem",
+            "Curry-Howard correspondence",
+            "CAP theorem",
+            "No-free-lunch theorem",
+            "Shannon source coding theorem",
+            "Huffman coding optimality theorem",
+            "RSA correctness theorem",
+            "AKS primality theorem",
+            "PCP theorem",
+            "Robertson-Seymour theorem",
+        ],
+    },
+    "information_coding": {
+        "tags": ["information_theory", "coding_theory"],
+        "label": "information and coding theory",
+        "names": [
+            "Shannon channel coding theorem",
+            "Shannon source coding theorem",
+            "Kraft-McMillan theorem",
+            "Hamming bound",
+            "Singleton bound",
+            "Gilbert-Varshamov bound",
+            "MacWilliams identities",
+            "Noisy-channel coding theorem",
+            "Data processing inequality",
+            "Fano's inequality",
+            "Asymptotic equipartition property",
+            "Slepian-Wolf theorem",
+            "Rate-distortion theorem",
+            "Polar coding theorem",
+            "Reed-Solomon decoding theorem",
+            "BCH bound",
+            "Plotkin bound",
+            "Sphere-packing bound",
+            "Elias bound",
+            "Kraft inequality",
+        ],
+    },
+    "optimization_convexity": {
+        "tags": ["optimization", "convex_geometry"],
+        "label": "optimization and convexity",
+        "names": [
+            "Karush-Kuhn-Tucker theorem",
+            "Linear programming strong duality theorem",
+            "Farkas lemma",
+            "Separating hyperplane theorem",
+            "Supporting hyperplane theorem",
+            "Fenchel duality theorem",
+            "Slater condition",
+            "Carathéodory theorem for convex hulls",
+            "Helly's theorem",
+            "Radon's theorem",
+            "Minkowski separation theorem",
+            "Krein-Milman theorem",
+            "Kakutani fixed-point theorem",
+            "Nash equilibrium theorem",
+            "Von Neumann minimax theorem",
+            "Sion minimax theorem",
+            "Danskin's theorem",
+            "Envelope theorem",
+            "Bellman optimality principle",
+            "Convex conjugate biconjugation theorem",
+        ],
+    },
+    "measure_ergodic": {
+        "tags": ["measure_theory", "ergodic_theory"],
+        "label": "measure and ergodic theory",
+        "names": [
+            "Carathéodory extension theorem",
+            "Radon-Nikodym theorem",
+            "Fubini's theorem",
+            "Tonelli's theorem",
+            "Lebesgue differentiation theorem",
+            "Egorov's theorem",
+            "Lusin's theorem",
+            "Riesz-Markov-Kakutani representation theorem",
+            "Birkhoff ergodic theorem",
+            "Poincaré recurrence theorem",
+            "Kingman subadditive ergodic theorem",
+            "Kolmogorov extension theorem",
+            "Prokhorov's theorem",
+            "Portmanteau theorem",
+            "Daniell-Stone theorem",
+            "Hahn decomposition theorem",
+            "Jordan decomposition theorem",
+            "Vitali covering theorem",
+            "Martingale convergence theorem",
+            "Ergodic decomposition theorem",
+        ],
+    },
+    "mathematical_physics": {
+        "tags": ["mathematical_physics"],
+        "label": "mathematical physics",
+        "names": [
+            "Noether's theorem",
+            "Hamilton-Jacobi theorem",
+            "Liouville's theorem in classical mechanics",
+            "Virial theorem",
+            "Maxwell equations",
+            "Euler-Lagrange equations",
+            "d'Alembert principle",
+            "Green's theorem",
+            "Stokes' theorem",
+            "Divergence theorem",
+            "Helmholtz decomposition theorem",
+            "Boltzmann H-theorem",
+            "Bell's theorem",
+            "Kochen-Specker theorem",
+            "Wigner's theorem",
+            "Stone's theorem on one-parameter unitary groups",
+            "Spectral theorem for quantum observables",
+            "Ehrenfest theorem",
+            "Born rule",
+            "Path integral principle",
+        ],
+    },
+    "axiomatic_systems": {
+        "tags": ["axioms", "foundations"],
+        "label": "axiomatic systems",
+        "names": [
+            "Euclidean geometry axioms",
+            "Hilbert geometry axioms",
+            "Kolmogorov probability axioms",
+            "Zermelo-Fraenkel set theory axioms",
+            "Peano axioms",
+            "Dedekind completeness axiom",
+            "Archimedean axiom",
+            "Field axioms",
+            "Group axioms",
+            "Ring axioms",
+            "Order axioms",
+            "Vector space axioms",
+            "Metric space axioms",
+            "Topological space axioms",
+            "Sigma-algebra axioms",
+            "Category axioms",
+            "Lattice axioms",
+            "Boolean algebra axioms",
+            "Linear order trichotomy axiom",
+            "Axiom of determinacy",
+        ],
+    },
+    "harmonic_analysis": {
+        "tags": ["harmonic_analysis", "functional_analysis"],
+        "label": "harmonic analysis",
+        "names": [
+            "Plancherel theorem",
+            "Fourier inversion theorem",
+            "Riemann-Lebesgue lemma",
+            "Hausdorff-Young inequality",
+            "Parseval's theorem",
+            "Fejér's theorem",
+            "Carleson's theorem",
+            "Hardy-Littlewood maximal theorem",
+            "Young's convolution inequality",
+            "Paley-Wiener theorem",
+            "Bochner's theorem",
+            "Peter-Weyl theorem",
+            "Stone-von Neumann theorem",
+            "Banach-Alaoglu theorem",
+            "Krein-Milman theorem",
+            "Riesz-Thorin interpolation theorem",
+            "Marcinkiewicz interpolation theorem",
+            "Littlewood-Paley theorem",
+            "Titchmarsh convolution theorem",
+            "Wiener Tauberian theorem",
+        ],
+    },
+    "partial_differential_equations": {
+        "tags": ["partial_differential_equations", "analysis"],
+        "label": "partial differential equations",
+        "names": [
+            "Cauchy-Kowalevski theorem",
+            "Lax-Milgram theorem",
+            "Schauder estimates",
+            "Calderón-Zygmund estimates",
+            "De Giorgi-Nash-Moser theorem",
+            "Harnack inequality",
+            "Elliptic maximum principle",
+            "Parabolic maximum principle",
+            "Sobolev embedding theorem",
+            "Rellich-Kondrachov theorem",
+            "Poincaré inequality",
+            "Trace theorem",
+            "Fredholm alternative",
+            "Lax equivalence theorem",
+            "Lax-Wendroff theorem",
+            "Wave equation well-posedness theorem",
+            "Heat kernel theorem",
+            "Navier-Stokes local existence theorem",
+            "Holmgren uniqueness theorem",
+            "Energy method theorem",
+        ],
+    },
+    "representation_theory": {
+        "tags": ["representation_theory", "algebra"],
+        "label": "representation theory",
+        "names": [
+            "Schur's lemma",
+            "Maschke's theorem",
+            "Peter-Weyl theorem",
+            "Weyl character formula",
+            "Highest weight theorem",
+            "Weyl complete reducibility theorem",
+            "Burnside theorem",
+            "Frobenius reciprocity",
+            "Mackey irreducibility criterion",
+            "Borel-Weil-Bott theorem",
+            "Harish-Chandra isomorphism",
+            "Artin-Wedderburn theorem",
+            "Tannaka-Krein duality",
+            "Brauer character theorem",
+            "Chevalley restriction theorem",
+            "Jacobson density theorem",
+            "Gelfand-Naimark-Segal construction",
+            "Stone-von Neumann theorem",
+            "Kazhdan-Lusztig theorem",
+            "Langlands classification theorem",
+        ],
+    },
+    "statistics_machine_learning": {
+        "tags": ["statistics", "machine_learning"],
+        "label": "statistics and machine learning",
+        "names": [
+            "Gauss-Markov theorem",
+            "Neyman-Pearson lemma",
+            "Cramér-Rao bound",
+            "Rao-Blackwell theorem",
+            "Lehmann-Scheffé theorem",
+            "Fisher-Neyman factorization theorem",
+            "Wilks' theorem",
+            "Bernstein-von Mises theorem",
+            "Delta method",
+            "Continuous mapping theorem",
+            "Slutsky's theorem",
+            "Glivenko-Cantelli theorem",
+            "Vapnik-Chervonenkis theorem",
+            "Representer theorem",
+            "Universal approximation theorem",
+            "No-free-lunch theorem",
+            "PAC-Bayes theorem",
+            "Hoeffding's inequality",
+            "Bias-variance decomposition",
+            "Backpropagation chain rule",
+        ],
+    },
+}
+
+
+AXIOM_MARKERS = {
+    "axiom",
+    "axioms",
+    "postulate",
+    "principle",
+    "law",
+    "rule",
+    "equations",
+    "thesis",
+}
+
+
+def parse_seed(argv: list[str]) -> dict:
+    """Parse native CLI arguments and initialize the traversal."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("artifacts/kb/famous_theorems_axioms_500.jsonl"),
+    )
+    parser.add_argument("--limit", type=int, default=500)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+
+    return {
+        "options": {"output": str(args.output), "limit": args.limit, "json": args.json},
+        "state": {"domain_index": 0, "name_index": 0, "entries": [], "names": []},
+    }
+
+
+def open_domain(state: dict) -> dict:
+    """Materialize and validate the current domain before appending names."""
+    domain_id, payload = list(DOMAIN_CATALOG.items())[state["domain_index"]]
+    names = list(payload["names"])
+    if len(names) != 20:
+        raise ValueError(
+            f"Domain {domain_id!r} must have exactly 20 names; got {len(names)}."
+        )
+    return {**state, "names": names, "name_index": 0}
+
+
+def append_entry(state: dict) -> dict:
+    """Append one native entry, retaining all carried state."""
+    domain_id, payload = list(DOMAIN_CATALOG.items())[state["domain_index"]]
+    entry = make_entry(domain_id, payload, str(state["names"][state["name_index"]]))
+    state = {
+        **state,
+        "entries": [*state["entries"], entry],
+        "name_index": state["name_index"] + 1,
+    }
+    return {"state": state, "done": state["name_index"] == len(state["names"])}
+
+
+def advance_domain(state: dict) -> dict:
+    """Advance the outer iterator after exhausting the current names."""
+    state = {
+        **state,
+        "domain_index": state["domain_index"] + 1,
+        "name_index": 0,
+        "names": [],
+    }
+    return {"state": state, "done": state["domain_index"] == len(DOMAIN_CATALOG)}
+
+
+def check_slice(state: dict, options: dict) -> list[KBEntry]:
+    entries, limit = state["entries"], options["limit"]
+    if len(entries) < limit:
+        raise ValueError(f"Catalog has only {len(entries)} entries; requested {limit}.")
+    return entries[:limit]
+
+
+def write_report(entries: list[KBEntry], options: dict) -> dict:
+    """Overwrite JSONL and emit the native metadata, including exit code 3."""
+    output = (
+        Path(options["output"])
+        if Path(options["output"]).is_absolute()
+        else REPO_ROOT / Path(options["output"])
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        "".join(
+            json.dumps(entry.to_dict(), ensure_ascii=False, sort_keys=True) + "\n"
+            for entry in entries
+        ),
+        encoding="utf-8",
+    )
+    payload = {
+        "ok": True,
+        "output": str(output),
+        "entry_count": len(entries),
+        "expected_count": options["limit"],
+        "domain_count": len(DOMAIN_CATALOG),
+        "entry_ids": [entry.id for entry in entries],
+    }
+    if options["json"]:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"ok: {payload['ok']}")
+        print(f"output: {payload['output']}")
+        print(f"entry_count: {payload['entry_count']}")
+    return {
+        "result": payload,
+        "exit_code": 0 if len(entries) == options["limit"] else 3,
+    }
+
+
+def main() -> int:
+    parsed = parse_seed(sys.argv[1:])
+    entries = build_entries(limit=parsed["options"]["limit"])
+    return write_report(entries, parsed["options"])["exit_code"]
+
+
+def build_entries(*, limit: int) -> list[KBEntry]:
+    state = {"domain_index": 0, "name_index": 0, "entries": [], "names": []}
+    while state["domain_index"] < len(DOMAIN_CATALOG):
+        state = open_domain(state)
+        while True:
+            result = append_entry(state)
+            state = result["state"]
+            if result["done"]:
+                break
+        result = advance_domain(state)
+        state = result["state"]
+        if result["done"]:
+            break
+    return check_slice(state, {"limit": limit})
+
+
+def make_entry(domain_id: str, domain_payload: dict[str, object], name: str) -> KBEntry:
+    """Document the responsibility of ``make_entry``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Build the local data structure or artifact used by the next workflow stage.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    kind = infer_kind(name)
+    label = str(domain_payload["label"])
+    tags = list(domain_payload["tags"])  # type: ignore[arg-type]
+    statement = (
+        f"{name} is a famous {kind} in {label}. "
+        "This generated candidate records the named result for premise retrieval and later source-backed curation."
+    )
+    provenance = ProvenanceRecord(
+        kind="generated",
+        source="premise-kb-theorem-seed-generator famous theorem/axiom corpus",
+        retrieved_at=now(),
+        confidence="low",
+        notes="name_level_famous_corpus; requires source-backed curation before trusted use",
+    )
+    entry = KBEntry(
+        id=f"famous.{domain_id}.{slugify(name)}",
+        status="generated_candidate",
+        domain_tags=tags,
+        informal_statement=statement,
+        latex_statement=f"{name} ({label})",
+        formal_statements=[],
+        symbols=extract_name_symbols(name),
+        theorem_shape=["atomic"],
+        provenance=[provenance],
+        canonical_hashes={"name": canonical_hash(name, surface="name")},
+        notes=f"famous_corpus_kind={kind}; name_level_seed=true",
+    )
+    return populate_canonical_fields(entry)
+
+
+def infer_kind(name: str) -> str:
+    """Document the responsibility of ``infer_kind``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``infer_kind`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    lowered = name.lower()
+    if any(marker in lowered for marker in AXIOM_MARKERS):
+        return "axiom"
+    if "lemma" in lowered:
+        return "lemma"
+    if (
+        "inequality" in lowered
+        or "bound" in lowered
+        or "formula" in lowered
+        or "identity" in lowered
+    ):
+        return "theorem"
+    return "theorem"
+
+
+def slugify(name: str) -> str:
+    """Document the responsibility of ``slugify``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``slugify`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    return slug[:80]
+
+
+def extract_name_symbols(name: str) -> list[str]:
+    """Document the responsibility of ``extract_name_symbols``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``extract_name_symbols`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    stop = {
+        "theorem",
+        "lemma",
+        "principle",
+        "axiom",
+        "axioms",
+        "formula",
+        "bound",
+        "law",
+        "identity",
+        "inequality",
+        "for",
+        "on",
+        "of",
+        "the",
+    }
+    tokens = [
+        token
+        for token in re.findall(r"[a-z0-9]+", name.lower())
+        if len(token) > 1 and token not in stop
+    ]
+    return sorted(dict.fromkeys(tokens))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

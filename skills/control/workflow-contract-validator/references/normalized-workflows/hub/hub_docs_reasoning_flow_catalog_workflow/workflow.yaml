@@ -1,0 +1,367 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_docs_reasoning_flow_catalog_workflow
+version: 1.0.0
+kind: workflow
+description: Construct validated ERFL catalogues, then generate or check both documents.
+aliases:
+- docs:reasoning-flow-catalog
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Request:
+    schema:
+      type: object
+      required:
+      - flows_dir
+      - output_file
+      - materializations_file
+      - check
+      - json
+      properties:
+        flows_dir:
+          type: string
+        output_file:
+          type: string
+        materializations_file:
+          type: string
+        check:
+          type: boolean
+        json:
+          type: boolean
+      additionalProperties: false
+  Construction:
+    schema:
+      type: object
+      required:
+      - ok
+      properties:
+        ok:
+          type: boolean
+        semantic:
+          type: string
+        materializations:
+          type: string
+        metadata:
+          type: object
+        error:
+          type: string
+      oneOf:
+      - required:
+        - semantic
+        - materializations
+        - metadata
+        properties:
+          ok:
+            const: true
+      - required:
+        - error
+        properties:
+          ok:
+            const: false
+      additionalProperties: false
+  Payload:
+    schema:
+      type: object
+      required:
+      - ok
+      - action
+      - output_file
+      - materializations_file
+      properties:
+        ok:
+          type: boolean
+        action:
+          enum:
+          - rendered
+          - checked
+        output_file:
+          type: string
+        materializations_file:
+          type: string
+        error:
+          type: string
+      additionalProperties: true
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 1
+  Context:
+    schema:
+      type: object
+      required:
+      - repository_root
+      properties:
+        repository_root:
+          type: string
+      additionalProperties: false
+inputs:
+  request:
+    type: Request
+  context:
+    type: Context
+outputs:
+  result:
+    type: Payload
+    value:
+      ref: flow.outputs.result
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  construct:
+    inputs:
+      request:
+        type: Request
+      context:
+        type: Context
+    outputs:
+      construction:
+        type: Construction
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_catalog_render_construct
+        operation: mathformer_reasoning_catalog_render_construct
+  compare:
+    inputs:
+      request:
+        type: Request
+      construction:
+        type: Construction
+      context:
+        type: Context
+    outputs:
+      payload:
+        type: Payload
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_catalog_render_compare
+        operation: mathformer_reasoning_catalog_render_compare
+  generate:
+    inputs:
+      request:
+        type: Request
+      construction:
+        type: Construction
+      context:
+        type: Context
+    outputs:
+      payload:
+        type: Payload
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_catalog_render_generate
+        operation: mathformer_reasoning_catalog_render_generate
+  emit:
+    inputs:
+      request:
+        type: Request
+      payload:
+        type: Payload
+      context:
+        type: Context
+    outputs:
+      result:
+        type: Payload
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_catalog_render_emit
+        operation: mathformer_reasoning_catalog_render_emit
+flow:
+  kind: sequence
+  steps:
+  - id: construct
+    kind: call
+    operation: construct
+    arguments:
+      request:
+        ref: inputs.request
+      context:
+        ref: inputs.context
+  - id: disposition
+    kind: switch
+    cases:
+    - id: check
+      when:
+        ref: inputs.request.check
+      body:
+        kind: call
+        operation: compare
+        arguments:
+          request:
+            ref: inputs.request
+          construction:
+            ref: steps.construct.outputs.construction
+          context:
+            ref: inputs.context
+    default:
+      kind: call
+      operation: generate
+      arguments:
+        request:
+          ref: inputs.request
+        construction:
+          ref: steps.construct.outputs.construction
+        context:
+          ref: inputs.context
+    outputs:
+      payload:
+        type: Payload
+        value:
+          ref: selected.outputs.payload
+  - id: emit
+    kind: call
+    operation: emit
+    arguments:
+      request:
+        ref: inputs.request
+      payload:
+        ref: steps.disposition.outputs.payload
+      context:
+        ref: inputs.context
+  outputs:
+    result:
+      type: Payload
+      value:
+        ref: steps.emit.outputs.result
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.emit.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+      - docs/architecture/ALL_REASONING_FLOWS.md
+      - docs/architecture/REASONING_FLOW_MATERIALIZATIONS.md
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 3
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Documentation generation or synchronization only; no scientific acceptance.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py
+    digest: sha256:208c892ff7c6fc3e0485dfb96cf578073b775a0a2d1804c6dae227c9600ed246
+    selector: main(argv=None) → render_catalog(flows_dir)
+  - path: scripts/mathformer.py
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/reasoning_catalog_tools.py
+    digest: sha256:a461db497a6dd701a36e6f21e79d10d56b19f53171248e8be66cddd37a4c4bf0
+  - path: scripts/reasoning_catalog_render_tools.py
+    digest: sha256:7cef89c387fdf92838d23b29fe2a39745ca0009be27d3e55182a2fe0bc7ad0da
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_reasoning_catalog_render_workflow_tests.py
+    digest: sha256:96218d88e321ec03af13c3a2143a0a6bec74547321ac563cc0d4b460b77f2f83
+  - path: tests/mcp/fixtures/reasoning_catalog_render_original.py.txt
+    digest: sha256:286e5273739087329ffd899a33d4cfb0a13e4e49d057adbc356e53b4cfc11c6d
+  - path: tests/test_matrix.json
+    digest: sha256:dd99b9d6cff21bc339fa3deb2d9f1da3540563b8e0ca94d28dc15675dc5e6c93
+  gaps:
+  - CLI parsing and path resolution precede this graph; request contains resolved
+    native CLI values. Context supplies the repository root used for registry and
+    relative-path lookup; MCP paths are confined to that root.
+  - Finite helper iterations and carried state remain within construct; no graph-level
+    cap is imposed. ERFL repeats are descriptions, not runtime loops.
+  - The 3600-second limit and operation-call budget are enforced by Lunar; the native
+    hub action has no timeout.
+  - Hub preflight, dry-run and postflight remain owned by the native hub caller outside
+    this renderer graph. MCP invocation requires host authorization; native optional
+    hub reports differ from Lunar receipts.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: docs:reasoning-flow-catalog
+    owner_skill: skills/control/reasoning-flow-language/SKILL.md
+    contract:
+      id: docs:reasoning-flow-catalog
+      family: docs
+      kind: generation
+      safety: writes_repo
+      command:
+      - '{python}'
+      - skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py
+      - --json
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Native hub invokes generation with --json, check=false and default
+      paths.
+    preflight: Check required paths; reject extra args; require mutation authorization
+      unless dry-run.
+    dry_run: Stops before renderer launch.
+    postflight: Hub audits writes afterward, including failed subprocess outcomes.
+    alternate_caller: control:reasoning-flow-catalog selects --check.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    failure_policy: Preserve failed payloads and exit 1; uncaught exceptions propagate.
+    scientific_payloads: Catalogue synchronization is not proof or promotion.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: Construction precedes disposition; generation writes are sequential
+      without rollback.
+# REUSE-IgnoreEnd

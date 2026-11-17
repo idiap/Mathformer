@@ -1,0 +1,1087 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Run one source-only FormalPhysics case through the recursive Lean workflow.
+
+This runner is intentionally one-sample scoped.  It reads only an already
+source-only record containing informal `question` and `answer` fields, calls the
+existing physics/Lean workflow scripts, records real stage outputs, and writes a
+rebuilt source record for the completeness checker.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SKILLS = REPO_ROOT / "skills"
+LEAN_ROOT = REPO_ROOT / "MathformerPhysicsLib" / "Lean"
+DEFAULT_ARTIFACT_ROOT = REPO_ROOT / "artifacts" / "physics_lean" / "recursive_goal_runs"
+DESIGN_TODO_ARTIFACT = (
+    "artifacts/physics_lean/reviews/autoformalization_design_todos.md"
+)
+
+REQUIRED_COMPLETENESS_STAGES = [
+    "source_extraction",
+    "informal_expansion",
+    "readiness_review",
+    "symbol_table",
+    "equation_parse",
+    "dimension_model",
+    "unit_grounding",
+    "derivation_plan",
+    "lean_workflow_plan",
+    "lean_type_packet",
+    "lean_assumption_packet",
+    "math_object_detection",
+    "mathlib_grounding",
+    "lean_execution",
+    "unit_report",
+    "semantics_critic",
+    "assumption_critic",
+    "dimension_critic",
+    "drift_monitor",
+    "pathology_repair",
+    "notational_collapse_repair",
+    "abstraction_elevation_repair",
+    "proof_strategy_alignment_repair",
+    "implicit_premise_normalization",
+    "generative_repair",
+    "generative_critic",
+    "repair_expansion_map",
+    "recursive_control",
+    "final_hypothesis_review",
+    "consistency_report",
+    "review_refinement_plan",
+]
+
+
+def rel(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def workflow_python() -> str:
+    candidates = [
+        REPO_ROOT / ".venv" / "bin" / "python",
+        REPO_ROOT / ".venv" / "bin" / "python3",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable
+
+
+def case_id_from_record(record: dict[str, Any]) -> str:
+    case_id = str(record.get("case_id") or "").strip()
+    if not case_id.startswith("formalphysics_"):
+        raise SystemExit("source record must contain case_id like formalphysics_0009")
+    return case_id
+
+
+def source_text_from_record(record: dict[str, Any]) -> str:
+    question = str(record.get("question") or "").strip()
+    answer = str(record.get("answer") or "").strip()
+    if not question or not answer:
+        raise SystemExit("source record must contain non-empty question and answer")
+    return f"Question:\n{question}\n\nInformal source derivation:\n{answer}\n"
+
+
+def script(*parts: str) -> str:
+    return rel(SKILLS.joinpath(*parts))
+
+
+def run_stage(
+    *,
+    name: str,
+    command: list[str],
+    output: Path | None,
+    reports: dict[str, Any],
+    timeout: int = 240,
+) -> dict[str, Any]:
+    start = time.time()
+    try:
+        proc = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+        )
+        timed_out = False
+        returncode = proc.returncode
+        stdout = proc.stdout
+        stderr = proc.stderr
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        returncode = 124
+        stdout = exc.stdout or ""
+        stderr = exc.stderr or ""
+
+    output_exists = output.exists() if output else False
+    ok = returncode == 0 and (output is None or output_exists)
+    payload_status = None
+    payload_decision = None
+    payload_ok = None
+    payload_style = None
+    if output_exists and output is not None:
+        try:
+            payload = json.loads(output.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                payload_status = payload.get("status")
+                payload_decision = payload.get("decision")
+                payload_ok = payload.get("ok")
+                payload_style = payload.get("style")
+        except json.JSONDecodeError:
+            pass
+    report = {
+        "ok": ok,
+        "stage": name,
+        "command": command,
+        "returncode": returncode,
+        "duration_seconds": round(time.time() - start, 3),
+        "timed_out": timed_out,
+        "path": rel(output) if output and output_exists else "",
+        "payload_style": payload_style,
+        "payload_status": payload_status,
+        "payload_decision": payload_decision,
+        "payload_ok": payload_ok,
+        "stdout_tail": stdout[-3000:],
+        "stderr_tail": stderr[-3000:],
+    }
+    reports[name] = report
+    return report
+
+
+def stage_summary(stage_reports: dict[str, Any]) -> dict[str, Any]:
+    required = {
+        stage: stage_reports.get(stage, {}).get("ok") is True
+        for stage in REQUIRED_COMPLETENESS_STAGES
+    }
+    return {
+        "required_stage_count": len(required),
+        "ok_required_stage_count": sum(1 for ok in required.values() if ok),
+        "failed_required_stages": [stage for stage, ok in required.items() if not ok],
+        "all_required_stages_ok": all(required.values()),
+    }
+
+
+def final_acceptance(
+    stage_reports: dict[str, Any], *, lean_compile_ok: bool
+) -> dict[str, Any]:
+    bad_statuses = {
+        "fail",
+        "blocked",
+        "needs_expansion",
+        "blocked_on_library_or_labels",
+    }
+    critical_stages = [
+        "drift_monitor",
+        "pathology_repair",
+        "repair_expansion_map",
+        "recursive_control",
+        "final_hypothesis_review",
+        "consistency_report",
+        "case_thoroughness",
+    ]
+    blockers: list[str] = []
+    for stage in critical_stages:
+        report = stage_reports.get(stage, {})
+        status = str(report.get("payload_status") or "")
+        decision = str(report.get("payload_decision") or "")
+        payload_ok = report.get("payload_ok")
+        if status in bad_statuses:
+            blockers.append(f"{stage}:{status}")
+        if decision == "blocked":
+            blockers.append(f"{stage}:decision_blocked")
+        if payload_ok is False:
+            blockers.append(f"{stage}:payload_not_ok")
+    controller = stage_reports.get("recursive_control", {})
+    controller_decision = str(
+        controller.get("payload_decision") or controller.get("payload_status") or ""
+    )
+    if controller_decision != "complete":
+        blockers.append(
+            f"recursive_control:not_complete:{controller_decision or 'missing'}"
+        )
+    if not lean_compile_ok:
+        blockers.append("lean_compile_failed")
+    return {"ok": not blockers, "blockers": blockers}
+
+
+def build_source_record(
+    original: dict[str, Any],
+    *,
+    artifact_dir: Path,
+    source_text_path: Path,
+    stage_reports: dict[str, Any],
+) -> dict[str, Any]:
+    rebuilt = dict(original)
+    rebuilt["source_policy"] = "source_only_question_answer_no_dataset_solution"
+    rebuilt["formal_answer_policy"] = {
+        "status": "not_used",
+        "constraint": "Do not inspect or compare withheld dataset formal_answer for this new-example first pass.",
+    }
+    rebuilt["semantic_preservation_metadata_policy"] = {
+        "todo_artifact": DESIGN_TODO_ARTIFACT,
+        "status": "required_for_new_or_repaired_cases",
+        "recommended_fields": [
+            "source_target",
+            "lean_target_kind",
+            "preservation_status",
+            "source_assumptions",
+            "introduced_assumptions",
+            "not_modeled",
+            "semantic_deltas",
+            "step_alignment_expected",
+        ],
+        "missing_field_handling": (
+            "Record a design guard warning and require explicit module-header "
+            "semantic-preservation commentary before claiming a strengthened "
+            "new-case formalization."
+        ),
+    }
+    rebuilt["recursive_goal_artifact_dir"] = rel(artifact_dir)
+    rebuilt["source_text_artifact"] = rel(source_text_path)
+    rebuilt["workflow_stage_reports"] = {
+        stage: stage_reports[stage]
+        for stage in REQUIRED_COMPLETENESS_STAGES
+        if stage in stage_reports
+    }
+    rebuilt["workflow_stage_summary"] = stage_summary(stage_reports)
+    return rebuilt
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-record", type=Path, required=True)
+    parser.add_argument("--lean-file", type=Path)
+    parser.add_argument("--artifact-root", type=Path, default=DEFAULT_ARTIFACT_ROOT)
+    parser.add_argument("--iteration", type=int, default=1)
+    parser.add_argument("--max-iterations", type=int, default=8)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+
+    source_record_path = (
+        args.source_record
+        if args.source_record.is_absolute()
+        else REPO_ROOT / args.source_record
+    )
+    original = read_json(source_record_path)
+    case_id = case_id_from_record(original)
+    lean_file = args.lean_file or LEAN_ROOT / case_id / "MathformerPhysics.lean"
+    lean_file = lean_file if lean_file.is_absolute() else REPO_ROOT / lean_file
+    artifact_dir = (
+        args.artifact_root
+        if args.artifact_root.is_absolute()
+        else REPO_ROOT / args.artifact_root
+    ) / case_id
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    source_text = source_text_from_record(original)
+    source_text_path = artifact_dir / "source_text.txt"
+    source_text_path.write_text(source_text, encoding="utf-8")
+
+    stage_reports: dict[str, Any] = {}
+    py = workflow_python()
+    outputs = {
+        "source_extraction": artifact_dir / "source_extraction.json",
+        "informal_expansion": artifact_dir / "informal_expansion.json",
+        "readiness_review": artifact_dir / "readiness_review.json",
+        "symbol_table": artifact_dir / "symbol_table.json",
+        "equation_parse": artifact_dir / "equation_parse.json",
+        "dimension_model": artifact_dir / "dimension_model.json",
+        "unit_grounding": artifact_dir / "unit_grounding.json",
+        "law_grounding": artifact_dir / "law_grounding.json",
+        "gap_detection": artifact_dir / "gap_detection.json",
+        "derivation_plan": artifact_dir / "derivation_plan.json",
+        "lean_workflow_plan": artifact_dir / "lean_workflow_plan.json",
+        "lean_type_packet": artifact_dir / "lean_type_packet.json",
+        "lean_assumption_packet": artifact_dir / "lean_assumption_packet.json",
+        "background_plan": artifact_dir / "background_plan.json",
+        "unit_report": artifact_dir / "unit_report.json",
+        "semantics_critic": artifact_dir / "semantics_critic.json",
+        "assumption_critic": artifact_dir / "assumption_critic.json",
+        "dimension_critic": artifact_dir / "dimension_critic.json",
+        "drift_monitor": artifact_dir / "drift_monitor.json",
+        "math_object_detection": artifact_dir / "math_object_detection.json",
+        "workbench_plan": artifact_dir / "workbench_plan.json",
+        "mathlib_grounding": artifact_dir / "mathlib_grounding.json",
+        "pathology_repair": artifact_dir / "pathology_repair.json",
+        "notational_collapse_repair": artifact_dir / "notational_collapse_repair.json",
+        "abstraction_elevation_repair": artifact_dir
+        / "abstraction_elevation_repair.json",
+        "proof_strategy_alignment_repair": artifact_dir
+        / "proof_strategy_alignment_repair.json",
+        "implicit_premise_normalization": artifact_dir
+        / "implicit_premise_normalization.json",
+        "generative_repair": artifact_dir / "generative_repair.json",
+        "generative_critic": artifact_dir / "generative_critic.json",
+        "repair_expansion_map": artifact_dir / "repair_expansion_map.json",
+        "recursive_control": artifact_dir / "recursive_control.json",
+        "final_hypothesis_review": artifact_dir / "final_hypothesis_review.json",
+        "review_refinement_plan": artifact_dir / "review_refinement_plan.json",
+        "lean_execution": artifact_dir / "lean_execution.json",
+        "consistency_report": artifact_dir / "consistency_report.json",
+        "derivation_completeness": artifact_dir / "derivation_completeness.json",
+        "case_thoroughness": artifact_dir / "case_thoroughness.json",
+    }
+
+    run_stage(
+        name="source_extraction",
+        command=[
+            py,
+            script(
+                "physics-derivation-source-extractor",
+                "scripts",
+                "extract_physics_derivation_source.py",
+            ),
+            "--text",
+            source_text,
+            "--output",
+            str(outputs["source_extraction"]),
+            "--json",
+        ],
+        output=outputs["source_extraction"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="informal_expansion",
+        command=[
+            py,
+            script(
+                "physics-informal-derivation-expander",
+                "scripts",
+                "expand_informal_physics_derivation.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--case-id",
+            case_id,
+            "--output",
+            str(outputs["informal_expansion"]),
+        ],
+        output=outputs["informal_expansion"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="readiness_review",
+        command=[
+            py,
+            script(
+                "physics-informal-derivation-readiness-reviewer",
+                "scripts",
+                "review_physics_informal_derivation_readiness.py",
+            ),
+            "--packet-file",
+            str(outputs["informal_expansion"]),
+            "--case-id",
+            case_id,
+            "--output",
+            str(outputs["readiness_review"]),
+        ],
+        output=outputs["readiness_review"],
+        reports=stage_reports,
+    )
+    for name, skill_dir, script_name in [
+        (
+            "symbol_table",
+            "physics-symbol-table-builder",
+            "build_physics_symbol_table.py",
+        ),
+        ("equation_parse", "physics-equation-parser", "parse_physics_equations.py"),
+        ("dimension_model", "physics-dimension-modeler", "model_physics_dimensions.py"),
+        ("unit_grounding", "physics-unit-system-grounder", "ground_physics_units.py"),
+        (
+            "law_grounding",
+            "physics-law-concept-grounding-navigator",
+            "ground_physics_laws.py",
+        ),
+        ("gap_detection", "physics-implicit-gap-detector", "detect_physics_gaps.py"),
+        (
+            "derivation_plan",
+            "physics-derivation-plan-builder",
+            "build_physics_derivation_plan.py",
+        ),
+    ]:
+        run_stage(
+            name=name,
+            command=[
+                py,
+                script(skill_dir, "scripts", script_name),
+                "--text",
+                source_text,
+                "--output",
+                str(outputs[name]),
+                "--json",
+            ],
+            output=outputs[name],
+            reports=stage_reports,
+        )
+    run_stage(
+        name="lean_workflow_plan",
+        command=[
+            py,
+            script(
+                "physics-lean-workflow-orchestrator",
+                "scripts",
+                "build_physics_lean_workflow_plan.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--case-id",
+            case_id,
+            "--output",
+            str(outputs["lean_workflow_plan"]),
+        ],
+        output=outputs["lean_workflow_plan"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="lean_type_packet",
+        command=[
+            py,
+            script(
+                "physics-lean-type-system-builder",
+                "scripts",
+                "build_physics_lean_type_system.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--case-id",
+            case_id,
+            "--output",
+            str(outputs["lean_type_packet"]),
+        ],
+        output=outputs["lean_type_packet"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="lean_assumption_packet",
+        command=[
+            py,
+            script(
+                "physics-lean-assumption-context-encoder",
+                "scripts",
+                "encode_physics_lean_assumptions.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--case-id",
+            case_id,
+            "--output",
+            str(outputs["lean_assumption_packet"]),
+        ],
+        output=outputs["lean_assumption_packet"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="background_plan",
+        command=[
+            py,
+            script(
+                "physics-lean-workflow-orchestrator",
+                "scripts",
+                "build_physics_lean_background_plan.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--case-id",
+            case_id,
+            "--type-packet",
+            str(outputs["lean_type_packet"]),
+            "--expansion-packet",
+            str(outputs["informal_expansion"]),
+            "--lean-file",
+            str(lean_file),
+            "--output",
+            str(outputs["background_plan"]),
+        ],
+        output=outputs["background_plan"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="unit_report",
+        command=[
+            py,
+            script(
+                "physics-lean-unit-analysis-verifier",
+                "scripts",
+                "verify_physics_lean_units.py",
+            ),
+            "--lean-file",
+            str(lean_file),
+            "--output",
+            str(outputs["unit_report"]),
+        ],
+        output=outputs["unit_report"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="semantics_critic",
+        command=[
+            py,
+            script(
+                "physics-lean-physical-semantics-critic",
+                "scripts",
+                "critique_physics_lean_semantics.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--lean-file",
+            str(lean_file),
+            "--type-packet",
+            str(outputs["lean_type_packet"]),
+            "--assumption-packet",
+            str(outputs["lean_assumption_packet"]),
+            "--output",
+            str(outputs["semantics_critic"]),
+        ],
+        output=outputs["semantics_critic"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="assumption_critic",
+        command=[
+            py,
+            script(
+                "physics-lean-assumption-critic",
+                "scripts",
+                "critique_physics_lean_assumptions.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--lean-file",
+            str(lean_file),
+            "--assumption-packet",
+            str(outputs["lean_assumption_packet"]),
+            "--output",
+            str(outputs["assumption_critic"]),
+        ],
+        output=outputs["assumption_critic"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="dimension_critic",
+        command=[
+            py,
+            script(
+                "physics-lean-dimension-critic",
+                "scripts",
+                "critique_physics_lean_dimensions.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--lean-file",
+            str(lean_file),
+            "--type-packet",
+            str(outputs["lean_type_packet"]),
+            "--unit-report",
+            str(outputs["unit_report"]),
+            "--output",
+            str(outputs["dimension_critic"]),
+        ],
+        output=outputs["dimension_critic"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="drift_monitor",
+        command=[
+            py,
+            script(
+                "physics-lean-drift-pathology-monitor",
+                "scripts",
+                "monitor_physics_lean_drift_pathologies.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--lean-file",
+            str(lean_file),
+            "--type-packet",
+            str(outputs["lean_type_packet"]),
+            "--assumption-packet",
+            str(outputs["lean_assumption_packet"]),
+            "--unit-report",
+            str(outputs["unit_report"]),
+            "--physical-semantics-report",
+            str(outputs["semantics_critic"]),
+            "--assumption-critic-report",
+            str(outputs["assumption_critic"]),
+            "--dimension-critic-report",
+            str(outputs["dimension_critic"]),
+            "--output",
+            str(outputs["drift_monitor"]),
+        ],
+        output=outputs["drift_monitor"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="math_object_detection",
+        command=[
+            py,
+            script(
+                "physics-math-object-detector",
+                "scripts",
+                "detect_physics_math_objects.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--lean-file",
+            str(lean_file),
+            "--monitor-report",
+            str(outputs["drift_monitor"]),
+            "--output",
+            str(outputs["math_object_detection"]),
+        ],
+        output=outputs["math_object_detection"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="workbench_plan",
+        command=[
+            py,
+            script(
+                "mathformerphysicslib-object-workbench",
+                "scripts",
+                "build_mathformerphysicslib_object_workbench.py",
+            ),
+            "--object-packet",
+            str(outputs["math_object_detection"]),
+            "--output",
+            str(outputs["workbench_plan"]),
+            "--json",
+        ],
+        output=outputs["workbench_plan"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="mathlib_grounding",
+        command=[
+            py,
+            script(
+                "mathformerphysicslib-mathlib-grounding-auditor",
+                "scripts",
+                "audit_mathlib_grounding.py",
+            ),
+            "--output",
+            str(outputs["mathlib_grounding"]),
+            "--json",
+        ],
+        output=outputs["mathlib_grounding"],
+        reports=stage_reports,
+        timeout=360,
+    )
+    repair_plan_stages = [
+        (
+            "notational_collapse_repair",
+            "physics-lean-notational-collapse-repairer",
+            "repair_notational_collapse.py",
+        ),
+        (
+            "abstraction_elevation_repair",
+            "physics-lean-abstraction-elevation-repairer",
+            "repair_abstraction_elevation.py",
+        ),
+        (
+            "proof_strategy_alignment_repair",
+            "physics-lean-proof-strategy-alignment-repairer",
+            "repair_proof_strategy_alignment.py",
+        ),
+        (
+            "implicit_premise_normalization",
+            "physics-lean-implicit-premise-normalizer",
+            "normalize_implicit_premises.py",
+        ),
+    ]
+    repair_plan_paths: list[Path] = []
+    for stage_name, skill_dir, script_name in repair_plan_stages:
+        run_stage(
+            name=stage_name,
+            command=[
+                py,
+                script(skill_dir, "scripts", script_name),
+                "--monitor-report",
+                str(outputs["drift_monitor"]),
+                "--object-packet",
+                str(outputs["math_object_detection"]),
+                "--workbench-plan",
+                str(outputs["workbench_plan"]),
+                "--output",
+                str(outputs[stage_name]),
+            ],
+            output=outputs[stage_name],
+            reports=stage_reports,
+        )
+        repair_plan_paths.append(outputs[stage_name])
+    repair_plan_args = [
+        arg for path in repair_plan_paths for arg in ("--repair-plan", str(path))
+    ]
+    run_stage(
+        name="pathology_repair",
+        command=[
+            py,
+            script(
+                "physics-lean-pathology-repair-orchestrator",
+                "scripts",
+                "orchestrate_pathology_repair.py",
+            ),
+            "--monitor-report",
+            str(outputs["drift_monitor"]),
+            "--object-packet",
+            str(outputs["math_object_detection"]),
+            "--workbench-plan",
+            str(outputs["workbench_plan"]),
+            *repair_plan_args,
+            "--output",
+            str(outputs["pathology_repair"]),
+        ],
+        output=outputs["pathology_repair"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="generative_repair",
+        command=[
+            py,
+            script(
+                "physics-lean-generative-repair-orchestrator",
+                "scripts",
+                "build_physics_lean_generative_repair_plan.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--lean-file",
+            str(lean_file),
+            "--monitor-report",
+            str(outputs["drift_monitor"]),
+            "--object-packet",
+            str(outputs["math_object_detection"]),
+            "--workbench-plan",
+            str(outputs["workbench_plan"]),
+            "--repair-loop",
+            str(outputs["pathology_repair"]),
+            *repair_plan_args,
+            "--high-risk",
+            "--output",
+            str(outputs["generative_repair"]),
+        ],
+        output=outputs["generative_repair"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="generative_critic",
+        command=[
+            py,
+            script(
+                "physics-lean-generative-critic-orchestrator",
+                "scripts",
+                "build_physics_lean_generative_critic_plan.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--lean-file",
+            str(lean_file),
+            "--high-risk",
+            "--output",
+            str(outputs["generative_critic"]),
+        ],
+        output=outputs["generative_critic"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="repair_expansion_map",
+        command=[
+            py,
+            script(
+                "physics-lean-repair-expansion-cartographer",
+                "scripts",
+                "map_repair_expansion.py",
+            ),
+            "--monitor-report",
+            str(outputs["drift_monitor"]),
+            "--object-packet",
+            str(outputs["math_object_detection"]),
+            "--workbench-plan",
+            str(outputs["workbench_plan"]),
+            "--repair-loop",
+            str(outputs["pathology_repair"]),
+            "--generative-repair",
+            str(outputs["generative_repair"]),
+            *repair_plan_args,
+            "--output",
+            str(outputs["repair_expansion_map"]),
+        ],
+        output=outputs["repair_expansion_map"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="recursive_control",
+        command=[
+            py,
+            script(
+                "physics-lean-recursive-repair-loop-controller",
+                "scripts",
+                "control_recursive_repair_loop.py",
+            ),
+            "--expansion-map",
+            str(outputs["repair_expansion_map"]),
+            "--iteration",
+            str(args.iteration),
+            "--max-iterations",
+            str(args.max_iterations),
+            "--output",
+            str(outputs["recursive_control"]),
+        ],
+        output=outputs["recursive_control"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="final_hypothesis_review",
+        command=[
+            py,
+            script(
+                "physics-final-hypothesis-reviewer",
+                "scripts",
+                "review_physics_final_hypotheses.py",
+            ),
+            "--source-file",
+            str(source_text_path),
+            "--lean-file",
+            str(lean_file),
+            "--type-packet",
+            str(outputs["lean_type_packet"]),
+            "--assumption-packet",
+            str(outputs["lean_assumption_packet"]),
+            "--unit-report",
+            str(outputs["unit_report"]),
+            "--law-packet",
+            str(outputs["law_grounding"]),
+            "--background-packet",
+            str(outputs["background_plan"]),
+            "--output",
+            str(outputs["final_hypothesis_review"]),
+        ],
+        output=outputs["final_hypothesis_review"],
+        reports=stage_reports,
+    )
+
+    lean_log = artifact_dir / "lean_execution_raw.log"
+    lean_proc = subprocess.run(
+        ["lake", "env", "lean", rel(lean_file)],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    lean_log.write_text(lean_proc.stdout + lean_proc.stderr, encoding="utf-8")
+    stage_reports["lean_compile"] = {
+        "ok": lean_proc.returncode == 0,
+        "stage": "lean_compile",
+        "command": ["lake", "env", "lean", rel(lean_file)],
+        "returncode": lean_proc.returncode,
+        "path": rel(lean_log),
+        "stdout_tail": lean_proc.stdout[-3000:],
+        "stderr_tail": lean_proc.stderr[-3000:],
+    }
+    run_stage(
+        name="lean_execution",
+        command=[
+            py,
+            script(
+                "physics-lean-execution-interpreter",
+                "scripts",
+                "interpret_physics_lean_execution.py",
+            ),
+            "--text",
+            lean_log.read_text(encoding="utf-8"),
+            "--output",
+            str(outputs["lean_execution"]),
+        ],
+        output=outputs["lean_execution"],
+        reports=stage_reports,
+    )
+    if lean_proc.returncode == 0 and not lean_log.read_text(encoding="utf-8").strip():
+        write_json(
+            outputs["lean_execution"],
+            {
+                "status": "no_known_diagnostics",
+                "category_counts": {},
+                "findings": [],
+                "warning_findings": [],
+                "repair_targets": [],
+            },
+        )
+        stage_reports["lean_execution"]["payload_status"] = "no_known_diagnostics"
+
+    compile_ok_args = ["--compile-ok"] if lean_proc.returncode == 0 else []
+    realness_ok_args = (
+        ["--realness-ok"]
+        if lean_proc.returncode == 0
+        and stage_reports.get("lean_execution", {}).get("payload_status")
+        == "no_known_diagnostics"
+        else []
+    )
+    run_stage(
+        name="consistency_report",
+        command=[
+            py,
+            script(
+                "physics-lean-consistency-report-orchestrator",
+                "scripts",
+                "run_physics_lean_consistency_report.py",
+            ),
+            "--unit-report",
+            str(outputs["unit_report"]),
+            "--execution-report",
+            str(outputs["lean_execution"]),
+            "--type-packet",
+            str(outputs["lean_type_packet"]),
+            "--assumption-packet",
+            str(outputs["lean_assumption_packet"]),
+            "--background-packet",
+            str(outputs["background_plan"]),
+            "--critic-report",
+            str(outputs["semantics_critic"]),
+            "--critic-report",
+            str(outputs["assumption_critic"]),
+            "--critic-report",
+            str(outputs["dimension_critic"]),
+            "--critic-report",
+            str(outputs["drift_monitor"]),
+            "--critic-report",
+            str(outputs["generative_critic"]),
+            "--pathology-repair-loop",
+            str(outputs["pathology_repair"]),
+            "--generative-repair",
+            str(outputs["generative_repair"]),
+            "--repair-expansion-map",
+            str(outputs["repair_expansion_map"]),
+            "--recursive-repair-control",
+            str(outputs["recursive_control"]),
+            "--final-review",
+            str(outputs["final_hypothesis_review"]),
+            *compile_ok_args,
+            *realness_ok_args,
+            "--anchor-ok",
+            "--output",
+            str(outputs["consistency_report"]),
+        ],
+        output=outputs["consistency_report"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="review_refinement_plan",
+        command=[
+            py,
+            script(
+                "physics-lean-review-refinement-router",
+                "scripts",
+                "plan_review_refinement.py",
+            ),
+            "--final-review",
+            str(outputs["final_hypothesis_review"]),
+            "--baseline-report",
+            str(outputs["consistency_report"]),
+            "--output",
+            str(outputs["review_refinement_plan"]),
+        ],
+        output=outputs["review_refinement_plan"],
+        reports=stage_reports,
+    )
+
+    rebuilt_source_record = build_source_record(
+        original,
+        artifact_dir=artifact_dir,
+        source_text_path=source_text_path,
+        stage_reports=stage_reports,
+    )
+    rebuilt_source_record_path = artifact_dir / "source_record.rebuilt.json"
+    write_json(rebuilt_source_record_path, rebuilt_source_record)
+
+    run_stage(
+        name="derivation_completeness",
+        command=[
+            py,
+            script(
+                "physics-lean-derivation-completeness-checker",
+                "scripts",
+                "check_derivation_completeness.py",
+            ),
+            "--lean-file",
+            str(lean_file),
+            "--source-record",
+            str(rebuilt_source_record_path),
+            "--recursive-frontier-count",
+            "0",
+            "--output",
+            str(outputs["derivation_completeness"]),
+            "--json",
+        ],
+        output=outputs["derivation_completeness"],
+        reports=stage_reports,
+    )
+    run_stage(
+        name="case_thoroughness",
+        command=[
+            py,
+            "tests/physics_lean/run_grounded_sample_thoroughness.py",
+            "--case",
+            case_id,
+            "--output",
+            str(outputs["case_thoroughness"]),
+            "--json",
+        ],
+        output=outputs["case_thoroughness"],
+        reports=stage_reports,
+    )
+
+    acceptance = final_acceptance(
+        stage_reports, lean_compile_ok=lean_proc.returncode == 0
+    )
+    payload = {
+        "schema_version": 1,
+        "style": "physics_lean_recursive_goal_case_run",
+        "ok": stage_summary(stage_reports)["all_required_stages_ok"]
+        and acceptance["ok"],
+        "case_id": case_id,
+        "lean_file": rel(lean_file),
+        "artifact_dir": rel(artifact_dir),
+        "source_record": rel(rebuilt_source_record_path),
+        "stage_summary": stage_summary(stage_reports),
+        "final_acceptance": acceptance,
+        "stage_reports": stage_reports,
+        "formal_answer_policy": rebuilt_source_record["formal_answer_policy"],
+    }
+    run_report = artifact_dir / "recursive_goal_case_run.json"
+    write_json(run_report, payload)
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+    else:
+        print(f"wrote {rel(run_report)}")
+    return 0 if payload["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

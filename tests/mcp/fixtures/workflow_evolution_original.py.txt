@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Make long recursive workflows inspectable as states, transitions, gates,
+#   reflective questions, and next deltas.
+#
+# Intent:
+#   Validate workflow evolution graph artifacts.
+#
+# Function:
+#   Checks required graph fields, transition endpoints, evidence path existence,
+#   and writes a validation report.
+#
+# Maintenance Notes:
+#   Keep this script aligned with workflow_evolution.schema.json.
+
+"""Validate meta-skill workflow evolution graphs."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCHEMA_PATH = REPO_ROOT / "meta_skills" / "schemas" / "workflow_evolution.schema.json"
+GRAPH_ROOT = REPO_ROOT / "meta_skills" / "registry" / "tasks"
+OUTPUT_PATH = (
+    REPO_ROOT / "artifacts" / "meta_skills" / "workflow_evolution_validation.json"
+)
+
+
+def rel(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def check_evidence(
+    paths: list[str], graph_path: Path, location: str, findings: list[dict[str, Any]]
+) -> None:
+    if not paths:
+        findings.append(
+            {
+                "severity": "error",
+                "code": "missing_evidence",
+                "path": rel(graph_path),
+                "location": location,
+            }
+        )
+    for value in paths:
+        evidence_path = REPO_ROOT / value
+        if not evidence_path.exists():
+            findings.append(
+                {
+                    "severity": "error",
+                    "code": "missing_evidence_path",
+                    "path": rel(graph_path),
+                    "location": location,
+                    "evidence": rel(evidence_path),
+                }
+            )
+
+
+def validate_graph(path: Path, schema: dict[str, Any]) -> list[dict[str, Any]]:
+    data = load_json(path)
+    findings: list[dict[str, Any]] = []
+    for field in schema["required"]:
+        if field not in data:
+            findings.append(
+                {
+                    "severity": "error",
+                    "code": "missing_field",
+                    "path": rel(path),
+                    "field": field,
+                }
+            )
+    if findings:
+        return findings
+    source = REPO_ROOT / str(data["source_report"])
+    if not source.exists():
+        findings.append(
+            {
+                "severity": "error",
+                "code": "missing_source_report",
+                "path": rel(path),
+                "source_report": rel(source),
+            }
+        )
+
+    state_ids = {row.get("state_id") for row in data.get("states", [])}
+    nested = schema["nested_required"]
+    for collection, fields in nested.items():
+        rows = data.get(collection)
+        if not isinstance(rows, list) or not rows:
+            findings.append(
+                {
+                    "severity": "error",
+                    "code": "empty_collection",
+                    "path": rel(path),
+                    "collection": collection,
+                }
+            )
+            continue
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                findings.append(
+                    {
+                        "severity": "error",
+                        "code": "non_object_row",
+                        "path": rel(path),
+                        "collection": collection,
+                        "index": index,
+                    }
+                )
+                continue
+            for field in fields:
+                if field not in row:
+                    findings.append(
+                        {
+                            "severity": "error",
+                            "code": "missing_nested_field",
+                            "path": rel(path),
+                            "collection": collection,
+                            "index": index,
+                            "field": field,
+                        }
+                    )
+            if "evidence" in row:
+                check_evidence(
+                    list(row.get("evidence") or []),
+                    path,
+                    f"{collection}[{index}]",
+                    findings,
+                )
+
+    for index, row in enumerate(data.get("transitions", [])):
+        if row.get("from") not in state_ids or row.get("to") not in state_ids:
+            findings.append(
+                {
+                    "severity": "error",
+                    "code": "transition_unknown_endpoint",
+                    "path": rel(path),
+                    "index": index,
+                    "from": row.get("from"),
+                    "to": row.get("to"),
+                }
+            )
+    if not data.get("next_delta", {}).get("decision"):
+        findings.append(
+            {
+                "severity": "error",
+                "code": "next_delta_missing_decision",
+                "path": rel(path),
+            }
+        )
+    return findings
+
+
+def run() -> dict[str, Any]:
+    schema = load_json(SCHEMA_PATH)
+    paths = sorted(GRAPH_ROOT.glob("*/workflow_evolution.json"))
+    results = []
+    all_findings = []
+    for path in paths:
+        findings = validate_graph(path, schema)
+        all_findings.extend(findings)
+        results.append(
+            {
+                "path": rel(path),
+                "ok": not any(f["severity"] == "error" for f in findings),
+                "findings": findings,
+            }
+        )
+    payload = {
+        "schema_version": 1,
+        "style": "mathformer_meta_workflow_evolution_validation",
+        "ok": bool(paths) and not any(f["severity"] == "error" for f in all_findings),
+        "graph_count": len(paths),
+        "results": results,
+        "findings": all_findings,
+    }
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    OUTPUT_PATH.write_text(
+        json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    return payload
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    payload = run()
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print("PASS workflow evolution" if payload["ok"] else "FAIL workflow evolution")
+    return 0 if payload["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

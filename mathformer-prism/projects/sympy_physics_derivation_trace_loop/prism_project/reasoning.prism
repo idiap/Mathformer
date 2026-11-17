@@ -1,0 +1,86 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from sympy_physics_derivation_trace_loop import (
+    ExpandedDerivation,
+    SampleCoverageReview,
+    PhysicsSympyDerivationRequest,
+    SympyDerivationBasis,
+    SympyMathematicalReview,
+    SympyFormalReviewCase,
+    SympyGroundingBasis,
+    SympyPhysicsReview,
+    PhysicalModel,
+    SympyPhysicalReviewCase,
+    SympyPhysicsBasis,
+    SympyPhysicsCase,
+    SympyPhysicsDisposition,
+    SympyDerivationArtifact,
+    SympyDerivationPlan,
+    SourceDerivationModel,
+    SympyRepairCase,
+    SympyRepairRoute,
+    SympyExecutionReport,
+)
+import occurrences as steps
+import relations as links
+
+# Recover a source-grounded physical derivation, expose its executable SymPy
+# surface, run and review it, then route bounded repairs and report their status.
+reasoning ReconstructWithSympy(
+    workflow_source: PhysicsSympyDerivationRequest,
+) -> Generated[SympyPhysicsDisposition]:
+    sequence:
+        # Recover source-anchored laws, assumptions, regimes, and intended target.
+        [source_model: steps.ReadSourceDerivation(workflow_source)]
+        # Model quantities, units, dimensions, regimes, and frames.
+        [physical_model: steps.ModelPhysicalSystem(source_model.value)] by links.DefinePhysicalModel
+        # Propose explicit bridges for detected derivation gaps without claiming proof.
+        [expanded_steps: steps.ExpandDerivationSteps(SympyDerivationBasis(
+            source_model = source_model.value,
+            physical_model = physical_model.value,
+        ))] by links.CompleteDerivationSteps
+        # Align the physical model with applicable SymPy APIs and assumptions.
+        [sympy_plan: steps.PlanSympyDerivation(SympyGroundingBasis(
+            expanded_steps = expanded_steps.value,
+            physical_model = physical_model.value,
+        ))] by links.GroundSympyPlan
+        # Draft the executable physics derivation artifact.
+        [sympy_artifact: steps.DraftSympyDerivation(SympyPhysicsBasis(
+            expanded_steps = expanded_steps.value,
+            physical_model = physical_model.value,
+            sympy_plan = sympy_plan.value,
+        ))] by links.DraftExecutableDerivation
+        # Execute the artifact and classify its concrete diagnostics.
+        [execution_report: steps.ExecuteSympyDerivation(sympy_artifact.value)] by links.RunSympyDerivation
+        parallel:
+            # Assess steps, units, samples, and final mathematical equations.
+            [math_review: steps.ReviewSympyMathematics(SympyFormalReviewCase(
+                sympy_artifact = sympy_artifact.value,
+                execution_report = execution_report.value,
+            ))] by links.ReviewMathematicalValidity
+            # Assess physical meaning, dimensions, regimes, and governing laws.
+            [physics_review: steps.ReviewPhysicsFidelity(SympyPhysicalReviewCase(
+                sympy_artifact = sympy_artifact.value,
+                physical_model = physical_model.value,
+                execution_report = execution_report.value,
+            ))] by links.ReviewPhysicalFidelity
+        # Route localized repairs, map their expansion frontier, and decide
+        # whether the bounded loop should recurse or block; this is not a rerun.
+        [repair_route: steps.RouteSympyRepairs(SympyRepairCase(
+            sympy_artifact = sympy_artifact.value,
+            math_review = math_review.value,
+            physics_review = physics_review.value,
+        ))] by links.RouteReviewRepairs
+        # Assess whether the declared grounded sample exercises the required
+        # source, equation, law, API, and reasoning-log surfaces.
+        [sample_review: steps.ReviewSampleCoverage(repair_route.value)] by links.ReviewSampleCoverage
+        # Report the run and its remaining repair or revalidation obligations.
+        [report: steps.ReportSympyPhysics(SympyPhysicsCase(
+            repair_route = repair_route.value,
+            sample_review = sample_review.value,
+            math_review = math_review.value,
+            physics_review = physics_review.value,
+        ))] by links.SummarizeSympyRun
+    return report

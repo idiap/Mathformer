@@ -1,0 +1,182 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+def run_mathlib_concept_compatibility_loop(
+    statement: str,
+    *,
+    lean_workdir: str | os.PathLike[str] = ".",
+    top_k: int = 8,
+    top_modules: int = 12,
+    verify_checks: bool = True,
+    verify_timeout_sec: int = 60,
+    verify_max_concepts: int = 6,
+    verify_max_candidates: int = 3,
+    max_rounds: int = 3,
+    target_verified_ratio: float = 1.0,
+    reasoning_log_file: Optional[str | os.PathLike[str]] = None,
+    trace_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+) -> Tuple[
+    Optional[Dict[str, Any]], Dict[str, Any], List[Dict[str, Any]], Optional[str]
+]:
+    """Widen concept discovery/verification until mathlib coverage is maximized."""
+    if max_rounds <= 0:
+        raise ValueError("`max_rounds` must be positive.")
+    if top_k <= 0 or top_modules <= 0:
+        raise ValueError("`top_k` and `top_modules` must be positive.")
+
+    target_verified_ratio = max(0.0, min(1.0, target_verified_ratio))
+
+    def emit(event: str, payload: Dict[str, Any]) -> None:
+        """Document the responsibility of ``run_mathlib_concept_compatibility_loop.emit``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Persist or emit computed data in the format expected by later workflow stages.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        if trace_event is not None:
+            trace_event(event, payload)
+
+    emit(
+        "mathlib_concept_compatibility_loop_start",
+        {
+            "skill": "mathlib-compatibility-loop-orchestrator",
+            "hook_id": "mathlib.compatibility_loop",
+            "top_k": top_k,
+            "top_modules": top_modules,
+            "verify_checks": verify_checks,
+            "verify_max_concepts": verify_max_concepts,
+            "verify_max_candidates": verify_max_candidates,
+            "max_rounds": max_rounds,
+            "target_verified_ratio": target_verified_ratio,
+        },
+    )
+
+    best_map: Optional[Dict[str, Any]] = None
+    best_coverage = summarize_mathlib_concept_coverage(None)
+    rounds: List[Dict[str, Any]] = []
+    last_error: Optional[str] = None
+
+    current_top_k = top_k
+    current_top_modules = top_modules
+    current_verify_max_concepts = verify_max_concepts
+    current_verify_max_candidates = verify_max_candidates
+
+    for round_index in range(1, max_rounds + 1):
+        emit(
+            "mathlib_concept_compatibility_loop_iteration_start",
+            {
+                "skill": "mathlib-compatibility-loop-orchestrator",
+                "hook_id": "mathlib.compatibility_loop",
+                "round_index": round_index,
+                "top_k": current_top_k,
+                "top_modules": current_top_modules,
+                "verify_checks": verify_checks,
+                "verify_max_concepts": current_verify_max_concepts,
+                "verify_max_candidates": current_verify_max_candidates,
+            },
+        )
+        start_ns = time.perf_counter_ns()
+        try:
+            concept_map = map_statement_to_mathlib_concepts(
+                statement,
+                lean_workdir=lean_workdir,
+                top_k=current_top_k,
+                top_modules=current_top_modules,
+                verify_checks=verify_checks,
+                verify_timeout_sec=verify_timeout_sec,
+                verify_max_concepts=current_verify_max_concepts,
+                verify_max_candidates=current_verify_max_candidates,
+                reasoning_log_file=reasoning_log_file,
+            )
+            duration_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+            coverage = summarize_mathlib_concept_coverage(concept_map)
+            round_report = {
+                "round_index": round_index,
+                "top_k": current_top_k,
+                "top_modules": current_top_modules,
+                "verify_checks": verify_checks,
+                "verify_max_concepts": current_verify_max_concepts,
+                "verify_max_candidates": current_verify_max_candidates,
+                "duration_ms": duration_ms,
+                "coverage": coverage,
+                "error": None,
+            }
+            rounds.append(round_report)
+            if coverage.get("coverage_score", 0) >= best_coverage.get(
+                "coverage_score", 0
+            ):
+                best_map = concept_map
+                best_coverage = coverage
+            emit(
+                "mathlib_concept_coverage_review_complete",
+                {
+                    "skill": "mathlib-concept-coverage-reviewer",
+                    "hook_id": "mathlib.coverage",
+                    "round_index": round_index,
+                    "coverage": coverage,
+                    "duration_ms": duration_ms,
+                },
+            )
+            verified_ratio = coverage.get("verified_ratio")
+            if (
+                isinstance(verified_ratio, (int, float))
+                and verified_ratio >= target_verified_ratio
+            ):
+                break
+        except Exception as exc:
+            duration_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+            last_error = str(exc)
+            rounds.append(
+                {
+                    "round_index": round_index,
+                    "top_k": current_top_k,
+                    "top_modules": current_top_modules,
+                    "verify_checks": verify_checks,
+                    "verify_max_concepts": current_verify_max_concepts,
+                    "verify_max_candidates": current_verify_max_candidates,
+                    "duration_ms": duration_ms,
+                    "coverage": None,
+                    "error": last_error,
+                }
+            )
+            emit(
+                "mathlib_concept_compatibility_loop_iteration_error",
+                {
+                    "skill": "mathlib-compatibility-loop-orchestrator",
+                    "hook_id": "mathlib.compatibility_loop",
+                    "round_index": round_index,
+                    "error": last_error,
+                    "duration_ms": duration_ms,
+                },
+            )
+            if best_map is None:
+                break
+
+        current_top_k += max(2, top_k // 2)
+        current_top_modules += max(2, top_modules // 3)
+        current_verify_max_concepts += max(2, verify_max_concepts // 2)
+        current_verify_max_candidates += max(1, verify_max_candidates // 2)
+
+    emit(
+        "mathlib_concept_compatibility_loop_complete",
+        {
+            "skill": "mathlib-compatibility-loop-orchestrator",
+            "hook_id": "mathlib.compatibility_loop",
+            "round_count": len(rounds),
+            "coverage": best_coverage,
+            "target_verified_ratio": target_verified_ratio,
+            "target_met": (
+                isinstance(best_coverage.get("verified_ratio"), (int, float))
+                and best_coverage["verified_ratio"] >= target_verified_ratio
+            ),
+            "last_error": last_error,
+        },
+    )
+    return best_map, best_coverage, rounds, last_error

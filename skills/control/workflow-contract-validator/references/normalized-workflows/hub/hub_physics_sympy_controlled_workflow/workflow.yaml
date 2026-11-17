@@ -1,0 +1,474 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_sympy_controlled_workflow
+version: 1.0.0
+kind: workflow
+description: 'Source projection of controlled_suite behind physics-sympy:controlled:
+  eight independent cases, ordered artifact generation, consistency checks, controlled
+  validation, persistence and suite aggregation.'
+aliases:
+- physics-sympy:controlled
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  OutputRoot:
+    schema:
+      type: string
+      minLength: 1
+      description: Repository-relative or resolved output directory; native CLI default
+        artifacts/physics_sympy/controlled_suite.
+    representation: value
+  Flag:
+    schema:
+      type: boolean
+    representation: value
+  Draft:
+    schema:
+      type: object
+      properties:
+        case_id:
+          type: string
+        artifact:
+          type: string
+        draft:
+          type: object
+        native_json:
+          type: string
+      required:
+      - case_id
+      - artifact
+      - draft
+      - native_json
+    representation: value
+  Consistency:
+    schema:
+      type: object
+      properties:
+        status:
+          enum:
+          - complete
+          - draft
+          - blocked
+        native_json:
+          type: string
+      required:
+      - status
+      - native_json
+    representation: value
+  Suite:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        case_count:
+          type: integer
+          const: 8
+        cases:
+          type: array
+          minItems: 8
+          maxItems: 8
+          items:
+            type: object
+        controlled_case_ids:
+          type: array
+          minItems: 8
+          maxItems: 8
+          items:
+            type: string
+        wiki_level_cases_after_controlled_pass:
+          type: array
+      required:
+      - ok
+      - case_count
+      - cases
+      - controlled_case_ids
+      - wiki_level_cases_after_controlled_pass
+    representation: value
+  CaseState:
+    schema:
+      type: object
+      properties:
+        items:
+          type: array
+          maxItems: 8
+          items:
+            type: object
+            properties:
+              case_id:
+                type: string
+              artifact:
+                type: string
+              report_dir:
+                type: string
+              status:
+                enum:
+                - complete
+                - draft
+                - blocked
+              controlled_validation_ok:
+                type: boolean
+              failed_controlled_checks:
+                type: array
+                items:
+                  type: string
+            required:
+            - case_id
+            - artifact
+            - report_dir
+            - status
+            - controlled_validation_ok
+            - failed_controlled_checks
+        native_json:
+          type: string
+          description: Native insertion-ordered JSON of items; preserves persisted
+            report formatting across canonical MCP transport.
+      required:
+      - items
+      - native_json
+    representation: value
+inputs:
+  output_root:
+    type: OutputRoot
+  include_details:
+    type: Flag
+outputs:
+  suite:
+    type: Suite
+    value:
+      ref: flow.outputs.suite
+operations:
+  initialize:
+    inputs:
+      output_root:
+        type: OutputRoot
+    outputs:
+      cases:
+        type: CaseState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_controlled_sympy_initialize
+        operation: mathformer_controlled_sympy_initialize
+  generate:
+    inputs:
+      output_root:
+        type: OutputRoot
+      cases:
+        type: CaseState
+    outputs:
+      draft:
+        type: Draft
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_controlled_sympy_generate
+        operation: mathformer_controlled_sympy_generate
+  assess:
+    inputs:
+      draft:
+        type: Draft
+    outputs:
+      report:
+        type: Consistency
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_controlled_sympy_assess
+        operation: mathformer_controlled_sympy_assess
+  validate_persist_append:
+    inputs:
+      output_root:
+        type: OutputRoot
+      cases:
+        type: CaseState
+      draft:
+        type: Draft
+      report:
+        type: Consistency
+      include_details:
+        type: Flag
+    outputs:
+      cases:
+        type: CaseState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_controlled_sympy_validate_persist_append
+        operation: mathformer_controlled_sympy_validate_persist_append
+  iteration_guard:
+    inputs:
+      cases:
+        type: CaseState
+    outputs:
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_controlled_sympy_iteration_guard
+        operation: mathformer_controlled_sympy_iteration_guard
+  finalize:
+    inputs:
+      output_root:
+        type: OutputRoot
+      cases:
+        type: CaseState
+    outputs:
+      suite:
+        type: Suite
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_controlled_sympy_finalize
+        operation: mathformer_controlled_sympy_finalize
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments:
+      output_root:
+        ref: inputs.output_root
+  - id: cases
+    kind: loop
+    description: Eight fixed cases in native order. CaseState holds the accumulated
+      cases and their ordered JSON for source-owned persistence; each case is independent.
+      The eighth append terminates normally; a smaller compiler fixture bound fails
+      on exhaustion.
+    state_type: CaseState
+    initial:
+      ref: steps.initialize.outputs.cases
+    max_iterations: 8
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: generate
+        kind: call
+        operation: generate
+        arguments:
+          output_root:
+            ref: inputs.output_root
+          cases:
+            ref: loop.state
+      - id: assess
+        kind: call
+        operation: assess
+        arguments:
+          draft:
+            ref: steps.generate.outputs.draft
+      - id: append
+        kind: call
+        operation: validate_persist_append
+        arguments:
+          output_root:
+            ref: inputs.output_root
+          cases:
+            ref: loop.state
+          draft:
+            ref: steps.generate.outputs.draft
+          report:
+            ref: steps.assess.outputs.report
+          include_details:
+            ref: inputs.include_details
+      - id: guard
+        kind: call
+        operation: iteration_guard
+        arguments:
+          cases:
+            ref: steps.append.outputs.cases
+      outputs:
+        cases:
+          type: CaseState
+          value:
+            ref: steps.append.outputs.cases
+        done:
+          type: Flag
+          value:
+            ref: steps.guard.outputs.done
+    next_state:
+      ref: body.outputs.cases
+    until:
+      ref: body.outputs.done
+    outputs:
+      cases:
+        type: CaseState
+        value:
+          ref: body.outputs.cases
+  - id: finalize
+    kind: call
+    operation: finalize
+    arguments:
+      output_root:
+        ref: inputs.output_root
+      cases:
+        ref: steps.cases.outputs.cases
+  outputs:
+    suite:
+      type: Suite
+      value:
+        ref: steps.finalize.outputs.suite
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - output_root
+      - artifacts/physics_sympy/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 34
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked workflow description only; completion establishes neither
+    scientific truth, runtime qualification nor promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: backends/sympy/MathformerPhysicsSympy/pipeline.py
+    selector: controlled_suite
+    digest: sha256:42c1773f2d2121ec80a7a44b407caf7956ca3004c5a89da0c81da017ce72e056
+  - path: scripts/mathformer.py
+    selector: build_registry/action:physics-sympy:controlled; formalize.physics.sympy;
+      run_action; prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/physics_sympy/run_controlled_suite.py
+    selector: main; dependency_blocker
+    digest: sha256:bc884efb7831fe953cb988216a87e4ac8a10e38de265dc6de96694316b61506b
+  - path: scripts/controlled_sympy_tools.py
+    selector: register_controlled_sympy_tools
+    digest: sha256:48b4b8667d5bace55e347bb46b32a39d03f5a610949ec828e0bd1bd9b7f70c6b
+  - path: scripts/mcp_server.py
+    selector: register_controlled_sympy_tools(mcp, _analysis_write_policy, ...)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: tests/test_matrix.json
+    selector: tests/id:mcp.controlled_sympy.workflow
+    digest: sha256:bc7ed7eb3cbea42d79e42f7db6873f2f887056e32c7c13e68893b3f4d816af2b
+  gaps:
+  - Consistency and reporting helper internals remain native operations. Six real
+    MCP tools bind the shared controlled_suite blocks. CaseState, Draft and Consistency
+    carry ordered native JSON to preserve report formatting and persistence through
+    canonical transport.
+  - This graph projects the selected controlled_suite callable. Hub/CLI admission,
+    subprocess transport and postexecution auditing are retained as boundary metadata,
+    not executable graph adapters.
+  - Payload schemas describe compact required surfaces, not exhaustive backend report
+    schemas. Workflow receipts/provenance do not upgrade optional native logs.
+  - The 3600-second limit and 34-call allowance are generated descriptor budgets,
+    not native enforcement. No native timeout, retries or checkpoints are introduced.
+  - Network/external capabilities remain unqualified native declarations; the safety
+    label is not a runtime grant.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-sympy:controlled
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: physics-sympy:controlled
+      summary: Run the controlled physics SymPy suite.
+      family: physics_sympy
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - .venv/bin/python
+      - tests/physics_sympy/run_controlled_suite.py
+      - --json
+      depends_on: []
+      required_paths:
+      - tests/physics_sympy/run_controlled_suite.py
+      required_tools: []
+      optional_tools: []
+      writes:
+      - artifacts/physics_sympy/
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: Registered scripts/mathformer.py controller dispatches the unchanged
+      CLI. This graph binds the selected Python controlled_suite interface to shared
+      native steps via six MCP tools; hub admission, subprocess transport and postexecution
+      auditing remain outside this callable projection.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Preflight errors or dry_run return without launch. CLI catches
+      missing SymPy ModuleNotFoundError as a structured dependency blocker; exits
+      0 iff report.ok, otherwise 3. Other unhandled exceptions abort. Write auditing
+      after execution can set hub ok=false/status=undeclared_writes.
+    scientific_payloads: The graph returns the selected callable's Suite, not the
+      hub transport envelope. Direct callers may pass output_root and include_details
+      (native default false); registered CLI uses its default output root and false,
+      with no extra arguments.
+    transport: CaseState.items is the accumulated list; native_json preserves dictionary
+      insertion order for source-owned Markdown/HTML/JSON output. Draft and Consistency
+      use the same paired, checked encoding. It introduces no provider or compiler
+      boundary.
+    callable_inputs:
+    - output_root
+    - include_details
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    keep_going_semantics: 'No dependencies and no case-level early stop: keep_going
+      does not alter this suite.'
+    extra_args_for_sequence: native per-action policy
+    modeling: Phase 15 and Phase 18 call controlled_suite directly. Wiki-level cases
+      are metadata here; the separate Phase 15 caller executes them only after controlled-suite
+      success.
+# REUSE-IgnoreEnd

@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathlib_grounding_loop import (
+    ApiPlanCase,
+    GroundingCase,
+    GroundingDisposition,
+    GroundingVerificationBasis,
+    ImportCase,
+    LeanFormalizationConceptDemand,
+    MathlibCoverageCase,
+    MathlibSearchBasis,
+)
+import occurrences as steps
+import relations as links
+
+# Resolve a Lean concept demand against a fixed mathlib revision, verify the
+# declarations that actually fit, and produce a usable API and import plan.
+reasoning GroundLeanAPIs(
+    workflow_source: LeanFormalizationConceptDemand,
+) -> Generated[GroundingDisposition]:
+    sequence:
+        parallel:
+            # Resolve requested concepts, ambiguity, proof roles, and navigation bounds.
+            [concept_model: steps.ModelConceptDemand(workflow_source)]
+            # Observe a version-stamped declaration and import snapshot.
+            [mathlib_snapshot: steps.InspectMathlibSnapshot(workflow_source)]
+        # Search local indexes, hierarchy neighborhoods, and official-source fallbacks.
+        [candidates: steps.RetrieveMathlibCandidates(MathlibSearchBasis(
+            concept_model = concept_model.value,
+            mathlib_snapshot = mathlib_snapshot.value,
+        ))] by links.RetrieveCandidates
+        # Verify snapshot-bound declaration applicability and retain the supporting evidence.
+        [grounding_evidence: steps.VerifyMathlibGrounding(GroundingVerificationBasis(
+            concept_model = concept_model.value,
+            mathlib_snapshot = mathlib_snapshot.value,
+            candidates = candidates.value,
+        ))] by links.GroundCandidates
+        # Assess whether every demanded concept has verified coverage or an explicit gap.
+        [coverage_check: steps.AssessConceptCoverage(MathlibCoverageCase(
+            concept_model = concept_model.value,
+            grounding_evidence = grounding_evidence.value,
+        ))] by links.AssessCoverage
+        # Select declarations and narrow imports while keeping unresolved gaps visible.
+        [api_plan: steps.PlanLeanAPIs(ApiPlanCase(
+            concept_model = concept_model.value,
+            grounding_evidence = grounding_evidence.value,
+            coverage_check = coverage_check.value,
+        ))] by links.PlanAPIs
+        # Check the selected APIs in the intended import and namespace context.
+        [import_check: steps.AssessImportContext(ImportCase(
+            api_plan = api_plan.value,
+            grounding_evidence = grounding_evidence.value,
+        ))] by links.TestImports
+        # Return the verified API plan together with coverage, compatibility, and gaps.
+        [grounding_status: steps.CalibrateGroundingStatus(GroundingCase(
+            grounding_evidence = grounding_evidence.value,
+            coverage_check = coverage_check.value,
+            api_plan = api_plan.value,
+            import_check = import_check.value,
+        ))] by links.CalibrateGrounding
+    return grounding_status

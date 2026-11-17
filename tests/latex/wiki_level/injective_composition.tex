@@ -1,0 +1,65 @@
+% SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+% SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+% SPDX-License-Identifier: MIT
+% Neuro-symbolic AI Group
+% File Documentation
+%
+% Motivation:
+%   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+%
+% Intent:
+%   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+%
+% Function:
+%   Contains executable tests, fixtures, and manifests used for local and CI validation.
+%
+% Maintenance Notes:
+%   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+% mathformer-case-id: wiki_injective_composition
+% expected-lean-name: WikiLevelGold.wiki_injective_comp
+% controlled-suite: wiki_level_latex_to_lean
+% difficulty: easy
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+
+\newtheorem{theorem}{Theorem}
+
+\title{Composition of Injective Functions}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Controlled Origin Annotation}
+This is a synthetic controlled case written in a Wikipedia-style exposition.
+It is intended to test whether function domains, codomains, composition, and
+injectivity hypotheses are bound explicitly before autoformalization.
+
+\section*{Statement and Proof}
+
+\begin{theorem}[Composition of injective functions]
+Let $A$, $B$, and $C$ be sets, and let $f : A \to B$ and $g : B \to C$ be
+functions. If $f$ and $g$ are injective, then the composite function
+$g \circ f : A \to C$ is injective.
+\end{theorem}
+
+\begin{proof}
+Let $x,y \in A$ and suppose that $(g \circ f)(x) = (g \circ f)(y)$.
+By the definition of composition, this says $g(f(x)) = g(f(y))$. Since $g$ is
+injective, it follows that $f(x) = f(y)$. Since $f$ is injective, it follows
+that $x = y$. Therefore $g \circ f$ is injective.
+\end{proof}
+
+\section*{Lean Target}
+Formalize the theorem for arbitrary types $\alpha$, $\beta$, and $\gamma$,
+functions $f : \alpha \to \beta$ and $g : \beta \to \gamma$, and hypotheses
+\texttt{Function.Injective f} and \texttt{Function.Injective g}.
+The expected Lean theorem is \texttt{WikiLevelGold.wiki\_injective\_comp}.
+
+\end{document}

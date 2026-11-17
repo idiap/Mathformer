@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mathformer Paper Layout Packet",
+  "type": "object",
+  "required": ["source", "engine", "sections", "blocks", "references", "warnings"],
+  "properties": {
+    "source": {
+      "type": "object",
+      "required": ["input", "retrieved_at_utc"],
+      "properties": {
+        "input": {"type": "string"},
+        "title": {"type": "string"},
+        "retrieved_at_utc": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "engine": {
+      "type": "object",
+      "required": ["name", "ok"],
+      "properties": {
+        "name": {"type": "string"},
+        "ok": {"type": "boolean"},
+        "details": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "block_ids"],
+        "properties": {
+          "id": {"type": "string"},
+          "title": {"type": "string"},
+          "block_ids": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": true
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "section", "text", "role_hints", "citations"],
+        "properties": {
+          "id": {"type": "string"},
+          "section": {"type": "string"},
+          "page": {"type": ["integer", "null"]},
+          "text": {"type": "string"},
+          "role_hints": {"type": "array", "items": {"type": "string"}},
+          "citations": {"type": "array", "items": {"type": "string"}},
+          "labels": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": true
+      }
+    },
+    "references": {"type": "array", "items": {"type": "object"}},
+    "warnings": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

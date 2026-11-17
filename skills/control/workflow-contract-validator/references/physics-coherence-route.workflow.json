@@ -1,0 +1,619 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_mathformerphysicslib_coherence_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected coherence route in native order, preserving failure data.",
+  "aliases": [
+    "mathformerphysicslib.coherence"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "physics-lib:coherence-suite",
+          "physics-lib:coherence-loop-report"
+        ]
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RouteState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "required": [
+                "ok"
+              ],
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "SelectedMatch": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "object",
+            "properties": {
+              "route_id": {
+                "const": "mathformerphysicslib.coherence"
+              },
+              "action_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "const": [
+                  "physics-lib:coherence-suite",
+                  "physics-lib:coherence-loop-report"
+                ]
+              }
+            },
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "additionalProperties": true
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object"
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "SelectedMatch"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_coherence_route_initialize",
+          "operation": "mathformer_physics_coherence_route_initialize"
+        }
+      }
+    },
+    "select_action": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        }
+      },
+      "outputs": {
+        "action": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_coherence_route_select_action",
+          "operation": "mathformer_physics_coherence_route_select_action"
+        }
+      }
+    },
+    "run_selected_action": {
+      "inputs": {
+        "action": {
+          "type": "ActionId"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_coherence_route_run_selected_action",
+          "operation": "mathformer_physics_coherence_route_run_selected_action"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "done": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_coherence_route_advance",
+          "operation": "mathformer_physics_coherence_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_coherence_route_finish",
+          "operation": "mathformer_physics_coherence_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "Visit at most the two registered route actions. Failure is returned as data so keep_going can continue without clearing accumulated failure. Reaching the second child sets done and returns normally.",
+        "state_type": "RouteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 2,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select_action",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "execute",
+              "kind": "call",
+              "operation": "run_selected_action",
+              "arguments": {
+                "action": {
+                  "ref": "steps.select.outputs.action"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.execute.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "RouteState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Boolean",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "RouteState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/mathformerphysicslib/coherence/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 8
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source description only; completion grants no scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; build_registry; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action; prepare_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/physics_lean/run_mathformerphysicslib_coherence_loop.py",
+        "selector": "main; run_loop; compare_previous; check_and_summarize",
+        "digest": "sha256:4d823bac248a59aed30c95d0bfa0ca6d16a17c0e13ca6961c3356bb37cb093d6"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_ask; mathformer_run_workflow; _cap_unbounded_timeouts",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/physics_coherence_route_tools.py",
+        "selector": "register_physics_coherence_route_tools; selected_match; checked_registry; check_state",
+        "digest": "sha256:4c58835aced2b4bf548ce8d551289a3f92daaea3c731e4f7fe7377582e0f34fa"
+      },
+      {
+        "path": "scripts/adoption_check_tools.py",
+        "selector": "Context",
+        "digest": "sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac"
+      },
+      {
+        "path": "scripts/workflow_write_audit.py",
+        "selector": "snapshot_repository; audit_snapshots",
+        "digest": "sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "physics_coherence_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/build_coherence_inventory.py",
+        "selector": "native coherence implementation",
+        "digest": "sha256:21ee48b98b2422303284a24db371f24cc391c2a2794e7734ffe8a318a4ba3189"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-concept-canonicalizer/scripts/canonicalize_physics_concepts.py",
+        "selector": "native coherence implementation",
+        "digest": "sha256:978a98be160eaa2ecf50a3e47683aecc5c0971bebd7979240af0782d7d46f762"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-mathlib-grounding-auditor/scripts/audit_mathlib_grounding.py",
+        "selector": "native coherence implementation",
+        "digest": "sha256:ca4ae1f3f477164a1506946b2cb5f29e24ddcff56e2b05bacfa8fe5043156c0a"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-redefinition-critic/scripts/critic_redefinitions.py",
+        "selector": "native coherence implementation",
+        "digest": "sha256:6656d56f1d98052d124faeab60a138f81e638f7659d6b61496f3876f6ba559fb"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-integration-critic/scripts/critic_integration.py",
+        "selector": "native coherence implementation",
+        "digest": "sha256:7d13162c57fc29f2d519218fd847b8bf4187d2ec75fb03db5bed64b039c2b51a"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-api-operability-critic/scripts/critic_api_operability.py",
+        "selector": "native coherence implementation",
+        "digest": "sha256:3fb1c55eca4d9f921d901673f0bf57d1c54dfb4b69518172d71dcd091e8d4f25"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-generative-coherence-critic/scripts/build_generative_coherence_critic_plan.py",
+        "selector": "native coherence implementation",
+        "digest": "sha256:2f11a606d61a20e5d844711bb071aff11c2bd517cce8decf4e724b6f2b008495"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-coherence-repair-planner/scripts/plan_coherence_repairs.py",
+        "selector": "native coherence implementation",
+        "digest": "sha256:3acd9cc0324cc99a0ee733d39fb619adeb2a121788efffc6c6d502fc3b0c3bed"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-coherence-gate/scripts/gate_coherence.py",
+        "selector": "native coherence implementation",
+        "digest": "sha256:abc851b8d1344a842bdbf72e800ba0b5570d0fa9f42f8dabf2d6fa9a4940ad0d"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/coherence_common.py",
+        "selector": "native coherence implementation",
+        "digest": "sha256:e1da9d47b82e23be26335e4476ba442aa58aedafe245034709d2868909deb125"
+      },
+      {
+        "path": "libraries/MathformerPhysicsLib/release_status.py",
+        "selector": "build_release_status",
+        "digest": "sha256:d10f70157f9b44923ad8ed3fda743b70133ea890ace3d1c509638704dfc81d59"
+      }
+    ],
+    "gaps": [
+      "Recursive dependency traversal and report internals remain inside run_selected_action; the graph models route control only.",
+      "Native logging does not guarantee normalized receipts; Lunar supplies required runtime provenance, events and digests.",
+      "The 3600-second limit is a Lunar budget, not a native CLI route deadline. Step tools retain native None leaf timeouts; legacy MCP callers apply service caps."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "mathformerphysicslib.coherence",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "mathformerphysicslib.coherence",
+        "title": "Audit MathformerPhysicsLib coherence and grounding",
+        "action_ids": [
+          "physics-lib:coherence-suite",
+          "physics-lib:coherence-loop-report"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered mathformer_physics_coherence_route_* tools call the shared native route functions and run_action. Legacy controller dispatch is unchanged.",
+      "callers": [
+        "CLI ask --run",
+        "MCP mathformer_ask",
+        "MCP mathformer_run_workflow"
+      ],
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report",
+        "match",
+        "registry",
+        "repository_root"
+      ],
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "failure_policy": "Preserve failed native payloads; actual exceptions terminate execution.",
+      "scientific_payloads": "HubResult is the transport envelope; report JSON is captured in leaf stdout.",
+      "timeout": "Bound step tools retain native None leaf timeouts; Lunar enforces the descriptor budget. Legacy MCP ask/run_workflow retain service-configured caps.",
+      "service_authority": "Non-dry execution checks service read-only policy and every reachable declared write root before native dispatch."
+    },
+    "mathformer.composition": {
+      "selection": "Already selected route; match and registry are native constants resolved by the owning controller.",
+      "dependency_state": "run_action owns index=0, children=[], dependencies_ok=true and copied ancestry for cycle detection. Each dependency increments index, appends child and ANDs dependencies_ok with child.ok. Stop at list end or first failed child unless keep_going; continuing never restores success.",
+      "dependency_bounds": "Aliases each visit one child; suite visits nine self-tests; report visits one leaf. No retries.",
+      "admission": "Unknown actions, cycles and extra arguments on sequences return failure without visiting children.",
+      "leaves": "Preflight failure blocks launch; dry_run returns plans; exits, timeouts and undeclared writes propagate failure.",
+      "report_pass": "main calls run_loop once: prepare output directory, build inventory, canonicalize inventory, audit grounding from graph, compare previous grounding before overwrite, run redefinition/integration/API critics using inventory/graph/grounding, generate advisory and repair plans plus gate from deterministic reports, write Markdown and nine JSON artifacts, then evaluate six checks. Plans never execute repairs or convergence iterations.",
+      "previous_report": "Missing, invalid or empty previous grounding yields no_previous_report; comparison is cross-run evidence.",
+      "report_success": "All six checks must pass: scanned modules, included top10 cases, complete generative interpretation, recorded failed grounding candidates, comparison status present, report written. Gate status is reported independently. main emits the summary as JSON and exits 0 iff summary.ok, otherwise 1."
+    }
+  }
+}

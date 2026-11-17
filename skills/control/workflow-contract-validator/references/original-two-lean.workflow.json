@@ -1,0 +1,498 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_formalphysics_original_two_lean_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Model main() for the registered, no-flag original-two Lean generation action.",
+  "aliases": [
+    "formalphysics:original-two-lean"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Arguments": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 0
+      }
+    },
+    "NoPromotion": {
+      "schema": {
+        "type": "boolean",
+        "const": false
+      }
+    },
+    "Generated": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 2
+      }
+    },
+    "Case": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "formalphysics_0000",
+          "formalphysics_0020"
+        ]
+      }
+    },
+    "Written": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "artifact": {
+            "type": "string"
+          },
+          "library": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "artifact",
+          "library"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "const": 0
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Arguments"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "generated": {
+      "type": "Generated",
+      "value": {
+        "ref": "flow.outputs.generated"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {
+        "argv": {
+          "type": "Arguments"
+        }
+      },
+      "outputs": {
+        "promote_lib": {
+          "type": "NoPromotion"
+        },
+        "generated": {
+          "type": "Generated"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_original_two_lean_initialize",
+          "operation": "mathformer_original_two_lean_initialize"
+        }
+      }
+    },
+    "select_case": {
+      "inputs": {
+        "generated": {
+          "type": "Generated"
+        }
+      },
+      "outputs": {
+        "case": {
+          "type": "Case"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_original_two_lean_select_case",
+          "operation": "mathformer_original_two_lean_select_case"
+        }
+      }
+    },
+    "write_case": {
+      "inputs": {
+        "case": {
+          "type": "Case"
+        },
+        "promote_lib": {
+          "type": "NoPromotion"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "written": {
+          "type": "Written"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_original_two_lean_write_case",
+          "operation": "mathformer_original_two_lean_write_case"
+        }
+      }
+    },
+    "append_and_test": {
+      "inputs": {
+        "generated": {
+          "type": "Generated"
+        },
+        "written": {
+          "type": "Written"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "generated": {
+          "type": "Generated"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_original_two_lean_append_and_test",
+          "operation": "mathformer_original_two_lean_append_and_test"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "generated": {
+          "type": "Generated"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_original_two_lean_finish",
+          "operation": "mathformer_original_two_lean_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          }
+        }
+      },
+      {
+        "id": "cases",
+        "kind": "loop",
+        "description": "Exactly two ordered iterations; generated is the only carried state. The second completed body sets done=true and exits normally at the bound. Exceptions stop immediately; no search, refinement, retry or validation.",
+        "state_type": "Generated",
+        "initial": {
+          "ref": "steps.initialize.outputs.generated"
+        },
+        "max_iterations": 2,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select_case",
+              "arguments": {
+                "generated": {
+                  "ref": "loop.state"
+                }
+              }
+            },
+            {
+              "id": "write",
+              "kind": "call",
+              "operation": "write_case",
+              "arguments": {
+                "case": {
+                  "ref": "steps.select.outputs.case"
+                },
+                "promote_lib": {
+                  "ref": "steps.initialize.outputs.promote_lib"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "append_and_test",
+              "arguments": {
+                "generated": {
+                  "ref": "loop.state"
+                },
+                "written": {
+                  "ref": "steps.write.outputs.written"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "generated": {
+              "type": "Generated",
+              "value": {
+                "ref": "steps.advance.outputs.generated"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.generated"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "generated": {
+            "type": "Generated",
+            "value": {
+              "ref": "body.outputs.generated"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "generated": {
+            "ref": "steps.cases.outputs.generated"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "generated": {
+        "type": "Generated",
+        "value": {
+          "ref": "steps.cases.outputs.generated"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.finish.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/",
+          "artifacts/physics_lean/from_scratch_lean/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow",
+        "generate_lean_candidates"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion",
+        "promote_to_library"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 8
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Generated candidate files only; no compilation, proof validation or scientific acceptance."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/generate_formalphysics_original_two_lean.py",
+        "selector": "main; initialize; select_case; append_paths; finish; write_case; render; CASES",
+        "digest": "sha256:e0f3f9f3e140fcb1cb18fb3c7f62946335cb4bd6d022a43d346a10a0c65f481a"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:formalphysics:original-two-lean; run_action; run_leaf_action; prepare_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/formalphysics_original_two_lean_tools.py",
+        "selector": "register_original_two_lean_tools",
+        "digest": "sha256:7c916627617c70cc2ce58b509e6a9924c2f23c4f84e9a45f7806fcaeeecb8afb"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_original_two_lean_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Only empty hub argv is modeled; direct CLI --promote-lib execution is outside this specialization.",
+      "Native action has no timeout; Lunar enforces the declared 3600-second workflow bound.",
+      "Lunar records execution receipts; generated Lean paths retain the source candidate-only trust status.",
+      "Hub preflight, dry-run and post-execution write auditing remain in the native controller boundary."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "formalphysics:original-two-lean",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "formalphysics:original-two-lean",
+        "summary": "Regenerate the original two FormalPhysics Lean artifacts.",
+        "family": "physics_lean",
+        "kind": "generation",
+        "safety": "writes_repo",
+        "command": [
+          "{python}",
+          "scripts/generate_formalphysics_original_two_lean.py"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "scripts/generate_formalphysics_original_two_lean.py"
+        ],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [
+          "libraries/MathformerPhysicsLib/Lean/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": null,
+        "notes": ""
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Native hub dispatches one subprocess; this graph describes its main(), not a second dispatch.",
+      "failure_policy": "Preflight blocks execution; dry-run returns early; post-run audit can mark ok=false.",
+      "effects_status": "Registry declares library writes; actual default writes are artifacts and may fail the write audit.",
+      "partial_failure": "Unhandled read/write/copy errors stop immediately, may leave earlier outputs, and prevent normal final printing.",
+      "normal_outputs": [
+        "artifacts/physics_lean/from_scratch_lean/formalphysics_0000/mathformer_typed_candidate.lean",
+        "artifacts/physics_lean/from_scratch_lean/formalphysics_0020/mathformer_typed_candidate.lean"
+      ],
+      "bound_semantics": "Second iteration exits successfully; on_exhausted is unreachable for the fixed source CASES.",
+      "scientific_payloads": "Exit code zero means generation completed; it does not attest to Lean validity."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "command_after_dependencies": false,
+      "extra_args_for_sequence": "native per-action policy",
+      "modeling": "No dependency composition; fixed ordered CASES iteration only."
+    }
+  }
+}

@@ -1,0 +1,478 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_atp_premise_guided_group_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Run the native premise-guided group inverse regression with shared CLI steps.",
+  "aliases": [
+    "atp:premise-guided-group"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Arguments": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "artifact_root": {
+            "type": "string"
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Request": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "artifact_root",
+          "json",
+          "statement",
+          "time_limit",
+          "premise_loop"
+        ],
+        "properties": {
+          "artifact_root": {
+            "type": "string"
+          },
+          "json": {
+            "type": "boolean"
+          },
+          "statement": {
+            "const": "Let G be a group with multiplication mul, identity element e, and inverse operation inv. Prove that for all elements x and y of G, the inverse of the product mul(x,y) is the product of the inverses in reverse order: inv(mul(x,y)) = mul(inv(y),inv(x))."
+          },
+          "time_limit": {
+            "const": 3
+          },
+          "premise_loop": {
+            "const": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "attempts",
+          "winning_final_premise_ids"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "winning_final_premise_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "CheckedReport": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "test_assertions"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "test_assertions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          3
+        ]
+      }
+    }
+  },
+  "inputs": {
+    "args": {
+      "type": "Arguments"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "CheckedReport",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "resolve": {
+      "inputs": {
+        "args": {
+          "type": "Arguments"
+        }
+      },
+      "outputs": {
+        "request": {
+          "type": "Request"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_group_resolve",
+          "operation": "mathformer_group_resolve"
+        }
+      }
+    },
+    "discover": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_group_discover",
+          "operation": "mathformer_group_discover"
+        }
+      }
+    },
+    "check": {
+      "inputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "CheckedReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_group_check",
+          "operation": "mathformer_group_check"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "report": {
+          "type": "CheckedReport"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_group_emit",
+          "operation": "mathformer_group_emit"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "resolve",
+        "kind": "call",
+        "operation": "resolve",
+        "arguments": {
+          "args": {
+            "ref": "inputs.args"
+          }
+        }
+      },
+      {
+        "id": "discover",
+        "kind": "call",
+        "operation": "discover",
+        "arguments": {
+          "request": {
+            "ref": "steps.resolve.outputs.request"
+          }
+        }
+      },
+      {
+        "id": "check",
+        "kind": "call",
+        "operation": "check",
+        "arguments": {
+          "report": {
+            "ref": "steps.discover.outputs.report"
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "passed",
+            "when": {
+              "ref": "steps.check.outputs.report.ok"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "emit",
+              "arguments": {
+                "request": {
+                  "ref": "steps.resolve.outputs.request"
+                },
+                "report": {
+                  "ref": "steps.check.outputs.report"
+                },
+                "exit_code": {
+                  "literal": 0
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "emit",
+          "arguments": {
+            "request": {
+              "ref": "steps.resolve.outputs.request"
+            },
+            "report": {
+              "ref": "steps.check.outputs.report"
+            },
+            "exit_code": {
+              "literal": 3
+            }
+          }
+        },
+        "outputs": {
+          "exit_code": {
+            "type": "ExitCode",
+            "value": {
+              "ref": "selected.outputs.exit_code"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "CheckedReport",
+        "value": {
+          "ref": "steps.check.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.finish.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/vampire_atp/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 180,
+      "max_operation_calls": 4
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Native regression completion only; no scientific endorsement or durable artifact promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/atp/run_premise_guided_group_inverse.py",
+        "selector": "main",
+        "digest": "sha256:9eeb1119b2548d2b857ba846b7ca0c9f74cecb1d4508a884f885fcde16af12c9"
+      },
+      {
+        "path": "backends/atp/MathformerATP/vampire.py",
+        "selector": "discover_proof; discover_proof_steps; _run_premise_guided_attempt_steps; _prove_generated_lemmas_steps; _minimize_premises_steps",
+        "digest": "sha256:77ee1217a3c7555b14ab77042214207a2d61c1c6a8fe38d162f94932c30d5e4c"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:atp:premise-guided-group; preflight; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/premise_group_tools.py",
+        "selector": "register_premise_group_tools",
+        "digest": "sha256:e99e8e5dad02a0a944eb6ffc18b80ff2e5999f6cd2cc54aa548725659106fcea"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_premise_group_tools; _premise_group_guard",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "authored atp:premise-guided-group override",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Discovery helper control, finite traversal bounds, carried state and native reports remain inside the source-backed discover operation.",
+      "Payload schemas are compact projections; native report fields and artifacts remain source-owned.",
+      "The graph models main; preflight, dry-run, subprocess timeout and undeclared-write audit remain the external hub invocation boundary.",
+      "Native emitted stdout is routed to MCP stderr to preserve stdio framing; the CLI prints to stdout."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "atp:premise-guided-group",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "atp:premise-guided-group",
+        "summary": "Run the premise-guided group inverse ATP regression.",
+        "family": "atp",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "tests/atp/run_premise_guided_group_inverse.py",
+          "--json"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "tests/atp/run_premise_guided_group_inverse.py"
+        ],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [
+          "artifacts/vampire_atp/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": 180
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Existing scripts/mathformer.py controller; this graph specifies main only.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report"
+      ],
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "failure_policy": "Preflight failure or dry-run prevents execution. The dependency-free leaf invokes main with --json under a 180-second subprocess timeout. Subprocess failure, timeout or undeclared writes makes the hub unsuccessful. Main returns 0 only when every assertion passes, otherwise 3; unexpected errors propagate. Preserve the native hub result rather than accepting an emitted report or a normal nonzero return as success.",
+      "scientific_payloads": "CheckedReport is the native regression payload, not HubResult."
+    },
+    "mathformer.step_semantics": {
+      "resolve": "tests/atp/run_premise_guided_group_inverse.py::main argument parsing and request packing. Default artifact_root is artifacts/vampire_atp/premise_guided_group_inverse_test and json is false. Resolve relative paths against REPO_ROOT; retain absolute paths. Pack DEFAULT_STATEMENT, time_limit=3, premise_loop=true. CLI parsing errors terminate before discovery.",
+      "discover": "tests/atp/run_premise_guided_group_inverse.py::main calls backends/atp/MathformerATP/vampire.py::discover_proof, which drains discover_proof_steps. Use default medium premise budget (at most eight), generation and minimization enabled. Autoformalize the fixed statement into one built-in group candidate. In candidate order: build/select its registry, generate lemmas once, prove each eligible lemma separately from the selected premises, combine selected premises with successful promoted lemmas, greedily minimize, then attempt the final theorem. Skip ineligible lemmas; failed lemma proofs remain unpromoted. Lemma and final attempts use three-second limits. Candidate state carries accumulated attempts and the first winner; stop on first proof or finite candidate exhaustion. Lemma state carries proof statuses and promoted premises through one traversal of the generated list; no regeneration occurs. Minimization carries the current premise set and deletion records through one traversal of the original augmented list. Skip candidates absent from current; retain a deletion only when its trial proves the theorem, using a one-second limit per trial. Empty lists return normally. Candidate exhaustion also returns a report normally, with ok=false when no proof was found. Persist discovery, selection, generation, minimization and attempt reports and available proof artifacts. Callbacks, yielded events, timing and helper loops belong to this operation; no fixed-point refinement or retry is introduced.",
+      "check": "tests/atp/run_premise_guided_group_inverse.py::main report indexing, assertion computation and mutation. Index attempts[0], selection, generation and unsafe shortcut directly; missing entries or invalid paths propagate errors rather than being converted to assertion failures. Check proof_found and premise_loop enabled; selected_ids must equal mul_associative, left_identity, right_identity, left_inverse, right_inverse. Promoted ids must equal product_candidate_right_inverse, product_candidate_left_inverse, two_sided_inverse_unique. Require unsafe_group_commutativity_shortcut proof_status=rejected and promoted=false; its generated premise must be excluded from final_ids. Final ids must equal generated_product_candidate_right_inverse, generated_product_candidate_left_inverse, generated_two_sided_inverse_unique. Check is_file for winning selection, generation and minimization report paths. Add test_assertions and replace report.ok with all(assertions.values()); this is also the source-backed return guard. Do not rewrite discovery_report.json here.",
+      "emit": "tests/atp/run_premise_guided_group_inverse.py::main print and return. If request.json, print the complete checked report using ensure_ascii=false and indent=2; otherwise print ok, winning_status, final premises and the three report paths in source order. Return the supplied source-selected exit code after printing. Printing errors propagate; stdout is not a persisted report update."
+    }
+  }
+}

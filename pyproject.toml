@@ -1,0 +1,86 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+[project]
+name = "mathformer-workspace"
+version = "1.0.0"
+description = "Reproducible Python profiles for the Mathformer research workspace"
+requires-python = ">=3.11,<3.14"
+license = "MIT"
+dependencies = []
+
+[project.optional-dependencies]
+physics = [
+  "matplotlib>=3.8,<4",
+  "numpy>=1.26,<3",
+  "sympy>=1.12,<2",
+]
+mcp = [
+  "jsonschema>=4,<5",
+  "PyYAML>=6,<7",
+  "httpx>=0.27,<1",
+  "mcp>=1.6,<2",
+  "uvicorn>=0.30,<1",
+]
+documents = [
+  "beautifulsoup4>=4.12,<5",
+  "docling>=2,<3",
+]
+providers = [
+  "anthropic>=0.34,<1",
+  "google-genai>=1,<2",
+  "openai>=1,<3",
+]
+knowledge-base = [
+  "huggingface-hub>=0.23,<1",
+  "numpy>=1.26,<3",
+]
+
+[dependency-groups]
+dev = [
+  "pre-commit>=4,<5",
+  "pytest>=8,<9",
+  "ruff>=0.9,<1",
+  "black>=26,<27",
+  "pyright>=1.1,<2",
+  "vulture>=2,<3",
+  "reuse>=6,<7",
+]
+
+[tool.uv]
+package = false
+
+# Keep local environments, generated exports, and vendored snapshots outside
+# source analysis; REUSE and the attribution/LFS audit still inspect tracked files.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.black]
+target-version = ["py311"]
+extend-exclude = '/(artifacts|vendor|libraries|backends/sympy/MathformerSympy|docs/migrations/portable-repository-adoption/(upstream-v1\.2|evidence))/'
+
+[tool.ruff]
+extend-exclude = ["artifacts", "vendor", "libraries", "backends/sympy/MathformerSympy", "docs/migrations/portable-repository-adoption/upstream-v1.2"]
+
+# MCP integration tests choose/re-exec the Lunar interpreter and extend sys.path
+# before importing its runtime. The server registers tools between import groups.
+[tool.ruff.lint.per-file-ignores]
+"tests/mcp/**/*.py" = ["E402"]
+"tests/physics_lean/test_candidate_compile_workflow_runtime.py" = ["E402"]
+"scripts/mcp_server.py" = ["E402"]
+# These frozen function fragments are exec'd with the native module's globals.
+"tests/mcp/fixtures/derivation_completeness_entrypoint.py" = ["F821"]
+"tests/mcp/fixtures/grounded_sample_entrypoint.py" = ["F821"]
+
+[tool.pyright]
+include = ["scripts", "skills", "tests", "backends", "libraries", "benchmarks", "paper", ".idiap-sd"]
+exclude = ["**/__pycache__", "**/.venv", "**/.lake", "libraries/MathformerLib/SympyPhysics", "libraries/MathformerPhysicsLib/SymPy", "scripts/atp/run_vampire_atp.py", "scripts/control/audit_workflow_skill_integration.py", "scripts/control/mathformer.py", "scripts/control/mcp_server.py", "scripts/control/plan_workflow_graph_layout.py", "scripts/control/render_workflow_graphs.py", "scripts/control/workflow_write_audit.py", "scripts/mcp/load_mcp_service_config.py", "scripts/mcp/mathformer_mcp_service.py", "scripts/mcp/mcp_server.py", "scripts/mcp/mcp_service_config.py", "scripts/mcp/probe_mcp_service_dependencies.py", "scripts/physics-common/build_physics_registry.py", "scripts/physics-common/physics_ir.py", "scripts/physics-isabelle/generate_formalphysics_extra_isabelle.py", "scripts/physics-isabelle/generate_formalphysics_original_two_isabelle.py", "scripts/physics-lean/audit_mathformer_physics_lean_grounding.py", "scripts/physics-lean/generate_formalphysics_extra_lean.py", "scripts/physics-lean/generate_formalphysics_original_two_lean.py", "scripts/physics-lean/refresh_formalphysics_extra_lean_reports.py", "scripts/physics-sympy/generate_formalphysics_extra_sympy.py", "scripts/physics-sympy/generate_formalphysics_original_two_sympy.py", "scripts/physics-sympy/generate_formalphysics_top10_sympy.py", "scripts/premise-kb/manage_premise_kb.py", "scripts/rocq/run_rocq_autoformalization.py", "scripts/setup/generate_python_license_inventory.py", "scripts/setup/install_env.py", "scripts/setup/link_agent_skills.py", "scripts/setup/organize_repository_layout.py", "tests/runners/run_backend.py", "tests/runners/run_docs.py", "tests/runners/run_generative.py", "tests/runners/run_quick.py", "tests/runners/run_slow.py"]
+extraPaths = ["scripts", "skills/autoformalization/source-line-translation-packet-builder/scripts", "skills/control/gate-policy-controller/scripts", "skills/control/reasoning-log-schema-guardian/scripts", "skills/control/skill-hook-coverage-maximizer/scripts", "skills/control/skill-test-program-orchestrator/scripts", "skills/control/workflow-contract-validator/scripts", "skills/mathformerlib/mathformerlib-registry-manager/scripts", "skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts", "skills/mathlib/mathlib-concept-ontology-manager/scripts", "skills/mathlib/mathlib-index-builder/scripts", "skills/mathlib/mathlib-term-expansion-annotator/scripts", "skills/rfde/reference-free-critic-monitor/scripts"]
+pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
+
+[tool.vulture]
+exclude = [".venv/", ".lake/", ".git/", "artifacts/", "vendor/", "docs/migrations/portable-repository-adoption/upstream-v1.2/"]
+min_confidence = 80

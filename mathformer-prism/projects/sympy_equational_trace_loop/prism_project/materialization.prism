@@ -1,0 +1,306 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from sympy_equational_trace_loop import (
+    ParsedEquations,
+    SympyArtifact,
+    SympyAssessmentCase,
+    SympyConsistencyReport,
+    SympyDraftBasis,
+    SympyEquationFormalizationRequest,
+    SympyEquationalTraceAssessment,
+    SympyEquationalTraceDraftSympyInitialArtifact,
+    SympyEquationalTraceExecuteSympyInitialArtifact,
+    SympyEquationalTraceSympyApiDocsIndexArtifact,
+    SympyEquationalTraceSympyAssumptionsModelArtifact,
+    SympyEquationalTraceSympyCounterexampleSearchArtifact,
+    SympyEquationalTraceSympyDependenciesProbeArtifact,
+    SympyEquationalTraceSympyExpressionParseArtifact,
+    SympyEquationalTraceSympyGroundingNavigateArtifact,
+    SympyEquationalTraceSympyIdentityValidateArtifact,
+    SympyEquationalTraceSympyTraceVerifyArtifact,
+    SympyExecutionReport,
+    SympyGroundingContext,
+    SympyTraceCase,
+    SympyValidationReport,
+)
+from material_relations import FormalizesDraftSympyInitialCertificate
+from reasoning import TraceSympyEquations
+from relations import CheckSympyTraceCertificate
+from relations import DraftExecutableArtifactCertificate
+from relations import ExecuteSympyArtifactCertificate
+from relations import SummarizeSympyChecksCertificate
+from generated.draft_sympy_initial_skill import sympy_autoformalization_drafter_skill as draft_sympy_initial_skill_binding
+from generated.reasoning_equations_1_skill import sympy_expression_parser_skill as equations_reasoning_skill_1
+from generated.reasoning_sympy_context_1_skill import sympy_dependency_prober_skill as sympy_context_reasoning_skill_1
+from generated.reasoning_sympy_context_2_skill import sympy_api_docs_indexer_skill as sympy_context_reasoning_skill_2
+from generated.reasoning_sympy_context_3_skill import sympy_assumption_modeler_skill as sympy_context_reasoning_skill_3
+from generated.reasoning_sympy_context_4_skill import sympy_concept_grounding_navigator_skill as sympy_context_reasoning_skill_4
+from generated.reasoning_sympy_artifact_1_skill import sympy_autoformalization_drafter_skill as sympy_artifact_reasoning_skill_1
+from generated.reasoning_execution_report_1_skill import sympy_execution_runner_skill as execution_report_reasoning_skill_1
+from generated.reasoning_validation_report_1_skill import sympy_identity_validator_skill as validation_report_reasoning_skill_1
+from generated.reasoning_validation_report_2_skill import sympy_counterexample_searcher_skill as validation_report_reasoning_skill_2
+from generated.reasoning_validation_report_3_skill import sympy_transformation_trace_verifier_skill as validation_report_reasoning_skill_3
+from generated.reasoning_report_1_skill import sympy_consistency_report_orchestrator_skill as report_reasoning_skill_1
+
+def sympy_artifact_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> DraftExecutableArtifactCertificate[SourceValue, TargetValue]:
+    return DraftExecutableArtifactCertificate(source = source, target = target)
+
+def execution_report_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ExecuteSympyArtifactCertificate[SourceValue, TargetValue]:
+    return ExecuteSympyArtifactCertificate(source = source, target = target)
+
+def validation_report_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> CheckSympyTraceCertificate[SourceValue, TargetValue]:
+    return CheckSympyTraceCertificate(source = source, target = target)
+
+def report_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> SummarizeSympyChecksCertificate[SourceValue, TargetValue]:
+    return SummarizeSympyChecksCertificate(source = source, target = target)
+
+# Generative interpretation ParseEquations uses skill context selected from material steps: sympy_expression_parse.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: sympy-expression-parser.
+agent equations_reasoning_agent(
+    task: SympyEquationFormalizationRequest,
+) -> Result[Generated[ParsedEquations], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyEquationFormalizationRequest] = [equations_reasoning_skill_1]
+
+# Generative interpretation GroundSympyContext uses skill context selected from material steps: sympy_dependencies_probe, sympy_api_docs_index, sympy_assumptions_model, sympy_grounding_navigate.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: sympy-dependency-prober, sympy-api-docs-indexer, sympy-assumption-modeler, sympy-concept-grounding-navigator.
+agent sympy_context_reasoning_agent(
+    task: SympyEquationFormalizationRequest,
+) -> Result[Generated[SympyGroundingContext], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyEquationFormalizationRequest] = [sympy_context_reasoning_skill_1, sympy_context_reasoning_skill_2, sympy_context_reasoning_skill_3, sympy_context_reasoning_skill_4]
+
+# Generative interpretation DraftSympyArtifact uses skill context selected from material steps: draft_sympy_initial.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: sympy-autoformalization-drafter.
+agent sympy_artifact_reasoning_agent(
+    task: SympyDraftBasis,
+) -> Result[Generated[SympyArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyDraftBasis] = [sympy_artifact_reasoning_skill_1]
+
+# Generative interpretation RunSympyArtifact uses skill context selected from material steps: execute_sympy_initial.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: sympy-execution-runner.
+agent execution_report_reasoning_agent(
+    task: SympyArtifact,
+) -> Result[Generated[SympyExecutionReport], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyArtifact] = [execution_report_reasoning_skill_1]
+
+# Generative interpretation ValidateSympyTrace uses skill context selected from material steps: sympy_identity_validate, sympy_counterexample_search, sympy_trace_verify.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: sympy-identity-validator, sympy-counterexample-searcher, sympy-transformation-trace-verifier.
+agent validation_report_reasoning_agent(
+    task: SympyTraceCase,
+) -> Result[Generated[SympyValidationReport], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyTraceCase] = [validation_report_reasoning_skill_1, validation_report_reasoning_skill_2, validation_report_reasoning_skill_3]
+
+# Generative interpretation ReportSympyConsistency uses skill context selected from material steps: consistency_sympy_report.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: sympy-consistency-report-orchestrator.
+agent report_reasoning_agent(
+    task: SympyAssessmentCase,
+) -> Result[Generated[SympyConsistencyReport], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyAssessmentCase] = [report_reasoning_skill_1]
+
+converted_reasoning = TraceSympyEquations(
+    equations = equations_reasoning_agent,
+    sympy_context = sympy_context_reasoning_agent,
+    sympy_artifact = sympy_artifact_reasoning_agent,
+    sympy_artifact_by = sympy_artifact_reasoning_relation_builder,
+    execution_report = execution_report_reasoning_agent,
+    execution_report_by = execution_report_reasoning_relation_builder,
+    validation_report = validation_report_reasoning_agent,
+    validation_report_by = validation_report_reasoning_relation_builder,
+    report = report_reasoning_agent,
+    report_by = report_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `sympy-dependency-prober`; this does not execute the linked native resource.
+def sympy_dependencies_probe_material_binding(source: SympyEquationFormalizationRequest) -> Computed[SympyEquationalTraceSympyDependenciesProbeArtifact]:
+    artifact = SympyEquationalTraceSympyDependenciesProbeArtifact(
+        subject = "typed material binding for sympy_dependencies_probe",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation sympy_dependencies_probe",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: sympy_dependencies_probe")
+
+# Material binding descriptor for `sympy-api-docs-indexer`; this does not execute the linked native resource.
+def sympy_api_docs_index_material_binding(source: SympyEquationalTraceSympyDependenciesProbeArtifact) -> Computed[SympyEquationalTraceSympyApiDocsIndexArtifact]:
+    artifact = SympyEquationalTraceSympyApiDocsIndexArtifact(
+        subject = "typed material binding for sympy_api_docs_index",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: sympy_api_docs_index")
+
+# Material binding descriptor for `sympy-expression-parser`; this does not execute the linked native resource.
+def sympy_expression_parse_material_binding(source: SympyEquationalTraceSympyApiDocsIndexArtifact) -> Computed[SympyEquationalTraceSympyExpressionParseArtifact]:
+    artifact = SympyEquationalTraceSympyExpressionParseArtifact(
+        subject = "typed material binding for sympy_expression_parse",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: sympy_expression_parse")
+
+# Material binding descriptor for `sympy-assumption-modeler`; this does not execute the linked native resource.
+def sympy_assumptions_model_material_binding(source: SympyEquationalTraceSympyExpressionParseArtifact) -> Computed[SympyEquationalTraceSympyAssumptionsModelArtifact]:
+    artifact = SympyEquationalTraceSympyAssumptionsModelArtifact(
+        subject = "typed material binding for sympy_assumptions_model",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation sympy_assumptions_model",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: sympy_assumptions_model")
+
+# Material binding descriptor for `sympy-concept-grounding-navigator`; this does not execute the linked native resource.
+def sympy_grounding_navigate_material_binding(source: SympyEquationalTraceSympyAssumptionsModelArtifact) -> Computed[SympyEquationalTraceSympyGroundingNavigateArtifact]:
+    artifact = SympyEquationalTraceSympyGroundingNavigateArtifact(
+        subject = "typed material binding for sympy_grounding_navigate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: sympy_grounding_navigate")
+
+# Epistemic occurrence owned by `sympy-autoformalization-drafter`; output assurance remains Generated.
+agent draft_sympy_initial_agent(
+    task: SympyEquationalTraceSympyGroundingNavigateArtifact,
+) -> Result[Generated[SympyEquationalTraceDraftSympyInitialArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SympyEquationalTraceSympyGroundingNavigateArtifact] = [draft_sympy_initial_skill_binding]
+
+def draft_sympy_initial_relation_builder(
+    source: SympyEquationalTraceSympyGroundingNavigateArtifact,
+    target: Generated[SympyEquationalTraceDraftSympyInitialArtifact],
+) -> FormalizesDraftSympyInitialCertificate:
+    return FormalizesDraftSympyInitialCertificate(source = source, target = target)
+
+# Material binding descriptor for `sympy-execution-runner`; this does not execute the linked native resource.
+def execute_sympy_initial_material_binding(source: SympyEquationalTraceDraftSympyInitialArtifact) -> Computed[SympyEquationalTraceExecuteSympyInitialArtifact]:
+    artifact = SympyEquationalTraceExecuteSympyInitialArtifact(
+        subject = "typed material binding for execute_sympy_initial",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation execute_sympy_initial",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: execute_sympy_initial")
+
+# Material binding descriptor for `sympy-identity-validator`; this does not execute the linked native resource.
+def sympy_identity_validate_material_binding(source: SympyEquationalTraceExecuteSympyInitialArtifact) -> Computed[SympyEquationalTraceSympyIdentityValidateArtifact]:
+    artifact = SympyEquationalTraceSympyIdentityValidateArtifact(
+        subject = "typed material binding for sympy_identity_validate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: sympy_identity_validate")
+
+# Material binding descriptor for `sympy-counterexample-searcher`; this does not execute the linked native resource.
+def sympy_counterexample_search_material_binding(source: SympyEquationalTraceSympyIdentityValidateArtifact) -> Computed[SympyEquationalTraceSympyCounterexampleSearchArtifact]:
+    artifact = SympyEquationalTraceSympyCounterexampleSearchArtifact(
+        subject = "typed material binding for sympy_counterexample_search",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: sympy_counterexample_search")
+
+# Material binding descriptor for `sympy-transformation-trace-verifier`; this does not execute the linked native resource.
+def sympy_trace_verify_material_binding(source: SympyEquationalTraceSympyCounterexampleSearchArtifact) -> Computed[SympyEquationalTraceSympyTraceVerifyArtifact]:
+    artifact = SympyEquationalTraceSympyTraceVerifyArtifact(
+        subject = "typed material binding for sympy_trace_verify",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: sympy_trace_verify")
+
+# Material binding descriptor for `sympy-consistency-report-orchestrator`; this does not execute the linked native resource.
+def consistency_sympy_report_material_binding(source: SympyEquationalTraceSympyTraceVerifyArtifact) -> Computed[SympyEquationalTraceAssessment]:
+    artifact = SympyEquationalTraceAssessment(
+        subject = "typed material binding for consistency_sympy_report",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_sympy_report")
+
+# executable symbolic algebra autoformalization over SymPy using source parsing, assumption modeling, local API grounding, symbolic validation, bounded counterexample search, trace verification, and reference-free consistency metrics.
+workflow SympyEquationalTraceLoop(
+    workflow_source: SympyEquationFormalizationRequest,
+) -> Computed[SympyEquationalTraceAssessment]
+    fails ModelFailure
+    ! {AI.Generate, Context.Disclose}:
+    sequence:
+        [sympy_dependencies_probe: sympy_dependencies_probe_material_binding(workflow_source)]
+        [sympy_api_docs_index: sympy_api_docs_index_material_binding(sympy_dependencies_probe.value)]
+        [sympy_expression_parse: sympy_expression_parse_material_binding(sympy_api_docs_index.value)]
+        [sympy_assumptions_model: sympy_assumptions_model_material_binding(sympy_expression_parse.value)]
+        [sympy_grounding_navigate: sympy_grounding_navigate_material_binding(sympy_assumptions_model.value)]
+        [draft_sympy_initial: draft_sympy_initial_agent(sympy_grounding_navigate.value)]
+        [execute_sympy_initial: execute_sympy_initial_material_binding(draft_sympy_initial.value)]
+        [sympy_identity_validate: sympy_identity_validate_material_binding(execute_sympy_initial.value)]
+        [sympy_counterexample_search: sympy_counterexample_search_material_binding(sympy_identity_validate.value)]
+        [sympy_trace_verify: sympy_trace_verify_material_binding(sympy_counterexample_search.value)]
+        [consistency_sympy_report: consistency_sympy_report_material_binding(sympy_trace_verify.value)]
+    return consistency_sympy_report

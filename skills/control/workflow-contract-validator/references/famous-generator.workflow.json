@@ -1,0 +1,647 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_kb_generate_famous_corpus_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Expand generator main: traverse 25 domains and 20 names each, slice, overwrite JSONL, print metadata and return 0 or 3.",
+  "aliases": [
+    "kb:generate-famous-corpus"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Argv": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Options": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "output": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "output",
+          "limit",
+          "json"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "domain_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 25
+          },
+          "name_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "status",
+                "provenance"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "status": {
+                  "const": "generated_candidate"
+                },
+                "provenance": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "domain_index",
+          "name_index",
+          "entries",
+          "names"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Entries": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "id",
+            "status",
+            "provenance"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "status": {
+              "const": "generated_candidate"
+            },
+            "provenance": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Result": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "output": {
+            "type": "string"
+          },
+          "entry_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expected_count": {
+            "type": "integer"
+          },
+          "domain_count": {
+            "const": 25
+          },
+          "entry_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "output",
+          "entry_count",
+          "expected_count",
+          "domain_count",
+          "entry_ids"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          3
+        ]
+      }
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Argv"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Result",
+      "value": {
+        "ref": "steps.write.outputs.result"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "steps.write.outputs.exit_code"
+      }
+    },
+    "stdout": {
+      "type": "Text",
+      "value": {
+        "ref": "steps.write.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "parse_seed": {
+      "inputs": {
+        "argv": {
+          "type": "Argv"
+        }
+      },
+      "outputs": {
+        "options": {
+          "type": "Options"
+        },
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_seed_parse",
+          "operation": "mathformer_seed_parse"
+        }
+      }
+    },
+    "open_domain": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_seed_open",
+          "operation": "mathformer_seed_open"
+        }
+      }
+    },
+    "append_entry": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_seed_append",
+          "operation": "mathformer_seed_append"
+        }
+      }
+    },
+    "advance_domain": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_seed_advance",
+          "operation": "mathformer_seed_advance"
+        }
+      }
+    },
+    "check_slice": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "options": {
+          "type": "Options"
+        }
+      },
+      "outputs": {
+        "entries": {
+          "type": "Entries"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_seed_slice",
+          "operation": "mathformer_seed_slice"
+        }
+      }
+    },
+    "write_report": {
+      "inputs": {
+        "entries": {
+          "type": "Entries"
+        },
+        "options": {
+          "type": "Options"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_seed_write",
+          "operation": "mathformer_seed_write"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "parse",
+        "kind": "call",
+        "operation": "parse_seed",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          }
+        }
+      },
+      {
+        "id": "domains",
+        "kind": "loop",
+        "state_type": "State",
+        "description": "Insertion order; domain 25 completes normally rather than exhausting the bound.",
+        "initial": {
+          "ref": "steps.parse.outputs.state"
+        },
+        "max_iterations": 25,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "open",
+              "kind": "call",
+              "operation": "open_domain",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                }
+              }
+            },
+            {
+              "id": "names",
+              "kind": "loop",
+              "state_type": "State",
+              "description": "Append every name; the requested limit never causes early termination.",
+              "initial": {
+                "ref": "steps.open.outputs.state"
+              },
+              "max_iterations": 20,
+              "on_exhausted": "fail",
+              "body": {
+                "kind": "call",
+                "operation": "append_entry",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              },
+              "next_state": {
+                "ref": "body.outputs.state"
+              },
+              "until": {
+                "ref": "body.outputs.done"
+              },
+              "outputs": {
+                "state": {
+                  "type": "State",
+                  "value": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance_domain",
+              "arguments": {
+                "state": {
+                  "ref": "steps.names.outputs.state"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "slice",
+        "kind": "call",
+        "operation": "check_slice",
+        "arguments": {
+          "state": {
+            "ref": "steps.domains.outputs.state"
+          },
+          "options": {
+            "ref": "steps.parse.outputs.options"
+          }
+        }
+      },
+      {
+        "id": "write",
+        "kind": "call",
+        "operation": "write_report",
+        "arguments": {
+          "entries": {
+            "ref": "steps.slice.outputs.entries"
+          },
+          "options": {
+            "ref": "steps.parse.outputs.options"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Result",
+        "value": {
+          "ref": "steps.write.outputs.result"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.write.outputs.exit_code"
+        }
+      },
+      "stdout": {
+        "type": "Text",
+        "value": {
+          "ref": "steps.write.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository"
+        ],
+        "write": [
+          "artifacts/kb/",
+          "configured_output_path_and_parents"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "generate_candidate_corpus",
+        "overwrite_configured_output"
+      ],
+      "forbidden": [
+        "infer_scientific_truth_from_completion",
+        "promote_unverified_candidates",
+        "bypass_native_controls"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 553
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Generated low-confidence name-level candidates only; neither source verification nor proof."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/premise-kb/premise-kb-theorem-seed-generator/scripts/generate_famous_theorem_axiom_corpus.py",
+        "selector": "main",
+        "digest": "sha256:6668e72b9340e9963c9f4b8e452ef636d7ba189aca5ea06d57124ddaa5ba502e"
+      },
+      {
+        "path": "skills/premise-kb/premise-kb-theorem-seed-generator/scripts/generate_famous_theorem_axiom_corpus.py",
+        "selector": "build_entries; make_entry; infer_kind; slugify; extract_name_symbols",
+        "digest": "sha256:6668e72b9340e9963c9f4b8e452ef636d7ba189aca5ea06d57124ddaa5ba502e"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:kb:generate-famous-corpus; run_action; run_leaf_action; prepare_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/famous_generator_tools.py",
+        "selector": "register_famous_generator_tools; encode; decode",
+        "digest": "sha256:e299a7a6b360f6b04a16515e3e6dffd12a2d17f3d910058b508096dabfe5dcc8"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_famous_generator_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "capabilities: mcp_tools",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory: kb:generate-famous-corpus",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "mcp.famous_generator.workflow",
+        "digest": "sha256:cd74cde08de88ca50b1e91aeec5f4e186f87c0d55c2c4c52697fdffcd2a68b70"
+      }
+    ],
+    "gaps": [
+      "Graph begins at script main after hub admission; preflight, dry-run, subprocess capture and write audit remain owned by the native hub outside this graph.",
+      "Payload schemas project required fields; callable adapters retain every native KBEntry field. Contract time/call budgets are enforced by Lunar, not by the native CLI."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "kb:generate-famous-corpus",
+      "owner_skill": "skills/premise-kb/premise-kb-theorem-seed-generator/SKILL.md",
+      "contract": {
+        "id": "kb:generate-famous-corpus",
+        "family": "kb",
+        "kind": "generation",
+        "safety": "writes_artifacts",
+        "depends_on": [],
+        "writes": [
+          "artifacts/kb/"
+        ],
+        "allows_extra_args": true,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Existing controller routes kb:generate-famous-corpus through run_action to run_leaf_action. No dependencies; failed preflight or dry-run returns without launching main. Otherwise one subprocess receives extra arguments and declared writes are audited afterward.",
+      "failure_policy": "Native hub ok depends on subprocess returncode and write audit; main's printed ok=true does not override exit code 3. Configured paths outside declared artifact roots can trigger an undeclared-write failure after writing.",
+      "timeout": "No native timeout or retry loop; contract limits are descriptive host bounds.",
+      "scope": "argv contains script arguments, excluding Python and script path. Caller tests/kb/run_famous_theorem_corpus.py::generate_read performs separate later indexing/search checks; those stages are excluded."
+    }
+  }
+}

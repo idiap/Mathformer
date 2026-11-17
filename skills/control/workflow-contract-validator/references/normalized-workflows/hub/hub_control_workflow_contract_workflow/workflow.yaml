@@ -1,0 +1,493 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_control_workflow_contract_workflow
+version: 1.0.0
+kind: workflow
+description: Registered strict JSON specialization of validate_skill_hooks.main.
+aliases:
+- control:workflow-contract
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Paths:
+    schema:
+      type: object
+      required:
+      - repo_root
+      - hooks_file
+      - skills_dir
+      - prompt_index_file
+      properties:
+        repo_root:
+          type: string
+        hooks_file:
+          type: string
+        skills_dir:
+          type: string
+        prompt_index_file:
+          type: string
+      additionalProperties: false
+  Flag:
+    schema:
+      type: boolean
+  Manifest:
+    schema:
+      type: object
+      required:
+      - runtime_contract
+      - hooks
+      - direct_request_routing
+      properties:
+        runtime_contract:
+          type: object
+        hooks:
+          type: array
+          items:
+            type: object
+        direct_request_routing:
+          type: object
+          additionalProperties:
+            type: string
+      additionalProperties: false
+  Findings:
+    schema:
+      type: array
+      items:
+        type: object
+        required:
+        - severity
+        - code
+        - message
+        properties:
+          severity:
+            enum:
+            - info
+            - low
+            - medium
+            - high
+          code:
+            type: string
+          message:
+            type: string
+          hook_id:
+            type: string
+          path:
+            type: string
+        additionalProperties: false
+  Report:
+    schema:
+      type: object
+      required:
+      - ok
+      - hooks_file
+      - summary
+      - findings
+      - hook_count
+      - direct_route_count
+      properties:
+        ok:
+          type: boolean
+        hooks_file:
+          type: string
+        skills_dir:
+          type: string
+        strict:
+          const: true
+        hook_count:
+          type: integer
+          minimum: 0
+        direct_route_count:
+          type: integer
+          minimum: 0
+        shared_runtime_script_count:
+          type: integer
+          minimum: 0
+        summary:
+          type: object
+          required:
+          - finding_count
+          - blocking_findings
+          properties:
+            finding_count:
+              type: integer
+              minimum: 0
+            blocking_findings:
+              type: integer
+              minimum: 0
+            severity_counts:
+              type: object
+              additionalProperties:
+                type: integer
+          additionalProperties: false
+        findings:
+          type: array
+          items:
+            type: object
+      additionalProperties: false
+  Text:
+    schema:
+      type: string
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+inputs:
+  repo_root:
+    type: Text
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+  stdout:
+    type: Text
+    value:
+      ref: flow.outputs.stdout
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  resolve:
+    inputs:
+      repo_root:
+        type: Text
+    outputs:
+      paths:
+        type: Paths
+      hooks_exist:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_hooks_resolve
+        operation: mathformer_skill_hooks_resolve
+  missing_report:
+    inputs:
+      paths:
+        type: Paths
+    outputs:
+      report:
+        type: Report
+      serialized_report:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_hooks_missing_report
+        operation: mathformer_skill_hooks_missing_report
+  parse:
+    inputs:
+      paths:
+        type: Paths
+    outputs:
+      manifest:
+        type: Manifest
+      serialized_manifest:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_hooks_parse
+        operation: mathformer_skill_hooks_parse
+  validate:
+    inputs:
+      paths:
+        type: Paths
+      manifest:
+        type: Manifest
+      serialized_manifest:
+        type: Text
+    outputs:
+      findings:
+        type: Findings
+      serialized_findings:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_hooks_validate
+        operation: mathformer_skill_hooks_validate
+  assemble_report:
+    inputs:
+      paths:
+        type: Paths
+      manifest:
+        type: Manifest
+      findings:
+        type: Findings
+      serialized_findings:
+        type: Text
+    outputs:
+      report:
+        type: Report
+      serialized_report:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_hooks_assemble_report
+        operation: mathformer_skill_hooks_assemble_report
+  emit:
+    inputs:
+      report:
+        type: Report
+      serialized_report:
+        type: Text
+    outputs:
+      stdout:
+        type: Text
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_hooks_emit
+        operation: mathformer_skill_hooks_emit
+flow:
+  kind: sequence
+  steps:
+  - id: resolve_paths
+    kind: call
+    operation: resolve
+    arguments:
+      repo_root:
+        ref: inputs.repo_root
+  - id: choose_report
+    kind: switch
+    cases:
+    - id: missing
+      when:
+        not:
+          ref: steps.resolve_paths.outputs.hooks_exist
+      body:
+        kind: sequence
+        steps:
+        - id: make_missing
+          kind: call
+          operation: missing_report
+          arguments:
+            paths:
+              ref: steps.resolve_paths.outputs.paths
+        outputs:
+          report:
+            type: Report
+            value:
+              ref: steps.make_missing.outputs.report
+          serialized_report:
+            type: Text
+            value:
+              ref: steps.make_missing.outputs.serialized_report
+    default:
+      kind: sequence
+      steps:
+      - id: parse_manifest
+        kind: call
+        operation: parse
+        arguments:
+          paths:
+            ref: steps.resolve_paths.outputs.paths
+      - id: validate_manifest
+        kind: call
+        operation: validate
+        arguments:
+          paths:
+            ref: steps.resolve_paths.outputs.paths
+          manifest:
+            ref: steps.parse_manifest.outputs.manifest
+          serialized_manifest:
+            ref: steps.parse_manifest.outputs.serialized_manifest
+      - id: summarize_report
+        kind: call
+        operation: assemble_report
+        arguments:
+          paths:
+            ref: steps.resolve_paths.outputs.paths
+          manifest:
+            ref: steps.parse_manifest.outputs.manifest
+          findings:
+            ref: steps.validate_manifest.outputs.findings
+          serialized_findings:
+            ref: steps.validate_manifest.outputs.serialized_findings
+      outputs:
+        report:
+          type: Report
+          value:
+            ref: steps.summarize_report.outputs.report
+        serialized_report:
+          type: Text
+          value:
+            ref: steps.summarize_report.outputs.serialized_report
+    outputs:
+      report:
+        type: Report
+        value:
+          ref: selected.outputs.report
+      serialized_report:
+        type: Text
+        value:
+          ref: selected.outputs.serialized_report
+  - id: emit_result
+    kind: call
+    operation: emit
+    arguments:
+      report:
+        ref: steps.choose_report.outputs.report
+      serialized_report:
+        ref: steps.choose_report.outputs.serialized_report
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.choose_report.outputs.report
+    stdout:
+      type: Text
+      value:
+        ref: steps.emit_result.outputs.stdout
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.emit_result.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      write: []
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - validate_skill_hook_contract
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 6
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked validation description only; no scientific result or
+    runtime qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/control/workflow-contract-validator/scripts/validate_skill_hooks.py
+    selector: main; resolve_hooks_paths; missing_hooks_report; parse_hooks_manifest;
+      validate_manifest; assemble_hooks_report; emit_hooks_report
+    digest: sha256:92373acfd291a4325855c6d5dd671bdb29a24c8daea54fc20692d38f6f968b26
+  - path: scripts/mathformer.py
+    selector: build_registry/action:control:workflow-contract; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/skill_hooks_tools.py
+    selector: register_skill_hooks_tools
+    digest: sha256:60c41691dc5bc6840f9cd539bd8228ce86113054d7121371b1f6694139ba7567
+  - path: scripts/mcp_server.py
+    selector: register_skill_hooks_tools(mcp)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: 'descriptors: authored control:workflow-contract specialization'
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/test_matrix.json
+    selector: mcp.skill_hooks.workflow
+    digest: sha256:d7a9499cb278a61b0bc3343dcef241aa5e29cd99f578f306aa9881990dfbdbdc
+  gaps:
+  - Registered strict JSON invocation only; standalone CLI overrides and active reasoning-log
+    validation are outside this specialization.
+  - Helper iterations remain inside their owning operations; collection exhaustion
+    returns normally with no arbitrary cap, retries or convergence loop.
+  - Hub preflight, subprocess transport, write audit and optional hub reports remain
+    native boundary metadata. The block workflow preserves the main missing-file branch.
+  - The native CLI has no wall-time budget or mandatory v1 receipts; Lunar enforces
+    the authored execution budgets and supplies runtime provenance.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: control:workflow-contract
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: control:workflow-contract
+      summary: Validate the skill-hook workflow contract in strict mode.
+      family: control
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - skills/control/workflow-contract-validator/scripts/validate_skill_hooks.py
+      - --strict
+      - --json
+      depends_on: []
+      required_paths:
+      - skills/SKILL_HOOKS.yaml
+      required_tools: []
+      optional_tools: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    specialization: Explicit repository root supplies native cwd context; default
+      paths; strict=true; json=true; reasoning_log_file=None; no extra arguments.
+    execution: Hub preflight failure or dry-run returns before launch; otherwise one
+      subprocess, then undeclared-write audit; no dependencies or native timeout.
+    callers: control:all and portable_adoption.py::execute_invocation delegate to
+      this hub action.
+    failure_policy: Unhandled exceptions abort; report.ok=false remains a returned
+      failed report with exit 3, not an operation exception. Hub ok also requires
+      a clean write audit.
+    missing_file: Normally rejected by hub preflight; main retains its missing-file
+      branch for races or direct invocation.
+    text_output: Standalone render_text displays at most 60 findings; registered JSON
+      output includes all findings.
+    serialization: Explicit serialized_manifest, serialized_findings and serialized_report
+      state ports preserve source dictionary iteration and JSON emission order across
+      canonicalizing transport; tools reject disagreement with their structured value
+      ports.
+  mathformer.iteration:
+    parse: parse owns a finite input-line scan; carries section/current-hook/current-list
+      pointers, accumulated hooks/routes/runtime fields; ignores loop_contracts contents.
+    validate: validate owns bounded scans over runtime scripts, hooks, required fields,
+      routes and prompt references; carries findings and seen IDs. Missing/non-string/empty
+      IDs skip remaining hook checks; nonstandard strings receive medium findings
+      and continue.
+    summarize: assemble_report owns a finite findings scan with severity counters.
+      Other findings accumulate; only high severity blocks. Exhausting collections
+      returns normally; no retries or convergence loop.
+# REUSE-IgnoreEnd

@@ -1,0 +1,1427 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-FileContributor: Danilo Gusicuma <danilo.gusicuma@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Export canonical Mathformer skills and PRISM workflows for Lunar.
+
+The exporter deliberately includes only canonical ``skills/`` entries.  The
+repository's documentation, ``meta_skills/``, ``paper_skills/`` and
+``proj_skills/`` trees are not package inputs.  Canonical skills whose domain
+category is named ``paper`` remain included because the reviewed workflow
+contracts reference them; they are distinct from the excluded authoring-only
+``paper_skills/`` tree.
+
+Lunar owns the domain-package format.  This script imports the pinned builder
+and validator from an explicitly selected Lunar checkout instead of maintaining
+a second, drifting copy of the interchange schema.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib
+import json
+import re
+import stat
+import sys
+import tempfile
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+REPOSITORY = Path(__file__).resolve().parents[2]
+DEFAULT_LUNAR = REPOSITORY.parent / "lunar-platform"
+EXCLUDED_SOURCE_ROOTS = ("docs", "meta_skills", "paper_skills", "proj_skills")
+IGNORED_NAMES = {".DS_Store", "__pycache__"}
+CONTRACT_FILES = (
+    "skills/SKILL_HOOKS.yaml",
+    "skills/SKILL_TYPES.yaml",
+    "skills/OUTPUT_TYPES.yaml",
+    "skills/REASONING_TYPES.yaml",
+)
+PRISM_CATALOG_FILES = (
+    "mathformer-prism/workflow_catalog.json",
+    "mathformer-prism/workflow_catalog.md",
+    "mathformer-prism/skill_dispositions.json",
+    "mathformer-prism/conversion/converter-package.json",
+    "mathformer-prism/conversion/source-fingerprint.json",
+)
+REMOTE_BACKENDS = (
+    ("isabelle", "https://isabelle.in.tum.de/"),
+    ("lean", "https://lean-lang.org/"),
+    ("mathlib", "https://github.com/leanprover-community/mathlib4"),
+    ("rocq", "https://rocq-prover.org/"),
+    ("sympy", "https://www.sympy.org/"),
+    ("vampire", "https://vprover.github.io/"),
+)
+PLAUSIBLE_INPUTS: dict[str, dict[str, str | list[str]]] = {
+    "artifact_acceptance_loop": {
+        "artifact_paths": ["artifacts/lean/ConstantForceVelocity.lean"],
+        "source_anchors": ["examples/physics/constant_force.md#derivation"],
+        "acceptance_policy": "Require source alignment, successful checking, and no unproved axioms.",
+    },
+    "control_validation_loop": {
+        "hook_registry_digest": "sha256:" + "1" * 64,
+        "routing_registry_digest": "sha256:" + "2" * 64,
+        "requested_checks": [
+            "skill-hook coverage",
+            "workflow routing",
+            "entrypoint audit",
+        ],
+    },
+    "draft_execute_refine_loop": {
+        "source_claims": [
+            "For real x and y, if x = y then x + 1 = y + 1.",
+        ],
+        "target_context": "Lean 4 with Mathlib; theorem over real numbers.",
+        "acceptance_criteria": "The file compiles with no sorry and preserves the stated assumptions.",
+    },
+    "isabelle_physics_derivation_trace_loop": {
+        "source_derivation": (
+            "For a particle of mass m > 0 under a constant force F in one "
+            "dimension, assume integration of Newton's law has established "
+            "v - v0 = (F/m) * t. Prove the equivalent closed form "
+            "v = v0 + (F/m) * t."
+        ),
+        "physical_context": (
+            "Classical non-relativistic mechanics in an inertial frame; m and t "
+            "are real, m > 0, t >= 0, and F is constant. SI units are kg, s, N, "
+            "and m/s."
+        ),
+        "isabelle_context": (
+            "Target Isabelle/HOL theory imports Complex_Main. Represent m, F, "
+            "v0, and t as real variables, assume m > 0 and t >= 0, and prove "
+            "the algebraic closed-form velocity relation without unproved axioms."
+        ),
+    },
+    "lean_consistency_testing_loop": {
+        "artifact_paths": ["artifacts/lean/ConstantForceVelocity.lean"],
+        "compiler_evidence": "lake env lean completed with exit code 0.",
+        "consistency_scope": "Check declarations, assumptions, imports, and source alignment.",
+    },
+    "lean_physics_derivation_trace_loop": {
+        "source_derivation": "For constant acceleration a and initial velocity v0, integrating dv/dt = a gives v(t) = v0 + a*t.",
+        "physical_context": "One-dimensional classical motion in an inertial frame with real t >= 0 and constant acceleration a.",
+        "lean_context": "Lean 4 with Mathlib; use real variables and explicit hypotheses, with no sorry or added axioms.",
+    },
+    "mathformerlib_accumulation_loop": {
+        "candidate_paths": ["libraries/MathformerLib/Algebra/ConstantIncrement.lean"],
+        "registry_revision": "mathformerlib-registry-v1",
+        "promotion_policy": "Promote only compiled, source-aligned, non-duplicative declarations.",
+    },
+    "mathformerphysicslib_coherence_grounding_loop": {
+        "module_paths": ["libraries/MathformerPhysicsLib/Mechanics/Kinematics.lean"],
+        "mathlib_revision": "v4.19.0",
+        "coherence_policy": "Require dimensional, naming, import, and Mathlib grounding coherence.",
+    },
+    "mathlib_grounding_loop": {
+        "concepts": ["real division", "linear arithmetic", "constant acceleration"],
+        "mathlib_revision": "v4.19.0",
+        "target_context": "Lean 4 theorem over Real with the smallest sufficient Mathlib imports.",
+    },
+    "preformalization_readiness_loop": {
+        "source_paths": ["examples/physics/constant_force.md"],
+        "target_backend": "Isabelle/HOL",
+        "formalization_scope": "Formalize the constant-force velocity derivation and its explicit assumptions.",
+    },
+    "reflection_testing_loop": {
+        "run_identifiers": ["constant-force-isabelle-run-001"],
+        "baseline_digest": "sha256:" + "3" * 64,
+        "observed_regressions": [
+            "No regressions observed in source alignment or backend checking."
+        ],
+    },
+    "sympy_equational_trace_loop": {
+        "equations": ["m*a = F", "a = F/m", "v = v0 + a*t"],
+        "symbol_assumptions": ["m is real and positive", "t is real and nonnegative"],
+        "target_identity": "v = v0 + (F/m)*t",
+    },
+    "sympy_physics_derivation_trace_loop": {
+        "source_derivation": "From m*a = F with constant F and m > 0, substitute a = F/m into v = v0 + a*t.",
+        "physical_context": "Classical one-dimensional constant-force motion with real symbols and m > 0.",
+        "target_quantity": "v(t) = v0 + (F/m)*t",
+    },
+    "textbook_theory_autoformalization_loop": {
+        "archive_paths": ["examples/textbooks/classical_mechanics.zip"],
+        "target_chapters": ["Newton's laws", "Constant acceleration"],
+        "target_backend": "Lean 4 with Mathlib",
+    },
+}
+
+ISABELLE_EXECUTION_SOURCE = """\
+# SPDX-License-Identifier: MIT
+# Native outcomes are typed data; only the host backend receipt establishes success.
+type BackendRequest:
+    specification: String
+    instructions: String
+    previous_diagnostics: String
+
+type BackendCandidate:
+    code: String
+    source_mapping: List[String]
+
+type BackendReceipt:
+    passed: Bool
+    diagnostics: String
+    artifact: String
+
+def draft(request: BackendRequest, model: Model, access: ModelGenerate) -> Result[Generated[BackendCandidate], ModelFailure] ! {AI.Generate}:
+    return generate[BackendCandidate](request, model, access)
+
+def execute(candidate: Generated[BackendCandidate], native: PythonCall) -> Result[Result[BackendReceipt, PythonError], ModelFailure] ! {Python.Call}:
+    return Ok(python_call[BackendReceipt]("mathformer.isabelle.execute", candidate.value, native))
+
+workflow materialize_backend(request: BackendRequest, model: Model, access: ModelGenerate, native: PythonCall) -> Result[BackendReceipt, PythonError]
+    fails ModelFailure
+    ! {AI.Generate, Python.Call}:
+    sequence:
+        [candidate: draft(request, model, access)]
+        [receipt: execute(candidate, native)]
+    return receipt
+
+def main(request: BackendRequest, model: Model, access: ModelGenerate, native: PythonCall) -> Result[Result[BackendReceipt, PythonError], ModelFailure] ! {AI.Generate, Python.Call}:
+    return solve materialize_backend(request, model, access, native)
+"""
+
+RUNTIME_SOURCE = '''\
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+"""Lunar preparation hook for typed Mathformer PRISM reasoning workflows."""
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import re
+from types import SimpleNamespace
+
+from jsonschema import Draft202012Validator
+
+
+def _encoded(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False, allow_nan=False)
+
+
+def prepare(*, workflow_id, inputs, run_root, **unused):
+    """Validate and prepare one complete typed workflow input."""
+    contracts = json.loads(Path(__file__).with_name("workflow-inputs.json").read_text())
+    if workflow_id not in contracts:
+        raise ValueError("Unknown Mathformer workflow: " + workflow_id)
+    contract = contracts[workflow_id]
+    Draft202012Validator(contract["schema"]).validate(inputs)
+    workflow_inputs = {name: inputs[name] for name in contract["workflow_fields"]}
+    digest = hashlib.sha256(_encoded(inputs).encode()).hexdigest()
+    return {
+        "prepared_input": {
+            "entry_argument_name": contract["argument"],
+            "value": workflow_inputs,
+            "request_digest": digest,
+            "analysis_results": {
+                "execution_scope": "reviewed_reasoning_projection",
+                "native_backend_verification": contract.get("backend") == "isabelle",
+                "contains_placeholder_inputs": "fixture:" in _encoded(inputs),
+            },
+        },
+        "events": [{"kind": "input", "payload": {
+            "workflow_id": workflow_id, "request_digest": digest,
+        }}],
+        "state": {"workflow_id": workflow_id, "inputs": inputs,
+                  "workflow_inputs": workflow_inputs, "prepared": {
+                      "entry_argument_name": contract["argument"],
+                      "value": workflow_inputs, "request_digest": digest},
+                  "contract": contract, "run_root": str(run_root)},
+    }
+
+
+def _isabelle_module():
+    path = Path(__file__).with_name("isabelle_backend_runtime.py")
+    spec = importlib.util.spec_from_file_location("mathformer_isabelle_runtime", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _plain(value):
+    return json.loads(json.dumps(value, default=_encoded_result, allow_nan=False))
+
+
+def _extract_theory(events):
+    """Extract only the theory produced by the DraftIsabelleTheory occurrence."""
+    candidates = []
+    evidence = []
+    for payload in events:
+        result = payload.get("result")
+        if result is None:
+            continue
+        result = _plain(result)
+        if not isinstance(result, dict) or "candidate_artifacts" not in result:
+            continue
+        candidates.extend(result.get("candidate_artifacts") or [])
+        evidence.extend(payload.get("evidence_references") or [])
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            continue
+        fenced = re.search(
+            r"```(?:isabelle|isar)?\\s*(theory\\s+[A-Za-z][A-Za-z0-9_]*.*?\\nend)\\s*```",
+            candidate,
+            re.I | re.S,
+        )
+        if fenced:
+            return fenced.group(1).strip() + "\\n", evidence
+        start = re.search(r"(?m)^theory\\s+[A-Za-z][A-Za-z0-9_]*\\b", candidate)
+        ends = list(re.finditer(r"(?m)^end\\s*$", candidate))
+        if start and ends and ends[-1].end() > start.start():
+            return candidate[start.start():ends[-1].end()].strip() + "\\n", evidence
+    raise ValueError(
+        "DraftIsabelleTheory did not produce a complete named Isabelle theory artifact"
+    )
+
+
+def _executor(services):
+    executor = getattr(services, "execute_prism", None)
+    if executor is None:
+        from prism_engine import execute_prism
+        executor = execute_prism
+    return executor
+
+
+def _package_root(services):
+    return Path(getattr(services, "package_root", "/package"))
+
+
+def reason_and_initialize(*, state, services):
+    """Execute the complete reasoning graph with host-compatible step identities."""
+    execute_prism = _executor(services)
+
+    root = Path(state["run_root"])
+    backend = state["contract"].get("backend")
+    native = _isabelle_module() if backend == "isabelle" else None
+    if native is not None:
+        native.preflight(root)
+    observed = []
+
+    def reasoning(**payload):
+        # Prism reports an imported reasoning declaration with its module-qualified
+        # runtime identity (for example
+        # ``reasoning_materialization.ReconstructInIsabelle``). Lunar derives its
+        # completion contract from the source declaration and therefore expects
+        # the unqualified declaration name. Normalize only that exact suffix;
+        # unrelated nested workflows retain their native identities.
+        step = payload.get("reasoning_step")
+        expected = state["contract"]["reasoning_workflow"]
+        if isinstance(step, dict) and step.get("workflow") == (
+            "reasoning_materialization." + expected
+        ):
+            payload = dict(payload)
+            payload["reasoning_step"] = {**step, "workflow": expected}
+        observed.append(payload)
+        services.event("reasoning", payload)
+
+    reasoning_root = root / "reasoning"
+    reasoning_root.mkdir()
+    reasoning_execution = execute_prism(
+        source=_package_root(services) / state["contract"]["entry_file"],
+        entry_argument=state["contract"]["argument"],
+        prepared_input=state["prepared"],
+        selected_model=services.model,
+        artifact_root=reasoning_root,
+        completion=services.completion,
+        on_reasoning=reasoning,
+    )
+    if reasoning_execution.status != "accepted":
+        raise ValueError("The complete reasoning graph was not accepted")
+    completed_steps = sorted({
+        payload.get("reasoning_step", {}).get("name")
+        for payload in observed
+        if payload.get("status") == "completed"
+        and isinstance(payload.get("reasoning_step"), dict)
+        and payload["reasoning_step"].get("name")
+    })
+    if not observed or not completed_steps:
+        raise ValueError("Reasoning completion invariant failed; no completed steps")
+    if native is None:
+        return SimpleNamespace(
+            reasoning_execution=reasoning_execution,
+            reasoning_result=_plain_result(reasoning_execution),
+            reasoning_event_count=len(observed),
+            completed_steps=completed_steps,
+        )
+    theory, theory_evidence = _extract_theory(observed)
+    required_steps = {
+        "source_model", "formalization_packet", "physical_model", "isabelle_plan",
+        "theory", "session_report", "math_review", "physics_review",
+        "process_review", "report",
+    }
+    missing = sorted(required_steps - set(completed_steps))
+    if missing:
+        raise ValueError("Reasoning completion invariant failed; missing: " + ", ".join(missing))
+
+    return {
+        "reasoning_execution": reasoning_execution,
+        "observed": observed,
+        "completed_steps": completed_steps,
+        "theory_evidence": theory_evidence,
+        "reasoning": reasoning,
+        "native": native,
+    }, {"theory": theory, "receipts": [], "index": 1, "first_attempt": True}
+
+
+def first_build(*, state, attempt_state, evidence):
+    native = evidence["native"]
+    attempt = Path(state["run_root"]) / ("attempt-" + str(attempt_state["index"]))
+    attempt.mkdir()
+    theory = attempt_state["theory"]
+    theory_evidence = evidence["theory_evidence"]
+    receipt = native.execute_artifact(theory, attempt)
+    receipt["source_mapping"] = [
+        "Theory bytes came from the completed DraftIsabelleTheory occurrence.",
+        "The full ReconstructInIsabelle reasoning graph completed before build.",
+        *theory_evidence,
+    ]
+    return {"theory": theory, "receipt": receipt}
+
+
+def repair_build(*, state, services, attempt_state, evidence):
+    execute_prism = _executor(services)
+    native = evidence["native"]
+    attempt = Path(state["run_root"]) / ("attempt-" + str(attempt_state["index"]))
+    attempt.mkdir()
+    theory = attempt_state["theory"]
+    handler = native.BackendHandler(attempt, services.event)
+    request = {
+        "specification": _encoded(state["workflow_inputs"]),
+        "instructions": native.INSTRUCTIONS + (
+            " Repair the preceding workflow-generated theory without changing "
+            "the requested theorem or dropping source assumptions."
+        ),
+        "previous_diagnostics": json.dumps({
+            "previous_code": theory,
+            "execution": attempt_state["receipts"][-1],
+        }),
+    }
+    repair_execution = execute_prism(
+        source=_package_root(services) / state["contract"]["native_entry_file"],
+        entry_argument="request",
+        prepared_input={"entry_argument_name": "request", "value": request},
+        selected_model=services.model,
+        artifact_root=attempt,
+        completion=services.completion,
+        on_reasoning=evidence["reasoning"],
+        effect_handler=handler,
+    )
+    if repair_execution.status != "accepted" or handler.receipt is None:
+        raise ValueError("PRISM repair did not produce an Isabelle receipt")
+    receipt = handler.receipt
+    theory = (attempt / receipt["source_file"]).read_text()
+    return {"theory": theory, "receipt": receipt}
+
+
+def record_and_advance(*, state, attempt_state, candidate):
+    index = attempt_state["index"]
+    attempt = Path(state["run_root"]) / ("attempt-" + str(index))
+    receipt = candidate["receipt"]
+    receipt["request_digest"] = state["prepared"]["request_digest"]
+    (attempt / "receipt.json").write_text(json.dumps(receipt, indent=2))
+    attempts = [*attempt_state["receipts"], receipt]
+    return {
+        "theory": candidate["theory"], "receipts": attempts,
+        "index": index + 1, "first_attempt": False,
+    }, bool(receipt["backend_verified"] or index == 3)
+
+
+def assemble_execution(*, attempt_state, evidence):
+    return SimpleNamespace(
+        receipts=attempt_state["receipts"],
+        reasoning_execution=evidence["reasoning_execution"],
+        reasoning_result=_plain_result(evidence["reasoning_execution"]),
+        reasoning_event_count=len(evidence["observed"]),
+        completed_steps=evidence["completed_steps"],
+    )
+
+
+def execute(*, state, services):
+    """Native scheduler and normalized tools share the same source steps."""
+    initialized = reason_and_initialize(state=state, services=services)
+    if isinstance(initialized, SimpleNamespace):
+        return initialized
+    evidence, attempt_state = initialized
+    for index in range(1, 4):
+        if index == 1:
+            candidate = first_build(state=state, attempt_state=attempt_state, evidence=evidence)
+        else:
+            candidate = repair_build(state=state, services=services,
+                                     attempt_state=attempt_state, evidence=evidence)
+        attempt_state, stop = record_and_advance(
+            state=state, attempt_state=attempt_state, candidate=candidate)
+        if stop:
+            break
+    return assemble_execution(attempt_state=attempt_state, evidence=evidence)
+
+
+def _plain_result(execution):
+    value = execution.typed_result
+    while hasattr(value, "value"):
+        value = value.value
+    if hasattr(value, "fields"):
+        value = value.fields
+    return json.loads(json.dumps(value, default=_encoded_result, allow_nan=False))
+
+
+def _encoded_result(value):
+    if hasattr(value, "fields"):
+        return value.fields
+    if hasattr(value, "value"):
+        return value.value
+    raise TypeError("unsupported PRISM result value")
+
+
+def _markdown(workflow_id, structured):
+    lines = ["# " + workflow_id.replace("_", " ").title(), ""]
+    for name, value in structured.items():
+        lines.extend(("## " + name.replace("_", " ").title(), ""))
+        if isinstance(value, list):
+            lines.extend("- " + str(item) for item in value)
+            if not value:
+                lines.append("_None recorded._")
+        elif isinstance(value, dict):
+            lines.extend(("```json", json.dumps(value, indent=2), "```"))
+        else:
+            lines.append(str(value))
+        lines.append("")
+    return "\\n".join(lines).rstrip() + "\\n"
+
+
+def verify(*, state, execution, **unused):
+    """Render the typed reasoning result as a readable, verified Lunar report."""
+    if state["contract"].get("backend") == "isabelle":
+        return _verify_isabelle(state, execution)
+    if execution.reasoning_execution.status != "accepted":
+        raise ValueError("Reasoning execution was not accepted")
+    if execution.reasoning_event_count < 2 or not execution.completed_steps:
+        raise ValueError("Reasoning completion evidence is incomplete")
+    structured = execution.reasoning_result
+    if not isinstance(structured, dict):
+        structured = {"value": structured}
+    final_disposition = {
+        "status": "passed",
+        "summary": (
+            "The complete declared PRISM reasoning graph ran to acceptance and "
+            "its typed result was retained without claiming native backend verification."
+        ),
+        "blockers": [],
+        "limitations": [
+            "This completion disposition establishes execution of the packaged "
+            "reasoning graph, not native proof-assistant or symbolic-backend acceptance."
+        ],
+        "reasoning_complete": True,
+        "reasoning_event_count": execution.reasoning_event_count,
+        "completed_reasoning_steps": execution.completed_steps,
+    }
+    report_value = {
+        "final_disposition": final_disposition,
+        "reasoning_result": structured,
+    }
+    return {
+        "result": {
+            "markdown": _markdown(state["workflow_id"], report_value),
+            "structured_value": report_value,
+            "analysis_results": {
+                "execution_scope": "reviewed_reasoning_projection",
+                "native_backend_verification": False,
+                "reasoning_complete": True,
+                "reasoning_event_count": execution.reasoning_event_count,
+            },
+            "compact_prism_input": state["inputs"],
+            "narrative_slots": [],
+            "report_verification": {
+                "status": "passed",
+                "reasoning_complete": True,
+                "checks": [
+                    "complete_reasoning_trace",
+                    "typed_prism_result",
+                    "deterministic_markdown_render",
+                ],
+            },
+        },
+        "events": [{"kind": "artifact", "payload": {
+            "workflow_id": state["workflow_id"], "status": "rendered",
+        }}],
+    }
+
+
+def _verify_isabelle(state, execution):
+    """Require complete reasoning evidence plus an immutable native receipt."""
+    native = _isabelle_module()
+    root = Path(state["run_root"])
+    for index, receipt in enumerate(execution.receipts, 1):
+        if not receipt.get("source_file") or not receipt.get("source_sha256"):
+            if receipt.get("backend_executed"):
+                raise ValueError("Executed Isabelle receipt omitted its retained source")
+            continue
+        source = root / ("attempt-" + str(index)) / receipt["source_file"]
+        if native.digest(source) != receipt["source_sha256"]:
+            raise ValueError("Executed Isabelle artifact changed after validation")
+    receipt = execution.receipts[-1]
+    if execution.reasoning_execution.status != "accepted":
+        raise ValueError("Reasoning execution was not accepted")
+    if execution.reasoning_event_count < 20 or len(execution.completed_steps) < 10:
+        raise ValueError("Reasoning completion evidence is incomplete")
+    evidence = {
+        "backend": "isabelle",
+        "reasoning_executed": True,
+        "reasoning_event_count": execution.reasoning_event_count,
+        "completed_reasoning_steps": execution.completed_steps,
+        "backend_executed": receipt["backend_executed"],
+        "backend_verified": receipt["backend_verified"],
+        "reasoning_reconciled_with_backend": True,
+        "authority": "native_backend_receipt",
+        "verification_scope": receipt["verification_scope"],
+        "attempts": len(execution.receipts),
+        "repository_promotion": False,
+    }
+    outcome = "passed" if receipt["backend_verified"] else receipt["status"]
+    final_disposition = {
+        "status": outcome,
+        "summary": (
+            "The complete PRISM reasoning trace was recorded and the generated "
+            "Isabelle theory was accepted by the declared native backend."
+            if receipt["backend_verified"]
+            else "The reasoning trace completed, but native Isabelle verification failed."
+        ),
+        "blockers": [] if receipt["backend_verified"] else [
+            "Native Isabelle verification did not accept the final generated theory."
+        ],
+        "limitations": [
+            "The native receipt verifies the submitted Isabelle theory and its "
+            "declared theorem, not a machine-checked derivation of the physical "
+            "model from differential Newtonian dynamics.",
+            "Independent source-fidelity and physical-interpretation review remains "
+            "necessary for claims beyond the supplied derivation and context.",
+        ],
+        "reasoning_complete": True,
+        "backend_executed": receipt["backend_executed"],
+        "backend_verified": receipt["backend_verified"],
+        "source_sha256": receipt.get("source_sha256"),
+    }
+    markdown = (
+        "# Isabelle Physics Derivation Trace Loop\\n\\n"
+        "## Backend result: " + outcome + "\\n\\n"
+        "**Backend:** Isabelle\\n\\n"
+        "**Version:** " + receipt["runtime"]["version"] + "\\n\\n"
+        "**Reasoning events:** " + str(execution.reasoning_event_count) + "\\n\\n"
+        "## Final disposition\\n\\n```json\\n" +
+        json.dumps(final_disposition, indent=2) + "\\n```\\n\\n"
+        "**Verification scope:** " + receipt["verification_scope"] + "\\n\\n"
+        "## Execution evidence\\n\\n```json\\n" +
+        json.dumps(receipt, indent=2) + "\\n```\\n"
+    )
+    return {
+        "result": {
+            "markdown": markdown,
+            "structured_value": {
+                "reasoning": final_disposition,
+                "pre_execution_reasoning": execution.reasoning_result,
+                "evidence": evidence,
+                "receipts": execution.receipts,
+            },
+            "analysis_results": evidence,
+            "compact_prism_input": state["workflow_inputs"],
+            "narrative_slots": [],
+            "report_verification": {
+                "status": "passed" if receipt["backend_verified"] else "failed",
+                "scope": "native_receipt_and_artifact_integrity",
+                "backend_verified": receipt["backend_verified"],
+                "reasoning_complete": True,
+            },
+        },
+        "events": [{"kind": "stage", "payload": {
+            "stage": "native_result_validation", "status": outcome, **evidence,
+        }}],
+    }
+'''
+
+
+def canonical_json(value: Any) -> bytes:
+    """Return the finite, stable JSON encoding used in reports and digests."""
+    return (
+        json.dumps(
+            value,
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def lunar_modules(lunar_root: Path) -> tuple[type, Any]:
+    """Load Lunar's builder and archive validator from one explicit checkout."""
+    backend = lunar_root.resolve(strict=True) / "app" / "backend"
+    if not (backend / "domain_packages" / "archive_builder.py").is_file():
+        raise ValueError(f"not a Lunar platform checkout: {lunar_root}")
+    sys.path.insert(0, str(backend))
+    try:
+        builder = importlib.import_module("domain_packages.archive_builder")
+        archive = importlib.import_module("domain_packages.archive")
+    finally:
+        sys.path.pop(0)
+    return builder.ArchiveBuilder, archive.validate_archive
+
+
+def safe_files(root: Path) -> list[Path]:
+    """List regular, non-generated files below a confined source directory."""
+    root = root.resolve(strict=True)
+    result: list[Path] = []
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root)
+        if any(
+            part in IGNORED_NAMES or part.startswith(".") for part in relative.parts
+        ):
+            continue
+        if path.is_symlink():
+            raise ValueError(f"export source cannot contain a symlink: {path}")
+        if path.is_dir():
+            continue
+        mode = path.stat().st_mode
+        if not stat.S_ISREG(mode):
+            raise ValueError(f"export source is not a regular file: {path}")
+        if path.suffix == ".pyc" or path.name == "prism":
+            continue
+        result.append(path)
+    return result
+
+
+def frontmatter(skill_file: Path) -> dict[str, Any]:
+    """Read the first complete YAML frontmatter block in a canonical skill."""
+    text = skill_file.read_text(encoding="utf-8")
+    delimiters = list(re.finditer(r"(?m)^---[ \t]*\r?$", text))
+    if len(delimiters) < 2:
+        raise ValueError(f"skill has no complete YAML frontmatter: {skill_file}")
+    block = text[delimiters[0].end() : delimiters[1].start()]
+    try:
+        value = yaml.safe_load(block)
+    except yaml.YAMLError:
+        # A few legacy skills contain an unquoted colon in their one-line
+        # description.  The package preserves the source byte-for-byte; this
+        # fallback only extracts the two presentation fields we need.
+        value = {
+            key: match.group(1).strip().strip("\"'")
+            for key in ("name", "description")
+            if (match := re.search(rf"(?m)^{key}:[ \t]*(.+)$", block))
+        }
+    if not isinstance(value, dict):
+        raise TypeError(f"skill frontmatter is not a mapping: {skill_file}")
+    return value
+
+
+def load_hooks(root: Path) -> tuple[dict[str, Any], dict[str, list[dict[str, Any]]]]:
+    """Load the hook registry and index capabilities by canonical owner skill."""
+    registry = yaml.safe_load((root / "skills" / "SKILL_HOOKS.yaml").read_text())
+    if not isinstance(registry, dict) or not isinstance(registry.get("hooks"), list):
+        raise TypeError("skills/SKILL_HOOKS.yaml has no hook inventory")
+    owners: dict[str, list[dict[str, Any]]] = {}
+    for hook in registry["hooks"]:
+        owner = hook.get("owner_skill")
+        if not isinstance(owner, str) or not owner:
+            raise ValueError(f"hook has no canonical owner_skill: {hook!r}")
+        owners.setdefault(owner, []).append(
+            {key: hook[key] for key in ("id", "reasoning", "outputs") if key in hook}
+        )
+    for values in owners.values():
+        values.sort(key=lambda item: item["id"])
+    return registry, owners
+
+
+def workflow_skill_references(root: Path) -> dict[str, list[str]]:
+    """Map each reviewed workflow to the canonical skills it references."""
+    value = json.loads(
+        (root / "mathformer-prism" / "skill_dispositions.json").read_text()
+    )
+    result: dict[str, list[str]] = {}
+    for row in value["skills"]:
+        for workflow in row.get("workflows", []):
+            result.setdefault(workflow, []).append(row["skill"])
+    return {key: sorted(set(items)) for key, items in result.items()}
+
+
+def reasoning_contract(project_root: Path, workflow: dict[str, Any]) -> dict[str, Any]:
+    """Extract the reviewed reasoning projection's typed public contract."""
+    api = (project_root / "prism_project" / "reasoning_api.prism").read_text()
+    signature = re.search(
+        r"def run_reasoning\(\s*(\w+): (\w+),.*?"
+        r"Result\[Generated\[(\w+)\], ModelFailure\]",
+        api,
+        re.DOTALL,
+    )
+    if signature is None:
+        raise ValueError(f"unsupported reasoning API: {project_root}")
+    argument, input_type, output_type = signature.groups()
+    domain = (project_root / "prism_project" / f"{workflow['id']}.prism").read_text()
+    block = re.search(rf"(?m)^type {input_type}:\n((?:[ \t].*\n|\n)+)", domain)
+    if block is None:
+        raise ValueError(f"missing reasoning input type {input_type}: {project_root}")
+    fields = re.findall(r"(?m)^    (\w+): (.+)$", block.group(1))
+    if not fields or any(kind not in {"String", "List[String]"} for _, kind in fields):
+        raise ValueError(f"unsupported reasoning fields for {workflow['id']}: {fields}")
+    fixture_source = (project_root / "prism_project" / "main.prism").read_text()
+    examples = PLAUSIBLE_INPUTS.get(workflow["id"])
+    field_names = {name for name, _ in fields}
+    if examples is None or set(examples) != field_names:
+        raise ValueError(
+            f"plausible input coverage mismatch for {workflow['id']}: "
+            f"{sorted(set(examples or {}) ^ field_names)}"
+        )
+    fixture: dict[str, Any] = {}
+    properties: dict[str, Any] = {}
+    for name, kind in fields:
+        match = re.search(rf"(?m)^        {name} = (.+),$", fixture_source)
+        if match is None:
+            raise ValueError(f"missing canonical fixture {name}: {project_root}")
+        json.loads(match.group(1))
+        example = examples[name]
+        valid_example = (
+            isinstance(example, str)
+            if kind == "String"
+            else isinstance(example, list)
+            and all(isinstance(item, str) for item in example)
+        )
+        if not valid_example:
+            raise ValueError(f"invalid plausible input {workflow['id']}.{name}")
+        fixture[name] = example
+        field: dict[str, Any] = {
+            "type": "string" if kind == "String" else "array",
+            "title": name.replace("_", " ").capitalize(),
+            "default": fixture[name],
+            "description": (
+                "Deterministic example for an initial run. Replace it with the "
+                "actual evidence for substantive reasoning."
+            ),
+        }
+        if kind == "List[String]":
+            field["items"] = {"type": "string"}
+        properties[name] = field
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": properties,
+        "required": [name for name, _ in fields],
+    }
+    return {
+        "argument": argument,
+        "input_type": input_type,
+        "output_type": output_type,
+        "workflow_fields": [name for name, _ in fields],
+        "schema": schema,
+        "fixture": fixture,
+    }
+
+
+def runnable_reasoning_main(
+    workflow: dict[str, Any], contract: dict[str, Any]
+) -> bytes:
+    """Create a material-path registration for the reviewed reasoning projection."""
+    workflow_id = workflow["id"]
+    annotation = {
+        "declaration": workflow_id,
+        "id": workflow_id,
+        "entry_argument": contract["argument"],
+        "prepare_hook": "mathformer-workflow-prepare",
+        "verify_hook": "mathformer-workflow-verify",
+        "input_schema": contract["schema"],
+        "output_schema": {"type": "object"},
+        "metadata": {
+            "description": workflow["description"],
+            "model_required": True,
+            "reasoning_required": True,
+            "timeout_seconds": 1800,
+            "contract_semantics": (
+                "Native Isabelle execution backed by an immutable process receipt."
+                if workflow_id == "isabelle_physics_derivation_trace_loop"
+                else "Reviewed generative reasoning projection using the packaged "
+                "skill instructions. Generated results do not claim native backend execution."
+            ),
+            "native_backend_execution": workflow_id
+            == "isabelle_physics_derivation_trace_loop",
+            "completion_contract": {
+                "terminal_state": "completed",
+                "reasoning_events_min": 1,
+                "reasoning_complete": True,
+                "allowed_final_statuses": ["passed"],
+                "forbid_blockers": True,
+            },
+        },
+        "execute_hook": "mathformer-workflow-execute",
+    }
+    if workflow_id == "isabelle_physics_derivation_trace_loop":
+        annotation["metadata"]["backend"] = "isabelle"
+        annotation["metadata"]["required_capabilities"] = ["backend.isabelle"]
+        annotation["metadata"]["completion_contract"]["native_backend"] = {
+            "backend": "isabelle",
+            "version": "Isabelle2025-2",
+            "backend_executed": True,
+            "backend_verified": True,
+            "exit_code": 0,
+        }
+    argument = contract["argument"]
+    input_type = contract["input_type"]
+    output_type = contract["output_type"]
+    lines = [
+        "from reasoning_api import run_reasoning",
+        f"from {workflow_id} import {input_type}, {output_type}",
+        "",
+        "# lunar-runtime: " + json.dumps(annotation, sort_keys=True),
+        f"workflow {workflow_id}(",
+        f"    {argument}: {input_type},",
+        "    model_access: ModelGenerate,",
+        "    disclosure: ContextDisclose,",
+        f") -> Generated[{output_type}] fails ModelFailure ! {{AI.Generate, Context.Disclose}}:",
+        f"    [result: run_reasoning({argument}, model_access, disclosure)]",
+        "    return result",
+        "",
+        f"def main({argument}: {input_type}, model_access: ModelGenerate, disclosure: ContextDisclose) -> Result[Generated[{output_type}], ModelFailure] ! {{AI.Generate, Context.Disclose}}:",
+        f"    return solve {workflow_id}({argument}, model_access, disclosure)",
+        "",
+    ]
+    text = "\n".join(lines)
+    return text.encode("utf-8")
+
+
+def reasoning_materialization(project_root: Path) -> tuple[bytes, bytes]:
+    """Isolate the reviewed generative composition from detailed material bindings."""
+    prism_root = project_root / "prism_project"
+    materialization = (prism_root / "materialization.prism").read_text()
+    composition = re.search(
+        r"\A.*?^converted_reasoning = .*?^\)\n",
+        materialization,
+        re.MULTILINE | re.DOTALL,
+    )
+    if composition is None:
+        raise ValueError(f"missing reviewed reasoning composition: {project_root}")
+    api = (prism_root / "reasoning_api.prism").read_text()
+    expected = "from materialization import converted_reasoning"
+    if expected not in api:
+        raise ValueError(
+            f"reasoning API has no canonical materialization import: {project_root}"
+        )
+    rendered_api = api.replace(
+        expected,
+        "from reasoning_materialization import converted_reasoning",
+        1,
+    )
+    return (composition.group(0).rstrip() + "\n").encode(), rendered_api.encode()
+
+
+def add_source_file(
+    builder: Any,
+    *,
+    archive_path: str,
+    source: Path,
+    source_root: Path,
+) -> str:
+    """Add one source file through Lunar's snapshot and confinement checks."""
+    return builder.add_file(archive_path, source, source_root=source_root)
+
+
+def add_skills(
+    builder: Any, root: Path, hooks_by_owner: dict[str, list[dict[str, Any]]]
+) -> list[str]:
+    """Add every canonical two-level Mathformer skill and all of its assets."""
+    identifiers: list[str] = []
+    for skill_file in sorted((root / "skills").glob("*/*/SKILL.md")):
+        skill_root = skill_file.parent
+        category = skill_root.parent.name
+        metadata = frontmatter(skill_file)
+        skill_id = str(metadata.get("name") or skill_root.name)
+        if skill_id != skill_root.name:
+            raise ValueError(f"skill name/path mismatch: {skill_file}")
+        files: list[str] = []
+        for source in safe_files(skill_root):
+            relative = source.relative_to(skill_root).as_posix()
+            files.append(
+                add_source_file(
+                    builder,
+                    archive_path=f"skills/source/{category}/{skill_id}/{relative}",
+                    source=source,
+                    source_root=root,
+                )
+            )
+        instructions = skill_file.read_text(encoding="utf-8")
+        document = {
+            "id": skill_id,
+            "name": skill_id,
+            "instructions": instructions,
+            "capabilities": hooks_by_owner.get(skill_id, []),
+            "invocation": {
+                "kind": "codex-skill",
+                "entrypoint": f"skills/source/{category}/{skill_id}/SKILL.md",
+            },
+            "groups": [category],
+            "metadata": {
+                "description": str(metadata.get("description", "")),
+                "source_path": skill_file.relative_to(root).as_posix(),
+                "source_sha256": sha256(skill_file),
+                "scope": "canonical-mathformer-skill",
+            },
+        }
+        builder.add_resource("skills", document, files=files)
+        identifiers.append(skill_id)
+    if len(identifiers) != len(set(identifiers)):
+        raise ValueError("canonical skill identifiers are not unique")
+    return identifiers
+
+
+def add_workflows(
+    builder: Any,
+    root: Path,
+    available_skills: set[str],
+) -> tuple[list[str], dict[str, dict[str, Any]]]:
+    """Add all projects named by the reviewed Mathformer PRISM catalog."""
+    prism_root = root / "mathformer-prism"
+    catalog = json.loads((prism_root / "workflow_catalog.json").read_text())
+    references = workflow_skill_references(root)
+    workflow_ids: list[str] = []
+    contracts: dict[str, dict[str, Any]] = {}
+    for workflow in sorted(catalog["workflows"], key=lambda item: item["id"]):
+        workflow_id = workflow["id"]
+        project_root = prism_root / "projects" / workflow_id
+        if not project_root.is_dir():
+            raise ValueError(f"missing catalogued PRISM project: {workflow_id}")
+        contract = reasoning_contract(project_root, workflow)
+        reasoning_body, reasoning_api = reasoning_materialization(project_root)
+        reasoning_source = (
+            project_root / "prism_project" / "reasoning.prism"
+        ).read_text()
+        reasoning_match = re.search(
+            r"(?m)^reasoning\s+([A-Za-z][A-Za-z0-9_]*)\s*\(", reasoning_source
+        )
+        if reasoning_match is None:
+            raise ValueError(f"missing reasoning declaration: {project_root}")
+        contracts[workflow_id] = {
+            "argument": contract["argument"],
+            "schema": contract["schema"],
+            "workflow_fields": contract["workflow_fields"],
+            "reasoning_workflow": reasoning_match.group(1),
+            "entry_file": (
+                "repository/mathformer-prism/projects/"
+                f"{workflow_id}/prism_project/{workflow['material_entrypoint']}"
+            ),
+        }
+        if workflow_id == "isabelle_physics_derivation_trace_loop":
+            contracts[workflow_id].update(
+                backend="isabelle",
+                native_entry_file=(
+                    "repository/mathformer-prism/projects/"
+                    f"{workflow_id}/prism_project/native_execution.prism"
+                ),
+            )
+        files: list[str] = []
+        for source in safe_files(project_root):
+            relative = source.relative_to(project_root).as_posix()
+            archive_path = (
+                f"repository/mathformer-prism/projects/{workflow_id}/{relative}"
+            )
+            if relative == "prism_project/material_main.prism":
+                files.append(
+                    builder.add_bytes(
+                        archive_path,
+                        runnable_reasoning_main(workflow, contract),
+                        media_type="text/plain",
+                    )
+                )
+            elif relative == "prism_project/reasoning_api.prism":
+                files.append(
+                    builder.add_bytes(
+                        archive_path,
+                        reasoning_api,
+                        media_type="text/plain",
+                    )
+                )
+            else:
+                files.append(
+                    add_source_file(
+                        builder,
+                        archive_path=archive_path,
+                        source=source,
+                        source_root=root,
+                    )
+                )
+        files.append(
+            builder.add_bytes(
+                (
+                    "repository/mathformer-prism/projects/"
+                    f"{workflow_id}/prism_project/reasoning_materialization.prism"
+                ),
+                reasoning_body,
+                media_type="text/plain",
+            )
+        )
+        if workflow_id == "isabelle_physics_derivation_trace_loop":
+            files.append(
+                builder.add_bytes(
+                    (
+                        "repository/mathformer-prism/projects/"
+                        f"{workflow_id}/prism_project/native_execution.prism"
+                    ),
+                    ISABELLE_EXECUTION_SOURCE.encode("utf-8"),
+                    media_type="text/plain",
+                )
+            )
+        skill_ids = references.get(workflow_id, [])
+        missing = sorted(set(skill_ids) - available_skills)
+        if missing:
+            raise ValueError(f"{workflow_id} references unexported skills: {missing}")
+        document = {
+            "id": workflow_id,
+            "name": workflow_id,
+            "kind": "project",
+            "metadata": {
+                "description": workflow["description"],
+                "entrypoint": (
+                    "repository/mathformer-prism/projects/"
+                    f"{workflow_id}/prism_project/{workflow['material_entrypoint']}"
+                ),
+                "reasoning_entrypoint": (
+                    "repository/mathformer-prism/projects/"
+                    f"{workflow_id}/prism_project/{workflow['entrypoint']}"
+                ),
+                "public_output_type": workflow["public_output_type"],
+                "semantic_mode": workflow["semantic_mode"],
+                "source_fingerprint": catalog["source_fingerprint"],
+            },
+        }
+        builder.add_resource(
+            "repository",
+            document,
+            files=files,
+            references=[{"collection": "skills", "id": item} for item in skill_ids],
+        )
+        workflow_ids.append(workflow_id)
+
+    catalog_files: list[str] = []
+    for relative in PRISM_CATALOG_FILES:
+        source = root / relative
+        catalog_files.append(
+            add_source_file(
+                builder,
+                archive_path=f"repository/{relative}",
+                source=source,
+                source_root=root,
+            )
+        )
+    builder.add_resource(
+        "repository",
+        {
+            "id": "mathformer-prism-catalog",
+            "name": "Mathformer PRISM catalog",
+            "kind": "project",
+            "metadata": {
+                "description": "Reviewed catalog and deterministic conversion provenance for the packaged workflows.",
+                "source_fingerprint": catalog["source_fingerprint"],
+                "workflow_count": len(workflow_ids),
+            },
+        },
+        files=catalog_files,
+        references=[{"collection": "repository", "id": item} for item in workflow_ids],
+    )
+    return workflow_ids, contracts
+
+
+def add_runtime(builder: Any, contracts: dict[str, dict[str, Any]]) -> None:
+    """Register the Lunar hook that prepares all typed reasoning workflows."""
+    compile(RUNTIME_SOURCE, "mathformer_lunar_runtime.py", "exec")
+    runtime_file = builder.add_bytes(
+        "repository/runtime/mathformer_lunar_runtime.py",
+        RUNTIME_SOURCE.encode("utf-8"),
+        media_type="text/x-python",
+    )
+    isabelle_runtime_source = (
+        REPOSITORY / "scripts" / "prism" / "isabelle_backend_runtime.py"
+    )
+    compile(
+        isabelle_runtime_source.read_text(encoding="utf-8"),
+        str(isabelle_runtime_source),
+        "exec",
+    )
+    isabelle_runtime_file = add_source_file(
+        builder,
+        archive_path="repository/runtime/isabelle_backend_runtime.py",
+        source=isabelle_runtime_source,
+        source_root=REPOSITORY,
+    )
+    contracts_file = builder.add_bytes(
+        "repository/runtime/workflow-inputs.json",
+        canonical_json(contracts),
+        media_type="application/json",
+    )
+    builder.manifest["runtime"]["entrypoints"] = [
+        {
+            "id": "mathformer-workflow-prepare",
+            "operation": "prepare",
+            "file": runtime_file,
+            "callable": "prepare",
+        },
+        {
+            "id": "mathformer-workflow-verify",
+            "operation": "verify",
+            "file": runtime_file,
+            "callable": "verify",
+        },
+        {
+            "id": "mathformer-workflow-execute",
+            "operation": "execute",
+            "file": runtime_file,
+            "callable": "execute",
+        },
+    ]
+    builder.add_resource(
+        "repository",
+        {
+            "id": "mathformer-lunar-runtime",
+            "name": "Mathformer Lunar reasoning runtime",
+            "kind": "runtime",
+            "metadata": {
+                "description": "Typed input preparation for all packaged reviewed PRISM reasoning workflows.",
+                "execution_mode": "reasoning",
+                "workflow_count": len(contracts),
+            },
+        },
+        files=[runtime_file, contracts_file, isabelle_runtime_file],
+    )
+
+
+def data_source(
+    builder: Any,
+    root: Path,
+    *,
+    source_id: str,
+    name: str,
+    descriptor: dict[str, Any],
+    sources: Iterable[Path],
+    prefix: str,
+) -> None:
+    """Add a deterministic local-file data-source resource."""
+    local_files: list[dict[str, str]] = []
+    files: list[str] = []
+    for index, source in enumerate(sorted(sources), start=1):
+        relative = source.relative_to(root).as_posix()
+        target = add_source_file(
+            builder,
+            archive_path=f"data-sources/{prefix}/{relative}",
+            source=source,
+            source_root=root,
+        )
+        files.append(target)
+        local_files.append({"id": f"file-{index:04d}", "file": target})
+    builder.add_resource(
+        "data-sources",
+        {
+            "id": source_id,
+            "name": name,
+            "descriptor": descriptor,
+            "local_files": local_files,
+            "remote_references": [],
+        },
+        files=files,
+    )
+
+
+def add_data_sources(builder: Any, root: Path) -> list[str]:
+    """Add registries, example inputs, PRISM catalogs, and backend references."""
+    data_source(
+        builder,
+        root,
+        source_id="mathformer-contracts",
+        name="Mathformer skill and reasoning contracts",
+        descriptor={"kind": "contract-registry", "trust": "canonical-source"},
+        sources=(root / path for path in CONTRACT_FILES),
+        prefix="contracts",
+    )
+    flows = sorted((root / "examples" / "reasoning_flows").glob("*.rflow"))
+    data_source(
+        builder,
+        root,
+        source_id="mathformer-reasoning-flow-examples",
+        name="Mathformer reasoning-flow input data",
+        descriptor={"kind": "reasoning-flow-examples", "trust": "example-input"},
+        sources=flows,
+        prefix="reasoning-flows",
+    )
+    data_source(
+        builder,
+        root,
+        source_id="mathformer-prism-catalog-data",
+        name="Mathformer PRISM workflow catalogs",
+        descriptor={"kind": "workflow-catalog", "trust": "generated-and-reviewed"},
+        sources=(
+            root / path for path in PRISM_CATALOG_FILES if (root / path).suffix != ".md"
+        ),
+        prefix="prism-catalogs",
+    )
+    builder.add_resource(
+        "data-sources",
+        {
+            "id": "mathformer-backend-dependencies",
+            "name": "Mathformer external backend references",
+            "descriptor": {
+                "kind": "runtime-dependencies",
+                "bundled": False,
+                "trust": "reference-only",
+            },
+            "local_files": [],
+            "remote_references": [
+                {"id": identifier, "uri": uri} for identifier, uri in REMOTE_BACKENDS
+            ],
+        },
+    )
+    return [
+        "mathformer-contracts",
+        "mathformer-reasoning-flow-examples",
+        "mathformer-prism-catalog-data",
+        "mathformer-backend-dependencies",
+    ]
+
+
+def add_conversion_lock(builder: Any) -> None:
+    """Record every pre-lock payload in a deterministic conversion inventory."""
+    rows = [
+        {
+            "archive_path": path,
+            "archive_sha256": builder.files[path]["sha256"],
+            "conversion": "byte-preserving-source-or-declared-generated-adapter",
+            "media_type": builder.files[path]["media_type"],
+            "size": builder.files[path]["size"],
+        }
+        for path in sorted(builder.files)
+    ]
+    fingerprint = hashlib.sha256(
+        canonical_json(
+            [
+                {
+                    "archive_path": row["archive_path"],
+                    "archive_sha256": row["archive_sha256"],
+                }
+                for row in rows
+            ]
+        )
+    ).hexdigest()
+    lock_file = builder.add_bytes(
+        "repository/conversion-lock.json",
+        canonical_json(
+            {
+                "artifact": "repository-prism-conversion-lock",
+                "schema_version": 1,
+                "package_key": builder.manifest["package"]["key"],
+                "payload_fingerprint": "sha256:" + fingerprint,
+                "files": rows,
+            }
+        ),
+        media_type="application/json",
+    )
+    builder.add_resource(
+        "repository",
+        {
+            "id": "mathformer-conversion-lock",
+            "name": "Mathformer deterministic conversion lock",
+            "kind": "asset",
+            "metadata": {
+                "description": (
+                    "Complete digest inventory for the source and generated payloads "
+                    "present before the self-describing lock resource is added."
+                ),
+                "payload_fingerprint": "sha256:" + fingerprint,
+                "schema_version": 1,
+            },
+        },
+        files=[lock_file],
+    )
+
+
+def build(root: Path, output: Path, lunar_root: Path) -> dict[str, Any]:
+    """Build and validate one deterministic Lunar domain-package archive."""
+    root = root.resolve(strict=True)
+    output = output.absolute()
+    ArchiveBuilder, validate_archive = lunar_modules(lunar_root)
+    _, hooks_by_owner = load_hooks(root)
+    with tempfile.TemporaryDirectory(prefix="mathformer-lunar-export-") as temporary:
+        snapshot = Path(temporary) / "snapshot"
+        builder = ArchiveBuilder(
+            snapshot,
+            package_key="mathformer",
+            display_name="Mathformer skills and PRISM workflows",
+        )
+        builder.manifest["runtime"]["python"] = ">=3.12,<3.15"
+        skills = add_skills(builder, root, hooks_by_owner)
+        workflows, contracts = add_workflows(builder, root, set(skills))
+        add_runtime(builder, contracts)
+        data_sources = add_data_sources(builder, root)
+        add_conversion_lock(builder)
+        manifest = builder.publish(output)
+        extracted = Path(temporary) / "validated"
+        validated = validate_archive(output, extracted)
+        if validated.manifest != manifest:
+            raise ValueError("Lunar archive validation changed the export manifest")
+    return {
+        "artifact": "mathformer-lunar-domain-package",
+        "archive": str(output),
+        "archive_sha256": sha256(output),
+        "data_source_count": len(data_sources),
+        "excluded_source_roots": list(EXCLUDED_SOURCE_ROOTS),
+        "file_count": len(manifest["files"]),
+        "format_version": manifest["format_version"],
+        "package": manifest["package"],
+        "skill_count": len(skills),
+        "workflow_count": len(workflows),
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Export canonical Mathformer skills, data sources, and reviewed PRISM "
+            "workflows as a deterministic Lunar domain package."
+        )
+    )
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--root", type=Path, default=REPOSITORY)
+    parser.add_argument("--lunar-root", type=Path, default=DEFAULT_LUNAR)
+    parser.add_argument(
+        "--verify-reproducible",
+        action="store_true",
+        help="Build an independent copy and require byte-identical ZIP output.",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    report = build(args.root, args.output, args.lunar_root)
+    if args.verify_reproducible:
+        with tempfile.TemporaryDirectory(prefix="mathformer-lunar-repro-") as temporary:
+            comparison = Path(temporary) / args.output.name
+            second = build(args.root, comparison, args.lunar_root)
+            if report["archive_sha256"] != second["archive_sha256"]:
+                args.output.unlink(missing_ok=True)
+                raise ValueError("independent exports were not byte-identical")
+        report["reproducible"] = True
+    print(canonical_json(report).decode("utf-8"), end="")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

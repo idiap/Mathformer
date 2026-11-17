@@ -1,0 +1,525 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_sympy_recursive_repair_control_0000_workflow
+version: 1.0.0
+kind: workflow
+description: Load one SymPy expansion state, choose one ordered control branch, and
+  emit a repair control plan; no repairs or internal iteration.
+aliases:
+- physics-sympy:recursive-repair-control-0000
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Request:
+    representation: value
+    schema:
+      type: object
+      properties:
+        case:
+          type: string
+          default: formalphysics_0000
+        expansion_map:
+          type: string
+          description: Optional JSON file; takes precedence over case.
+        previous_expansion_maps:
+          type: array
+          items:
+            type: string
+          default: []
+        iteration:
+          type: integer
+          default: 1
+        max_iterations:
+          type: integer
+          default: 6
+        output:
+          type: string
+        reasoning_log:
+          type: string
+      additionalProperties: false
+  State:
+    representation: value
+    schema:
+      type: object
+      properties:
+        request:
+          type: object
+        expansion_map:
+          type: object
+        previous_expansion_maps:
+          type: array
+          items:
+            type: object
+        iteration:
+          type: integer
+        max_iterations:
+          type: integer
+      required:
+      - request
+      - expansion_map
+      - previous_expansion_maps
+      - iteration
+      - max_iterations
+      additionalProperties: false
+  Guards:
+    schema:
+      type: object
+      properties:
+        early_complete:
+          type: boolean
+          description: status in {complete, not_required} and no outstanding nodes
+        non_exhaustive:
+          type: boolean
+          description: not bool(expansion_map.get('exhaustive', False))
+        repeated:
+          type: boolean
+          description: str(current signature, default missing) occurs among truthy
+            prior signatures converted to str
+        at_cap:
+          type: boolean
+          description: iteration >= max_iterations when earlier stopping checks have
+            not matched; otherwise false (native comparison bypass).
+        empty:
+          type: boolean
+          description: not expansion_map.get('outstanding_nodes', [])
+      required:
+      - early_complete
+      - non_exhaustive
+      - repeated
+      - at_cap
+      - empty
+      additionalProperties: false
+  Branch:
+    schema:
+      type: string
+      enum:
+      - complete
+      - non_exhaustive
+      - repeated
+      - at_cap
+      - recurse
+  Plan:
+    representation: value
+    schema:
+      type: object
+      properties:
+        style:
+          const: physics_sympy_recursive_repair_control_plan
+        backend:
+          const: sympy
+        case_id: {}
+        status:
+          type: string
+          enum:
+          - complete
+          - blocked
+          - recurse
+        decision:
+          type: string
+          enum:
+          - complete
+          - blocked
+          - recurse
+        iteration:
+          type: integer
+        max_iterations:
+          type: integer
+        iteration_signature:
+          type: string
+        prior_iteration_signatures:
+          type: array
+          items:
+            type: string
+        outstanding_node_count:
+          type: integer
+        blockers:
+          type: array
+          items:
+            type: string
+        next_actions:
+          type: array
+          items:
+            type: object
+        loop_policy:
+          type: object
+        required_rerun_gates:
+          type: array
+          items:
+            type: string
+        recursion_invariants:
+          type: array
+          items:
+            type: string
+        sympy_only_boundary:
+          type: object
+      required:
+      - style
+      - backend
+      - case_id
+      - status
+      - decision
+      - iteration
+      - max_iterations
+      - iteration_signature
+      - prior_iteration_signatures
+      - outstanding_node_count
+      - blockers
+      - next_actions
+      - loop_policy
+      - required_rerun_gates
+      - recursion_invariants
+      - sympy_only_boundary
+      additionalProperties: false
+  Context:
+    schema:
+      type: object
+      properties:
+        working_directory:
+          type: string
+          description: Existing absolute caller directory for relative input and output
+            paths.
+      required:
+      - working_directory
+      additionalProperties: false
+  Text:
+    schema:
+      type: string
+  ExitCode:
+    schema:
+      type: integer
+inputs:
+  request:
+    type: Request
+  context:
+    type: Context
+outputs:
+  plan:
+    type: Plan
+    value:
+      ref: flow.outputs.plan
+  stdout_text:
+    type: Text
+    value:
+      ref: flow.outputs.stdout_text
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  load_state:
+    inputs:
+      request:
+        type: Request
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      state_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_sympy_recursive_repair_load_state
+        operation: mathformer_sympy_recursive_repair_load_state
+  compute_guards:
+    inputs:
+      state:
+        type: State
+      state_json:
+        type: Text
+    outputs:
+      guards:
+        type: Guards
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_sympy_recursive_repair_compute_guards
+        operation: mathformer_sympy_recursive_repair_compute_guards
+  finish_plan:
+    inputs:
+      state:
+        type: State
+      branch:
+        type: Branch
+      state_json:
+        type: Text
+    outputs:
+      plan:
+        type: Plan
+      stdout_text:
+        type: Text
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_sympy_recursive_repair_finish_plan
+        operation: mathformer_sympy_recursive_repair_finish_plan
+flow:
+  kind: sequence
+  steps:
+  - id: load
+    kind: call
+    operation: load_state
+    arguments:
+      request:
+        ref: inputs.request
+      context:
+        ref: inputs.context
+  - id: guards
+    kind: call
+    operation: compute_guards
+    arguments:
+      state:
+        ref: steps.load.outputs.state
+      state_json:
+        ref: steps.load.outputs.state_json
+  - id: decide
+    kind: switch
+    description: First true branch wins. Early completion bypasses exhaustiveness,
+      repetition and iteration-cap checks. finish_plan subsequently applies the explicit
+      blocked-status override.
+    cases:
+    - id: early_complete
+      when:
+        ref: steps.guards.outputs.guards.early_complete
+      body:
+        kind: call
+        operation: finish_plan
+        arguments:
+          state:
+            ref: steps.load.outputs.state
+          branch:
+            literal: complete
+          state_json:
+            ref: steps.load.outputs.state_json
+    - id: non_exhaustive
+      when:
+        ref: steps.guards.outputs.guards.non_exhaustive
+      body:
+        kind: call
+        operation: finish_plan
+        arguments:
+          state:
+            ref: steps.load.outputs.state
+          branch:
+            literal: non_exhaustive
+          state_json:
+            ref: steps.load.outputs.state_json
+    - id: repeated
+      when:
+        ref: steps.guards.outputs.guards.repeated
+      body:
+        kind: call
+        operation: finish_plan
+        arguments:
+          state:
+            ref: steps.load.outputs.state
+          branch:
+            literal: repeated
+          state_json:
+            ref: steps.load.outputs.state_json
+    - id: at_cap
+      when:
+        ref: steps.guards.outputs.guards.at_cap
+      body:
+        kind: call
+        operation: finish_plan
+        arguments:
+          state:
+            ref: steps.load.outputs.state
+          branch:
+            literal: at_cap
+          state_json:
+            ref: steps.load.outputs.state_json
+    - id: empty
+      when:
+        ref: steps.guards.outputs.guards.empty
+      body:
+        kind: call
+        operation: finish_plan
+        arguments:
+          state:
+            ref: steps.load.outputs.state
+          branch:
+            literal: complete
+          state_json:
+            ref: steps.load.outputs.state_json
+    default:
+      kind: call
+      operation: finish_plan
+      arguments:
+        state:
+          ref: steps.load.outputs.state
+        branch:
+          literal: recurse
+        state_json:
+          ref: steps.load.outputs.state_json
+    outputs:
+      plan:
+        type: Plan
+        value:
+          ref: selected.outputs.plan
+      stdout_text:
+        type: Text
+        value:
+          ref: selected.outputs.stdout_text
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+  outputs:
+    plan:
+      type: Plan
+      value:
+        ref: steps.decide.outputs.plan
+    stdout_text:
+      type: Text
+      value:
+        ref: steps.decide.outputs.stdout_text
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.decide.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+      - requested_output
+      - requested_reasoning_log
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    - produce_control_plan
+    - write_requested_outputs
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+    - execute_repairs
+    - enforce_advisory_reruns
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 3
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Native control plan only; completion establishes no proof, repair
+    execution, scientific acceptance or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/physics-sympy/physics-sympy-recursive-repair-loop-controller/scripts/control_physics_sympy_recursive_repair.py
+    selector: build_control_plan; load_state; compute_guards; choose_branch; finish_plan;
+      emit_plan; run_cartographer; cartographer_result; main
+    digest: sha256:83cffe4ea8e2e6dbb33ec63bd18d0576414af8544a32657243a38eb70957149c
+  - path: scripts/mathformer.py
+    selector: build_registry/action:physics-sympy:recursive-repair-control-0000; run_action;
+      run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/sympy_recursive_repair_control_tools.py
+    selector: register_sympy_recursive_repair_control_tools
+    digest: sha256:b82bfe289d4c557b1969a9f4b940a1ef22689a4f4f39b172e1c665105397b24e
+  - path: scripts/mcp_server.py
+    selector: register_sympy_recursive_repair_control_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory:physics-sympy:recursive-repair-control-0000
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_sympy_recursive_repair_control_workflow_tests.py
+    selector: SympyRecursiveControlTests
+    digest: sha256:9883b5e49aad4117f6cd41311298e4fcdaa5a8c5412ee2a16848f1712f9c9103
+  - path: tests/mcp/fixtures/sympy_recursive_repair_control_original.py.txt
+    selector: frozen original build_control_plan/main
+    digest: sha256:541c47ab9510e296669a8fcdf8124d225b055d21f580216fa4bc2f5b6b795ef0
+  gaps:
+  - One normal controller invocation is projected. CLI self-test/argparse and hub
+    preflight, write audit, report envelope and 420-second subprocess timeout remain
+    in their owning entrypoints.
+  - Cartographer and goal-planner subprocesses remain real native calls with 300-second
+    and 240-second timeouts. Their internals are not decomposed here; exceptions propagate
+    and unsuccessful cartographer output is interpreted by the native fallback.
+  - Lunar enforces the generated 3600-second/three-call budgets and supplies mandatory
+    receipts; these are separate from caller-carried iteration caps. There is no internal
+    repair loop, iteration increment or enforced rerun.
+  - Native emissions occur after plan assembly. MCP validates requested write paths
+    through the existing service policy before emitting; JSON stdout is returned as
+    stdout_text, and optional reasoning events retain native metadata.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-sympy:recursive-repair-control-0000
+    owner_skill: skills/physics-sympy/physics-sympy-recursive-repair-loop-controller/SKILL.md
+    contract:
+      id: physics-sympy:recursive-repair-control-0000
+      summary: Control the recursive SymPy repair loop for FormalPhysics 0000.
+      family: physics_sympy
+      kind: validation
+      safety: read_only
+      command:
+      - .venv/bin/python
+      - skills/physics-sympy/physics-sympy-recursive-repair-loop-controller/scripts/control_physics_sympy_recursive_repair.py
+      - --case
+      - formalphysics_0000
+      - --json
+      depends_on: []
+      writes: []
+      allows_extra_args: true
+      timeout_seconds: 420
+  mathformer.native_boundary:
+    execution: Registered MCP tools share load_state/compute_guards/finish_plan/emit_plan
+      with the original CLI. Native hub remains the dependency-free controlled leaf.
+    effects_status: Native optional writes guarded by existing MCP write policy; real
+      transitive cartographer/planner calls retained.
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Preserve native preflight/subprocess failure; hub catches its
+      420s timeout, controller timeouts propagate.
+    scientific_payloads: Plan is the controller payload; the hub transport envelope
+      is not modeled.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: One controller invocation; no repair loop, automatic increment, or checkpoint.
+      Caller supplies current map, prior maps/signatures, iteration and cap.
+    default_caller: run_recursive_goal_case.py:build_run invokes once without history/iteration
+      options; goal planner advertises controller command.
+    bound_behavior: At iteration >= max_iterations return a normal blocked plan unless
+      the earlier completion branch wins; explicit blocked status overrides all decisions.
+# REUSE-IgnoreEnd

@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import ControlValidationLoop
+from control_validation_loop import MathformerControlSurfaceSnapshot, MathformerControlValidationDecision
+
+def main() -> Computed[MathformerControlValidationDecision]:
+    workflow_source = MathformerControlSurfaceSnapshot(
+        hook_registry_digest = "fixture:control_validation_loop:hook_registry_digest",
+        routing_registry_digest = "fixture:control_validation_loop:routing_registry_digest",
+        requested_checks = ["fixture:control_validation_loop:requested_checks"],
+    )
+    return solve ControlValidationLoop(workflow_source)

@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import ArtifactAcceptanceLoop
+from artifact_acceptance_loop import LeanArtifactAcceptanceRequest, LeanArtifactAcceptanceDecision
+
+def main() -> Computed[LeanArtifactAcceptanceDecision]:
+    workflow_source = LeanArtifactAcceptanceRequest(
+        artifact_paths = ["fixture:artifact_acceptance_loop:artifact_paths"],
+        source_anchors = ["fixture:artifact_acceptance_loop:source_anchors"],
+        acceptance_policy = "fixture:artifact_acceptance_loop:acceptance_policy",
+    )
+    return solve ArtifactAcceptanceLoop(workflow_source)

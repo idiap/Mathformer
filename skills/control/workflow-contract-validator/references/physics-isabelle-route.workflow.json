@@ -1,0 +1,532 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_formalize_physics_isabelle_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the already selected Isabelle physics route through run_intent_match; generate candidates without checking Isabelle proofs.",
+  "aliases": [
+    "formalize.physics.isabelle"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "MatchMetadata": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "score": {
+            "type": "number"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "score",
+          "matched_terms"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "RouteState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ]
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "formalphysics:extra-isabelle"
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object"
+        }
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "MatchMetadata"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    },
+    "registry": {
+      "type": "Registry"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_isabelle_route_initialize",
+          "operation": "mathformer_physics_isabelle_route_initialize"
+        }
+      }
+    },
+    "select_action": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_isabelle_route_select_action",
+          "operation": "mathformer_physics_isabelle_route_select_action"
+        }
+      }
+    },
+    "execute_action": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_isabelle_route_execute_action",
+          "operation": "mathformer_physics_isabelle_route_execute_action"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_isabelle_route_advance",
+          "operation": "mathformer_physics_isabelle_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "MatchMetadata"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_isabelle_route_finish",
+          "operation": "mathformer_physics_isabelle_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "The route has exactly one action. advance.done is true after its result, so the bound exits normally even for a failed payload; exhaustion failure is unreachable.",
+        "state_type": "RouteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select_action",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                }
+              }
+            },
+            {
+              "id": "execute",
+              "kind": "call",
+              "operation": "execute_action",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                }
+              },
+              "description": "Native run_action owns admission, preflight, mutation authorization, dry-run, subprocess capture and write audit. No arguments or timeout are added. Failed child payloads remain data; unexpected launch exceptions propagate."
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.execute.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "RouteState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "RouteState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/physics_isabelle/from_scratch_isabelle/",
+          "libraries/MathformerPhysicsLib/backends/isabelle/Isabelle/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Generated Isabelle candidates only; completion establishes neither proof checking nor promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/generate_formalphysics_extra_isabelle.py",
+        "selector": "main; initialize; write_case_at; advance; finish",
+        "digest": "sha256:3b5382a70492ef81c38981f934aa0e01e8ce51e775368f9e2f1f7c31b9806bb1"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_ask; mathformer_run_workflow; _cap_unbounded_timeouts",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/physics_isabelle_route_tools.py",
+        "selector": "register_physics_isabelle_route_tools; selected_match; checked_registry; check_state",
+        "digest": "sha256:8ae60739a1fd814cea4b9622a6ee30f81d3ca8f4837dce9c57374d50d0141f62"
+      },
+      {
+        "path": "scripts/adoption_check_tools.py",
+        "selector": "Context",
+        "digest": "sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac"
+      },
+      {
+        "path": "scripts/workflow_write_audit.py",
+        "selector": "snapshot_repository; audit_snapshots",
+        "digest": "sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "physics_isabelle_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "The generator stays inside native execute_action; its eight-case loop and rendering helpers are opaque to the route graph.",
+      "3600 seconds and five operation calls are Lunar ceilings, not native route budgets. The binding preserves timeout_seconds=None; legacy MCP dispatch separately supplies its configurable default of 600 seconds.",
+      "Generator output roots differ from the action's declared library root; changed generated files cause native undeclared_writes failure. This mismatch is intentionally preserved.",
+      "Mandatory v1 receipts and digests are supplied by Lunar; native optional reports and caller logging remain outside run_intent_match."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "formalize.physics.isabelle",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "formalize.physics.isabelle",
+        "title": "Plan Isabelle physics formalization workflows",
+        "action_ids": [
+          "formalphysics:extra-isabelle"
+        ],
+        "skill_routes": [
+          "physics-isabelle-workflow-orchestrator",
+          "physics-isabelle-derivation-drafter"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered mathformer_physics_isabelle_route_* tools call the shared native route helpers and run_action with controller-owned route and registry capabilities. A null repository_root selects hub.REPO_ROOT.",
+      "callers": [
+        "scripts/mathformer.py:main ask --run",
+        "scripts/mcp_server.py:mathformer_ask",
+        "scripts/mcp_server.py:mathformer_run_workflow"
+      ],
+      "selection": "Already selected route only; explicit workflow dispatch selects it directly. NL matching remains outside this graph.",
+      "failure_policy": "Accumulate native failed payloads and return intent_run_failed; do not suppress propagated launch exceptions.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report"
+      ],
+      "registry": "Required value projection of the native action registry, checked for exact native metadata before capability resolution. An absent action retains unknown_action data and the native metadata KeyError on finish.",
+      "service_authority": "Non-dry-run known actions require service write permission and permitted actual artifact and declared library roots. Native allow_mutating preflight and write auditing still apply.",
+      "reports": "Optional CLI report writing and MCP call logs remain caller-owned, outside run_intent_match."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "formalphysics:extra-isabelle"
+      ],
+      "action_workflows": [
+        "hub_formalphysics_extra_isabelle_workflow"
+      ],
+      "keep_going_semantics": "Stop after all actions or the first failed child unless keep_going; this one-action route always stops after its first returned child."
+    },
+    "mathformer.generator": {
+      "source": "scripts/generate_formalphysics_extra_isabelle.py:main",
+      "behavior": "Initialize cursor=0, promote_lib=false and generated=[]; process all eight fixed CASES in insertion order. Each case reads its TeX source, writes MathformerPhysics.thy then ROOT, and advance increments cursor, appends paths and preserves promote_lib. Range exhaustion prints accumulated paths and returns zero; uncaught read/write errors abort with no retries. No Isabelle invocation or proof check.",
+      "promotion": "The route passes no arguments, so optional --promote-lib copying into libraries/MathformerPhysicsLib/Isabelle is inactive."
+    }
+  }
+}

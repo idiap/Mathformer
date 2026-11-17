@@ -1,0 +1,730 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_sympy_source_only_recursive_0000_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "One source-only SymPy case pass with five ordered stages and final aggregation.",
+  "aliases": [
+    "physics-sympy:source-only-recursive-0000"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunRequest": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "case_id",
+          "source_record",
+          "output_root"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string"
+          },
+          "source_record": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "output_root": {
+            "type": "string"
+          },
+          "regenerate_initial_artifact": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "PreparedRun": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "case_id",
+          "run_dir",
+          "artifact_path",
+          "source_packet",
+          "initial_draft",
+          "stage_specs",
+          "_native_json",
+          "stage_order"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string"
+          },
+          "run_dir": {
+            "type": "string"
+          },
+          "artifact_path": {
+            "type": "string"
+          },
+          "source_packet": {
+            "type": "object"
+          },
+          "initial_draft": {
+            "type": "object"
+          },
+          "stage_specs": {
+            "type": "object",
+            "minProperties": 5,
+            "maxProperties": 5
+          },
+          "_native_json": {
+            "type": "string"
+          },
+          "stage_order": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 5,
+            "maxItems": 5
+          }
+        }
+      }
+    },
+    "StageState": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "prepared",
+          "next_stage",
+          "workflow_stage_reports",
+          "command_metadata",
+          "blockers",
+          "_native_json"
+        ],
+        "properties": {
+          "prepared": {
+            "type": "object"
+          },
+          "next_stage": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "workflow_stage_reports": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            }
+          },
+          "command_metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            }
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "_native_json": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Assessment": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "state",
+          "loaded_reports",
+          "complete",
+          "blocked",
+          "_native_json"
+        ],
+        "properties": {
+          "state": {
+            "type": "object"
+          },
+          "loaded_reports": {
+            "type": "object"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "blocked": {
+            "type": "boolean"
+          },
+          "_native_json": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Flag": {
+      "representation": "value",
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RunStatus": {
+      "representation": "value",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "complete_sympy_physics_derivation",
+          "blocked",
+          "derivation_partial"
+        ]
+      }
+    },
+    "RunReport": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "style",
+          "backend",
+          "case_id",
+          "status",
+          "run_dir",
+          "workflow_stage_reports",
+          "command_metadata",
+          "blockers",
+          "artifacts"
+        ],
+        "properties": {
+          "style": {
+            "const": "physics_sympy_source_only_recursive_goal_run"
+          },
+          "backend": {
+            "const": "sympy"
+          },
+          "case_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "complete_sympy_physics_derivation",
+              "blocked",
+              "derivation_partial"
+            ]
+          },
+          "run_dir": {
+            "type": "string"
+          },
+          "workflow_stage_reports": {
+            "type": "object"
+          },
+          "command_metadata": {
+            "type": "object"
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "artifacts": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "RunContext": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "working_directory",
+          "allow_mutating"
+        ],
+        "properties": {
+          "working_directory": {
+            "type": "string"
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "request": {
+      "type": "RunRequest"
+    },
+    "context": {
+      "type": "RunContext"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "RunReport",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "prepare": {
+      "inputs": {
+        "request": {
+          "type": "RunRequest"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "prepared": {
+          "type": "PreparedRun"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_source_only_prepare",
+          "operation": "mathformer_sympy_source_only_prepare"
+        }
+      }
+    },
+    "pack_state": {
+      "inputs": {
+        "prepared": {
+          "type": "PreparedRun"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "StageState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_source_only_pack_state",
+          "operation": "mathformer_sympy_source_only_pack_state"
+        }
+      }
+    },
+    "execute_stage": {
+      "inputs": {
+        "state": {
+          "type": "StageState"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "StageState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_source_only_execute_stage",
+          "operation": "mathformer_sympy_source_only_execute_stage"
+        }
+      }
+    },
+    "assess": {
+      "inputs": {
+        "state": {
+          "type": "StageState"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "assessment": {
+          "type": "Assessment"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_source_only_assess",
+          "operation": "mathformer_sympy_source_only_assess"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "assessment": {
+          "type": "Assessment"
+        },
+        "status": {
+          "type": "RunStatus"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "RunReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_source_only_emit",
+          "operation": "mathformer_sympy_source_only_emit"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare",
+        "arguments": {
+          "request": {
+            "ref": "inputs.request"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "pack",
+        "kind": "call",
+        "operation": "pack_state",
+        "arguments": {
+          "prepared": {
+            "ref": "steps.prepare.outputs.prepared"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "stages",
+        "kind": "loop",
+        "description": "Fixed insertion-order stage traversal, not a repair loop. The fifth stage sets done, so ordinary source exhaustion returns normally, even with blockers.",
+        "state_type": "StageState",
+        "initial": {
+          "ref": "steps.pack.outputs.state"
+        },
+        "body": {
+          "kind": "call",
+          "operation": "execute_stage",
+          "arguments": {
+            "state": {
+              "ref": "loop.state"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 5,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "StageState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "assess",
+        "kind": "call",
+        "operation": "assess",
+        "arguments": {
+          "state": {
+            "ref": "steps.stages.outputs.state"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "complete",
+            "when": {
+              "ref": "steps.assess.outputs.assessment.complete"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "emit",
+              "arguments": {
+                "assessment": {
+                  "ref": "steps.assess.outputs.assessment"
+                },
+                "status": {
+                  "literal": "complete_sympy_physics_derivation"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          },
+          {
+            "id": "blocked",
+            "when": {
+              "ref": "steps.assess.outputs.assessment.blocked"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "emit",
+              "arguments": {
+                "assessment": {
+                  "ref": "steps.assess.outputs.assessment"
+                },
+                "status": {
+                  "literal": "blocked"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "emit",
+          "arguments": {
+            "assessment": {
+              "ref": "steps.assess.outputs.assessment"
+            },
+            "status": {
+              "literal": "derivation_partial"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "RunReport",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "RunReport",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "requested_output_root",
+          "selected_sympy_case_artifact",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion",
+        "use_dataset_formal_answer"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 900,
+      "max_operation_calls": 9
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked description only; no scientific validation, runtime qualification or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/scripts/run_recursive_goal_case.py",
+        "selector": "build_run",
+        "digest": "sha256:57f4ae1dfcedd73df3c94b809b6d80da968831c94b6f1dd0787fdeaa896e44b9"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "skills/physics-sympy/physics-sympy-recursive-repair-loop-controller/scripts/control_physics_sympy_recursive_repair.py",
+        "selector": "build_control_plan; compute_guards; choose_branch; finish_plan; parse_args",
+        "digest": "sha256:83cffe4ea8e2e6dbb33ec63bd18d0576414af8544a32657243a38eb70957149c"
+      },
+      {
+        "path": "scripts/sympy_source_only_tools.py",
+        "selector": "register_sympy_source_only_tools",
+        "digest": "sha256:d78b5a09bce8db7ca9782b254dad7733b5c1209ea3cf346961dec163079b4279"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_sympy_source_only_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "service tool inventory",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/scripts/plan_goal_sample_sympy_autoformalization.py",
+        "selector": "main; build_plan",
+        "digest": "sha256:38455a8768c85c3d9f85dd11f00c4eb5a5e6aaec394171fb16d0cc1e49feb604"
+      },
+      {
+        "path": "skills/physics-sympy/physics-sympy-review-refinement-router/scripts/plan_physics_sympy_review_refinement.py",
+        "selector": "main; build_design_guard_review",
+        "digest": "sha256:4a323d615204b9c2cc6326c2f047a2e88b070644c23d7a31bd5fe7fe55ce52d2"
+      },
+      {
+        "path": "skills/physics-sympy/physics-sympy-repair-expansion-cartographer/scripts/map_physics_sympy_repair_expansion.py",
+        "selector": "main; build_map",
+        "digest": "sha256:41e47a6f15b19da49f1f1949c711e6d2e95992ebf4c9d619ad9eeedcaf3c0405"
+      },
+      {
+        "path": "tests/physics_sympy/run_grounded_sample_thoroughness.py",
+        "selector": "main; build_report",
+        "digest": "sha256:0d1fa4540d356d1ce66b64116a1f9707436c6008750aac0f1a6579db2e67cd47"
+      },
+      {
+        "path": "tests/mcp/run_sympy_source_only_workflow_tests.py",
+        "selector": "SourceOnlyTests",
+        "digest": "sha256:0a903b28c31f937f22c316e26ae190cbaea00d22fbebc8e5663f17d0b63606ea"
+      },
+      {
+        "path": "tests/mcp/fixtures/sympy_source_only_server.py",
+        "selector": "test-only filesystem mount",
+        "digest": "sha256:f89179fdee1ca5bf44061c7b412ea472c56bfdd8d29589a614c2e63bca0fa1f5"
+      },
+      {
+        "path": "tests/mcp/fixtures/sympy_source_only_original.py.txt",
+        "selector": "independent frozen oracle",
+        "digest": "sha256:937c30fc3407d827f6cbbb55fe99f02c9cbf8370781587c4874fe1a3499b1411"
+      }
+    ],
+    "gaps": [
+      "Child internals and artifact scientific validity remain outside this runner decomposition; completion is not proof or promotion.",
+      "900 seconds is the host workflow ceiling; native build_run and run_json retain their original lack of a subprocess timeout."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-sympy:source-only-recursive-0000",
+      "owner_skill": "skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/SKILL.md"
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered MCP tools and original main share prepare_run, pack_run_state, execute_run_stage, assess_run, emit_run. Native subprocess stages remain unchanged.",
+      "inputs": "main normalizes case from --case or registered source-record path (default formalphysics_0000); allowed extra args override case/source/output/regeneration.",
+      "failure_policy": "Uncaught launch, JSON, filesystem or other unhandled errors abort; main exits 3 for blocked report, otherwise 0.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "scientific_payloads": "result is build_run report, not a HubResult transport envelope."
+    },
+    "mathformer.stage_order": {
+      "stages": [
+        "goal_plan",
+        "design_guard_review",
+        "repair_expansion_map",
+        "recursive_repair_control",
+        "grounded_sample_thoroughness"
+      ],
+      "handoffs": "goal_plan runs executable gates; map reads design_guard_review.json; controller reads repair_expansion.json; shared case artifact/run directory persists.",
+      "controller": "Called once with iteration=1, max_iterations=6, no history. Precedence is complete/not_required with empty outstanding set, non-exhaustive map, repeated signature, iteration cap, empty outstanding set, else recurse; blocked map overrides. Decisions are reported only; no repairs or signature history carried.",
+      "aliases": "current_evidence.json -> goal_plan.json; repair_expansion.json -> repair_expansion_map.json; controller_decision.json -> recursive_repair_control.json; thoroughness.json -> grounded_sample_thoroughness.json; reasoning.jsonl -> reasoning_log.jsonl."
+    }
+  }
+}

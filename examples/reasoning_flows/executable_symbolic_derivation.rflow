@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Canonical epistemic projection; not an execution trace.
+erfl 0.3
+reasoning executable_symbolic_derivation {
+  goal "produce a scoped executable symbolic derivation assessment" -> derivation_status
+  steps
+    o:O[source::Context->equations::Evidence] -model> ...
+    m:M[equations::Evidence->symbolic_context::Model] -construct> ...
+    f:F[symbolic_context::Model->program::Bundle] -derive> ...
+    d:D[
+      program::Bundle,
+      symbolic_context::Model
+      -> result::Claim
+    ] -test> ...
+    p:P[result::Claim,program::Bundle->execution::Evidence] -assess> ...
+    r:R[
+      result::Claim,
+      execution::Evidence
+      -> assessment::Assessment
+    ] -calibrate> ...
+    e:E[
+      result::Claim,
+      assessment::Assessment
+      -> derivation_status::Decision
+    ]
+  on e.accepted_for_scope => accept
+  on e.counterexample_found => stop
+  on e.blocked => stop
+}

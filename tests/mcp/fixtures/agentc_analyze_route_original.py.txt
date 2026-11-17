@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+def run_intent_match(
+    match: IntentMatch,
+    registry: Mapping[str, WorkflowAction],
+    context: RunContext,
+) -> Dict[str, Any]:
+    """Execute the controlled action sequence selected by an NL route.
+
+    Motivation:
+        Allow NL requests to drive workflows without bypassing safety checks.
+
+    Intent:
+        Run only registered action ids from the selected route and reuse the
+        existing execution engine for preflight, dry-run, and mutation policy.
+
+    Inputs:
+        The selected match, action registry, and run context.
+
+    Outputs:
+        A result dictionary containing one child result per action.
+    """
+
+    children: List[Dict[str, Any]] = []
+    ok = True
+    for action_id in match.route.action_ids:
+        child = run_action(action_id, registry, context)
+        children.append(child)
+        if not child.get("ok", False):
+            ok = False
+            if not context.keep_going:
+                break
+    return {
+        "schema_version": 1,
+        "ok": ok,
+        "status": "intent_run_completed" if ok else "intent_run_failed",
+        "route": intent_match_to_dict(match, registry),
+        "children": children,
+    }

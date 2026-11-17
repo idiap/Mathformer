@@ -1,0 +1,572 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_prism_native_semantic_parallel_e2e_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Selected singleton route with native admission, static catalog validation, and timeout-controlled Codex parallel verification through staged MCP ports.",
+  "aliases": [
+    "prism.native-semantic-parallel-e2e"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Context": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "Catalog": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "workflows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 14,
+            "items": {
+              "type": "object"
+            }
+          },
+          "workflow_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 14
+          }
+        },
+        "required": [
+          "workflows",
+          "workflow_count"
+        ],
+        "description": "Exact snapshot of mathformer-prism/workflow_catalog.json; nonempty default-cap specialization."
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "scan": {
+            "type": "boolean"
+          },
+          "runtime": {
+            "type": "boolean"
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "failed": {
+            "type": "boolean"
+          },
+          "cursor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "session_id",
+          "scan",
+          "runtime",
+          "done",
+          "failed",
+          "cursor",
+          "revision"
+        ],
+        "additionalProperties": false,
+        "description": "Opaque process-local capability plus observable native phase/cursor. Exact-state assertions reject stale or modified inputs. Session owns route, preflight snapshot, subprocess, output, futures and resources; no checkpoint serialization."
+      }
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Object": {
+      "schema": {
+        "type": "object"
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "Context",
+      "required": true
+    },
+    "catalog": {
+      "type": "Catalog",
+      "required": true
+    },
+    "match": {
+      "type": "Object",
+      "required": true
+    },
+    "registry": {
+      "type": "Object",
+      "required": true
+    },
+    "repository_root": {
+      "type": "RepositoryRoot",
+      "required": false
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {
+        "context": {
+          "type": "Context"
+        },
+        "catalog": {
+          "type": "Catalog"
+        },
+        "match": {
+          "type": "Object",
+          "required": true
+        },
+        "registry": {
+          "type": "Object",
+          "required": true
+        },
+        "repository_root": {
+          "type": "RepositoryRoot",
+          "required": false
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_prism_route_initialize",
+          "operation": "mathformer_prism_route_initialize"
+        }
+      }
+    },
+    "validate_entry": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_prism_route_validate_entry",
+          "operation": "mathformer_prism_route_validate_entry"
+        }
+      }
+    },
+    "await_entry": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_prism_route_await_entry",
+          "operation": "mathformer_prism_route_await_entry"
+        }
+      }
+    },
+    "retain_state": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_prism_route_retain_state",
+          "operation": "mathformer_prism_route_retain_state"
+        }
+      }
+    },
+    "finalize": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_prism_route_finalize",
+          "operation": "mathformer_prism_route_finalize"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          },
+          "catalog": {
+            "ref": "inputs.catalog"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 14,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "enabled",
+              "when": {
+                "ref": "loop.state.scan"
+              },
+              "body": {
+                "kind": "call",
+                "operation": "validate_entry",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "retain_state",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.state.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        },
+        "id": "static"
+      },
+      {
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.static.outputs.state"
+        },
+        "max_iterations": 14,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "enabled",
+              "when": {
+                "ref": "loop.state.runtime"
+              },
+              "body": {
+                "kind": "call",
+                "operation": "await_entry",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "retain_state",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.state.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        },
+        "id": "runtime"
+      },
+      {
+        "id": "finalize",
+        "kind": "call",
+        "operation": "finalize",
+        "arguments": {
+          "state": {
+            "ref": "steps.runtime.outputs.state"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finalize.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/",
+          "mathformer-prism/tests/native-semantic-parallel-e2e.json",
+          "verifier_temporary_runs"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 31
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Accepted execution and registered conservative nonpromotion oracles only; no scientific truth or semantic equivalence."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match; build_intent_routes; run_action; prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/prism/verify_mathformer_prism.py",
+        "selector": "verify; VerificationSession; run_one; serve_steps; main",
+        "digest": "sha256:6f954c3d888531f4dcc98983d6ce0d1bd590450357058f6c937a30cf4ea61cff"
+      },
+      {
+        "path": "scripts/prism_native_route_tools.py",
+        "selector": "register_prism_native_route_tools; StepProcess; prism_route_lifespan",
+        "digest": "sha256:9558777a26ab0b7894a25aff3282b1e6d79af3a850e38707d1f8eb61fcfb1768"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_prism_native_route_tools; lifespan",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "prism_native_route_descriptor",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "expected MCP inventory",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      }
+    ],
+    "gaps": [
+      "Catalog input must equal the source-owned file and contain 1..14 entries. Larger/empty catalogs require another specialization. Normal loops stop at the source count; there is no retry or convergence.",
+      "Process-local contexts cannot resume. If a host aborts outside a tool call (including exhaustion or cancellation), it must call mathformer_prism_route_close with the received session_id; server lifespan also closes outstanding contexts. The native subprocess timeout remains active across staged calls.",
+      "Network/external native binding capabilities still require host authorization. Private temporary-file transport only selects shared verifier methods and supplies no provider implementation. Call budgets are host limits, not native scientific or semantic guarantees."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "prism.native-semantic-parallel-e2e",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "prism.native-semantic-parallel-e2e",
+        "action_ids": [
+          "prism:native-semantic-parallel-e2e"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "MCP staged ports retain the native argv, launch_leaf_boundary subprocess timeout and output capture. A private temporary-file channel calls shared VerificationSession methods in that same process; CLI and ordinary MCP dispatch still use run_intent_match.",
+      "command": [
+        "scripts/prism/verify_mathformer_prism.py",
+        "--root",
+        "mathformer-prism",
+        "--jobs",
+        "4",
+        "--handler",
+        "codex",
+        "--output",
+        "mathformer-prism/tests/native-semantic-parallel-e2e.json"
+      ],
+      "workers": "run_one runs then offline-verifies the public entrypoint. Projection entries additionally run then offline-verify detailed materialization and validate trace/skill structure. Codex requires authentic accepted effects, placeholder nonpromotion and matching public/material accepted statuses and disposition classes. Nonprojection/nonnative structural branches remain internal; native execution rejects missing projections. Worker subprocesses have no timeout. ExitStack joins the pool before releasing temporary files.",
+      "failure_policy": "Static errors stop immediately; runtime exceptions accumulate through all futures. No retry, refinement, convergence or checkpoint loop.",
+      "cleanup": "mathformer_prism_route_close releases interrupted sessions and audits writes; server lifespan releases outstanding sessions. Native exceptions become process failure data, preserving route finalize/audit."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "prism:native-semantic-parallel-e2e"
+      ],
+      "action_workflows": [
+        "hub_prism_native_semantic_parallel_e2e_workflow"
+      ],
+      "keep_going_semantics": "One-action specialization of the source route loop; failure stops unless keep_going and aggregate ok remains false. One child ends this route regardless.",
+      "selection": "Already selected route; NL scoring and ambiguity resolution remain native."
+    },
+    "mathformer.steps": {
+      "initialize": "scripts/mathformer.py initialize_intent_state, select_intent_action, prepare_action and prepare_leaf_boundary admit the singleton action, check paths/tools/mutation permission and compute execute. Admission failure, preflight failure or dry-run preserves its payload and sets scan/runtime false. Only execution takes the before-write snapshot and starts the verifier subprocess. VerificationSession.__init__ fingerprints sources and canonical skills, loads this exact catalog and checks identity, counts, uniqueness, loop membership, reasoning entrypoints and projection digest. A verifier initialization exception becomes subprocess failure state. Pack scan=true only for a successfully initialized nonempty session.",
+      "validate_entry": "VerificationSession.validate_entry consumes entries[cursor]: validate plans, generated layers/hashes, approved taxonomy and fingerprints, hook coverage/owners and projection metadata; accumulate taxonomy schema issues and negative controls, then increment cursor. Pack done at catalog end and runtime=true only after successful static traversal. A raised static validation error aborts traversal immediately: retain failure, done=true and runtime=false, as verify/main exits with code 1.",
+      "await_entry": "On first runtime iteration, VerificationSession.prepare_runtime rejects taxonomy issues, checks the 188-skill inventory, selects all entries, opens ExitStack/temporary storage and submits run_one for every entry to ThreadPoolExecutor(max_workers=4), resetting cursor/results/runtime_failures. Submission failure closes resources and terminates this phase with failure. Then await_entry consumes futures[cursor] in submission order, appending success or accumulating Exception text, increments cursor and packs done only after every submitted future has been awaited. Worker exceptions do not stop collection. Later iterations only await the next future.",
+      "retain_state": "Source control-flow projection of run_leaf_action's early return or verify's skipped phase after a static exception; retain the existing payload/session failure without invoking skipped work.",
+      "finalize": "VerificationSession.finish_runtime rejects accumulated runtime failures and closes/join resources in finally. On success only, write_report sorts results, requires observed process overlap when at least two results exist, verifies unchanged source/skill fingerprints and writes the designated JSON report. verify.finally always closes remaining resources. main converts verifier Exceptions to exit code 1. launch_leaf_boundary captures output/returncode or the 3600-second TimeoutExpired payload; unexpected launch errors propagate. finish_leaf_boundary audits repository writes after any completed/timed-out launch and marks undeclared writes failed. Early admission, preflight and dry-run payloads bypass launch/audit. advance_intent_state appends the single child with sticky aggregate ok; finish_intent_state returns native route metadata, ordered children and completed/failed status."
+    }
+  }
+}

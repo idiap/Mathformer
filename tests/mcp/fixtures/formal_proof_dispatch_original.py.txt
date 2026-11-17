@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+def mathformer_run_workflow(
+    workflow_id: str,
+    dry_run: bool = False,
+    allow_mutating: bool = False,
+    keep_going: bool = False,
+    extra_args: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Dispatch a normalized hub/route ID through existing native MCP controls.
+
+    Loop/profile contracts are inspectable specifications without executable
+    bindings and return specification_only. This is native-controller dispatch,
+    not an interpreter for arbitrary YAML operations or draft generated skills.
+    """
+    try:
+        row = resolve_workflow(workflow_id)
+        descriptor_text(row)
+    except (OSError, ValueError) as exc:
+        return {'ok': False, 'status': 'workflow_unavailable', 'error': str(exc)}
+    if row['category'] not in ('hub', 'route'):
+        return {'schema_version': 1, 'ok': False, 'status': 'specification_only',
+                'workflow_id': row['id'], 'coverage': row['coverage'],
+                'message': 'Read this contract with mathformer_show_workflow; no executable native binding is declared.'}
+    native = row['aliases'][0]
+    if row['category'] == 'hub':
+        return {'workflow_id': row['id'], **mathformer_run_action(
+            native, dry_run=dry_run, allow_mutating=allow_mutating,
+            keep_going=keep_going, extra_args=extra_args,
+        )}
+    if extra_args:
+        return {'ok': False, 'status': 'extra_args_for_route', 'workflow_id': row['id']}
+    route = next((route for route in hub.build_intent_routes() if route.route_id == native), None)
+    if route is None:
+        return {'ok': False, 'status': 'native_route_missing', 'workflow_id': row['id']}
+    root_errors = [] if dry_run else _service_write_root_errors(list(route.action_ids))
+    if root_errors:
+        result = {'ok': False, 'status': 'blocked_by_service_write_roots',
+                  'workflow_id': row['id'], 'preflight_errors': root_errors}
+    else:
+        match = hub.IntentMatch(route=route, score=0, matched_terms=())
+        result = hub.run_intent_match(match, _EXEC_REGISTRY, _run_context(
+            dry_run=dry_run, allow_mutating=allow_mutating, keep_going=keep_going,
+        ))
+    _log_call(action_id=','.join(route.action_ids), safety='native_route',
+              allow_mutating=allow_mutating, dry_run=dry_run, ok=bool(result.get('ok')))
+    return {'workflow_id': row['id'], **result}

@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Workflow graphs are only useful when their geometry reflects the reasoning
+#   task. The current report favors a single click drill-down view so each
+#   workflow can be inspected without tab switching or dense global graphs.
+#
+# Intent:
+#   Read Mathformer's workflow graph representation and emit a deterministic
+#   layout plan that explains where node classes should live and why.
+#
+# Function:
+#   Computes drill-down positioning hints, graph pressure metrics, lane
+#   assignments, and human-readable recommendations for the HTML renderer or
+#   layout-focused agents.
+#
+# Maintenance Notes:
+#   Keep node and edge type assumptions synchronized with
+#   scripts/render_workflow_graphs.py.
+
+"""Build rational layout plans for Mathformer workflow graph reports."""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Mapping
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_GRAPH = REPO_ROOT / "artifacts" / "workflow_graphs" / "workflow_graphs.json"
+DEFAULT_OUTPUT = (
+    REPO_ROOT / "artifacts" / "workflow_graphs" / "workflow_layout_plan.json"
+)
+
+
+def node_id_by_step(model: Mapping[str, Any]) -> Dict[str, Dict[int, str]]:
+    """Index workflow_step node ids by stack label and sequence index."""
+    index: Dict[str, Dict[int, str]] = defaultdict(dict)
+    for node in model["graph"]["elements"]["nodes"]:
+        data = node["data"]
+        if data.get("node_type") == "workflow_step":
+            index[data["stack"]][int(data["sequence_index"])] = data["id"]
+    return dict(index)
+
+
+def skill_node_ids(model: Mapping[str, Any]) -> Dict[str, str]:
+    """Index skill node ids by skill name."""
+    ids = {}
+    for node in model["graph"]["elements"]["nodes"]:
+        data = node["data"]
+        if data.get("node_type") == "skill":
+            ids[data["skill"]] = data["id"]
+    return ids
+
+
+def workflow_node_ids(model: Mapping[str, Any]) -> Dict[str, str]:
+    """Index workflow node ids by stack id."""
+    ids = {}
+    for node in model["graph"]["elements"]["nodes"]:
+        data = node["data"]
+        if data.get("node_type") == "workflow":
+            ids[data["id"].replace("workflow:", "")] = data["id"]
+    return ids
+
+
+def edge_pressure(model: Mapping[str, Any]) -> Dict[str, Any]:
+    """Summarize the edge classes that contribute most to clutter."""
+    edge_types = Counter(
+        edge["data"]["edge_type"] for edge in model["graph"]["elements"]["edges"]
+    )
+    visible_by_default = {
+        "drilldown": ["workflow_entry", "skill_handoff"],
+    }
+    pressure = {}
+    for view, types in visible_by_default.items():
+        total = sum(edge_types[edge_type] for edge_type in types)
+        pressure[view] = {
+            "default_edge_types": types,
+            "default_edge_count": total,
+            "clutter_risk": "high" if total > 18 else "medium" if total > 8 else "low",
+        }
+    return {"edge_type_counts": dict(edge_types), "view_pressure": pressure}
+
+
+def sequence_positions(model: Mapping[str, Any]) -> Dict[str, Any]:
+    """Place each workflow's steps on a horizontal lane."""
+    step_ids = node_id_by_step(model)
+    skill_ids = skill_node_ids(model)
+    workflow_ids = workflow_node_ids(model)
+    by_stack: Dict[str, Any] = {}
+    for stack_id, stack in model["stacks"].items():
+        positions: Dict[str, Dict[str, int]] = {}
+        workflow_id = workflow_ids[stack_id]
+        positions[workflow_id] = {"x": -320, "y": 0}
+        for hook in stack["ordered_hooks"]:
+            index = int(hook["index"])
+            step_id = step_ids[stack["label"]][index]
+            positions[step_id] = {"x": (index - 1) * 310, "y": 0}
+            skill_id = skill_ids.get(hook["skill"])
+            if skill_id:
+                positions[skill_id] = {"x": (index - 1) * 310, "y": 190}
+        by_stack[stack_id] = {
+            "positions": positions,
+            "lanes": {
+                "workflow": "left anchor",
+                "steps": "main horizontal derivation lane",
+                "skills": "lower optional capability lane",
+                "reflection": "upper optional feedback lane",
+            },
+            "rationale": "A proof or workflow sequence should read left to right; skill nodes sit below steps so capability reuse does not obscure temporal order.",
+        }
+    return by_stack
+
+
+def recommendations(model: Mapping[str, Any]) -> List[str]:
+    """Generate high-level layout recommendations from graph density."""
+    summary = model["summary"]
+    notes = [
+        "Keep drill-down single-stack by default; all-stack sequence layouts exceed the readable edge budget.",
+        "Make reflection opt-in because reflective loops cross the main temporal lane.",
+        "Keep reusable skill nodes out of the drill-down graph unless they explain a selected step.",
+    ]
+    if summary["total_hooks"] > 25:
+        notes.append("Use at least 300 px horizontal spacing between ordered hooks.")
+    if summary["shared_skills"] < 4:
+        notes.append(
+            "Small shared-skill sets should remain metadata on selected steps, not a separate graph surface."
+        )
+    return notes
+
+
+def build_plan(model: Mapping[str, Any]) -> Dict[str, Any]:
+    """Build the complete workflow layout plan."""
+    return {
+        "repo": model["repo"],
+        "source_graph": model["source_document"],
+        "layout_principle": "Position nodes by reasoning role: temporal order first, capability reuse second, reflective feedback third.",
+        "pressure": edge_pressure(model),
+        "views": {
+            "drilldown": {
+                "purpose": "inspect one selected workflow as an ordered derivation or control trace",
+                "default_nodes": ["workflow", "workflow_step"],
+                "default_edges": ["workflow_entry", "skill_handoff"],
+                "stack_layouts": sequence_positions(model),
+                "optional_overlays": ["reflective edges", "external references"],
+            },
+        },
+        "recommendations": recommendations(model),
+    }
+
+
+def resolve_paths(argv=None, repository_root=None) -> Dict[str, Any]:
+    """Parse the native CLI and resolve its two paths independently."""
+    root = Path(repository_root) if repository_root is not None else REPO_ROOT
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--graph",
+        type=Path,
+        default=root / "artifacts/workflow_graphs/workflow_graphs.json",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=root / "artifacts/workflow_graphs/workflow_layout_plan.json",
+    )
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+    graph_path = args.graph if args.graph.is_absolute() else root / args.graph
+    output_path = args.output if args.output.is_absolute() else root / args.output
+    return {"graph": str(graph_path), "output": str(output_path), "json": args.json}
+
+
+def read_graph(paths):
+    """Read the graph without adding a schema-validation stage."""
+    return json.loads(Path(paths["graph"]).read_text(encoding="utf-8"))
+
+
+def emit_plan(paths, plan, repository_root=None):
+    """Write first, then report; failures deliberately do not roll back."""
+    root = Path(repository_root) if repository_root is not None else REPO_ROOT
+    output_path = Path(paths["output"])
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    report = {
+        "ok": True,
+        "output": str(output_path.relative_to(root)),
+        "views": list(plan["views"]),
+    }
+    print(json.dumps(report, indent=2) if paths["json"] else f"ok: {report['output']}")
+    return 0
+
+
+def main(argv=None, repository_root=None) -> int:
+    """CLI entry point sharing the registered callable stages."""
+    paths = resolve_paths(argv, repository_root)
+    model = read_graph(paths)
+    plan = build_plan(model)
+    return emit_plan(paths, plan, repository_root)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

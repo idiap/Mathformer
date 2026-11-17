@@ -1,0 +1,1208 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+# File Documentation
+#
+# Motivation:
+#   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+#
+# Intent:
+#   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+#
+# Function:
+#   Contains executable tests, fixtures, and manifests used for local and CI validation.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Run the comprehensive Mathformer test program.
+
+The runner is intentionally dependency-aware: core repository contracts fail
+hard, while backend-specific tools that are absent on a workstation are reported
+as skipped unless ``--fail-on-warning`` is requested.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import html
+from importlib import metadata as importlib_metadata
+import json
+import os
+from pathlib import Path
+import platform
+import shutil
+import subprocess
+import sys
+import time
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+ARTIFACT_ROOT = REPO_ROOT / "artifacts" / "test_program"
+MATRIX_FILE = REPO_ROOT / "tests" / "test_matrix.json"
+PYTHON = sys.executable
+VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+SYMPY_PYTHON = str(VENV_PYTHON if VENV_PYTHON.exists() else PYTHON)
+
+from scripts.workflow_write_audit import (
+    audit_snapshots,
+    snapshot_repository,
+)
+
+MODULE_FAMILIES = {
+    "control",
+    "source",
+    "paper",
+    "textbook",
+    "mathlib",
+    "lean",
+    "isabelle",
+    "rocq",
+    "sympy",
+    "atp",
+    "physics_lean",
+    "physics_sympy",
+    "rfde",
+    "docs",
+    "mathformerlib",
+    "mathformerphysicslib",
+    "environment",
+    "e2e",
+    "generative",
+    "mcp",
+    "meta_skills",
+    "skills",
+}
+
+PATH_FAMILY_HINTS = [
+    ("meta_skills/", "meta_skills"),
+    ("tests/meta_skills/", "meta_skills"),
+    ("config/", "mcp"),
+    ("deploy/mcp/", "mcp"),
+    ("requirements-mcp-service.txt", "mcp"),
+    ("scripts/mathformer_mcp_service.py", "mcp"),
+    ("scripts/mcp_service_config.py", "mcp"),
+    ("scripts/load_mcp_service_config.py", "mcp"),
+    ("scripts/probe_mcp_service_dependencies.py", "mcp"),
+    ("tests/agent_clients/", "skills"),
+    ("scripts/link_agent_skills.py", "skills"),
+    ("skills/control/mathformer-generative-workflow-coordinator", "skills"),
+    ("skills/control/mathformer-workflow-router", "skills"),
+    ("skills/source-", "source"),
+    ("skills/paper-", "paper"),
+    ("skills/latex-archive", "textbook"),
+    ("skills/textbook-", "textbook"),
+    ("skills/mathlib-", "mathlib"),
+    ("skills/lean-", "lean"),
+    ("backends/lean/Mathformer/", "lean"),
+    ("backends/isabelle/Isabelle/", "isabelle"),
+    ("skills/isabelle", "isabelle"),
+    ("skills/isarmathlib", "isabelle"),
+    ("backends/rocq/MathformerRocq/", "rocq"),
+    ("skills/rocq-", "rocq"),
+    ("tests/rocq/", "rocq"),
+    ("skills/sympy-", "sympy"),
+    ("backends/sympy/MathformerSympy/", "sympy"),
+    ("tests/sympy/", "sympy"),
+    ("backends/atp/MathformerATP/", "atp"),
+    ("scripts/run_vampire_atp.py", "atp"),
+    ("skills/vampire-atp-", "atp"),
+    ("skills/vampire-proof-", "atp"),
+    ("tests/atp/", "atp"),
+    ("artifacts/vampire_atp/", "atp"),
+    ("skills/physics-lean-", "physics_lean"),
+    ("skills/physics-foundation-", "physics_lean"),
+    ("skills/mathformerphysicslib-", "mathformerphysicslib"),
+    ("libraries/MathformerPhysicsLib/Lean/", "physics_lean"),
+    ("libraries/MathformerPhysicsLib/MANIFEST.json", "mathformerphysicslib"),
+    (
+        "libraries/MathformerPhysicsLib/MATHLIB_GROUNDING_AUDIT.json",
+        "mathformerphysicslib",
+    ),
+    (
+        "tests/physics_lean/run_mathformerphysicslib_coherence_loop.py",
+        "mathformerphysicslib",
+    ),
+    ("tests/physics_lean/", "physics_lean"),
+    ("skills/physics-", "physics_sympy"),
+    ("backends/sympy/MathformerPhysicsSympy/", "physics_sympy"),
+    ("backends/sympy/MathformerSympyPhysics/", "physics_sympy"),
+    ("tests/physics_sympy/", "physics_sympy"),
+    ("skills/reference-free", "rfde"),
+    ("artifacts/rfde/", "rfde"),
+    ("docs/", "docs"),
+    ("docs/libraries/mathformerlib/", "mathformerlib"),
+    ("tests/generative/", "generative"),
+    ("scripts/mcp_server.py", "mcp"),
+    ("tests/mcp/", "mcp"),
+]
+
+
+def rel(path: Path) -> str:
+    """Document the responsibility of ``rel``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``rel`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def excerpt(text: str | bytes, limit: int = 4000) -> str:
+    """Document the responsibility of ``excerpt``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``excerpt`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", errors="replace")
+    if len(text) <= limit:
+        return text
+    head = text[: limit // 2]
+    tail = text[-limit // 2 :]
+    return f"{head}\n... <truncated> ...\n{tail}"
+
+
+def fingerprint(check: Dict[str, Any], stdout: str, stderr: str) -> str:
+    """Document the responsibility of ``fingerprint``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``fingerprint`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    payload = json.dumps(
+        {
+            "id": check["id"],
+            "family": check["module_family"],
+            "command": check.get("command", []),
+            "stdout": excerpt(stdout, 1000),
+            "stderr": excerpt(stderr, 1000),
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def command_exists(name: str) -> bool:
+    """Document the responsibility of ``command_exists``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``command_exists`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return shutil.which(name) is not None
+
+
+def python_module_exists(module_name: str, python_exe: str = PYTHON) -> bool:
+    """Document the responsibility of ``python_module_exists``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``python_module_exists`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    result = subprocess.run(
+        [python_exe, "-c", f"import {module_name}"],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=15,
+    )
+    return result.returncode == 0
+
+
+def dependency_snapshot() -> Dict[str, Any]:
+    """Document the responsibility of ``dependency_snapshot``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``dependency_snapshot`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+
+    def version_cmd(cmd: Sequence[str]) -> Dict[str, Any]:
+        """Document the responsibility of ``dependency_snapshot.version_cmd``.
+
+        Motivation:
+            Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+        Intent:
+            Provide the local operation named ``dependency_snapshot.version_cmd`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        if not shutil.which(cmd[0]):
+            return {"available": False, "command": list(cmd)}
+        try:
+            result = subprocess.run(
+                list(cmd),
+                cwd=REPO_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=30,
+            )
+            return {
+                "available": result.returncode == 0,
+                "command": list(cmd),
+                "returncode": result.returncode,
+                "stdout": excerpt(result.stdout.strip(), 1000),
+                "stderr": excerpt(result.stderr.strip(), 1000),
+            }
+        except subprocess.TimeoutExpired:
+            return {"available": False, "command": list(cmd), "timeout": True}
+
+    def package_version(
+        distribution: str, module: Optional[str] = None, python_exe: str = PYTHON
+    ) -> Dict[str, Any]:
+        available = python_module_exists(
+            module or distribution.replace("-", "_"), python_exe
+        )
+        version: Optional[str] = None
+        if available and python_exe == PYTHON:
+            try:
+                version = importlib_metadata.version(distribution)
+            except importlib_metadata.PackageNotFoundError:
+                version = None
+        elif available:
+            result = subprocess.run(
+                [
+                    python_exe,
+                    "-c",
+                    (
+                        "from importlib.metadata import version; "
+                        f"print(version({distribution!r}))"
+                    ),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=15,
+            )
+            if result.returncode == 0:
+                version = result.stdout.strip()
+        return {"available": available, "version": version}
+
+    snapshot = {
+        "python": {
+            "executable": PYTHON,
+            "version": platform.python_version(),
+            "platform": platform.platform(),
+        },
+        "venv": {
+            "path": rel(REPO_ROOT / ".venv"),
+            "present": (REPO_ROOT / ".venv").exists(),
+            "python": SYMPY_PYTHON,
+        },
+        "lean": version_cmd(["lean", "--version"]),
+        "lake": version_cmd(["lake", "--version"]),
+        "isabelle": version_cmd(["isabelle", "version"]),
+        "vampire": version_cmd(["vampire", "--version"]),
+        "rocq": version_cmd(["rocq", "--version"]),
+        "coqc": version_cmd(["coqc", "--version"]),
+        "java": version_cmd(["java", "-version"]),
+        "pdftotext": version_cmd(["pdftotext", "-v"]),
+        "docling": package_version("docling"),
+        "mcp": package_version("mcp"),
+        "httpx": package_version("httpx"),
+        "uvicorn": package_version("uvicorn"),
+        "sympy": package_version("sympy", python_exe=SYMPY_PYTHON),
+        "sympy_physics_units": {
+            "available": python_module_exists("sympy.physics.units", SYMPY_PYTHON)
+        },
+        "sympy_physics_mechanics": {
+            "available": python_module_exists("sympy.physics.mechanics", SYMPY_PYTHON)
+        },
+        "bs4": {"available": python_module_exists("bs4", SYMPY_PYTHON)},
+        "matplotlib": {"available": python_module_exists("matplotlib", SYMPY_PYTHON)},
+        "providers": {
+            "codex_cli": {"available": command_exists("codex")},
+            "openai_api_configured": {
+                "available": bool(os.environ.get("OPENAI_API_KEY"))
+            },
+            "anthropic_api_configured": {
+                "available": bool(os.environ.get("ANTHROPIC_API_KEY"))
+            },
+        },
+    }
+    return snapshot
+
+
+def build_capability_ledger(
+    matrix: Sequence[Dict[str, Any]],
+    selected: Sequence[Dict[str, Any]],
+    results: Sequence[Dict[str, Any]],
+    *,
+    profile: str,
+    selected_family_names: Set[str],
+) -> Dict[str, Any]:
+    """Explain which declared capabilities executed, skipped, or were untested."""
+
+    by_id = {str(item.get("check_id")): item for item in results}
+    family_rows: Dict[str, List[Dict[str, Any]]] = {
+        family: [row for row in selected if row.get("module_family") == family]
+        for family in sorted(selected_family_names)
+    }
+    families: Dict[str, Dict[str, Any]] = {}
+    for family, rows in family_rows.items():
+        statuses = [
+            str(by_id.get(str(row.get("id")), {}).get("status", "untested"))
+            for row in rows
+        ]
+        if not rows:
+            state = "untested"
+        elif statuses and all(status == "skip" for status in statuses):
+            state = "skipped"
+        elif any(status == "fail" for status in statuses):
+            state = "executed_with_failures"
+        elif any(status == "pass" for status in statuses):
+            state = "executed"
+        else:
+            state = "untested"
+        families[family] = {
+            "state": state,
+            "declared_checks": len(rows),
+            "pass": statuses.count("pass"),
+            "fail": statuses.count("fail"),
+            "skip": statuses.count("skip"),
+            "untested": statuses.count("untested"),
+        }
+
+    optional_dependencies: Dict[str, Dict[str, Any]] = {}
+    for row in matrix:
+        dependency = row.get("optional_dependency")
+        if not dependency:
+            continue
+        key = str(dependency)
+        optional_dependencies.setdefault(
+            key,
+            {
+                "available": dependency_available(key),
+                "selected_check_ids": [],
+            },
+        )
+        if row in selected:
+            optional_dependencies[key]["selected_check_ids"].append(row.get("id"))
+
+    unavailable_selected = sorted(
+        name
+        for name, item in optional_dependencies.items()
+        if item["selected_check_ids"] and not item["available"]
+    )
+    skipped_checks = sorted(
+        str(item.get("check_id")) for item in results if item.get("status") == "skip"
+    )
+    untested_families = sorted(
+        family for family, item in families.items() if item["state"] == "untested"
+    )
+    strict_blockers = [
+        *(f"skipped_check:{check_id}" for check_id in skipped_checks),
+        *(f"unavailable_dependency:{name}" for name in unavailable_selected),
+        *(f"untested_family:{family}" for family in untested_families),
+    ]
+    return {
+        "schema_version": 1,
+        "profile": profile,
+        "conditional": profile != "strict",
+        "families": families,
+        "optional_dependencies": optional_dependencies,
+        "skipped_checks": skipped_checks,
+        "unavailable_selected_dependencies": unavailable_selected,
+        "untested_families": untested_families,
+        "strict_blockers": strict_blockers,
+        "strict_ready": not strict_blockers,
+    }
+
+
+def write_dependency_snapshot() -> Path:
+    """Document the responsibility of ``write_dependency_snapshot``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
+    output = ARTIFACT_ROOT / "dependency_map.json"
+    output.write_text(
+        json.dumps(dependency_snapshot(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return output
+
+
+def load_matrix() -> List[Dict[str, Any]]:
+    """Load the canonical matrix and fail closed when its contract is absent."""
+
+    if not MATRIX_FILE.exists():
+        raise ValueError(f"canonical test matrix is missing: {rel(MATRIX_FILE)}")
+    parsed = json.loads(MATRIX_FILE.read_text(encoding="utf-8"))
+    if not isinstance(parsed, dict):
+        raise ValueError("tests/test_matrix.json must contain a schema-bearing object")
+    if parsed.get("schema_version") != 2:
+        raise ValueError("tests/test_matrix.json must use schema_version 2")
+    tests = parsed.get("tests")
+    if not isinstance(tests, list) or not tests:
+        raise ValueError(
+            "tests/test_matrix.json must contain at least one executable test row"
+        )
+    replacements = {"{python}": PYTHON, "{sympy_python}": SYMPY_PYTHON}
+    loaded: List[Dict[str, Any]] = []
+    for row in tests:
+        if not isinstance(row, dict):
+            raise ValueError("every test-matrix row must be an object")
+        item = dict(row)
+        command = item.get("command")
+        if isinstance(command, list):
+            item["command"] = [
+                replacements.get(str(part), str(part)) for part in command
+            ]
+        loaded.append(item)
+    return loaded
+
+
+def selected_families(requested: Sequence[str], changed_files_only: bool) -> Set[str]:
+    """Document the responsibility of ``selected_families``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``selected_families`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if changed_files_only:
+        changed = changed_files()
+        families = {"control"}
+        for path in changed:
+            for prefix, family in PATH_FAMILY_HINTS:
+                if path.startswith(prefix):
+                    families.add(family)
+        return families
+    if not requested or "all" in requested:
+        return set(MODULE_FAMILIES)
+    return set(requested)
+
+
+def changed_files() -> List[str]:
+    """Document the responsibility of ``changed_files``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``changed_files`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    paths: Set[str] = set()
+    for command in (
+        ["git", "diff", "--name-only", "HEAD"],
+        ["git", "ls-files", "--others", "--exclude-standard"],
+    ):
+        try:
+            result = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=30,
+            )
+        except Exception:
+            continue
+        if result.returncode == 0:
+            paths.update(
+                line.strip() for line in result.stdout.splitlines() if line.strip()
+            )
+    return sorted(paths)
+
+
+def dependency_available(name: str) -> bool:
+    """Document the responsibility of ``dependency_available``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``dependency_available`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    names = [part.strip() for part in name.split(",") if part.strip()]
+    if len(names) > 1:
+        return all(dependency_available(part) for part in names)
+    dependency = names[0] if names else name
+    if dependency in {
+        "lean",
+        "lake",
+        "isabelle",
+        "java",
+        "pdftotext",
+        "vampire",
+        "rocq",
+        "coqc",
+    }:
+        return command_exists(dependency)
+    if dependency == "sympy":
+        return python_module_exists(dependency, SYMPY_PYTHON)
+    if dependency in {"docling", "mcp", "httpx", "uvicorn"}:
+        return python_module_exists(dependency, PYTHON)
+    return python_module_exists(dependency, PYTHON) or command_exists(dependency)
+
+
+def run_check(item: Dict[str, Any], fail_on_warning: bool) -> Dict[str, Any]:
+    """Document the responsibility of ``run_check``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    start = time.time()
+    optional_dep = item.get("optional_dependency")
+    if optional_dep and not dependency_available(optional_dep):
+        status = "fail" if fail_on_warning else "skip"
+        return {
+            **result_base(item, start),
+            "status": status,
+            "ok": status != "fail",
+            "stdout": "",
+            "stderr": f"optional dependency not available: {optional_dep}",
+            "returncode": None,
+            "regression_fingerprint": fingerprint(item, "", f"missing {optional_dep}"),
+        }
+
+    command = [str(part) for part in item["command"]]
+    before_snapshot = snapshot_repository(REPO_ROOT)
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=int(item.get("timeout_seconds", 120)),
+        )
+        expected_exit = int(item.get("expected_exit", 0))
+        ok = completed.returncode == expected_exit
+        status = "pass" if ok else "fail"
+        stdout = excerpt(completed.stdout)
+        stderr = excerpt(completed.stderr)
+        result = {
+            **result_base(item, start),
+            "status": status,
+            "ok": ok,
+            "stdout": stdout,
+            "stderr": stderr,
+            "returncode": completed.returncode,
+            "regression_fingerprint": fingerprint(item, stdout, stderr),
+        }
+        write_audit = audit_snapshots(
+            before_snapshot,
+            snapshot_repository(REPO_ROOT),
+            action_id=str(item["id"]),
+            safety="writes_artifacts",
+            declared_roots=tuple(item.get("write_set") or ()),
+        )
+        result["write_audit"] = write_audit
+        if not write_audit["ok"]:
+            result["status"] = "fail"
+            result["ok"] = False
+            message = "undeclared test writes: " + ", ".join(
+                write_audit["unexpected_paths"]
+            )
+            result["stderr"] = "\n".join(part for part in (stderr, message) if part)
+            result["regression_fingerprint"] = fingerprint(
+                item, stdout, result["stderr"]
+            )
+        return result
+    except subprocess.TimeoutExpired as exc:
+        stderr = f"timeout after {item.get('timeout_seconds', 120)}s"
+        stdout = excerpt(exc.stdout or "")
+        return {
+            **result_base(item, start),
+            "status": "fail",
+            "ok": False,
+            "stdout": stdout,
+            "stderr": stderr,
+            "returncode": None,
+            "regression_fingerprint": fingerprint(item, stdout, stderr),
+        }
+
+
+def result_base(item: Dict[str, Any], start: float) -> Dict[str, Any]:
+    """Document the responsibility of ``result_base``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``result_base`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return {
+        "check_id": item["id"],
+        "command": item.get("command", []),
+        "owner_skill": item.get("owner_skill") or item.get("test_owner"),
+        "test_owner": item.get("test_owner") or item.get("owner_skill"),
+        "hook_id": item.get("hook_id"),
+        "module_family": item.get("module_family"),
+        "test_kind": item.get("test_kind"),
+        "risk_level": item.get("risk_level"),
+        "fixture_ids": item.get("fixture_ids", []),
+        "duration_seconds": round(time.time() - start, 3),
+    }
+
+
+def validate_result_schema(results: Iterable[Dict[str, Any]]) -> List[str]:
+    """Document the responsibility of ``validate_result_schema``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Validate assumptions or artifacts and return explicit evidence about whether the contract holds.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    required = {
+        "check_id",
+        "command",
+        "owner_skill",
+        "hook_id",
+        "module_family",
+        "fixture_ids",
+        "duration_seconds",
+        "stdout",
+        "stderr",
+        "status",
+        "regression_fingerprint",
+    }
+    errors: List[str] = []
+    for index, result in enumerate(results):
+        missing = sorted(required - set(result))
+        if missing:
+            errors.append(f"result {index} missing fields: {', '.join(missing)}")
+        if result.get("status") not in {"pass", "fail", "warn", "skip"}:
+            errors.append(f"result {index} has invalid status {result.get('status')!r}")
+    return errors
+
+
+def validate_matrix_coverage(matrix: Sequence[Dict[str, Any]]) -> List[str]:
+    """Document the responsibility of ``validate_matrix_coverage``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Validate assumptions or artifacts and return explicit evidence about whether the contract holds.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    errors: List[str] = []
+    parsed = json.loads(MATRIX_FILE.read_text(encoding="utf-8"))
+    taxonomies = (parsed.get("taxonomies") or {}) if isinstance(parsed, dict) else {}
+    schema = (parsed.get("schema") or {}) if isinstance(parsed, dict) else {}
+    required_fields = set(schema.get("required_fields") or ())
+    allowed_families = set(taxonomies.get("module_family") or ())
+    allowed_kinds = set(taxonomies.get("test_kind") or ())
+    allowed_risks = set(taxonomies.get("risk_level") or ())
+    if not required_fields:
+        errors.append("matrix schema has no required_fields")
+    ids = set()
+    for row in matrix:
+        check_id = row.get("id")
+        if not check_id:
+            errors.append("matrix row missing id")
+            continue
+        if check_id in ids:
+            errors.append(f"duplicate matrix id: {check_id}")
+        ids.add(check_id)
+        for field in sorted(required_fields):
+            if field not in row:
+                errors.append(f"{check_id} missing {field}")
+        if row.get("module_family") not in allowed_families:
+            errors.append(
+                f"{check_id} has unknown module_family {row.get('module_family')!r}"
+            )
+        if row.get("test_kind") not in allowed_kinds:
+            errors.append(f"{check_id} has unknown test_kind {row.get('test_kind')!r}")
+        if row.get("risk_level") not in allowed_risks:
+            errors.append(
+                f"{check_id} has unknown risk_level {row.get('risk_level')!r}"
+            )
+        if not isinstance(row.get("command"), list) or not row.get("command"):
+            errors.append(f"{check_id} command must be a non-empty list")
+        if (
+            not isinstance(row.get("timeout_seconds"), int)
+            or int(row.get("timeout_seconds", 0)) <= 0
+        ):
+            errors.append(f"{check_id} timeout_seconds must be a positive integer")
+        if not isinstance(row.get("expected_exit"), int):
+            errors.append(f"{check_id} expected_exit must be an integer")
+        if not isinstance(row.get("write_set"), list):
+            errors.append(f"{check_id} write_set must be a list")
+
+    raw_rows = parsed.get("tests", []) if isinstance(parsed, dict) else []
+    raw_ids = [row.get("id") for row in raw_rows if isinstance(row, dict)]
+    loaded_ids = [row.get("id") for row in matrix]
+    if raw_ids != loaded_ids:
+        errors.append(
+            "canonical manifest and runtime matrix ids differ or changed order"
+        )
+
+    skill_files = sorted((REPO_ROOT / "skills").glob("*/*/SKILL.md"))
+    owners = {row.get("test_owner") for row in matrix}
+    missing = []
+    for skill_file in skill_files:
+        name = skill_file.parent.name
+        if name not in owners:
+            missing.append(name)
+    waiver_file = REPO_ROOT / "tests" / "test_program" / "test_waivers.json"
+    waivers: Set[str] = set()
+    if waiver_file.exists():
+        parsed = json.loads(waiver_file.read_text(encoding="utf-8"))
+        waivers = set(parsed.get("generative_only") or []) | set(
+            parsed.get("wrapper_exempt") or []
+        )
+    uncovered = sorted(name for name in missing if name not in waivers)
+    if uncovered:
+        errors.append("skills without matrix owner rows: " + ", ".join(uncovered[:25]))
+    return errors
+
+
+def write_jsonl(path: Path, results: Sequence[Dict[str, Any]]) -> None:
+    """Document the responsibility of ``write_jsonl``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for item in results:
+            handle.write(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def write_junit(path: Path, results: Sequence[Dict[str, Any]]) -> None:
+    """Document the responsibility of ``write_junit``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    failures = sum(1 for item in results if item["status"] == "fail")
+    skipped = sum(1 for item in results if item["status"] == "skip")
+    total_time = sum(float(item["duration_seconds"]) for item in results)
+    lines = [
+        f'<testsuite name="mathformer-comprehensive" tests="{len(results)}" failures="{failures}" skipped="{skipped}" time="{total_time:.3f}">'
+    ]
+    for item in results:
+        name = html.escape(item["check_id"])
+        classname = html.escape(str(item["module_family"]))
+        lines.append(
+            f'  <testcase classname="{classname}" name="{name}" time="{item["duration_seconds"]:.3f}">'
+        )
+        if item["status"] == "fail":
+            message = html.escape(item.get("stderr") or item.get("stdout") or "failed")
+            lines.append(f'    <failure message="{message[:500]}">{message}</failure>')
+        elif item["status"] == "skip":
+            message = html.escape(item.get("stderr") or "skipped")
+            lines.append(f'    <skipped message="{message[:500]}" />')
+        lines.append("  </testcase>")
+    lines.append("</testsuite>")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def render_text(report: Dict[str, Any]) -> str:
+    """Document the responsibility of ``render_text``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    lines = [
+        f"run_id: {report['run_id']}",
+        f"ok: {report['ok']}",
+        f"families: {', '.join(report['families'])}",
+        f"checks: {report['summary']['total']}",
+        f"passed: {report['summary']['pass']}",
+        f"failed: {report['summary']['fail']}",
+        f"skipped: {report['summary']['skip']}",
+    ]
+    if report["schema_errors"]:
+        lines.append("schema errors:")
+        lines.extend(f"- {error}" for error in report["schema_errors"])
+    for item in report["results"]:
+        mark = {"pass": "PASS", "fail": "FAIL", "skip": "SKIP", "warn": "WARN"}[
+            item["status"]
+        ]
+        lines.append(
+            f"- {mark} {item['check_id']} ({item['module_family']}, {item['duration_seconds']}s)"
+        )
+        if item["status"] == "fail":
+            lines.append(
+                f"  {excerpt(item.get('stderr') or item.get('stdout') or '', 500)}"
+            )
+    return "\n".join(lines)
+
+
+def run(args: argparse.Namespace) -> Dict[str, Any]:
+    """Document the responsibility of ``run``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
+    if args.emit_dependency_map_only:
+        output = write_dependency_snapshot()
+        result = {
+            "run_id": args.run_id,
+            "ok": True,
+            "families": ["environment"],
+            "summary": {"total": 1, "pass": 1, "fail": 0, "skip": 0, "warn": 0},
+            "results": [
+                {
+                    "check_id": "environment.dependency_map.write",
+                    "command": [
+                        PYTHON,
+                        "tests/test_program/run_comprehensive_tests.py",
+                        "--emit-dependency-map-only",
+                    ],
+                    "owner_skill": "skill-test-program-orchestrator",
+                    "hook_id": "test.environment",
+                    "module_family": "environment",
+                    "fixture_ids": [],
+                    "duration_seconds": 0.0,
+                    "stdout": rel(output),
+                    "stderr": "",
+                    "status": "pass",
+                    "regression_fingerprint": hashlib.sha256(
+                        rel(output).encode()
+                    ).hexdigest()[:16],
+                }
+            ],
+            "schema_errors": [],
+            "matrix_errors": [],
+        }
+        return result
+
+    state = prepare_checks(args)
+    while state["index"] < len(state["selected"]):
+        state = advance_check(state, args)
+    return finalize_checks(state, args)
+
+
+def prepare_checks(args: argparse.Namespace) -> Dict[str, Any]:
+    """Load and select once, retaining matrix order and an explicit result cursor."""
+    matrix = load_matrix()
+    families = selected_families(args.module_family, args.changed_files_only)
+    selected = [item for item in matrix if item.get("module_family") in families]
+    if not selected:
+        selected = []
+
+    return {"matrix": matrix, "selected": selected, "families": sorted(families),
+            "index": 0, "results": []}
+
+
+def advance_check(state: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:
+    """Run exactly one native check; ordinary failed results do not stop traversal."""
+    index = state["index"]
+    if index < 0 or index >= len(state["selected"]) or len(state["results"]) != index:
+        raise ValueError("invalid or exhausted check cursor")
+    result = run_check(state["selected"][index], args.fail_on_warning or args.profile == "strict")
+    return {**state, "index": index + 1, "results": [*state["results"], result]}
+
+
+def finalize_checks(state: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:
+    """Apply the source schema, coverage and capability gates and write its snapshot."""
+    if state["index"] != len(state["selected"]) or len(state["results"]) != state["index"]:
+        raise ValueError("cannot finalize unconsumed checks")
+    matrix, selected = state["matrix"], state["selected"]
+    families, results = set(state["families"]), list(state["results"])
+    schema_errors = validate_result_schema(results)
+    matrix_errors = validate_matrix_coverage(matrix) if args.validate_matrix else []
+    if matrix_errors:
+        results.append(
+            {
+                "check_id": "meta.matrix_coverage",
+                "command": [
+                    PYTHON,
+                    "tests/test_program/run_comprehensive_tests.py",
+                    "--validate-matrix",
+                ],
+                "owner_skill": "skill-test-program-orchestrator",
+                "hook_id": "test.skill_program",
+                "module_family": "control",
+                "fixture_ids": [],
+                "duration_seconds": 0.0,
+                "stdout": "",
+                "stderr": "\n".join(matrix_errors),
+                "status": "fail",
+                "regression_fingerprint": hashlib.sha256(
+                    "\n".join(matrix_errors).encode()
+                ).hexdigest()[:16],
+            }
+        )
+
+    summary = {
+        status: sum(1 for item in results if item["status"] == status)
+        for status in ("pass", "fail", "skip", "warn")
+    }
+    summary["total"] = len(results)
+    capability_ledger = build_capability_ledger(
+        matrix,
+        selected,
+        results,
+        profile=args.profile,
+        selected_family_names=families,
+    )
+    ok = summary["fail"] == 0 and not schema_errors
+    if args.profile == "strict" and not capability_ledger["strict_ready"]:
+        ok = False
+    report = {
+        "run_id": args.run_id,
+        "ok": ok,
+        "profile": args.profile,
+        "families": sorted(families),
+        "changed_files_only": args.changed_files_only,
+        "changed_files": changed_files() if args.changed_files_only else [],
+        "summary": summary,
+        "results": results,
+        "schema_errors": schema_errors,
+        "matrix_errors": matrix_errors,
+        "capability_ledger": capability_ledger,
+        "dependency_map": rel(write_dependency_snapshot()),
+    }
+    return report
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    """Document the responsibility of ``parse_args``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--module-family",
+        action="append",
+        choices=sorted(MODULE_FAMILIES | {"all"}),
+        default=[],
+        help="Run only checks for a module family. Repeatable. Default: all.",
+    )
+    parser.add_argument("--run-id", default=f"test-program-{int(time.time())}")
+    parser.add_argument(
+        "--output-file", type=Path, default=ARTIFACT_ROOT / "deterministic_tests.json"
+    )
+    parser.add_argument(
+        "--write-jsonl",
+        nargs="?",
+        const=str(ARTIFACT_ROOT / "deterministic_tests.jsonl"),
+    )
+    parser.add_argument(
+        "--write-junit", nargs="?", const=str(ARTIFACT_ROOT / "deterministic_tests.xml")
+    )
+    parser.add_argument("--fail-on-warning", action="store_true")
+    parser.add_argument(
+        "--profile",
+        choices=("workstation", "strict"),
+        default="workstation",
+        help="Workstation permits declared optional skips; strict fails unless every selected capability executes.",
+    )
+    parser.add_argument("--changed-files-only", action="store_true")
+    parser.add_argument("--validate-matrix", action="store_true")
+    parser.add_argument("--emit-dependency-map-only", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    args = parse_args(argv)
+    report = run(args)
+    return publish_report(report, args)
+
+
+def publish_report(report: Dict[str, Any], args: argparse.Namespace) -> int:
+    """Write JSON, JSONL, JUnit and CLI output in the original order."""
+    output_file = (REPO_ROOT / args.output_file).resolve()
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    if args.write_jsonl:
+        write_jsonl((REPO_ROOT / args.write_jsonl).resolve(), report["results"])
+    if args.write_junit:
+        write_junit((REPO_ROOT / args.write_junit).resolve(), report["results"])
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(render_text(report))
+    return 0 if report["ok"] else 3
+
+
+if __name__ == "__main__":
+    sys.exit(main())

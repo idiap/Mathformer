@@ -1,0 +1,568 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_docs_validate_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected docs.validate route through the native controlled action engine.",
+  "aliases": [
+    "docs.validate"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Context": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "Result": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Match": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "properties": {
+              "route_id": {
+                "const": "docs.validate"
+              },
+              "action_ids": {
+                "type": "array",
+                "const": [
+                  "test:docs"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "score": {
+            "type": "number"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object"
+      }
+    },
+    "Mount": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "repository_root": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Action": {
+      "schema": {
+        "type": "string",
+        "const": "test:docs"
+      }
+    },
+    "Count": {
+      "schema": {
+        "type": "integer",
+        "const": 1
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    }
+  },
+  "inputs": {
+    "match": {
+      "type": "Match"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "context": {
+      "type": "Context"
+    },
+    "mount": {
+      "type": "Mount"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Result",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_docs_route_initialize",
+          "operation": "mathformer_docs_route_initialize"
+        }
+      }
+    },
+    "select_action": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "match": {
+          "type": "Match"
+        }
+      },
+      "outputs": {
+        "action": {
+          "type": "Action"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_docs_route_select_action",
+          "operation": "mathformer_docs_route_select_action"
+        }
+      }
+    },
+    "run_action": {
+      "inputs": {
+        "action": {
+          "type": "Action"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "context": {
+          "type": "Context"
+        },
+        "mount": {
+          "type": "Mount"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_docs_route_run_action",
+          "operation": "mathformer_docs_route_run_action"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "child": {
+          "type": "Result"
+        },
+        "context": {
+          "type": "Context"
+        },
+        "action_count": {
+          "type": "Count"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_docs_route_advance",
+          "operation": "mathformer_docs_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "match": {
+          "type": "Match"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_docs_route_finish",
+          "operation": "mathformer_docs_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {},
+        "description": "Initialize ok=true and children=[]."
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "description": "Native ordered action traversal specialized to exactly [test:docs]. Its first iteration always sets done=true, including child failure; normal termination occurs at the bound, never an exhaustion error.\n",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select_action",
+              "kind": "call",
+              "operation": "select_action",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              },
+              "description": "Select match.route.action_ids[len(state.children)]."
+            },
+            {
+              "id": "execute_action",
+              "kind": "call",
+              "operation": "run_action",
+              "arguments": {
+                "action": {
+                  "ref": "steps.select_action.outputs.action"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "mount": {
+                  "ref": "inputs.mount"
+                }
+              },
+              "description": "Apply admission and preflight in native order. Errors return negative child data; after successful preflight dry_run returns without launch. Otherwise run tests/run_docs.py --json, capture exit/stdout/stderr, then audit writes. Timeout and undeclared writes set ok=false; unexpected launch errors propagate. No extra arguments are supplied.\n"
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.execute_action.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "action_count": {
+                  "literal": 1
+                }
+              },
+              "description": "Append child once in order; set ok=prior ok AND bool(child.get(ok,false)). Stop when child count equals action_count OR child failed without keep_going. Failure stays sticky; keep_going cannot add a second action.\n"
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        },
+        "description": "Return schema_version=1, accumulated ok, route metadata from intent_match_to_dict(match,registry), and ordered children. Status is intent_run_completed if ok, otherwise intent_run_failed.\n"
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Result",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked execution description; completion establishes no scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes/docs.validate; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/run_docs.py",
+        "selector": "main; delegate_command",
+        "digest": "sha256:a85b099ee3a780272d1618827304a0fbb0dbe77c9e623e90209d7a0b9a78a716"
+      },
+      {
+        "path": "tests/test_program/run_comprehensive_tests.py",
+        "selector": "prepare_checks; advance_check; run_check; finalize_checks; run; publish_report",
+        "digest": "sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_ask; mathformer_run_workflow; _cap_unbounded_timeouts",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/docs_validate_route_tools.py",
+        "selector": "register_docs_validate_route_tools; selected_match; checked_registry; check_state",
+        "digest": "sha256:c4c23ec69294b47c8770816e68d83b3ce9afd2685637cafde7fa2bdedb3b9e4d"
+      },
+      {
+        "path": "scripts/adoption_check_tools.py",
+        "selector": "Context",
+        "digest": "sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac"
+      },
+      {
+        "path": "scripts/workflow_write_audit.py",
+        "selector": "snapshot_repository; audit_snapshots",
+        "digest": "sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "docs_validate_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_docs_validate_route_workflow_tests.py",
+        "selector": "DocsRouteTests",
+        "digest": "sha256:1a3805783c54ea0e2a43a164b500213886aa1322d1c538de44f29426f0e171d8"
+      },
+      {
+        "path": "tests/mcp/fixtures/docs_route_boundary.py",
+        "selector": "install_external; serve",
+        "digest": "sha256:cbb9be104c4f6b0a8edd84e2d5acc9501bf7ba631ab85ebf832993875f7c475a"
+      },
+      {
+        "path": "tests/mcp/fixtures/docs_route_startup/sitecustomize.py",
+        "selector": "test-only external boundary installation",
+        "digest": "sha256:e95a506a448c5a8d50f673238a3a2a27565a4b8820378f0860a8f12feab59a1f"
+      },
+      {
+        "path": "tests/mcp/fixtures/docs_validate_route_original.py.txt",
+        "selector": "frozen run_intent_match and native state helpers",
+        "digest": "sha256:204521794cd12d4a9138209e7cacafee4251d3ae75a904e266cb24031ec78fc4"
+      }
+    ],
+    "gaps": [
+      "Action and delegated runner internals remain owned by native run_action and its real subprocesses, rather than expanded into graph nodes.",
+      "The 3600-second ceiling and five-call limit are enforced by Lunar, not the native CLI. The typed bindings retain the native unbounded action timeout; legacy MCP dispatch separately caps it at a configurable default of 600 seconds.",
+      "Lunar supplies required receipts, digests and provenance for graph operations; native stdout, stderr, reports and write audits remain source-owned. Complete network and external effects of selected matrix checks remain unqualified."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "docs.validate",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md"
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered mathformer_docs_route_* tools invoke the same intent-state helpers and run_action as run_intent_match; the generated graph preserves one ordered route action.",
+      "callers": "CLI ask --run uses the highest-ranked match; MCP mathformer_ask and mathformer_run_workflow call the same function.",
+      "mcp_admission": "Resolve normalized ID to docs.validate, reject nonempty route extra_args, check service write roots before non-dry execution.",
+      "mount": "Empty mount preserves the default repository root; repository_root is forwarded to run_action when supplied.",
+      "timeout": "CLI test:docs has no overall timeout; MCP caps its leaf command with a configurable timeout, default 600 seconds.",
+      "effects": "Qualification capability names are metadata, never runtime grants.",
+      "registration": "Registry values select the exact source-owned test:docs declaration. No extra arguments, retries or additional subprocess timeout are supplied.",
+      "service_admission": "Non-dry execution checks service read-only policy and mounted artifacts/ write root before invoking the native action. Dry-run preserves native preflight without launching."
+    },
+    "mathformer.delegated_runner": {
+      "command": "tests/run_docs.py --json delegates once to tests/test_program/run_comprehensive_tests.py for docs and mathformerlib with JSONL and JUnit reports.",
+      "state": "Load tests/test_matrix.json; retain matrix, selected checks in matrix order, families, index=0 and results=[].",
+      "traversal": "While index<len(selected), run one check, append its result and increment index; ordinary failures never stop traversal.",
+      "checks": "Missing optional dependencies skip under workstation defaults; configured per-check timeouts default to 120 seconds. Timeouts, unexpected exit codes and undeclared writes fail checks.",
+      "completion": "After all selected checks, validate results, build capability summary and dependency snapshot; publish JSON, JSONL and JUnit in source order, then exit 0 if ok else 3.",
+      "bounds": "Finite selected-check traversal, including empty selection; no retries. This traversal remains owned by the delegated operation."
+    }
+  }
+}

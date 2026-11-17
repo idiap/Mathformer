@@ -1,0 +1,586 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_prove_vampire_atp_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Selected Vampire route controller; one ordered atp:demo action and native result aggregation.",
+  "aliases": [
+    "prove.vampire.atp"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext",
+      "representation": "value"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult",
+      "representation": "value"
+    },
+    "RouteMatch": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "object",
+            "properties": {
+              "route_id": {
+                "type": "string",
+                "const": "prove.vampire.atp"
+              },
+              "action_ids": {
+                "type": "array",
+                "const": [
+                  "atp:demo"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "route_id",
+              "action_ids"
+            ]
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "RouteState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ]
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "atp:demo"
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object"
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "RouteMatch"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot",
+      "required": false
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_vampire_route_initialize",
+          "operation": "mathformer_vampire_route_initialize"
+        }
+      }
+    },
+    "select_action": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "RouteMatch"
+        }
+      },
+      "outputs": {
+        "action": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_vampire_route_select_action",
+          "operation": "mathformer_vampire_route_select_action"
+        }
+      }
+    },
+    "run_action": {
+      "inputs": {
+        "action": {
+          "type": "ActionId"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot",
+          "required": false
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_vampire_route_run_action",
+          "operation": "mathformer_vampire_route_run_action"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_vampire_route_advance",
+          "operation": "mathformer_vampire_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "RouteMatch"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_vampire_route_finish",
+          "operation": "mathformer_vampire_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "Native for over the single registered action; done is true after its first child even on failure, so the normal return occurs at the bound.",
+        "state_type": "RouteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select_action",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "execute",
+              "kind": "call",
+              "operation": "run_action",
+              "description": "Native failure payloads remain data for advance; uncaught exceptions terminate.",
+              "arguments": {
+                "action": {
+                  "ref": "steps.select.outputs.action"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "carry",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.execute.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "RouteState",
+              "value": {
+                "ref": "steps.carry.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "steps.carry.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "RouteState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/vampire_atp/atp_function_demo/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked controller specification; neither a scientific proof nor runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; build_registry; build_intent_routes; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_run_workflow",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/run_vampire_atp.py",
+        "selector": "main; emit_result",
+        "digest": "sha256:3802293eed59e7d7f8c1ae083e7854b87cf469033864b4fb5a7bbee586db4e2b"
+      },
+      {
+        "path": "backends/atp/MathformerATP/vampire.py",
+        "selector": "discover_proof; discover_proof_steps; _run_premise_guided_attempt_steps; _prove_generated_lemmas_steps; _minimize_premises_steps",
+        "digest": "sha256:8b7d92bed2c701f704e124507d567c068969f4db6990a9ff0a906a180373bb2a"
+      },
+      {
+        "path": "backends/atp/MathformerATP/premises.py",
+        "selector": "select_premises; _budget_limit",
+        "digest": "sha256:abf54197f8096e9ffe34008473c098fdd6f7b850b1f088203d17da6cb029bae6"
+      },
+      {
+        "path": "scripts/vampire_route_tools.py",
+        "selector": "register_vampire_route_tools; selected_match; checked_registry; check_state",
+        "digest": "sha256:423e887fe2b373a2b076c0bf4390f9c3aefd22798cf5214ca766a1cafdc2a7d5"
+      },
+      {
+        "path": "scripts/adoption_check_tools.py",
+        "selector": "Context",
+        "digest": "sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "vampire_route_descriptor; descriptors",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_vampire_route_workflow_tests.py",
+        "selector": "VampireRouteTests",
+        "digest": "sha256:0ccb758d852416f054d1e966b1157bf9f1595e2256517512bd9445f18e0e590a"
+      },
+      {
+        "path": "tests/mcp/fixtures/vampire_route_original.py.txt",
+        "selector": "frozen selected source controller",
+        "digest": "sha256:f3d0517d1407bd0ccc348c75ae975fd0c9fbcf820ab87103ed915e8d8a583208"
+      },
+      {
+        "path": "tests/mcp/fixtures/vampire_route_boundary.py",
+        "selector": "test-only compiler boundary and server bootstrap",
+        "digest": "sha256:547b3dd4e501cbfb7aecc9f213902cc2d0d6dc3c12edf33e88a76f26b43c82b0"
+      },
+      {
+        "path": "tests/mcp/fixtures/atp_demo_boundary.py",
+        "selector": "compiler (deterministic SZS/TSTP fixture)",
+        "digest": "sha256:f946ad8679289f79ad1153db9063d6c6db884b3b34324c85fe74084619b9377f"
+      }
+    ],
+    "gaps": [
+      "Scientific search remains opaque inside run_action; the graph covers the selected route controller, not scientific leaf internals.",
+      "Registry values are validated projections of native declarations; repository_root preserves the caller mount. Service write controls additionally apply to MCP calls.",
+      "The 3600-second ceiling, five-operation budget and mandatory receipts belong to Lunar; native subprocess retains its 120-second timeout and optional logging.",
+      "External capability placeholders inherited in policy confer no runtime grants. Vampire execution requires the native local runtime; template generation uses no model."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "prove.vampire.atp",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "prove.vampire.atp",
+        "title": "Prove an informal first-order theorem with Vampire ATP",
+        "action_ids": [
+          "atp:demo"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Each MCP block calls the same native controller helper as run_intent_match; run_action retains the full native scientific subprocess and write audit.",
+      "registry": "Caller-supplied registry projection is checked against build_registry and passed to both run_action and finish; no caller-supplied executable definitions.",
+      "selection": "Already selected match; score and matched_terms are retained while source route metadata is restored from build_intent_routes.",
+      "loop_bound": "Exact one-action specialization, constrained by RouteMatch; exhaustion is unreachable for a conforming advance result.",
+      "failure_policy": "Always aggregate returned ok=false; do not raise before append/finish. Exceptions still propagate.",
+      "scientific_payloads": "HubResult is the transport envelope; scientific reports and proof files remain native artifacts.",
+      "limits": "The prior 3600-second/one-operation declarations were not native global budgets. Five calls accounts for this expanded controller; 3600 remains a normalization ceiling. The native outer subprocess timeout is 120 seconds."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "atp:demo"
+      ],
+      "action_workflows": [
+        "hub_atp_demo_workflow"
+      ],
+      "keep_going_semantics": "Failure is sticky; stop on failure unless keep_going. This singleton route always stops after its child.",
+      "leaf": {
+        "script": "scripts/run_vampire_atp.py",
+        "text_file": "examples/vampire_group_inverse_product_input.md",
+        "artifact_root": "artifacts/vampire_atp/atp_function_demo/",
+        "premise_loop": true,
+        "premise_budget": "medium",
+        "vampire_time_limit_seconds": 3,
+        "subprocess_timeout_seconds": 120,
+        "generation_enabled": true,
+        "minimization_enabled": true
+      },
+      "scientific_implementation": "discover_proof drains discover_proof_steps. Generate formalization candidates; for each, select at most eight trusted positive-scoring premises, traverse the finite generated-lemma list, skip ineligible lemmas, prove eligible lemmas before promotion, then augment selected premises with promoted lemmas. Traverse the original augmented list once for greedy deletion, carrying current premises and minimization attempts; skip absent candidates and retain a deletion only on proof, using one-second Vampire calls. Run the final problem and persist its artifacts. Append each candidate attempt and carry the first winning problem/result/attempt; stop on first proof or candidate exhaustion, then persist discovery_report.json. Empty finite lists complete normally. No proof yields a report with ok=false and CLI exit 3. Direct attempts and generation/minimization bypasses belong to the reusable implementation; this route enables all three premise stages."
+    }
+  }
+}

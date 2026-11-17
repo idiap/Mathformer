@@ -1,0 +1,500 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_meta_skills_taxonomic_navigation_workflow
+version: 1.0.0
+kind: workflow
+description: Process every taxonomy navigation example in order, write aggregate results,
+  print JSON, and return the CLI exit status.
+aliases:
+- meta-skills:taxonomic-navigation
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Taxonomy:
+    schema:
+      type: string
+      minLength: 1
+  State:
+    schema:
+      type: object
+      properties:
+        cases:
+          type: array
+          maxItems: 10000
+          items:
+            type: object
+            properties:
+              request:
+                type: string
+              expected_workflow_id:
+                type: string
+            required:
+            - request
+            - expected_workflow_id
+        index:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        results:
+          type: array
+          maxItems: 10000
+          items:
+            type: object
+            properties:
+              request:
+                type: string
+              expected:
+                type: string
+              got:
+                type:
+                - string
+                - 'null'
+              ok:
+                type: boolean
+            required:
+            - request
+            - expected
+            - got
+            - ok
+        taxonomy_path:
+          type: string
+      required:
+      - cases
+      - index
+      - results
+      - taxonomy_path
+  CaseResult:
+    schema:
+      type: object
+      properties:
+        request:
+          type: string
+        expected:
+          type: string
+        got:
+          type:
+          - string
+          - 'null'
+        ok:
+          type: boolean
+      required:
+      - request
+      - expected
+      - got
+      - ok
+  Report:
+    schema:
+      type: object
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: mathformer_meta_taxonomic_navigation_self_test
+        ok:
+          type: boolean
+        results:
+          type: array
+          maxItems: 10000
+          items:
+            type: object
+            properties:
+              request:
+                type: string
+              expected:
+                type: string
+              got:
+                type:
+                - string
+                - 'null'
+              ok:
+                type: boolean
+            required:
+            - request
+            - expected
+            - got
+            - ok
+      required:
+      - schema_version
+      - style
+      - ok
+      - results
+  Bool:
+    schema:
+      type: boolean
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 1
+  Path:
+    schema:
+      type: string
+      minLength: 1
+  Text:
+    schema:
+      type: string
+inputs:
+  taxonomy:
+    type: Taxonomy
+  report_path:
+    type: Path
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  stdout:
+    type: Text
+    value:
+      ref: flow.outputs.stdout
+operations:
+  initialize:
+    inputs:
+      taxonomy:
+        type: Taxonomy
+    outputs:
+      state:
+        type: State
+      has_cases:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_taxonomic_initialize
+        operation: mathformer_taxonomic_initialize
+  evaluate_case:
+    inputs:
+      state:
+        type: State
+    outputs:
+      result:
+        type: CaseResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_taxonomic_evaluate_case
+        operation: mathformer_taxonomic_evaluate_case
+  advance:
+    inputs:
+      state:
+        type: State
+      result:
+        type: CaseResult
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_taxonomic_advance
+        operation: mathformer_taxonomic_advance
+  empty_state:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_taxonomic_empty_state
+        operation: mathformer_taxonomic_empty_state
+  finalize:
+    inputs:
+      state:
+        type: State
+      report_path:
+        type: Path
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_taxonomic_finalize
+        operation: mathformer_taxonomic_finalize
+  finish_cli:
+    inputs:
+      report:
+        type: Report
+    outputs:
+      report:
+        type: Report
+      exit_code:
+        type: ExitCode
+      stdout:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_taxonomic_finish_cli
+        operation: mathformer_taxonomic_finish_cli
+flow:
+  kind: sequence
+  steps:
+  - id: load
+    kind: call
+    operation: initialize
+    arguments:
+      taxonomy:
+        ref: inputs.taxonomy
+  - kind: loop
+    state_type: State
+    initial:
+      ref: steps.load.outputs.state
+    max_iterations: 10000
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: dispatch
+        kind: switch
+        cases:
+        - id: nonempty
+          when:
+            ref: steps.load.outputs.has_cases
+          body:
+            kind: sequence
+            steps:
+            - id: evaluate
+              kind: call
+              operation: evaluate_case
+              arguments:
+                state:
+                  ref: loop.state
+            - id: append
+              kind: call
+              operation: advance
+              arguments:
+                state:
+                  ref: loop.state
+                result:
+                  ref: steps.evaluate.outputs.result
+            outputs:
+              state:
+                type: State
+                value:
+                  ref: steps.append.outputs.state
+              done:
+                type: Bool
+                value:
+                  ref: steps.append.outputs.done
+        default:
+          kind: sequence
+          steps:
+          - id: empty_state
+            kind: call
+            operation: empty_state
+            arguments:
+              state:
+                ref: steps.load.outputs.state
+          outputs:
+            state:
+              type: State
+              value:
+                ref: steps.empty_state.outputs.state
+            done:
+              type: Bool
+              value:
+                ref: steps.empty_state.outputs.done
+        outputs:
+          state:
+            type: State
+            value:
+              ref: selected.outputs.state
+          done:
+            type: Bool
+            value:
+              ref: selected.outputs.done
+      outputs:
+        state:
+          type: State
+          value:
+            ref: steps.dispatch.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: steps.dispatch.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: State
+        value:
+          ref: body.outputs.state
+    id: examples
+  - id: write
+    kind: call
+    operation: finalize
+    arguments:
+      state:
+        ref: steps.examples.outputs.state
+      report_path:
+        ref: inputs.report_path
+  - id: exit
+    kind: call
+    operation: finish_cli
+    arguments:
+      report:
+        ref: steps.write.outputs.report
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.exit.outputs.report
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.exit.outputs.exit_code
+    stdout:
+      type: Text
+      value:
+        ref: steps.exit.outputs.stdout
+policy:
+  effects:
+    filesystem:
+      read:
+      - meta_skills/taxonomy/workflow_taxonomy.json
+      - artifacts/workflow_hub/**
+      write:
+      - artifacts/meta_skills/taxonomic_navigation_report.json
+      - artifacts/workflow_hub/**
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - read_taxonomy
+    - evaluate_navigation_examples
+    - write_navigation_report
+    - print_cli_result
+    forbidden:
+    - infer_scientific_truth_from_completion
+    - promote_generated_artifacts
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 20004
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Navigation example agreement only; no scientific proof, promotion,
+    or runtime qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: meta_skills/scripts/navigate_workflow_taxonomy.py
+    selector: self_test
+    digest: sha256:a2254fd55a2ace8409c0aeb3524fa181841f24cc1debae0fd1a364b0fd8c604b
+  - path: meta_skills/scripts/navigate_workflow_taxonomy.py
+    selector: main; navigate; score_request; load_json
+    digest: sha256:a2254fd55a2ace8409c0aeb3524fa181841f24cc1debae0fd1a364b0fd8c604b
+  - path: scripts/mathformer.py
+    selector: build_registry/action:meta-skills:taxonomic-navigation; run_action;
+      run_leaf_action; preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/meta_skills/run_meta_skill_suite.py
+    selector: taxonomic navigation subprocess invocation
+    digest: sha256:06c35f2abb57248a44871776621cfe6612c81e24ad802517780d88a29a8e9fab
+  - path: scripts/taxonomic_navigation_tools.py
+    digest: sha256:7dc728dd92c4b06ca23fd91ba15c7b6b71b38ae3be208b876831ddb6bd6786fc
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - 'Input specialization: taxonomy is a path to the native taxonomy resource or an
+    isolated file under artifacts/workflow_hub. Initial examples are limited to 10000
+    without truncation. Each evaluation reloads that file. report_path is the native
+    report resource or an isolated file under artifacts/workflow_hub. The loop executes
+    an empty-state passthrough once for empty examples, making zero navigation calls;
+    final permitted iteration stops normally at 10000 examples.'
+  - Hub preflight/dry-run exits, subprocess transport, and post-execution write audit
+    remain outside the selected self_test graph. The hub leaf has no native timeout;
+    its suite caller imposes 180 seconds. The retained 3600-second policy and operation-call
+    ceiling are descriptor budgets, not native execution bounds.
+  - Mandatory receipts and provenance are contract requirements, not an assertion
+    that native logs implement them. Alternate CLI request/error paths are documented
+    as boundary metadata rather than executed by this fixed self-test graph.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: meta-skills:taxonomic-navigation
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+  mathformer.native_boundary:
+    execution: 'main -> self_test through dependency-free hub leaf meta-skills:taxonomic-navigation;
+      run_action dispatches through run_leaf_action. Registered command: {python}
+      meta_skills/scripts/navigate_workflow_taxonomy.py --self-test --json. The suite
+      invokes the same command directly.'
+    input_path: meta_skills/taxonomy/workflow_taxonomy.json
+    reload_semantics: Initial examples remain in State; every navigate call rereads
+      workflow_coordinates from TAXONOMY_PATH. No snapshot or cache is introduced.
+    cli_priority: --self-test takes precedence over --request. Request-only mode navigates
+      once and writes its navigation report. With neither option, main raises SystemExit
+      with an error. Without --json, main prints its source PASS/FAIL message.
+    failure_policy: Input/I/O exceptions propagate. Failed examples accumulate without
+      early termination; finalization writes aggregate ok=false, then main prints
+      JSON and returns exit 1.
+  mathformer.scoring:
+    semantics: Lowercase the request. The physics_lean.goal_sample.recursive_autoformalization
+      row immediately returns score zero and no matches unless the source sample-scope
+      regex matches. Otherwise traverse reasoning_types, object_domains, backend_families,
+      and risk_classes in source order. For each coordinate, test its underscore-to-space
+      form and KEYWORDS terms by substring; hits add len(hits)+1 and append the coordinate.
+      A task_id with hyphens replaced by spaces OR workflow_id with underscores replaced
+      by spaces adds five once and appends task_id. Return sorted(set(matched)).
+    navigation_output: navigate returns schema_version 1, style mathformer_meta_taxonomic_navigation_report,
+      ok based on selection presence, request, selected candidate or null, ranked
+      candidates, and rejected_alternatives from ranked[1:] whose scores are at most
+      the selected score or zero when selection is null. Each candidate retains workflow_id,
+      task_id, score, matched_coordinates, and the source rejected_reason.
+    bounds: Helper loops are bounded by loaded workflow rows, coordinate lists, and
+      keyword lists. The outer loop processes all initially loaded examples in order.
+      No iterative refinement, retries, or mismatch-based early stop occurs.
+# REUSE-IgnoreEnd

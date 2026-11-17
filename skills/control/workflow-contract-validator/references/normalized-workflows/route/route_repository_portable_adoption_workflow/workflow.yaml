@@ -1,0 +1,663 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_repository_portable_adoption_workflow
+version: 1.0.0
+kind: workflow
+description: Execute the selected portable-adoption route through ordered native checks.
+aliases:
+- repository.portable-adoption
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Context:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  Result:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  Bool:
+    schema:
+      type: boolean
+  Match:
+    schema:
+      type: object
+      required:
+      - route
+      - score
+      - matched_terms
+      properties:
+        route:
+          type: object
+          required:
+          - route_id
+          - action_ids
+          properties:
+            route_id:
+              const: repository.portable-adoption
+            action_ids:
+              const:
+              - adoption:check
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+  Registry:
+    schema:
+      type: object
+      properties:
+        adoption:check:
+          type: object
+          required:
+          - command
+          - depends_on
+          properties:
+            command:
+              const: []
+            depends_on:
+              const:
+              - adoption:validate
+              - adoption:catalog-check
+              - adoption:test-contracts
+              - adoption:test-provenance
+      description: Value projection of selected native registry entries. Missing entries
+        retain native unknown-action failure behavior; executable caller declarations
+        are rejected.
+  RouteState:
+    schema:
+      type: object
+      required:
+      - ok
+      - children
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+  Admission:
+    schema:
+      type: object
+      required:
+      - action_id
+      - accepted
+      - status
+      - ancestry
+      properties:
+        action_id:
+          type: string
+        accepted:
+          type: boolean
+        status:
+          enum:
+          - accepted
+          - unknown_action
+          - dependency_cycle
+          - extra_args_for_sequence
+        ancestry:
+          type: array
+          items:
+            type: string
+  Dependencies:
+    schema:
+      type: object
+      required:
+      - index
+      - children
+      - dependencies_ok
+      - ancestry
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          maximum: 4
+        children:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+        dependencies_ok:
+          type: boolean
+        ancestry:
+          type: array
+          items:
+            type: string
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+  Traversal:
+    schema:
+      type: object
+      required:
+      - accepted
+      - dependencies
+      - rejection
+      properties:
+        accepted:
+          type: boolean
+        dependencies:
+          type:
+          - object
+          - 'null'
+        rejection:
+          type:
+          - object
+          - 'null'
+inputs:
+  context:
+    type: Context
+  match:
+    type: Match
+  registry:
+    type: Registry
+  repository_root:
+    type: RepositoryRoot
+    required: false
+outputs:
+  result:
+    type: Result
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize_route:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_portable_route_initialize_route
+        operation: mathformer_portable_route_initialize_route
+  select_and_admit:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: Match
+      registry:
+        type: Registry
+    outputs:
+      admission:
+        type: Admission
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_portable_route_select_and_admit
+        operation: mathformer_portable_route_select_and_admit
+  reject:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      result:
+        type: Result
+      state:
+        type: Traversal
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_portable_route_reject
+        operation: mathformer_portable_route_reject
+  initialize_dependencies:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      state:
+        type: Traversal
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_portable_route_initialize_dependencies
+        operation: mathformer_portable_route_initialize_dependencies
+  visit_leaf:
+    inputs:
+      state:
+        type: Traversal
+      registry:
+        type: Registry
+      context:
+        type: Context
+      repository_root:
+        type: RepositoryRoot
+        required: false
+    outputs:
+      result:
+        type: Result
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_portable_route_visit_leaf
+        operation: mathformer_portable_route_visit_leaf
+  advance_dependencies:
+    inputs:
+      state:
+        type: Traversal
+      child:
+        type: Result
+      context:
+        type: Context
+    outputs:
+      state:
+        type: Traversal
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_portable_route_advance_dependencies
+        operation: mathformer_portable_route_advance_dependencies
+  finish_dependencies:
+    inputs:
+      state:
+        type: Traversal
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: Result
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_portable_route_finish_dependencies
+        operation: mathformer_portable_route_finish_dependencies
+  advance_route:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: Result
+      context:
+        type: Context
+    outputs:
+      state:
+        type: RouteState
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_portable_route_advance_route
+        operation: mathformer_portable_route_advance_route
+  finish_route:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: Match
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: Result
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_portable_route_finish_route
+        operation: mathformer_portable_route_finish_route
+  retain_rejection:
+    inputs:
+      state:
+        type: Traversal
+    outputs:
+      state:
+        type: Traversal
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_portable_route_retain_rejection
+        operation: mathformer_portable_route_retain_rejection
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize_route
+    arguments: {}
+  - id: actions
+    kind: loop
+    state_type: RouteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: admission
+        kind: call
+        operation: select_and_admit
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+          registry:
+            ref: inputs.registry
+      - id: seed
+        kind: switch
+        cases:
+        - id: accepted
+          when:
+            ref: steps.admission.outputs.admission.accepted
+          body:
+            kind: call
+            operation: initialize_dependencies
+            arguments:
+              admission:
+                ref: steps.admission.outputs.admission
+        default:
+          kind: sequence
+          steps:
+          - kind: call
+            operation: reject
+            arguments:
+              admission:
+                ref: steps.admission.outputs.admission
+            id: reject
+          outputs:
+            state:
+              type: Traversal
+              value:
+                ref: steps.reject.outputs.state
+        outputs:
+          state:
+            type: Traversal
+            value:
+              ref: selected.outputs.state
+      - id: dependencies
+        kind: loop
+        state_type: Traversal
+        initial:
+          ref: steps.seed.outputs.state
+        max_iterations: 4
+        on_exhausted: fail
+        body:
+          kind: switch
+          cases:
+          - id: accepted
+            when:
+              ref: loop.state.accepted
+            body:
+              kind: sequence
+              steps:
+              - id: visit
+                kind: call
+                operation: visit_leaf
+                arguments:
+                  state:
+                    ref: loop.state
+                  registry:
+                    ref: inputs.registry
+                  context:
+                    ref: inputs.context
+                  repository_root:
+                    ref: inputs.repository_root
+              - id: advance
+                kind: call
+                operation: advance_dependencies
+                arguments:
+                  state:
+                    ref: loop.state
+                  child:
+                    ref: steps.visit.outputs.result
+                  context:
+                    ref: inputs.context
+              outputs:
+                state:
+                  type: Traversal
+                  value:
+                    ref: steps.advance.outputs.state
+                done:
+                  type: Bool
+                  value:
+                    ref: steps.advance.outputs.done
+          default:
+            kind: call
+            operation: retain_rejection
+            arguments:
+              state:
+                ref: loop.state
+          outputs:
+            state:
+              type: Traversal
+              value:
+                ref: selected.outputs.state
+            done:
+              type: Bool
+              value:
+                ref: selected.outputs.done
+        next_state:
+          ref: body.outputs.state
+        until:
+          ref: body.outputs.done
+        outputs:
+          state:
+            type: Traversal
+            value:
+              ref: body.outputs.state
+      - id: finish
+        kind: call
+        operation: finish_dependencies
+        arguments:
+          state:
+            ref: steps.dependencies.outputs.state
+          registry:
+            ref: inputs.registry
+      - id: advance
+        kind: call
+        operation: advance_route
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.finish.outputs.result
+          context:
+            ref: inputs.context
+      outputs:
+        state:
+          type: RouteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RouteState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish_route
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: Result
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 14
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Completion records control-check results; it establishes no scientific
+    truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: complete
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes; build_registry; prepare_action; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mcp_server.py
+    selector: _cap_unbounded_timeouts; mathformer_ask; mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/portable_adoption_route_tools.py
+    selector: register_portable_adoption_route_tools; checked_registry; selected_match
+    digest: sha256:64d17c1207bccecf4aa4ed9907c5a3bcb8c0a58f3e0b697b5e343ed8e7d5e15d
+  - path: scripts/thematic_layout_route_tools.py
+    selector: check_state
+    digest: sha256:4f06514b7eb9d5005dbc36903ee09b58dd49b649ff7febbfa9f7909f50930462
+  - path: scripts/adoption_check_tools.py
+    selector: Context; State
+    digest: sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac
+  - path: skills/control/workflow-contract-validator/scripts/portable_adoption.py
+    selector: main
+    digest: sha256:71cc63a093533d56dc9a14c03557dbe914f75cfbc5baeee7b32fdf66ca58a025
+  - path: tests/control/test_portable_adoption.py
+    selector: AdoptionTests
+    digest: sha256:8ded7f91d98b1fd96f8f9e1b572503e67bcd6ecb348925f8536c637389b32278
+  - path: tests/control/test_adoption_provenance.py
+    selector: ReceiptTests
+    digest: sha256:1eacb8545af7b11e061a8e3d5a04d4ed7b7396ede95bac79b33833ba68d832de
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: portable_adoption_route_descriptor
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps: []
+extensions:
+  mathformer.source:
+    category: route
+    native_id: repository.portable-adoption
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+  mathformer.composition:
+    ordered_actions:
+    - adoption:check
+    ordered_dependencies:
+    - adoption:validate
+    - adoption:catalog-check
+    - adoption:test-contracts
+    - adoption:test-provenance
+    selection: Already selected route; NL scoring and caller admission remain outside
+      run_intent_match.
+    specialization: Source-owned route and registry dependency order are fixed; arbitrary
+      registry edits are outside this contract.
+    bounds: One route action, at most four leaf launches, fourteen block calls, no
+      controller retries.
+    termination: Native done is true on the final permitted iteration; both loops
+      return normally at their bounds, including failed result data. Exhaustion guards
+      are unreachable for this specialization.
+    transport: Tagged Traversal carries either the unchanged native dependency state
+      or a rejection. The dependency loop is outside the admission switch because
+      Lunar cannot compile branch-local exhaustion. Rejected admission performs one
+      pure retain_rejection call, no leaf visit, then returns the original failure
+      to the route accumulator. Accepted execution retains fourteen calls and both
+      native bounds.
+  mathformer.native_boundary:
+    execution: CLI ask --run and MCP ask/run_workflow call run_intent_match; normalized
+      ID resolves to this native route.
+    failure_policy: Native ok=false is result data consumed by accumulators, not a
+      block exception; keep_going never clears failure.
+    repository_root: Caller mount or CLI repository default flows through recursion,
+      preflight, cwd and write audits inside the owning operations.
+    budgets: The 3600-second wall limit is host policy, not a source global deadline.
+      Native CLI leaves have no configured timeout; the existing MCP ask/run_workflow
+      facade separately caps commands at its configurable default of 600 seconds.
+      These staged source ports retain native CLI timeout behavior.
+    observability: Native leaf results retain argv, cwd, preflight errors, captured
+      streams, exit status and write audits. Lunar adds mandatory receipts, events,
+      digests and provenance without reinterpreting native ok=false as an operation
+      exception.
+  mathformer.source_steps:
+    initialize_route: Initialize the source-owned ordered route accumulator.
+    select_and_admit: scripts/mathformer.py:select_intent_action then run_action/prepare_action/admit_action;
+      select by child count; extra_args=(), seen=None.
+    reject: scripts/mathformer.py:reject_action returns ok=false and admission status,
+      including cycle ancestry where applicable.
+    initialize_dependencies: scripts/mathformer.py:initialize_dependencies initializes
+      index=0, children=[], dependencies_ok=true and copied ancestry.
+    visit_leaf: 'scripts/mathformer.py:visit_dependency selects adoption:check.depends_on[index],
+      then run_action with copied ancestry. Admission precedes run_leaf_action: preflight
+      failure returns data; dry-run returns without launch; otherwise registered argv
+      executes without a shell, followed by repository write audit. Nonzero exit,
+      timeout or undeclared writes yields ok=false; unexpected launch exceptions propagate.
+      Snapshots and timing stay inside this block.'
+    advance_dependencies: scripts/mathformer.py:advance_dependencies increments index,
+      appends child, retains ancestry, ANDs dependencies_ok with child.ok; done at
+      index=4 or failed child without keep_going.
+    finish_dependencies: scripts/mathformer.py:dependency_command_guard is false for
+      commandless adoption:check; finish_dependencies returns action metadata, ordered
+      children, sticky ok, sequence_completed/sequence_failed.
+    advance_route: scripts/mathformer.py:advance_intent_state appends child and ANDs
+      ok; done at one action or failed child without keep_going.
+    finish_route: scripts/mathformer.py:finish_intent_state returns schema_version=1,
+      route metadata from intent_match_to_dict, ordered children, sticky ok and intent_run_completed/intent_run_failed.
+# REUSE-IgnoreEnd

@@ -1,0 +1,383 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_mathformerphysicslib_api_operability_critic_workflow
+version: 1.0.0
+kind: workflow
+description: Bounded executable specialization of the native critic_api ordered concept
+  traversal; CLI and hub boundaries remain source metadata.
+aliases:
+- mathformerphysicslib:api-operability-critic
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  ConceptGraph:
+    schema:
+      type: object
+      properties:
+        concepts:
+          type: array
+          maxItems: 1024
+          items:
+            type: object
+            properties:
+              concept_id: {}
+              owner_module: {}
+              api_terms:
+                type: array
+                items:
+                  type: string
+    representation: value
+  Traversal:
+    schema:
+      type: object
+      required:
+      - concepts
+      - index
+      - findings
+      properties:
+        concepts:
+          type: array
+          maxItems: 1024
+          items:
+            type: object
+            properties:
+              concept_id: {}
+              owner_module: {}
+              api_terms:
+                type: array
+                items:
+                  type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 1024
+        findings:
+          type: array
+          items:
+            type: object
+            required:
+            - severity
+            - kind
+            - concept_id
+            - owner_module
+            - message
+            properties:
+              severity:
+                enum:
+                - high
+                - low
+              kind:
+                enum:
+                - foundation_without_operable_api
+                - thin_foundation_api
+              concept_id: {}
+              owner_module: {}
+              message:
+                type: string
+              present_terms:
+                type: array
+                items:
+                  type: string
+    representation: value
+  Flag:
+    schema:
+      type: boolean
+  ApiReport:
+    schema:
+      type: object
+      required:
+      - style
+      - schema_version
+      - ok
+      - finding_count
+      - findings
+      properties:
+        style:
+          const: mathformerphysicslib_api_operability_report
+        schema_version:
+          const: 1
+        ok:
+          type: boolean
+        finding_count:
+          type: integer
+          minimum: 0
+        findings:
+          type: array
+          items:
+            type: object
+            required:
+            - severity
+            - kind
+            - concept_id
+            - owner_module
+            - message
+            properties:
+              severity:
+                enum:
+                - high
+                - low
+              kind:
+                enum:
+                - foundation_without_operable_api
+                - thin_foundation_api
+              concept_id: {}
+              owner_module: {}
+              message:
+                type: string
+              present_terms:
+                type: array
+                items:
+                  type: string
+      additionalProperties: false
+    representation: value
+  RepositoryRoot:
+    schema:
+      type: string
+    representation: value
+inputs:
+  concept_graph:
+    type: ConceptGraph
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  report:
+    type: ApiReport
+    value:
+      ref: flow.outputs.report
+operations:
+  initialize_traversal:
+    inputs:
+      graph:
+        type: ConceptGraph
+    outputs:
+      state:
+        type: Traversal
+      empty:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_api_critic_initialize
+        operation: mathformer_api_critic_initialize
+  visit_concept:
+    inputs:
+      state:
+        type: Traversal
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      state:
+        type: Traversal
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_api_critic_visit
+        operation: mathformer_api_critic_visit
+  finish_report:
+    inputs:
+      state:
+        type: Traversal
+    outputs:
+      report:
+        type: ApiReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_api_critic_finish
+        operation: mathformer_api_critic_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize_traversal
+    arguments:
+      graph:
+        ref: inputs.concept_graph
+  - id: concepts
+    kind: loop
+    state_type: Traversal
+    initial:
+      ref: steps.initialize.outputs.state
+    body:
+      kind: sequence
+      steps:
+      - id: visit
+        kind: call
+        operation: visit_concept
+        arguments:
+          state:
+            ref: loop.state
+          repository_root:
+            ref: inputs.repository_root
+      outputs:
+        state:
+          type: Traversal
+          value:
+            ref: steps.visit.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: steps.visit.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 1024
+    on_exhausted: fail
+    outputs:
+      state:
+        type: Traversal
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish_report
+    arguments:
+      state:
+        ref: steps.concepts.outputs.state
+  outputs:
+    report:
+      type: ApiReport
+      value:
+        ref: steps.finish.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write: []
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - inspect_foundation_api
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 1026
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: API operability findings only; completion is not proof, scientific
+    validity, or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/coherence_common.py
+    selector: critic_api
+    digest: sha256:e1da9d47b82e23be26335e4476ba442aa58aedafe245034709d2868909deb125
+  - path: skills/mathformerphysicslib/mathformerphysicslib-api-operability-critic/scripts/critic_api_operability.py
+    selector: main
+    digest: sha256:3fb1c55eca4d9f921d901673f0bf57d1c54dfb4b69518172d71dcd091e8d4f25
+  - path: scripts/mathformer.py
+    selector: build_registry/action:mathformerphysicslib:api-operability-critic; prepare_leaf_boundary;
+      launch_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: 'inventory: authored API critic contract'
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: scripts/api_critic_tools.py
+    selector: register_api_critic_tools
+    digest: sha256:46706cf03140e664151ee695cee449ae7207c467dc4e585d3e9acfc56d021d77
+  - path: scripts/mcp_server.py
+    selector: register_api_critic_tools(mcp)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  gaps:
+  - Specialization admits at most 1024 concepts and string API terms. Source has no
+    explicit size/time cap. Cursor is traversal bookkeeping; findings are the source's
+    accumulated state.
+  - At 1024 concepts the final visit sets done true and returns normally. Exhaustion
+    is unreachable for admitted inputs; on_exhausted fail handles a violated adapter
+    invariant, not native exhaustion.
+  - CLI loading, fixture helper internals, serialization and hub orchestration are
+    outside this critic graph. Report output is ApiReport, not the native HubResult
+    transport envelope.
+  - 3600 seconds and 1026 operation calls are descriptor budgets, not enforced native
+    action limits; no native timeout is configured.
+  - Lunar provides contract execution receipts and provenance; native CLI logging
+    remains unchanged.
+  - Lunar requires a root-scoped exhaustion exit. Its at-least-once loop uses a no-inspection
+    empty-state pass in the visit adapter; nonempty visits remain one per concept
+    in source order.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: mathformerphysicslib:api-operability-critic
+    owner_skill: skills/mathformerphysicslib/mathformerphysicslib-api-operability-critic/SKILL.md
+    contract:
+      id: mathformerphysicslib:api-operability-critic
+      summary: Smoke-test MathformerPhysicsLib API operability critic.
+      family: mathformerphysicslib
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - skills/mathformerphysicslib/mathformerphysicslib-api-operability-critic/scripts/critic_api_operability.py
+      - --self-test
+      - --json
+      depends_on: []
+      required_paths:
+      - skills/mathformerphysicslib/mathformerphysicslib-api-operability-critic/scripts/critic_api_operability.py
+      required_tools: []
+      optional_tools: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: Registered hub action preflights, launches once unless dry-run or blocked,
+      audits writes, and bases success on subprocess exit status plus write audit;
+      printed critic ok is not parsed.
+    cli: main loads --concept-graph or canonicalize(build_inventory()); --self-test
+      instead calls canonicalize(self_test_payload()). Then critic_api, optional --output
+      write, JSON print, return 0 regardless of report ok. Exceptions/assertion failures
+      propagate.
+    self_test: self_test_payload runs fixture checks/assertions and returns a report
+      bundle without concept_occurrence_index; canonicalizing that bundle yields an
+      empty graph for the final critic call.
+    other_callers:
+    - coherence gate
+    - repair planner
+    - generative critic planner
+    - coherence report runner
+    effects_status: selected critic reads only; CLI optional output and hub optional
+      reports are outside this graph
+    scientific_payloads: Report ok is independent of transport success; no scientific
+      validity follows.
+# REUSE-IgnoreEnd

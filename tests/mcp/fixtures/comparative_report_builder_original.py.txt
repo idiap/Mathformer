@@ -1,0 +1,2863 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Render end-to-end FormalPhysics comparison artifacts from cleaned external
+#   JSON, current Mathformer repo outputs, and Foundations dependency evidence.
+#
+# Intent:
+#   Provide one deterministic report builder that can later be enriched by
+#   Codex-exec judge results without hiding reference-answer policy.
+#
+# Function:
+#   Produces JSON, Codex-exec prompt packets, markdown, and self-contained HTML
+#   with side-by-side Lean rendering.
+#
+# Maintenance Notes:
+#   Keep deterministic gates independent from optional generative judge results.
+
+"""Build a FormalPhysics comparative-analysis report."""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import html
+import importlib.util
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+from typing import Any, Sequence
+
+STYLE = "formalphysics_comparative_analysis_report"
+REFERENCE_ROLE = "non_gold_reference_evidence"
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parents[4]
+PREPARE_SCRIPT = SCRIPT_DIR / "prepare_comparison_inputs.py"
+DEFAULT_SYNTHESIS_REPORT_JSON = (
+    REPO_ROOT
+    / "artifacts"
+    / "formalphysics_judge_synthesis"
+    / "hub_selected_examples"
+    / "synthesis_report.json"
+)
+
+METRIC_NAMES = (
+    "source_semantic_preservation",
+    "physics_object_fidelity",
+    "foundations_dependency_quality",
+    "mathlib_grounding",
+    "mathlib_concept_grounding",
+    "variable_naming_quality",
+    "formal_physics_modeling_depth",
+    "physics_representation_completeness",
+    "assumption_transparency",
+    "proof_integrity",
+    "derivation_coverage",
+    "reference_delta_quality",
+    "reviewability_clarity",
+    "maintainability",
+    "reportability",
+)
+
+METRIC_CRITERIA = {
+    "source_semantic_preservation": "Preserves source quantities, objects, hypotheses, quantifier scope, conclusion, and derivation intent.",
+    "physics_object_fidelity": "Models the intended physical objects such as fields, frames, units, dimensions, operators, states, domains, and boundary terms.",
+    "foundations_dependency_quality": "Uses or extends canonical MathformerPhysicsLib Foundations surfaces without duplicating, bypassing, or weakening them.",
+    "mathlib_grounding": "Uses Mathlib and MathformerPhysicsLib APIs deliberately instead of avoidable local replacements or broad unstructured imports.",
+    "mathlib_concept_grounding": "Grounds physics concepts in recognizable Mathlib structures such as modules, linear maps, inner-product spaces, derivatives, real/complex scalars, and algebraic laws.",
+    "variable_naming_quality": "Uses declaration and variable names that expose source concepts rather than generic algebra placeholders.",
+    "formal_physics_modeling_depth": "Represents physics concepts through typed structures, witnesses, contexts, units, operators, and reusable frontiers rather than a bare algebraic equality.",
+    "physics_representation_completeness": "Captures the complexity of the underlying physics, including assumptions, regimes, units, dimensions, operators, domains, boundary conditions, and source derivation steps.",
+    "assumption_transparency": "Labels regimes, regularity, boundary conditions, differentiability, domain restrictions, and source-to-formal deltas.",
+    "proof_integrity": "Proof terms or tactics justify the theorem shape rather than proving an unrelated algebraic shell.",
+    "derivation_coverage": "Major informal derivation steps have formal objects, lemmas, comments, or source anchors.",
+    "reference_delta_quality": "Explains agreement and disagreement with the reference answer without treating the reference as an oracle.",
+    "reviewability_clarity": "Provides concise annotations, source-step mapping, named bridge lemmas, and evidence surfaces that make the formalization easy to review.",
+    "maintainability": "Declarations are named, modular, reusable, and stable under library evolution.",
+    "reportability": "Evidence is machine-processable and human-readable.",
+}
+
+CRITIC_PROFILES = {
+    "mathlib_grounding_critic": {
+        "focus": "How well physics concepts are modeled through Mathlib and canonical Foundations surfaces.",
+        "criteria": [
+            "identify concrete Mathlib APIs used for scalars, modules, maps, derivatives, topology, inner products, or algebra",
+            "penalize avoidable local replacement of Mathlib objects",
+            "distinguish a broad `import Mathlib` from actual concept-level grounding",
+            "record absent grounding as repair evidence, not as automatic failure when the source genuinely needs a local physics abstraction",
+        ],
+        "metrics": [
+            "mathlib_grounding",
+            "mathlib_concept_grounding",
+            "foundations_dependency_quality",
+        ],
+    },
+    "naming_reviewability_critic": {
+        "focus": "Whether names, annotations, and source-step mapping make the Lean artifact reviewable.",
+        "criteria": [
+            "declaration names should carry source-domain vocabulary",
+            "variables should not collapse physics concepts into generic algebra letters without context",
+            "comments should identify source steps, assumptions, and bridge lemmas",
+            "review packets should be self-contained for human and machine consumers",
+        ],
+        "metrics": [
+            "variable_naming_quality",
+            "reviewability_clarity",
+            "maintainability",
+        ],
+    },
+    "formality_depth_critic": {
+        "focus": "Whether the candidate is a formal physics model or only a compiled algebraic shell.",
+        "criteria": [
+            "look for typed frontiers, contexts, witnesses, structures, and reusable bridge lemmas",
+            "penalize one-line identities that erase the physical construction",
+            "reward explicit links from informal derivation steps to formal declarations",
+            "separate proof success from semantic modeling depth",
+        ],
+        "metrics": [
+            "formal_physics_modeling_depth",
+            "proof_integrity",
+            "derivation_coverage",
+        ],
+    },
+    "physics_completeness_critic": {
+        "focus": "Whether the representation captures the physical concepts accurately and with enough complexity.",
+        "criteria": [
+            "check quantities, laws, operators, states, fields, frames, units, dimensions, domains, and boundary assumptions",
+            "ask whether source complexity was simplified away",
+            "record which physical assumptions are explicit, implicit, or missing",
+            "treat reference-answer similarity as evidence, not a gold-standard target",
+        ],
+        "metrics": [
+            "physics_object_fidelity",
+            "physics_representation_completeness",
+            "assumption_transparency",
+            "source_semantic_preservation",
+        ],
+    },
+    "invoked_dependency_excerpt_critic": {
+        "focus": "Whether the comparison imports the external declarations invoked by the top-level Lean excerpt.",
+        "criteria": [
+            "detect invoked Foundations declarations by name",
+            "include file path, line span, declaration kind, declaration name, invocation count, and code excerpt",
+            "use excerpt count and variety as evidence for grounding and modeling depth",
+            "flag missing or irrelevant excerpts when top-level code depends on external concepts",
+        ],
+        "metrics": [
+            "mathlib_concept_grounding",
+            "foundations_dependency_quality",
+            "formal_physics_modeling_depth",
+            "reviewability_clarity",
+        ],
+    },
+}
+
+ROLE_RUBRICS = {
+    "theorem_prover_expert": {
+        "label": "Theorem Prover Expert",
+        "review_mode": "deterministic_structured_qualitative_review",
+        "criteria": [
+            "Lean compile status and import discipline",
+            "absence of sorry/admit/axiom placeholders in final claims",
+            "non-vacuous theorem or lemma target",
+            "proof-integrity evidence from theorem shape and tactics",
+            "Mathlib and MathformerPhysicsLib Foundations grounding",
+            "variable and declaration names that preserve source concepts",
+            "formal modeling depth beyond an algebraic shell",
+            "maintainability of declarations and dependency choices",
+        ],
+        "primary_metrics": (
+            "proof_integrity",
+            "mathlib_grounding",
+            "mathlib_concept_grounding",
+            "variable_naming_quality",
+            "formal_physics_modeling_depth",
+            "foundations_dependency_quality",
+            "reviewability_clarity",
+            "maintainability",
+            "reportability",
+        ),
+    },
+    "physics_expert": {
+        "label": "Physics Expert",
+        "review_mode": "deterministic_structured_qualitative_review",
+        "criteria": [
+            "preservation of source quantities, regimes, and conclusions",
+            "fidelity of physical objects, fields, units, dimensions, and operators",
+            "explicit assumptions, domains, regularity, and boundary conditions",
+            "coverage of essential derivation steps",
+            "completeness and accuracy of the represented physics concepts",
+            "clarity and reviewability of source-step annotations",
+            "non-gold reference-delta analysis",
+            "use of reusable physics Foundations instead of an isolated algebra shell",
+        ],
+        "primary_metrics": (
+            "source_semantic_preservation",
+            "physics_object_fidelity",
+            "physics_representation_completeness",
+            "formal_physics_modeling_depth",
+            "assumption_transparency",
+            "derivation_coverage",
+            "reference_delta_quality",
+            "reviewability_clarity",
+            "foundations_dependency_quality",
+        ),
+    },
+}
+
+STOPWORDS = {
+    "about",
+    "after",
+    "also",
+    "and",
+    "answer",
+    "are",
+    "because",
+    "been",
+    "being",
+    "between",
+    "both",
+    "can",
+    "component",
+    "derive",
+    "does",
+    "each",
+    "from",
+    "given",
+    "have",
+    "into",
+    "let",
+    "law",
+    "over",
+    "prove",
+    "show",
+    "such",
+    "that",
+    "the",
+    "their",
+    "then",
+    "there",
+    "this",
+    "using",
+    "where",
+    "with",
+}
+
+LEAN_KEYWORDS = {
+    "abbrev",
+    "axiom",
+    "by",
+    "calc",
+    "class",
+    "def",
+    "deriving",
+    "example",
+    "have",
+    "import",
+    "inductive",
+    "instance",
+    "lemma",
+    "let",
+    "namespace",
+    "noncomputable",
+    "opaque",
+    "open",
+    "section",
+    "simp",
+    "structure",
+    "theorem",
+    "variable",
+    "where",
+}
+
+TACTICS = {
+    "aesop",
+    "exact",
+    "linarith",
+    "omega",
+    "rfl",
+    "ring",
+    "rw",
+    "simpa",
+    "simp",
+}
+
+SUSPICIOUS = {"admit", "axiom", "sorry"}
+
+MATHLIB_CONCEPT_PATTERNS = {
+    "real_complex_scalars": r"(\bReal\b|\bComplex\b|ℝ|ℂ)",
+    "modules_and_linear_maps": r"\b(Module|LinearMap|map_add|map_smul|smul|•)\b",
+    "inner_product_spaces": r"\b(InnerProductSpace|inner|NormedAddCommGroup|CompleteSpace)\b",
+    "calculus_derivatives": r"\b(HasDerivAt|deriv|Differentiable|ContDiff|partial|Derivative)\b",
+    "topology_and_norms": r"\b(Continuous|Tendsto|Normed|CompleteSpace|Metric)\b",
+    "algebraic_rewriting": r"\b(calc|ring|linarith|simp|rw|rfl)\b",
+}
+
+PHYSICS_COMPLEXITY_PATTERNS = {
+    "unit_dimension": r"\b(UnitDimensionCompatible|unit_dimension|Unit|Dimension|dimension|unit)\b",
+    "physics_context": r"\b(PhysicsContext|context|frame|boundary|regime|assumption)\b",
+    "physical_law_witness": r"\b(PhysicalLawWitness|Law|law|witness)\b",
+    "fields_and_operators": r"\b(Field|Vector|Operator|Hamiltonian|curl|timeDerivative|Hilbert|inner)\b",
+    "states_and_normalization": r"\b(State|state|Normalized|SelfAdjoint|wave|psi|Ψ)\b",
+    "source_step_alignment": r"\b(Source step|Formal alignment|Informal derivation|Recursive grounding|bridge|frontier)\b",
+}
+
+REVIEWABILITY_PATTERNS = {
+    "module_doc": r"/-!",
+    "doc_comments": r"/--",
+    "source_labels": r"\b(Source|source step|Formal alignment|Informal derivation|Recursive grounding)\b",
+    "bridge_names": r"\b(bridge|support|witness|grounding|frontier|context)\b",
+}
+
+
+def load_prepare_module() -> Any:
+    spec = importlib.util.spec_from_file_location(
+        "formalphysics_prepare_comparison_inputs", PREPARE_SCRIPT
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {PREPARE_SCRIPT}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+PREPARE = load_prepare_module()
+
+
+def read_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def rel(path: Path, root: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
+def case_id(index: int) -> str:
+    return f"formalphysics_{index:04d}"
+
+
+def tokens(text: str) -> set[str]:
+    found = {item.lower() for item in re.findall(r"[A-Za-z][A-Za-z0-9_]{2,}", text)}
+    return {
+        item
+        for item in found
+        if item not in STOPWORDS and not item.startswith("partial")
+    }
+
+
+def overlap_score(source: str, target: str) -> dict[str, Any]:
+    source_tokens = tokens(source)
+    target_tokens = tokens(target)
+    if not source_tokens:
+        return {"ratio": 0.0, "matched": [], "missing": [], "source_token_count": 0}
+    matched = sorted(source_tokens & target_tokens)
+    missing = sorted(source_tokens - target_tokens)
+    return {
+        "ratio": round(len(matched) / len(source_tokens), 3),
+        "matched": matched[:40],
+        "missing": missing[:40],
+        "source_token_count": len(source_tokens),
+    }
+
+
+def candidate_code(
+    record: dict[str, Any], candidate: dict[str, Any], repo_root: Path
+) -> str:
+    candidate_id = candidate["candidate_id"]
+    if candidate_id == "external_formaldiscovery":
+        return str(record.get(PREPARE.EXTERNAL_FIELD) or "")
+    path_text = candidate.get("path")
+    if path_text:
+        path = repo_root / path_text
+        if path.exists():
+            return read_text(path)
+    return ""
+
+
+def compile_lean_code(code: str, *, lean_cwd: Path, timeout: int) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory() as raw_tmp:
+        path = Path(raw_tmp) / "Candidate.lean"
+        path.write_text(code, encoding="utf-8")
+        return compile_lean_path(path, lean_cwd=lean_cwd, timeout=timeout)
+
+
+def compile_lean_path(path: Path, *, lean_cwd: Path, timeout: int) -> dict[str, Any]:
+    command = ["lake", "env", "lean", str(path)]
+    try:
+        proc = subprocess.run(
+            command,
+            cwd=lean_cwd,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "attempted": True,
+            "status": "timeout",
+            "returncode": None,
+            "command": command,
+            "stdout": exc.stdout or "",
+            "stderr": exc.stderr or "",
+            "error_count": 0,
+            "warning_count": 0,
+        }
+    stdout = proc.stdout or ""
+    stderr = proc.stderr or ""
+    return {
+        "attempted": True,
+        "status": "pass" if proc.returncode == 0 else "fail",
+        "returncode": proc.returncode,
+        "command": command,
+        "stdout": stdout[-6000:],
+        "stderr": stderr[-6000:],
+        "error_count": stdout.count("error:") + stderr.count("error:"),
+        "warning_count": stdout.count("warning:") + stderr.count("warning:"),
+    }
+
+
+def compile_candidate(
+    record: dict[str, Any],
+    candidate: dict[str, Any],
+    code: str,
+    *,
+    execute_lean: bool,
+    lean_cwd: Path,
+    timeout: int,
+    repo_root: Path,
+) -> dict[str, Any]:
+    if candidate.get("kind") != "lean" or not candidate.get("available"):
+        return {
+            "attempted": False,
+            "status": "not_applicable",
+            "reason": "candidate is not an available Lean artifact",
+        }
+    if not execute_lean:
+        return {
+            "attempted": False,
+            "status": "not_run",
+            "reason": "pass --execute-lean to run lake env lean",
+        }
+    if candidate["candidate_id"] == "external_formaldiscovery":
+        return compile_lean_code(code, lean_cwd=lean_cwd, timeout=timeout)
+    path = repo_root / str(candidate.get("path", ""))
+    if not path.exists():
+        return {"attempted": True, "status": "missing", "path": str(path)}
+    return compile_lean_path(path, lean_cwd=lean_cwd, timeout=timeout)
+
+
+def target_from_declaration_header(header: str) -> str | None:
+    depth = 0
+    target_colon: int | None = None
+    for index, char in enumerate(header):
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth = max(0, depth - 1)
+        elif char == ":" and depth == 0:
+            target_colon = index
+    if target_colon is None:
+        return None
+    target = re.sub(r"\s+", " ", header[target_colon + 1 :]).strip()
+    return target or None
+
+
+def split_top_level_assignment(text: str) -> str | None:
+    depth = 0
+    index = 0
+    while index < len(text) - 1:
+        char = text[index]
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth = max(0, depth - 1)
+        elif char == ":" and text[index + 1] == "=" and depth == 0:
+            return text[:index]
+        index += 1
+    return None
+
+
+def theorem_targets(code: str) -> list[str]:
+    targets = []
+    lines = code.splitlines()
+    index = 0
+    start_pattern = re.compile(r"^\s*(?:theorem|lemma)\s+[A-Za-z0-9_'.]+")
+    while index < len(lines):
+        line = lines[index]
+        if not start_pattern.match(line):
+            index += 1
+            continue
+        header_lines = [line]
+        lookahead = index
+        header_text = "\n".join(header_lines)
+        while (
+            split_top_level_assignment(header_text) is None
+            and lookahead + 1 < len(lines)
+            and len(header_lines) < 80
+        ):
+            lookahead += 1
+            header_lines.append(lines[lookahead])
+            header_text = "\n".join(header_lines)
+        header = split_top_level_assignment(header_text) or header_text
+        target = target_from_declaration_header(header)
+        if target is not None:
+            targets.append(target)
+        index = max(index + 1, lookahead + 1)
+    return targets
+
+
+def static_hygiene(candidate: dict[str, Any], code: str) -> dict[str, Any]:
+    analysis = candidate.get("analysis", {})
+    counts = analysis.get("declaration_counts", {})
+    targets = theorem_targets(code)
+    findings = []
+    if analysis.get("has_sorry"):
+        findings.append({"severity": "blocking", "code": "contains_sorry"})
+    if analysis.get("has_admit"):
+        findings.append({"severity": "blocking", "code": "contains_admit"})
+    if analysis.get("has_axiom"):
+        findings.append({"severity": "blocking", "code": "contains_axiom"})
+    if (
+        counts.get("theorem", 0) + counts.get("lemma", 0) == 0
+        and candidate.get("kind") == "lean"
+    ):
+        findings.append({"severity": "blocking", "code": "no_theorem_or_lemma"})
+    if any(target == "True" or target.endswith(": True") for target in targets):
+        findings.append({"severity": "high", "code": "vacuous_true_target"})
+    return {
+        "analysis": analysis,
+        "theorem_targets": targets[:20],
+        "findings": findings,
+    }
+
+
+def foundations_dependency(
+    candidate: dict[str, Any], code: str, foundations_inventory: dict[str, Any]
+) -> dict[str, Any]:
+    analysis = candidate.get("analysis", {})
+    foundation_records = []
+    for file_record in foundations_inventory.get("files", []):
+        for decl in file_record.get("analysis", {}).get("declarations", []):
+            name = decl.get("name")
+            if name:
+                foundation_records.append(
+                    {
+                        "path": file_record.get("path", ""),
+                        "name": name,
+                        "kind": decl.get("kind", ""),
+                        "line_start": decl.get("line_start"),
+                        "line_end": decl.get("line_end"),
+                        "excerpt_line_start": decl.get(
+                            "excerpt_line_start", decl.get("line_start")
+                        ),
+                        "excerpt_line_end": decl.get(
+                            "excerpt_line_end", decl.get("line_end")
+                        ),
+                        "excerpt": decl.get("excerpt", ""),
+                    }
+                )
+    invoked_records = []
+    for record in foundation_records:
+        name = record["name"]
+        matches = re.findall(rf"\b{re.escape(name)}\b", code)
+        if matches:
+            invoked = dict(record)
+            invoked["invocation_count"] = len(matches)
+            invoked_records.append(invoked)
+    invoked_records.sort(
+        key=lambda item: (item["path"], int(item.get("line_start") or 0), item["name"])
+    )
+    used_names = sorted({record["name"] for record in invoked_records})
+    imports_foundations = analysis.get("imports_foundations", [])
+    candidate_id = candidate.get("candidate_id")
+    if candidate_id == "current_mathformer_lean":
+        status = "included_dependency_context"
+    elif imports_foundations or used_names:
+        status = "explicit_foundations_use"
+    else:
+        status = "no_foundations_surface_detected"
+    return {
+        "status": status,
+        "foundations_files_in_scope": foundations_inventory.get("totals", {}).get(
+            "files", 0
+        ),
+        "imports_foundations": imports_foundations,
+        "used_foundation_declarations": used_names[:60],
+        "used_foundation_declaration_count": len(used_names),
+        "invoked_external_dependency_excerpts": invoked_records,
+        "invoked_external_dependency_excerpt_count": len(invoked_records),
+        "dependency_excerpt_scope": "libraries/MathformerPhysicsLib/Lean/Foundations.lean and libraries/MathformerPhysicsLib/Lean/Foundations/*.lean",
+        "candidate_context_note": (
+            "Mathformer candidates are judged with the full Foundations dependency surface."
+            if candidate_id and candidate_id.startswith("current_mathformer")
+            else "External snippets are judged as submitted; absent Foundations use is recorded as evidence."
+        ),
+    }
+
+
+def source_reference_delta(question: str, reference: str, code: str) -> dict[str, Any]:
+    source = overlap_score(question, code)
+    ref = overlap_score(reference, code)
+    classification = "style_or_abstraction_difference"
+    if source["ratio"] >= 0.35 and ref["ratio"] < 0.20:
+        classification = "stronger_source_than_reference_overlap"
+    elif source["ratio"] < 0.12:
+        classification = "possible_source_omission"
+    elif ref["ratio"] >= 0.30:
+        classification = "reference_aligned_non_gold"
+    return {
+        "source_overlap": source,
+        "reference_overlap": ref,
+        "classification": classification,
+        "reference_answer_role": REFERENCE_ROLE,
+    }
+
+
+def has_nonvacuous_target(candidate: dict[str, Any], code: str, question: str) -> bool:
+    if candidate.get("kind") != "lean":
+        return bool(code.strip())
+    targets = theorem_targets(code)
+    if not targets:
+        return False
+    if all(target == "True" or target.endswith(": True") for target in targets):
+        return False
+    if overlap_score(question, code)["ratio"] <= 0.03 and not candidate.get(
+        "analysis", {}
+    ).get("physics_context_surface"):
+        return False
+    return True
+
+
+def build_gates(
+    candidate: dict[str, Any],
+    code: str,
+    question: str,
+    compile_report: dict[str, Any],
+    hygiene: dict[str, Any],
+) -> dict[str, Any]:
+    blockers = []
+    lean_gate_status = "not_applicable"
+    if candidate.get("kind") == "lean":
+        if compile_report.get("status") == "pass":
+            lean_gate_status = "pass"
+        elif compile_report.get("attempted"):
+            lean_gate_status = "fail"
+            blockers.append("lean_compiles")
+        else:
+            lean_gate_status = "not_run"
+    placeholder_fail = any(
+        item.get("code") in {"contains_sorry", "contains_admit", "contains_axiom"}
+        for item in hygiene["findings"]
+    )
+    if placeholder_fail:
+        blockers.append("no_unsound_placeholders")
+    nonvacuous = has_nonvacuous_target(candidate, code, question)
+    if candidate.get("kind") == "lean" and not nonvacuous:
+        blockers.append("non_vacuous_target")
+    return {
+        "lean_compiles": lean_gate_status,
+        "no_unsound_placeholders": "fail" if placeholder_fail else "pass",
+        "non_vacuous_target": (
+            "pass"
+            if nonvacuous
+            else ("not_applicable" if candidate.get("kind") != "lean" else "fail")
+        ),
+        "reference_policy_respected": "pass",
+        "blocking_for_functional_best": blockers,
+    }
+
+
+def clamp_score(value: float) -> int:
+    return max(0, min(5, int(round(value))))
+
+
+def pattern_hits(code: str, patterns: dict[str, str]) -> list[str]:
+    return [
+        label
+        for label, pattern in patterns.items()
+        if re.search(pattern, code, flags=re.IGNORECASE)
+    ]
+
+
+def declaration_name_tokens(analysis: dict[str, Any]) -> set[str]:
+    names = [
+        item.get("name", "")
+        for item in analysis.get("declarations", [])
+        if item.get("name")
+    ]
+    tokens_found: set[str] = set()
+    for name in names:
+        pieces = re.findall(r"[A-Za-z][A-Za-z0-9]*", name.replace("'", "_"))
+        for piece in pieces:
+            for subpiece in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)|[0-9]+", piece):
+                lowered = subpiece.lower()
+                if len(lowered) >= 3 and lowered not in STOPWORDS:
+                    tokens_found.add(lowered)
+    return tokens_found
+
+
+def generic_declaration_name_count(analysis: dict[str, Any]) -> int:
+    generic = {
+        "foo",
+        "bar",
+        "baz",
+        "test",
+        "example",
+        "result",
+        "solution",
+        "main",
+        "thm",
+        "lemma",
+    }
+    count = 0
+    for item in analysis.get("declarations", []):
+        name = str(item.get("name", "")).lower()
+        if name in generic or re.fullmatch(
+            r"(h|h\d+|t\d+|theorem\d+|lemma\d+|result\d+)", name
+        ):
+            count += 1
+    return count
+
+
+def deterministic_critic_evidence(
+    *,
+    candidate: dict[str, Any],
+    code: str,
+    question: str,
+    foundation_report: dict[str, Any],
+    delta: dict[str, Any],
+) -> dict[str, Any]:
+    analysis = candidate.get("analysis", {})
+    mathlib_hits = pattern_hits(code, MATHLIB_CONCEPT_PATTERNS)
+    physics_hits = pattern_hits(code, PHYSICS_COMPLEXITY_PATTERNS)
+    reviewability_hits = pattern_hits(code, REVIEWABILITY_PATTERNS)
+    decl_tokens = declaration_name_tokens(analysis)
+    source_tokens = tokens(question)
+    matched_source_tokens = sorted(decl_tokens & source_tokens)
+    domain_tokens = {
+        "ampere",
+        "boundary",
+        "curl",
+        "derivative",
+        "dimension",
+        "energy",
+        "field",
+        "force",
+        "fourier",
+        "hamiltonian",
+        "hilbert",
+        "inner",
+        "lorentz",
+        "magnetic",
+        "maxwell",
+        "operator",
+        "polarization",
+        "potential",
+        "schrodinger",
+        "state",
+        "time",
+        "unit",
+        "vector",
+        "wave",
+    }
+    matched_domain_tokens = sorted(decl_tokens & domain_tokens)
+    _declarations = analysis.get("declarations", [])
+    counts = analysis.get("declaration_counts", {})
+    algebraic_tactic_hits = sorted(
+        {
+            item
+            for item in ("ring", "linarith", "simp", "rw", "rfl", "calc")
+            if re.search(rf"\b{item}\b", code)
+        }
+    )
+    modeling_declaration_count = (
+        counts.get("structure", 0)
+        + counts.get("class", 0)
+        + counts.get("def", 0)
+        + counts.get("abbrev", 0)
+        + len(foundation_report.get("used_foundation_declarations", []))
+    )
+    theorem_count = counts.get("theorem", 0) + counts.get("lemma", 0)
+    comment_count = code.count("/--") + code.count("/-!")
+    source_step_count = len(
+        re.findall(
+            r"source step|Formal alignment|Informal derivation|Recursive grounding",
+            code,
+            flags=re.IGNORECASE,
+        )
+    )
+    return {
+        "mathlib_grounding_critic": {
+            "matched_mathlib_concept_families": mathlib_hits,
+            "concept_family_count": len(mathlib_hits),
+            "broad_import_mathlib": bool(analysis.get("broad_import_mathlib")),
+            "imports": analysis.get("imports", []),
+            "used_foundation_declaration_count": foundation_report.get(
+                "used_foundation_declaration_count", 0
+            ),
+            "invoked_external_dependency_excerpt_count": foundation_report.get(
+                "invoked_external_dependency_excerpt_count", 0
+            ),
+            "invoked_external_dependency_kinds": sorted(
+                {
+                    item.get("kind", "")
+                    for item in foundation_report.get(
+                        "invoked_external_dependency_excerpts", []
+                    )
+                    if item.get("kind")
+                }
+            ),
+            "criteria": CRITIC_PROFILES["mathlib_grounding_critic"]["criteria"],
+        },
+        "naming_reviewability_critic": {
+            "declaration_token_count": len(decl_tokens),
+            "matched_source_name_tokens": matched_source_tokens[:20],
+            "matched_domain_name_tokens": matched_domain_tokens[:20],
+            "generic_declaration_name_count": generic_declaration_name_count(analysis),
+            "comment_count": comment_count,
+            "source_step_annotation_count": source_step_count,
+            "reviewability_hits": reviewability_hits,
+            "criteria": CRITIC_PROFILES["naming_reviewability_critic"]["criteria"],
+        },
+        "formality_depth_critic": {
+            "modeling_declaration_count": modeling_declaration_count,
+            "theorem_or_lemma_count": theorem_count,
+            "algebraic_tactic_hits": algebraic_tactic_hits,
+            "physics_complexity_hits": physics_hits,
+            "single_claim_solution_shape": theorem_count == 1
+            and modeling_declaration_count <= 1,
+            "criteria": CRITIC_PROFILES["formality_depth_critic"]["criteria"],
+        },
+        "physics_completeness_critic": {
+            "physics_complexity_hits": physics_hits,
+            "physics_complexity_family_count": len(physics_hits),
+            "source_overlap_ratio": delta.get("source_overlap", {}).get("ratio", 0.0),
+            "missing_source_terms": delta.get("source_overlap", {}).get("missing", [])[
+                :20
+            ],
+            "unit_dimension_surface": bool(analysis.get("unit_dimension_surface")),
+            "physics_context_surface": bool(analysis.get("physics_context_surface")),
+            "criteria": CRITIC_PROFILES["physics_completeness_critic"]["criteria"],
+        },
+        "invoked_dependency_excerpt_critic": {
+            "dependency_excerpt_scope": foundation_report.get(
+                "dependency_excerpt_scope"
+            ),
+            "invoked_external_dependency_excerpt_count": foundation_report.get(
+                "invoked_external_dependency_excerpt_count", 0
+            ),
+            "invoked_external_dependency_names": [
+                item.get("name", "")
+                for item in foundation_report.get(
+                    "invoked_external_dependency_excerpts", []
+                )
+                if item.get("name")
+            ],
+            "invoked_external_dependency_paths": sorted(
+                {
+                    item.get("path", "")
+                    for item in foundation_report.get(
+                        "invoked_external_dependency_excerpts", []
+                    )
+                    if item.get("path")
+                }
+            ),
+            "criteria": CRITIC_PROFILES["invoked_dependency_excerpt_critic"][
+                "criteria"
+            ],
+        },
+    }
+
+
+def metric_scores(
+    candidate: dict[str, Any],
+    code: str,
+    question: str,
+    reference: str,
+    hygiene: dict[str, Any],
+    foundation_report: dict[str, Any],
+    delta: dict[str, Any],
+    gates: dict[str, Any],
+    critic_evidence: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    analysis = candidate.get("analysis", {})
+    source_ratio = delta["source_overlap"]["ratio"]
+    ref_ratio = delta["reference_overlap"]["ratio"]
+    placeholder_penalty = 2 if gates["no_unsound_placeholders"] == "fail" else 0
+    physics_surface = int(bool(analysis.get("physics_context_surface"))) + int(
+        bool(analysis.get("unit_dimension_surface"))
+    )
+    foundation_surface = (
+        5
+        if foundation_report["status"] == "included_dependency_context"
+        else 3 if foundation_report["status"] == "explicit_foundations_use" else 1
+    )
+    proof_base = 4 if gates["non_vacuous_target"] == "pass" else 1
+    if gates["lean_compiles"] == "pass":
+        proof_base += 1
+    mathlib_evidence = critic_evidence["mathlib_grounding_critic"]
+    naming_evidence = critic_evidence["naming_reviewability_critic"]
+    formality_evidence = critic_evidence["formality_depth_critic"]
+    physics_evidence = critic_evidence["physics_completeness_critic"]
+    naming_hits = len(naming_evidence["matched_source_name_tokens"]) + len(
+        naming_evidence["matched_domain_name_tokens"]
+    )
+    generic_name_penalty = min(2, naming_evidence["generic_declaration_name_count"])
+    algebra_shell_penalty = (
+        1
+        if formality_evidence["single_claim_solution_shape"]
+        and len(physics_evidence["physics_complexity_hits"]) <= 1
+        else 0
+    )
+    scores = {
+        "source_semantic_preservation": clamp_score(source_ratio * 10),
+        "physics_object_fidelity": clamp_score(
+            1 + physics_surface * 2 + int("PhysicsContext" in code)
+        ),
+        "foundations_dependency_quality": foundation_surface,
+        "mathlib_grounding": clamp_score(
+            4
+            - int(analysis.get("broad_import_mathlib", False))
+            + len(analysis.get("imports", [])) * 0.15
+        ),
+        "mathlib_concept_grounding": clamp_score(
+            1
+            + mathlib_evidence["concept_family_count"] * 0.8
+            + min(1.5, mathlib_evidence["used_foundation_declaration_count"] / 12)
+            + min(
+                1.0, mathlib_evidence["invoked_external_dependency_excerpt_count"] / 20
+            )
+            - int(analysis.get("broad_import_mathlib", False)) * 0.5
+        ),
+        "variable_naming_quality": clamp_score(
+            1
+            + min(3, naming_hits / 2)
+            + min(1, naming_evidence["declaration_token_count"] / 20)
+            - generic_name_penalty
+        ),
+        "formal_physics_modeling_depth": clamp_score(
+            1
+            + min(2, formality_evidence["modeling_declaration_count"] / 8)
+            + min(2, len(formality_evidence["physics_complexity_hits"]) / 2)
+            + min(1, mathlib_evidence["invoked_external_dependency_excerpt_count"] / 18)
+            - algebra_shell_penalty
+        ),
+        "physics_representation_completeness": clamp_score(
+            1
+            + source_ratio * 4
+            + min(2, physics_evidence["physics_complexity_family_count"] / 2)
+            + int(physics_evidence["unit_dimension_surface"]) * 0.5
+            + int(physics_evidence["physics_context_surface"]) * 0.5
+        ),
+        "assumption_transparency": clamp_score(
+            1
+            + int(bool(analysis.get("source_anchor_surface"))) * 2
+            + int("Assumption" in code or "assumption" in code)
+        ),
+        "proof_integrity": clamp_score(proof_base - placeholder_penalty),
+        "derivation_coverage": clamp_score(
+            1 + source_ratio * 8 + int(bool(analysis.get("source_anchor_surface")))
+        ),
+        "reference_delta_quality": clamp_score(
+            2
+            + ref_ratio * 5
+            + int(delta["classification"] != "possible_source_omission")
+        ),
+        "reviewability_clarity": clamp_score(
+            1
+            + min(2, naming_evidence["comment_count"] / 8)
+            + min(1.5, naming_evidence["source_step_annotation_count"] / 4)
+            + min(1, len(naming_evidence["reviewability_hits"]) / 2)
+        ),
+        "maintainability": clamp_score(
+            2
+            + min(2, len(analysis.get("declarations", [])) / 8)
+            + int(not analysis.get("broad_import_mathlib", False))
+        ),
+        "reportability": 5 if candidate.get("available") else 1,
+    }
+    return {
+        name: {
+            "score": scores[name],
+            "scale": "0_to_5",
+        }
+        for name in METRIC_NAMES
+    }
+
+
+def aggregate_candidate(candidate_report: dict[str, Any]) -> dict[str, Any]:
+    gates = candidate_report["hard_gates"]
+    scores = candidate_report["scores"]
+    numeric = [item["score"] for item in scores.values()]
+    mean = round(sum(numeric) / len(numeric), 2) if numeric else 0.0
+    blockers = list(gates.get("blocking_for_functional_best", []))
+    if (
+        gates.get("lean_compiles") == "not_run"
+        and candidate_report.get("kind") == "lean"
+    ):
+        status = "provisional_pending_compile"
+    elif blockers:
+        status = "blocked"
+    else:
+        status = "accepted"
+    return {
+        "status": status,
+        "mean_score": mean,
+        "hard_blockers": blockers,
+        "confidence": (
+            "medium"
+            if status == "accepted"
+            else (
+                "low" if status == "provisional_pending_compile" else "repair_required"
+            )
+        ),
+    }
+
+
+def build_codex_prompt(
+    case: dict[str, Any], candidate_report: dict[str, Any], judge_id: str
+) -> dict[str, Any]:
+    candidate_id = candidate_report["candidate_id"]
+    prompt = f"""
+You are the {judge_id} for a FormalPhysics Lean comparison.
+
+Return strict JSON with keys: judge_id, case_id, candidate_id, scores,
+hard_gate_findings, evidence, uncertainty, repair_suggestions.
+
+Policy:
+- The informal reference answer is non-gold reference evidence.
+- Compare the candidate against the source question and its dependency context.
+- Do not reward a solution only because it resembles the reference answer.
+- For Mathformer candidates, include the MathformerPhysicsLib Foundations
+  dependency surface in the judgment.
+
+Case: {case['case_id']}
+Candidate: {candidate_id}
+Deterministic gates: {json.dumps(candidate_report['hard_gates'], ensure_ascii=False)}
+Deterministic scores: {json.dumps(candidate_report['scores'], ensure_ascii=False)}
+Metric criteria: {json.dumps(METRIC_CRITERIA, ensure_ascii=False)}
+Critic profiles: {json.dumps(CRITIC_PROFILES, ensure_ascii=False)}
+Deterministic critic evidence: {json.dumps(candidate_report.get('critic_evidence', {}), ensure_ascii=False)}
+Source excerpt: {case.get('question_excerpt', '')}
+Reference excerpt: {case.get('reference_excerpt', '')}
+Code excerpt:
+{candidate_report.get('code_excerpt', '')}
+""".strip()
+    return {
+        "judge_id": judge_id,
+        "case_id": case["case_id"],
+        "candidate_id": candidate_id,
+        "status": "prompt_ready",
+        "expected_output": [
+            "judge_id",
+            "case_id",
+            "candidate_id",
+            "scores",
+            "hard_gate_findings",
+            "evidence",
+            "uncertainty",
+            "repair_suggestions",
+        ],
+        "prompt": prompt,
+    }
+
+
+def load_codex_results(path: Path | None) -> list[dict[str, Any]]:
+    if path is None:
+        return []
+    payload = read_json(path)
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict) and isinstance(payload.get("results"), list):
+        return payload["results"]
+    raise ValueError("--codex-results-json must contain a list or {'results': [...]}")
+
+
+def load_judge_synthesis(path: Path | None) -> dict[str, Any]:
+    source_path = path
+    explicitly_requested = source_path is not None
+    if source_path is None:
+        source_path = DEFAULT_SYNTHESIS_REPORT_JSON
+    if not source_path.exists():
+        if explicitly_requested:
+            raise FileNotFoundError(f"judge synthesis report not found: {source_path}")
+        return {
+            "available": False,
+            "source_path": str(source_path),
+            "reason": "No synthesis report JSON was found at the default path.",
+        }
+    payload = read_json(source_path)
+    if not isinstance(payload, dict):
+        raise ValueError("--synthesis-report-json must contain a JSON object")
+    return {
+        "available": True,
+        "source_path": str(source_path),
+        "payload": payload,
+    }
+
+
+def normalized_judge_id(judge_id: Any) -> str:
+    normalized = str(judge_id or "")
+    if "." in normalized:
+        normalized = normalized.split(".", 1)[0]
+    return re.sub(r"_v\d+$", "", normalized)
+
+
+def build_candidate_report(
+    *,
+    record: dict[str, Any],
+    case: dict[str, Any],
+    candidate: dict[str, Any],
+    foundations_inventory: dict[str, Any],
+    execute_lean: bool,
+    lean_cwd: Path,
+    timeout: int,
+    repo_root: Path,
+) -> dict[str, Any]:
+    question = str(record.get("question") or "")
+    reference = str(record.get("answer") or "")
+    code = candidate_code(record, candidate, repo_root)
+    compile_report = compile_candidate(
+        record,
+        candidate,
+        code,
+        execute_lean=execute_lean,
+        lean_cwd=lean_cwd,
+        timeout=timeout,
+        repo_root=repo_root,
+    )
+    hygiene = static_hygiene(candidate, code)
+    foundation_report = foundations_dependency(candidate, code, foundations_inventory)
+    delta = source_reference_delta(question, reference, code)
+    gates = build_gates(candidate, code, question, compile_report, hygiene)
+    critic_evidence = deterministic_critic_evidence(
+        candidate=candidate,
+        code=code,
+        question=question,
+        foundation_report=foundation_report,
+        delta=delta,
+    )
+    scores = metric_scores(
+        candidate,
+        code,
+        question,
+        reference,
+        hygiene,
+        foundation_report,
+        delta,
+        gates,
+        critic_evidence,
+    )
+    report = {
+        "candidate_id": candidate["candidate_id"],
+        "kind": candidate.get("kind"),
+        "available": candidate.get("available", False),
+        "path": candidate.get("path"),
+        "source_field": candidate.get("source_field"),
+        "comparison_role": candidate.get("comparison_role"),
+        "code": code,
+        "code_excerpt": code[:6000],
+        "analysis": candidate.get("analysis", {}),
+        "lean_compile": compile_report,
+        "static_hygiene": hygiene,
+        "foundations_dependency": foundation_report,
+        "source_reference_delta": delta,
+        "critic_evidence": critic_evidence,
+        "hard_gates": gates,
+        "scores": scores,
+    }
+    report["aggregate"] = aggregate_candidate(report)
+    return report
+
+
+def choose_best(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    lean_candidates = [item for item in candidates if item.get("kind") == "lean"]
+    accepted = [
+        item for item in lean_candidates if item["aggregate"]["status"] == "accepted"
+    ]
+    provisional = [
+        item
+        for item in lean_candidates
+        if item["aggregate"]["status"] == "provisional_pending_compile"
+    ]
+    pool = accepted or provisional or lean_candidates
+    if not pool:
+        return {"status": "no_lean_candidate", "candidate_id": None}
+    best = max(pool, key=lambda item: item["aggregate"]["mean_score"])
+    return {
+        "status": (
+            "functional_best"
+            if accepted
+            else (
+                "provisional_best_pending_compile" if provisional else "repair_target"
+            )
+        ),
+        "candidate_id": best["candidate_id"],
+        "mean_score": best["aggregate"]["mean_score"],
+        "reason": (
+            "Selected after hard gates and scores."
+            if accepted
+            else "No fully accepted functional Lean solution yet; selected as the strongest current repair target."
+        ),
+    }
+
+
+def metric_value(candidate: dict[str, Any], metric: str) -> float:
+    return float(candidate.get("scores", {}).get(metric, {}).get("score", 0))
+
+
+def role_score(candidate: dict[str, Any], role_id: str) -> float:
+    metrics = ROLE_RUBRICS[role_id]["primary_metrics"]
+    base = sum(metric_value(candidate, metric) for metric in metrics) / max(
+        1, len(metrics)
+    )
+    blockers = candidate.get("aggregate", {}).get("hard_blockers", [])
+    placeholder_penalty = (
+        1.0
+        if candidate.get("hard_gates", {}).get("no_unsound_placeholders") == "fail"
+        else 0.0
+    )
+    nonvacuity_penalty = (
+        0.8
+        if candidate.get("hard_gates", {}).get("non_vacuous_target") == "fail"
+        else 0.0
+    )
+    return round(
+        max(0.0, base - 0.5 * len(blockers) - placeholder_penalty - nonvacuity_penalty),
+        2,
+    )
+
+
+def candidate_strategy_tags(candidate: dict[str, Any]) -> list[str]:
+    analysis = candidate.get("analysis", {})
+    counts = analysis.get("declaration_counts", {})
+    tags: list[str] = []
+    candidate_id = candidate.get("candidate_id")
+    if candidate_id == "current_mathformer_lean":
+        tags.append("repo_current_lean_artifact")
+        tags.append("full_foundations_context_available")
+    elif candidate_id == "external_formaldiscovery":
+        tags.append("submitted_external_lean_snippet")
+    if analysis.get("broad_import_mathlib"):
+        tags.append("broad_mathlib_import")
+    elif analysis.get("imports"):
+        tags.append("targeted_import_surface")
+    if analysis.get("imports_foundations"):
+        tags.append("explicit_foundations_import")
+    if (
+        candidate.get("foundations_dependency", {}).get("status")
+        == "included_dependency_context"
+    ):
+        tags.append("foundations_dependency_context_included")
+    if analysis.get("source_anchor_surface"):
+        tags.append("source_anchor_commentary")
+    if analysis.get("unit_dimension_surface"):
+        tags.append("unit_dimension_surface")
+    if analysis.get("physics_context_surface"):
+        tags.append("physics_context_surface")
+    critic_evidence = candidate.get("critic_evidence", {})
+    if (
+        critic_evidence.get("mathlib_grounding_critic", {}).get(
+            "concept_family_count", 0
+        )
+        >= 3
+    ):
+        tags.append("mathlib_concept_grounded")
+    if critic_evidence.get("formality_depth_critic", {}).get(
+        "single_claim_solution_shape"
+    ):
+        tags.append("algebraic_shell_risk")
+    if (
+        critic_evidence.get("physics_completeness_critic", {}).get(
+            "physics_complexity_family_count", 0
+        )
+        >= 3
+    ):
+        tags.append("physics_complexity_represented")
+    if (
+        critic_evidence.get("naming_reviewability_critic", {}).get(
+            "source_step_annotation_count", 0
+        )
+        >= 2
+    ):
+        tags.append("reviewable_source_step_annotations")
+    if (
+        analysis.get("has_sorry")
+        or analysis.get("has_admit")
+        or analysis.get("has_axiom")
+    ):
+        tags.append("unsound_placeholder_surface")
+    if counts.get("structure", 0) + counts.get("class", 0) + counts.get(
+        "def", 0
+    ) > counts.get("theorem", 0):
+        tags.append("modeling_scaffold_before_claim")
+    if counts.get("theorem", 0) + counts.get("lemma", 0) == 1 and not tags.count(
+        "modeling_scaffold_before_claim"
+    ):
+        tags.append("single_claim_solution_shape")
+    return tags
+
+
+def role_evidence(candidate: dict[str, Any], role_id: str) -> list[str]:
+    gates = candidate.get("hard_gates", {})
+    delta = candidate.get("source_reference_delta", {})
+    analysis = candidate.get("analysis", {})
+    if role_id == "theorem_prover_expert":
+        targets = candidate.get("static_hygiene", {}).get("theorem_targets", [])
+        target_summary = (
+            "; ".join(short(target, 90) for target in targets[:2])
+            or "no theorem target detected"
+        )
+        mathlib_evidence = candidate.get("critic_evidence", {}).get(
+            "mathlib_grounding_critic", {}
+        )
+        naming_evidence = candidate.get("critic_evidence", {}).get(
+            "naming_reviewability_critic", {}
+        )
+        return [
+            f"compile={gates.get('lean_compiles', 'unknown')}",
+            f"placeholder_hygiene={gates.get('no_unsound_placeholders', 'unknown')}",
+            f"non_vacuity={gates.get('non_vacuous_target', 'unknown')}",
+            f"proof_integrity={metric_value(candidate, 'proof_integrity')}/5",
+            f"mathlib_grounding={metric_value(candidate, 'mathlib_grounding')}/5",
+            f"mathlib_concept_grounding={metric_value(candidate, 'mathlib_concept_grounding')}/5",
+            f"mathlib_concepts={','.join(mathlib_evidence.get('matched_mathlib_concept_families', [])) or 'none'}",
+            f"variable_naming_quality={metric_value(candidate, 'variable_naming_quality')}/5",
+            f"source_name_tokens={','.join(naming_evidence.get('matched_source_name_tokens', [])[:8]) or 'none'}",
+            f"foundation_status={candidate.get('foundations_dependency', {}).get('status', 'unknown')}",
+            f"target={target_summary}",
+        ]
+    physics_evidence = candidate.get("critic_evidence", {}).get(
+        "physics_completeness_critic", {}
+    )
+    formality_evidence = candidate.get("critic_evidence", {}).get(
+        "formality_depth_critic", {}
+    )
+    naming_evidence = candidate.get("critic_evidence", {}).get(
+        "naming_reviewability_critic", {}
+    )
+    return [
+        f"source_overlap={delta.get('source_overlap', {}).get('ratio', 0.0)}",
+        f"reference_overlap={delta.get('reference_overlap', {}).get('ratio', 0.0)}",
+        f"reference_delta={delta.get('classification', 'unknown')}",
+        f"physics_object_fidelity={metric_value(candidate, 'physics_object_fidelity')}/5",
+        f"physics_representation_completeness={metric_value(candidate, 'physics_representation_completeness')}/5",
+        f"formal_physics_modeling_depth={metric_value(candidate, 'formal_physics_modeling_depth')}/5",
+        f"assumption_transparency={metric_value(candidate, 'assumption_transparency')}/5",
+        f"reviewability_clarity={metric_value(candidate, 'reviewability_clarity')}/5",
+        f"physics_complexity={','.join(physics_evidence.get('physics_complexity_hits', [])) or 'none'}",
+        f"modeling_declaration_count={formality_evidence.get('modeling_declaration_count', 0)}",
+        f"source_step_annotations={naming_evidence.get('source_step_annotation_count', 0)}",
+        f"unit_dimension_surface={bool(analysis.get('unit_dimension_surface'))}",
+        f"physics_context_surface={bool(analysis.get('physics_context_surface'))}",
+    ]
+
+
+def role_strengths(candidate: dict[str, Any], role_id: str) -> list[str]:
+    strengths = []
+    for metric in ROLE_RUBRICS[role_id]["primary_metrics"]:
+        if metric_value(candidate, metric) >= 4:
+            strengths.append(f"{metric} scored {metric_value(candidate, metric)}/5")
+    for tag in candidate_strategy_tags(candidate):
+        if tag in {
+            "full_foundations_context_available",
+            "foundations_dependency_context_included",
+            "explicit_foundations_import",
+            "source_anchor_commentary",
+            "unit_dimension_surface",
+            "physics_context_surface",
+        }:
+            strengths.append(f"strategy tag: {tag}")
+    return strengths[:8] or [
+        "No high-confidence strength detected by deterministic packets."
+    ]
+
+
+def role_concerns(candidate: dict[str, Any], role_id: str) -> list[str]:
+    concerns = []
+    gates = candidate.get("hard_gates", {})
+    aggregate = candidate.get("aggregate", {})
+    if aggregate.get("status") == "provisional_pending_compile":
+        concerns.append(
+            "Lean compile gate was not executed, so functionality is provisional."
+        )
+    elif gates.get("lean_compiles") == "fail":
+        concerns.append("Lean compile gate failed.")
+    if gates.get("no_unsound_placeholders") == "fail":
+        concerns.append("Unsound placeholder surface detected.")
+    if gates.get("non_vacuous_target") == "fail":
+        concerns.append("The theorem or lemma target appears vacuous or missing.")
+    if role_id == "theorem_prover_expert":
+        if metric_value(candidate, "proof_integrity") <= 2:
+            concerns.append(
+                "Proof-integrity score is weak for a functional Lean artifact."
+            )
+        if candidate.get("analysis", {}).get("broad_import_mathlib"):
+            concerns.append("Broad Mathlib import reduces dependency precision.")
+        if metric_value(candidate, "mathlib_concept_grounding") <= 2:
+            concerns.append(
+                "Mathlib concept grounding is shallow or mostly import-level."
+            )
+        if metric_value(candidate, "variable_naming_quality") <= 2:
+            concerns.append(
+                "Declaration or variable naming weakly exposes source physics concepts."
+            )
+        if metric_value(candidate, "formal_physics_modeling_depth") <= 2:
+            concerns.append(
+                "The artifact risks being an algebraic shell rather than a typed formal model."
+            )
+    else:
+        delta = candidate.get("source_reference_delta", {})
+        if delta.get("classification") == "possible_source_omission":
+            concerns.append(
+                "Source-overlap judge flags possible omission of source concepts."
+            )
+        if metric_value(candidate, "physics_object_fidelity") <= 2:
+            concerns.append("Physics object fidelity is weak.")
+        if metric_value(candidate, "physics_representation_completeness") <= 2:
+            concerns.append(
+                "The representation may not capture the underlying physics in enough complexity."
+            )
+        if metric_value(candidate, "formal_physics_modeling_depth") <= 2:
+            concerns.append(
+                "The formalization leans toward a pure algebraic equality instead of modeling the physics structure."
+            )
+        if metric_value(candidate, "assumption_transparency") <= 2:
+            concerns.append(
+                "Assumptions, regimes, or domain restrictions are underspecified."
+            )
+        if metric_value(candidate, "reviewability_clarity") <= 2:
+            concerns.append("Annotations and source-step review aids are thin.")
+    return concerns[:8] or ["No blocking concern detected by deterministic packets."]
+
+
+def build_role_candidate_review(
+    candidate: dict[str, Any], role_id: str
+) -> dict[str, Any]:
+    return {
+        "candidate_id": candidate["candidate_id"],
+        "role_score": role_score(candidate, role_id),
+        "aggregate_status": candidate.get("aggregate", {}).get("status"),
+        "essential_features": role_evidence(candidate, role_id),
+        "essential_strategies": candidate_strategy_tags(candidate),
+        "strengths": role_strengths(candidate, role_id),
+        "concerns": role_concerns(candidate, role_id),
+    }
+
+
+def choose_role_preference(candidate_reviews: list[dict[str, Any]]) -> dict[str, Any]:
+    if not candidate_reviews:
+        return {
+            "candidate_id": None,
+            "status": "no_candidate",
+            "reason": "No Lean candidate was available.",
+        }
+    status_rank = {"accepted": 3, "provisional_pending_compile": 2, "blocked": 1}
+    best = max(
+        candidate_reviews,
+        key=lambda item: (
+            status_rank.get(str(item.get("aggregate_status")), 0),
+            float(item.get("role_score", 0)),
+            str(item.get("candidate_id", "")),
+        ),
+    )
+    return {
+        "candidate_id": best["candidate_id"],
+        "status": "preferred_by_role",
+        "role_score": best["role_score"],
+        "reason": (
+            "Highest role-specific score after hard-gate status ordering. "
+            "If compile is pending, this is a review preference rather than accepted correctness."
+        ),
+    }
+
+
+def contrast_sentence(candidate_reviews: list[dict[str, Any]], role_id: str) -> str:
+    by_id = {item["candidate_id"]: item for item in candidate_reviews}
+    current = by_id.get("current_mathformer_lean")
+    external = by_id.get("external_formaldiscovery")
+    label = ROLE_RUBRICS[role_id]["label"]
+    if not current or not external:
+        return f"{label}: only one side was available, so strategy contrast is limited."
+    if current["role_score"] > external["role_score"]:
+        return (
+            f"{label}: current Mathformer is stronger on this rubric, mainly because "
+            "the review packet exposes more reusable context or semantic scaffolding."
+        )
+    if external["role_score"] > current["role_score"]:
+        return (
+            f"{label}: the external Lean snippet is stronger on this rubric, usually due to "
+            "a narrower or cleaner claim surface in the deterministic packet."
+        )
+    return f"{label}: both strategies are tied under the deterministic role rubric."
+
+
+def build_role_reviews(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    reviews: dict[str, Any] = {}
+    for role_id, rubric in ROLE_RUBRICS.items():
+        case_reviews = []
+        preference_counts: dict[str, int] = {}
+        strategy_counts: dict[str, int] = {}
+        for case in cases:
+            candidate_reviews = [
+                build_role_candidate_review(candidate, role_id)
+                for candidate in case["candidates"]
+            ]
+            preference = choose_role_preference(candidate_reviews)
+            preferred = preference.get("candidate_id")
+            if preferred:
+                preference_counts[str(preferred)] = (
+                    preference_counts.get(str(preferred), 0) + 1
+                )
+            for candidate_review in candidate_reviews:
+                for tag in candidate_review["essential_strategies"]:
+                    strategy_counts[tag] = strategy_counts.get(tag, 0) + 1
+            case_reviews.append(
+                {
+                    "case_id": case["case_id"],
+                    "preference": preference,
+                    "strategy_contrast": contrast_sentence(candidate_reviews, role_id),
+                    "candidate_reviews": candidate_reviews,
+                }
+            )
+        reviews[role_id] = {
+            "role_id": role_id,
+            "label": rubric["label"],
+            "review_mode": rubric["review_mode"],
+            "rubric": {
+                "criteria": rubric["criteria"],
+                "primary_metrics": list(rubric["primary_metrics"]),
+            },
+            "cases": case_reviews,
+            "aggregate": {
+                "preference_counts": preference_counts,
+                "strategy_counts": dict(
+                    sorted(
+                        strategy_counts.items(), key=lambda item: (-item[1], item[0])
+                    )
+                ),
+            },
+        }
+    return reviews
+
+
+def build_strategy_comparison_summary(
+    cases: list[dict[str, Any]], role_reviews: dict[str, Any]
+) -> dict[str, Any]:
+    role_case_index = {
+        role_id: {
+            case_review["case_id"]: case_review for case_review in review["cases"]
+        }
+        for role_id, review in role_reviews.items()
+    }
+    per_case = []
+    agreements = 0
+    disagreements = 0
+    preference_totals: dict[str, int] = {}
+    for case in cases:
+        case_id_value = case["case_id"]
+        tp_pref = (
+            role_case_index.get("theorem_prover_expert", {})
+            .get(case_id_value, {})
+            .get("preference", {})
+        )
+        physics_pref = (
+            role_case_index.get("physics_expert", {})
+            .get(case_id_value, {})
+            .get("preference", {})
+        )
+        tp_candidate = tp_pref.get("candidate_id")
+        physics_candidate = physics_pref.get("candidate_id")
+        if tp_candidate:
+            preference_totals[str(tp_candidate)] = (
+                preference_totals.get(str(tp_candidate), 0) + 1
+            )
+        if physics_candidate:
+            preference_totals[str(physics_candidate)] = (
+                preference_totals.get(str(physics_candidate), 0) + 1
+            )
+        agreement = bool(tp_candidate and tp_candidate == physics_candidate)
+        agreements += int(agreement)
+        disagreements += int(not agreement)
+        per_case.append(
+            {
+                "case_id": case_id_value,
+                "theorem_prover_preference": tp_candidate,
+                "physics_preference": physics_candidate,
+                "agreement": agreement,
+                "best_solution_packet": case.get("best_solution", {}),
+                "contrast": (
+                    "Both qualitative reviewers prefer the same strategy."
+                    if agreement
+                    else "Role reviewers disagree, so inspect theorem-proving risk and physics-semantics risk separately."
+                ),
+            }
+        )
+    compile_statuses = {
+        candidate["hard_gates"]["lean_compiles"]
+        for case in cases
+        for candidate in case["candidates"]
+        if candidate.get("kind") == "lean"
+    }
+    observations = [
+        "Theorem-prover review prioritizes functional Lean evidence: compile, placeholder hygiene, non-vacuous targets, and dependency discipline.",
+        "Physics review prioritizes source-semantic preservation, physical object fidelity, assumptions, units, dimensions, and derivation coverage.",
+        "Reference answers are treated as non-gold evidence, so disagreement with the reference is a delta to explain rather than an automatic error.",
+    ]
+    if compile_statuses == {"not_run"}:
+        observations.append(
+            "All compile conclusions are provisional because the report was generated without --execute-lean."
+        )
+    return {
+        "review_mode": "cross_role_strategy_synthesis",
+        "rubric": {
+            role_id: {
+                "label": rubric["label"],
+                "criteria": rubric["criteria"],
+                "primary_metrics": list(rubric["primary_metrics"]),
+            }
+            for role_id, rubric in ROLE_RUBRICS.items()
+        },
+        "per_case": per_case,
+        "aggregate": {
+            "agreement_count": agreements,
+            "disagreement_count": disagreements,
+            "preference_totals": preference_totals,
+        },
+        "strategy_observations": observations,
+    }
+
+
+def record_by_index(records: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+    return {
+        int(record.get("FS_index", position)): record
+        for position, record in enumerate(records)
+    }
+
+
+def build_report(args: argparse.Namespace) -> dict[str, Any]:
+    records = PREPARE.read_json(args.input_json)
+    if not isinstance(records, list):
+        raise ValueError("input JSON must contain a list")
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    manifest = PREPARE.build_manifest(
+        records,
+        input_json=args.input_json,
+        output_dir=args.output_dir,
+        repo_root=args.repo_root,
+        keep_obsolete_self_output=args.keep_obsolete_self_output,
+    )
+    by_index = record_by_index(records)
+    codex_results = load_codex_results(args.codex_results_json)
+    judge_synthesis = load_judge_synthesis(getattr(args, "synthesis_report_json", None))
+    result_index = {
+        (
+            item.get("case_id"),
+            item.get("candidate_id"),
+            normalized_judge_id(item.get("judge_id")),
+        ): item
+        for item in codex_results
+        if isinstance(item, dict)
+    }
+    cases = []
+    codex_prompts = []
+    for case in manifest["cases"]:
+        record = by_index.get(case["fs_index"], {})
+        case_report = {
+            "case_id": case["case_id"],
+            "fs_index": case["fs_index"],
+            "question": str(record.get("question") or ""),
+            "answer_reference": str(record.get("answer") or ""),
+            "question_excerpt": str(record.get("question") or "")[:1000],
+            "reference_excerpt": str(record.get("answer") or "")[:1000],
+            "reference_answer_role": REFERENCE_ROLE,
+            "removed_obsolete_fields": case["removed_obsolete_fields"],
+            "foundations_dependency_scope": case["foundations_dependency_scope"],
+            "candidates": [],
+        }
+        for candidate in case["candidates"]:
+            candidate_report = build_candidate_report(
+                record=record,
+                case=case_report,
+                candidate=candidate,
+                foundations_inventory=manifest["foundations_inventory"],
+                execute_lean=args.execute_lean,
+                lean_cwd=args.lean_cwd,
+                timeout=args.timeout,
+                repo_root=args.repo_root,
+            )
+            prompts = [
+                build_codex_prompt(case_report, candidate_report, judge_id)
+                for judge_id in (
+                    "physicist_semantics_judge",
+                    "lean_tp_judge",
+                    "mathlib_grounding_judge",
+                    "formal_modeling_completeness_judge",
+                    "naming_reviewability_judge",
+                    "invoked_dependency_excerpt_judge",
+                    "foundations_dependency_judge_llm",
+                    "adversarial_reference_judge",
+                )
+            ]
+            for prompt in prompts:
+                key = (prompt["case_id"], prompt["candidate_id"], prompt["judge_id"])
+                prompt["result_status"] = (
+                    "completed" if key in result_index else "pending_codex_exec"
+                )
+                if key in result_index:
+                    prompt["result"] = result_index[key]
+            candidate_report["generative_judges"] = {
+                "status": (
+                    "results_ingested"
+                    if any(p.get("result") for p in prompts)
+                    else "prompts_ready_pending_codex_exec"
+                ),
+                "prompts": prompts,
+            }
+            codex_prompts.extend(prompts)
+            case_report["candidates"].append(candidate_report)
+        case_report["best_solution"] = choose_best(case_report["candidates"])
+        cases.append(case_report)
+
+    qualitative_reviews = build_role_reviews(cases)
+    strategy_summary = build_strategy_comparison_summary(cases, qualitative_reviews)
+    report = {
+        "schema_version": 1,
+        "style": STYLE,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "input_json": str(args.input_json),
+        "output_dir": str(args.output_dir),
+        "policy": {
+            "reference_answer_role": REFERENCE_ROLE,
+            "reference_answer_is_gold": False,
+            "obsolete_self_output_removed": not args.keep_obsolete_self_output,
+            "candidate_unit": "top_level_artifact_plus_foundations_dependency_context",
+        },
+        "metric_criteria": METRIC_CRITERIA,
+        "critic_profiles": CRITIC_PROFILES,
+        "manifest": manifest,
+        "foundations_inventory": manifest["foundations_inventory"],
+        "cases": cases,
+        "qualitative_reviews": qualitative_reviews,
+        "strategy_comparison_summary": strategy_summary,
+        "judge_synthesis": judge_synthesis,
+        "codex_exec_judge_prompts": codex_prompts,
+        "summary": summarize_report(cases, manifest),
+    }
+    report["summary"]["judge_synthesis_loaded"] = bool(judge_synthesis.get("available"))
+    report["summary"]["judge_synthesis_path"] = judge_synthesis.get("source_path")
+    return report
+
+
+def summarize_report(
+    cases: list[dict[str, Any]], manifest: dict[str, Any]
+) -> dict[str, Any]:
+    candidate_count = sum(len(case["candidates"]) for case in cases)
+    accepted = sum(
+        1
+        for case in cases
+        for candidate in case["candidates"]
+        if candidate["aggregate"]["status"] == "accepted"
+    )
+    provisional = sum(
+        1
+        for case in cases
+        for candidate in case["candidates"]
+        if candidate["aggregate"]["status"] == "provisional_pending_compile"
+    )
+    invoked_excerpts = sum(
+        candidate.get("foundations_dependency", {}).get(
+            "invoked_external_dependency_excerpt_count", 0
+        )
+        for case in cases
+        for candidate in case["candidates"]
+    )
+    return {
+        "case_count": len(cases),
+        "candidate_count": candidate_count,
+        "accepted_candidate_count": accepted,
+        "provisional_candidate_count": provisional,
+        "foundations_file_count": manifest["foundations_inventory"]["totals"]["files"],
+        "invoked_external_dependency_excerpt_count": invoked_excerpts,
+        "reference_answer_role": REFERENCE_ROLE,
+        "obsolete_self_output_removed": manifest["policy"][
+            "obsolete_self_output_removed_by_default"
+        ],
+        "qualitative_role_review_count": len(ROLE_RUBRICS),
+    }
+
+
+def badge(status: str) -> str:
+    cls = re.sub(r"[^a-z0-9_-]+", "-", status.lower())
+    return f'<span class="badge {cls}">{html.escape(status)}</span>'
+
+
+def highlight_lean_line(line: str) -> str:
+    if line.strip().startswith("--"):
+        return f'<span class="tok-comment">{html.escape(line)}</span>'
+    escaped_parts: list[str] = []
+    pattern = re.compile(
+        r'("(?:\\.|[^"])*")|(\b[A-Za-z_][A-Za-z0-9_]*\b)|(\b\d+(?:\.\d+)?\b)|(.)'
+    )
+    for match in pattern.finditer(line):
+        string, word, number, other = match.groups()
+        if string is not None:
+            escaped_parts.append(
+                f'<span class="tok-string">{html.escape(string)}</span>'
+            )
+        elif word is not None:
+            if word in SUSPICIOUS:
+                escaped_parts.append(
+                    f'<span class="tok-bad">{html.escape(word)}</span>'
+                )
+            elif word in LEAN_KEYWORDS:
+                escaped_parts.append(
+                    f'<span class="tok-key">{html.escape(word)}</span>'
+                )
+            elif word in TACTICS:
+                escaped_parts.append(
+                    f'<span class="tok-tactic">{html.escape(word)}</span>'
+                )
+            else:
+                escaped_parts.append(html.escape(word))
+        elif number is not None:
+            escaped_parts.append(f'<span class="tok-num">{html.escape(number)}</span>')
+        else:
+            escaped_parts.append(html.escape(other or ""))
+    return "".join(escaped_parts)
+
+
+def highlighted_lean(code: str) -> str:
+    if not code:
+        return '<div class="empty-code">(missing)</div>'
+    rows = []
+    for idx, line in enumerate(code.splitlines(), 1):
+        rows.append(
+            f'<div class="code-line"><span class="line-no">{idx}</span>'
+            f'<span class="line-code">{highlight_lean_line(line)}</span></div>'
+        )
+    return "\n".join(rows)
+
+
+def short(text: str, limit: int = 220) -> str:
+    compact = re.sub(r"\s+", " ", text).strip()
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3] + "..."
+
+
+def json_block(payload: Any) -> str:
+    return html.escape(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def render_count_map(counts: dict[str, Any]) -> str:
+    if not counts:
+        return "<span class='muted'>none</span>"
+    return " ".join(
+        f"{badge(str(key))}<strong>{html.escape(str(value))}</strong>"
+        for key, value in sorted(counts.items(), key=lambda item: str(item[0]))
+    )
+
+
+def render_text_list(items: Sequence[Any]) -> str:
+    if not items:
+        return "<p class='muted'>None recorded.</p>"
+    return (
+        "<ul>"
+        + "".join(f"<li>{html.escape(str(item))}</li>" for item in items)
+        + "</ul>"
+    )
+
+
+def approach_label(candidate_id: str) -> str:
+    if candidate_id == "current_mathformer_lean":
+        return "Current Mathformer Lean"
+    if candidate_id == "external_formaldiscovery":
+        return "External FormalDiscovery Lean"
+    return candidate_id.replace("_", " ").title()
+
+
+def render_synthesis_section(synthesis: dict[str, Any]) -> str:
+    if not synthesis.get("available"):
+        return (
+            '<section id="synthesis" class="panel">'
+            "<h2>Judge Synthesis</h2>"
+            "<p class='muted'>No synthesis report JSON was loaded for this run.</p>"
+            f"<p>Expected source: <code>{html.escape(str(synthesis.get('source_path', '')))}</code></p>"
+            "</section>"
+        )
+
+    payload = synthesis.get("payload", {})
+    source_summary = payload.get("source_report", {}).get("summary", {})
+    review_synthesis = payload.get("judge_review_synthesis", {})
+    readiness = review_synthesis.get("codex_exec_prompt_readiness", {})
+    todo_summary = payload.get("todo_state_summary", {})
+    synthesis_cards = [
+        ("Synthesis Source", synthesis.get("source_path", "")),
+        ("Cases", source_summary.get("case_count", "n/a")),
+        ("Candidates", source_summary.get("candidate_count", "n/a")),
+        ("Completed Judge Results", readiness.get("completed_count", 0)),
+        ("Pending Judge Results", readiness.get("pending_count", 0)),
+        ("Open Repo Actions", todo_summary.get("open_repo_actionable_count", 0)),
+    ]
+    card_html = "".join(
+        f"<div class='metric-card'><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong></div>"
+        for label, value in synthesis_cards
+    )
+
+    approach_cards = []
+    for candidate_id, approach in payload.get("approaches", {}).items():
+        aspect_rows = "".join(
+            "<tr>"
+            f"<td>{html.escape(str(aspect_id))}</td>"
+            f"<td>{html.escape(str(score))}/5</td>"
+            "</tr>"
+            for aspect_id, score in approach.get("aspect_scores", {}).items()
+        )
+        approach_cards.append(
+            "<section class='role-card'>"
+            f"<h3>{html.escape(approach_label(candidate_id))}</h3>"
+            "<div class='metric-grid compact-grid'>"
+            f"<div class='metric-card'><span>Best Solutions</span><strong>{html.escape(str(approach.get('best_solution_count', 0)))}</strong></div>"
+            f"<div class='metric-card'><span>Accepted</span><strong>{html.escape(str(approach.get('accepted_count', 0)))}</strong></div>"
+            f"<div class='metric-card'><span>Blocked</span><strong>{html.escape(str(approach.get('blocked_count', 0)))}</strong></div>"
+            "</div>"
+            f"<p><strong>Aggregate statuses.</strong> {render_count_map(approach.get('aggregate_statuses', {}))}</p>"
+            f"<p><strong>Compile statuses.</strong> {render_count_map(approach.get('compile_statuses', {}))}</p>"
+            "<table><thead><tr><th>Aspect</th><th>Score</th></tr></thead>"
+            f"<tbody>{aspect_rows}</tbody></table>"
+            "<h4>Strengths</h4>"
+            f"{render_text_list(approach.get('strengths', []))}"
+            "<h4>Weaknesses</h4>"
+            f"{render_text_list(approach.get('weaknesses', []))}"
+            "</section>"
+        )
+
+    aspect_rows = []
+    for item in payload.get("aspect_comparison", []):
+        scores = item.get("scores", {})
+        aspect_rows.append(
+            "<tr>"
+            f"<td><strong>{html.escape(str(item.get('label', item.get('aspect_id', 'aspect'))))}</strong><br>"
+            f"<span class='muted'>{html.escape(str(item.get('focus', '')))}</span></td>"
+            f"<td>{html.escape(str(scores.get('current_mathformer_lean', 'n/a')))}</td>"
+            f"<td>{html.escape(str(scores.get('external_formaldiscovery', 'n/a')))}</td>"
+            f"<td>{badge(str(item.get('winner', 'unknown')))}<br><span class='muted'>gap {html.escape(str(item.get('gap', 'n/a')))}</span></td>"
+            f"<td>{html.escape(str(item.get('interpretation', '')))}</td>"
+            "</tr>"
+        )
+
+    case_rows = []
+    for item in payload.get("case_synthesis", []):
+        best = item.get("best_solution", {})
+        role_preferences = item.get("role_preferences", {})
+        statuses = item.get("candidate_statuses", {})
+        blocker_bits = []
+        for candidate_id, candidate_status in statuses.items():
+            blockers = candidate_status.get("aggregate", {}).get("hard_blockers", [])
+            if blockers:
+                blocker_bits.append(
+                    f"{approach_label(candidate_id)}: {', '.join(map(str, blockers))}"
+                )
+        case_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('case_id', '')))}</td>"
+            f"<td>{html.escape(approach_label(str(best.get('candidate_id', 'unknown'))))}<br>"
+            f"{badge(str(best.get('status', 'unknown')))} "
+            f"<span class='muted'>score {html.escape(str(best.get('mean_score', 'n/a')))}</span></td>"
+            f"<td>{html.escape(str(role_preferences.get('theorem_prover_expert', 'n/a')))}</td>"
+            f"<td>{html.escape(str(role_preferences.get('physics_expert', 'n/a')))}</td>"
+            f"<td>{html.escape('; '.join(blocker_bits) or 'none')}</td>"
+            "</tr>"
+        )
+
+    todo_rows = []
+    for item in payload.get("synthesis_todos", []):
+        todo_rows.append(
+            "<tr>"
+            f"<td><code>{html.escape(str(item.get('id', '')))}</code></td>"
+            f"<td><strong>{html.escape(str(item.get('title', '')))}</strong><br>{html.escape(str(item.get('detail', '')))}</td>"
+            f"<td>{badge(str(item.get('status', 'unknown')))}</td>"
+            f"<td>{html.escape(str(item.get('actionability', '')))}</td>"
+            "</tr>"
+        )
+
+    judge_rows = []
+    for judge_id, statuses in readiness.get("by_judge", {}).items():
+        judge_rows.append(
+            "<tr>"
+            f"<td><code>{html.escape(str(judge_id))}</code></td>"
+            f"<td>{render_count_map(statuses)}</td>"
+            "</tr>"
+        )
+
+    return (
+        '<section id="synthesis" class="panel">'
+        "<h2>Judge Synthesis</h2>"
+        "<p>The synthesis coheres deterministic gates, role reviews, and Codex-exec judge outcomes into approach-level strengths, weaknesses, and repair priorities.</p>"
+        f"<div class='metric-grid'>{card_html}</div>"
+        "<h3>Approach Profiles</h3>"
+        f"<div class='approach-grid'>{''.join(approach_cards)}</div>"
+        "<h3>Aspect Comparison</h3>"
+        "<table><thead><tr><th>Aspect</th><th>Current Mathformer Lean</th><th>External FormalDiscovery Lean</th><th>Winner</th><th>Interpretation</th></tr></thead>"
+        f"<tbody>{''.join(aspect_rows)}</tbody></table>"
+        "<h3>Case Synthesis</h3>"
+        "<table><thead><tr><th>Case</th><th>Best Solution</th><th>Theorem Prover Preference</th><th>Physics Preference</th><th>Hard Blockers</th></tr></thead>"
+        f"<tbody>{''.join(case_rows)}</tbody></table>"
+        "<h3>Judge Completion</h3>"
+        "<table><thead><tr><th>Judge</th><th>Status Counts</th></tr></thead>"
+        f"<tbody>{''.join(judge_rows)}</tbody></table>"
+        "<h3>Synthesis Todos</h3>"
+        "<table><thead><tr><th>ID</th><th>Finding</th><th>Status</th><th>Actionability</th></tr></thead>"
+        f"<tbody>{''.join(todo_rows)}</tbody></table>"
+        f"<details><summary>Machine-readable judge synthesis</summary><pre>{json_block(payload)}</pre></details>"
+        "</section>"
+    )
+
+
+COVERAGE_METRICS = (
+    ("Source", "source_semantic_preservation"),
+    ("Derivation", "derivation_coverage"),
+    ("Physics", "physics_representation_completeness"),
+    ("Depth", "formal_physics_modeling_depth"),
+    ("Mathlib", "mathlib_concept_grounding"),
+    ("Foundations", "foundations_dependency_quality"),
+    ("Review", "reviewability_clarity"),
+)
+
+
+def score_value(candidate: dict[str, Any] | None, metric: str) -> int:
+    if not candidate:
+        return 0
+    return int(candidate.get("scores", {}).get(metric, {}).get("score", 0))
+
+
+def coverage_bar(candidate: dict[str, Any] | None, label: str, metric: str) -> str:
+    value = score_value(candidate, metric)
+    width = max(0, min(100, value * 20))
+    return (
+        "<div class='coverage-meter'>"
+        f"<span class='coverage-label'>{html.escape(label)}</span>"
+        "<span class='coverage-track'>"
+        f"<span class='coverage-fill' style='width:{width}%'></span>"
+        "</span>"
+        f"<span class='coverage-score'>{value}/5</span>"
+        "</div>"
+    )
+
+
+def coverage_panel(
+    candidate: dict[str, Any] | None, *, best_candidate_id: str | None
+) -> str:
+    if candidate is None:
+        return "<div class='coverage-panel missing'>Missing candidate.</div>"
+    gates = candidate.get("hard_gates", {})
+    aggregate = candidate.get("aggregate", {})
+    excerpts = candidate.get("foundations_dependency", {}).get(
+        "invoked_external_dependency_excerpt_count", 0
+    )
+    best_badge = (
+        badge("best") if candidate.get("candidate_id") == best_candidate_id else ""
+    )
+    metric_bars = "".join(
+        coverage_bar(candidate, label, metric) for label, metric in COVERAGE_METRICS
+    )
+    blockers = ", ".join(aggregate.get("hard_blockers", [])) or "none"
+    return (
+        "<div class='coverage-panel'>"
+        f"<div class='coverage-head'><strong>{html.escape(candidate.get('candidate_id', 'candidate'))}</strong>{best_badge}</div>"
+        "<div class='coverage-meta'>"
+        f"{badge(aggregate.get('status', 'unknown'))}"
+        f"<span>mean <strong>{html.escape(str(aggregate.get('mean_score', 'n/a')))}</strong></span>"
+        f"<span>compile {badge(gates.get('lean_compiles', 'unknown'))}</span>"
+        f"<span>hygiene {badge(gates.get('no_unsound_placeholders', 'unknown'))}</span>"
+        f"<span>non-vacuity {badge(gates.get('non_vacuous_target', 'unknown'))}</span>"
+        f"<span>invoked excerpts <strong>{excerpts}</strong></span>"
+        "</div>"
+        f"<div class='coverage-bars'>{metric_bars}</div>"
+        f"<p class='blocker-line'>Blockers: {html.escape(blockers)}</p>"
+        "</div>"
+    )
+
+
+def coverage_delta(
+    current: dict[str, Any] | None, external: dict[str, Any] | None
+) -> str:
+    rows = []
+    for label, metric in COVERAGE_METRICS:
+        current_value = score_value(current, metric)
+        external_value = score_value(external, metric)
+        delta = current_value - external_value
+        marker = "equal"
+        if delta > 0:
+            marker = "current +"
+        elif delta < 0:
+            marker = "external +"
+        rows.append(
+            "<div class='delta-row'>"
+            f"<span>{html.escape(label)}</span>"
+            f"<strong>{html.escape(marker)}{abs(delta) if delta else ''}</strong>"
+            "</div>"
+        )
+    return "<div class='delta-stack'>" + "".join(rows) + "</div>"
+
+
+def render_html(report: dict[str, Any]) -> str:
+    data_json = json.dumps(report, ensure_ascii=False)
+    overview_cards = [
+        ("Cases", report["summary"]["case_count"]),
+        ("Candidates", report["summary"]["candidate_count"]),
+        ("Foundations Files", report["summary"]["foundations_file_count"]),
+        (
+            "Invoked Concept Excerpts",
+            report["summary"].get("invoked_external_dependency_excerpt_count", 0),
+        ),
+        ("Reference Role", report["summary"]["reference_answer_role"]),
+        (
+            "Judge Synthesis",
+            (
+                "loaded"
+                if report["summary"].get("judge_synthesis_loaded")
+                else "not loaded"
+            ),
+        ),
+    ]
+    leaderboard_rows = []
+    for case in report["cases"]:
+        current = next(
+            (
+                c
+                for c in case["candidates"]
+                if c["candidate_id"] == "current_mathformer_lean"
+            ),
+            None,
+        )
+        external = next(
+            (
+                c
+                for c in case["candidates"]
+                if c["candidate_id"] == "external_formaldiscovery"
+            ),
+            None,
+        )
+        best_id = case.get("best_solution", {}).get("candidate_id")
+        leaderboard_rows.append(
+            "<tr class='leaderboard-case-row'>"
+            f"<td class='case-key'><strong>{html.escape(case['case_id'])}</strong><br>{badge(case.get('best_solution', {}).get('status', 'unknown'))}</td>"
+            f"<td>{coverage_panel(current, best_candidate_id=best_id)}</td>"
+            f"<td>{coverage_panel(external, best_candidate_id=best_id)}</td>"
+            f"<td>{coverage_delta(current, external)}</td>"
+            "</tr>"
+        )
+    case_details = []
+    side_by_side = []
+    invoked_concept_sections = []
+    evidence_cards = []
+    for case in report["cases"]:
+        best = case["best_solution"]
+        case_details.append(
+            f"<details open><summary>{html.escape(case['case_id'])} "
+            f"{badge(best['status'])} {html.escape(str(best.get('candidate_id')))}</summary>"
+            f"<p><strong>Question.</strong> {html.escape(short(case['question'], 700))}</p>"
+            f"<p><strong>Reference answer role.</strong> {badge(case['reference_answer_role'])}</p>"
+            f"<p><strong>Reference excerpt.</strong> {html.escape(short(case['answer_reference'], 700))}</p>"
+            + "".join(
+                f"<div class='candidate-card'><h4>{html.escape(candidate['candidate_id'])} "
+                f"{badge(candidate['aggregate']['status'])}</h4>"
+                f"<p>Mean score: <strong>{candidate['aggregate']['mean_score']}</strong>. "
+                f"Blockers: {html.escape(', '.join(candidate['aggregate']['hard_blockers']) or 'none')}.</p>"
+                f"<p>Reference delta: {html.escape(candidate['source_reference_delta']['classification'])}.</p>"
+                "</div>"
+                for candidate in case["candidates"]
+            )
+            + "</details>"
+        )
+        left = next(
+            (
+                c
+                for c in case["candidates"]
+                if c["candidate_id"] == "current_mathformer_lean"
+            ),
+            None,
+        )
+        right = next(
+            (
+                c
+                for c in case["candidates"]
+                if c["candidate_id"] == "external_formaldiscovery"
+            ),
+            None,
+        )
+        sync_id = f"sync-{case['case_id']}"
+        side_by_side.append(
+            f"<details><summary>{html.escape(case['case_id'])}</summary>"
+            "<div class='side-grid'>"
+            f"<section><h4>Current Mathformer Lean</h4><div class='codepane' data-sync='{sync_id}'>{highlighted_lean((left or {}).get('code', ''))}</div></section>"
+            f"<section><h4>External FormalDiscovery Lean</h4><div class='codepane' data-sync='{sync_id}'>{highlighted_lean((right or {}).get('code', ''))}</div></section>"
+            "</div></details>"
+        )
+        invoked_candidate_blocks = []
+        for candidate in case["candidates"]:
+            excerpts = candidate.get("foundations_dependency", {}).get(
+                "invoked_external_dependency_excerpts", []
+            )
+            excerpt_blocks = []
+            for item in excerpts:
+                location = (
+                    f"{item.get('path', '')}:"
+                    f"{item.get('excerpt_line_start', item.get('line_start', ''))}"
+                )
+                excerpt_blocks.append(
+                    "<details class='dependency-excerpt'>"
+                    f"<summary>{html.escape(item.get('kind', 'decl'))} "
+                    f"<code>{html.escape(item.get('name', ''))}</code> "
+                    f"<span class='muted'>{html.escape(location)}</span> "
+                    f"{badge('used ' + str(item.get('invocation_count', 1)) + 'x')}</summary>"
+                    f"<div class='codepane compact'>{highlighted_lean(item.get('excerpt', ''))}</div>"
+                    "</details>"
+                )
+            invoked_candidate_blocks.append(
+                "<section class='candidate-card'>"
+                f"<h4>{html.escape(candidate['candidate_id'])}</h4>"
+                f"<p>Invoked external concept excerpts: <strong>{len(excerpts)}</strong>. "
+                f"Scope: {html.escape(candidate.get('foundations_dependency', {}).get('dependency_excerpt_scope', 'none'))}.</p>"
+                + (
+                    "".join(excerpt_blocks)
+                    if excerpt_blocks
+                    else "<p class='muted'>No invoked external dependency excerpts detected.</p>"
+                )
+                + "</section>"
+            )
+        invoked_concept_sections.append(
+            f"<details><summary>{html.escape(case['case_id'])}</summary>"
+            + "".join(invoked_candidate_blocks)
+            + "</details>"
+        )
+        evidence_cards.append(
+            f"<details><summary>{html.escape(case['case_id'])}</summary>"
+            f"<pre>{json_block({'best_solution': case['best_solution'], 'candidates': [{k: v for k, v in candidate.items() if k != 'code'} for candidate in case['candidates']]})}</pre>"
+            "</details>"
+        )
+    foundation_rows = []
+    for item in report["foundations_inventory"]["files"]:
+        analysis = item["analysis"]
+        counts = analysis["declaration_counts"]
+        foundation_rows.append(
+            "<tr>"
+            f"<td>{html.escape(item['path'])}</td>"
+            f"<td>{analysis['line_count']}</td>"
+            f"<td>{counts.get('structure', 0)}</td>"
+            f"<td>{counts.get('def', 0) + counts.get('abbrev', 0)}</td>"
+            f"<td>{counts.get('theorem', 0)}</td>"
+            f"<td>{counts.get('axiom', 0)}</td>"
+            "</tr>"
+        )
+    role_review_sections = []
+    for role_id, review in report.get("qualitative_reviews", {}).items():
+        case_blocks = []
+        for case_review in review.get("cases", []):
+            preference = case_review.get("preference", {})
+            candidate_blocks = []
+            for candidate_review in case_review.get("candidate_reviews", []):
+                candidate_blocks.append(
+                    "<div class='candidate-card'>"
+                    f"<h4>{html.escape(candidate_review['candidate_id'])} "
+                    f"{badge(candidate_review.get('aggregate_status') or 'unknown')}</h4>"
+                    f"<p>Role score: <strong>{candidate_review.get('role_score')}</strong>. "
+                    f"Strategies: {html.escape(', '.join(candidate_review.get('essential_strategies', [])) or 'none')}.</p>"
+                    f"<p><strong>Essential features.</strong> {html.escape('; '.join(candidate_review.get('essential_features', [])))}</p>"
+                    f"<p><strong>Strengths.</strong> {html.escape('; '.join(candidate_review.get('strengths', [])))}</p>"
+                    f"<p><strong>Concerns.</strong> {html.escape('; '.join(candidate_review.get('concerns', [])))}</p>"
+                    "</div>"
+                )
+            case_blocks.append(
+                f"<details><summary>{html.escape(case_review['case_id'])}: preferred "
+                f"{html.escape(str(preference.get('candidate_id')))} "
+                f"(score {html.escape(str(preference.get('role_score', 'n/a')))} )</summary>"
+                f"<p>{html.escape(case_review.get('strategy_contrast', ''))}</p>"
+                + "".join(candidate_blocks)
+                + "</details>"
+            )
+        role_review_sections.append(
+            f"<section class='role-card'><h3>{html.escape(review.get('label', role_id))}</h3>"
+            f"<p>Mode: <code>{html.escape(review.get('review_mode', 'unknown'))}</code></p>"
+            f"<p><strong>Criteria.</strong> {html.escape('; '.join(review.get('rubric', {}).get('criteria', [])))}</p>"
+            f"<p><strong>Preference counts.</strong> {html.escape(json.dumps(review.get('aggregate', {}).get('preference_counts', {}), sort_keys=True))}</p>"
+            + "".join(case_blocks)
+            + "</section>"
+        )
+    strategy_summary = report.get("strategy_comparison_summary", {})
+    strategy_rows = []
+    for item in strategy_summary.get("per_case", []):
+        strategy_rows.append(
+            "<tr>"
+            f"<td>{html.escape(item['case_id'])}</td>"
+            f"<td>{html.escape(str(item.get('theorem_prover_preference')))}</td>"
+            f"<td>{html.escape(str(item.get('physics_preference')))}</td>"
+            f"<td>{badge('agreement' if item.get('agreement') else 'disagreement')}</td>"
+            f"<td>{html.escape(item.get('contrast', ''))}</td>"
+            "</tr>"
+        )
+    strategy_observations = "".join(
+        f"<li>{html.escape(item)}</li>"
+        for item in strategy_summary.get("strategy_observations", [])
+    )
+    metric_criteria_rows = "".join(
+        "<tr>"
+        f"<td><code>{html.escape(metric)}</code></td>"
+        f"<td>{html.escape(description)}</td>"
+        "</tr>"
+        for metric, description in report.get("metric_criteria", {}).items()
+    )
+    critic_profile_cards = "".join(
+        "<details>"
+        f"<summary>{html.escape(critic_id)}</summary>"
+        f"<p><strong>Focus.</strong> {html.escape(profile.get('focus', ''))}</p>"
+        f"<p><strong>Metrics.</strong> {html.escape(', '.join(profile.get('metrics', [])))}</p>"
+        "<ul>"
+        + "".join(
+            f"<li>{html.escape(item)}</li>" for item in profile.get("criteria", [])
+        )
+        + "</ul>"
+        "</details>"
+        for critic_id, profile in report.get("critic_profiles", {}).items()
+    )
+    cards_html = "".join(
+        f"<div class='metric-card'><span>{html.escape(label)}</span><strong>{html.escape(str(value))}</strong></div>"
+        for label, value in overview_cards
+    )
+    synthesis_section = render_synthesis_section(report.get("judge_synthesis", {}))
+    css = """
+:root { color-scheme: light; --bg:#f7f8fb; --ink:#162033; --muted:#5c677a; --line:#d9deea; --panel:#ffffff; --blue:#2457a6; --green:#1f7a4d; --red:#b42318; --amber:#a15c00; --violet:#6b46c1; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+header { padding: 28px 36px 18px; background: #ffffff; border-bottom: 1px solid var(--line); }
+h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: 0; }
+.subtitle { color: var(--muted); max-width: 980px; line-height: 1.45; }
+nav { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 36px; background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+button.tab { border: 1px solid var(--line); background: #fff; color: var(--ink); padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+button.tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+main { padding: 24px 36px 48px; }
+.panel { display: none; }
+.panel.active { display: block; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0; }
+.compact-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.approach-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 14px; }
+.metric-card, .candidate-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+.metric-card span { display:block; color: var(--muted); font-size: 13px; }
+.metric-card strong { display:block; font-size: 24px; margin-top: 4px; }
+table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 14px; }
+th { background: #eef2f8; color: #24324a; }
+.coverage-table th:nth-child(2), .coverage-table th:nth-child(3) { width: 35%; }
+.case-key { width: 150px; background: #fbfcff; }
+.coverage-panel { min-width: 300px; }
+.coverage-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 8px; }
+.coverage-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+.coverage-bars { display: grid; gap: 6px; }
+.coverage-meter { display: grid; grid-template-columns: 86px minmax(90px, 1fr) 36px; gap: 8px; align-items: center; }
+.coverage-label { color: #334155; font-size: 12px; }
+.coverage-track { height: 8px; border-radius: 999px; background: #e5eaf3; overflow: hidden; }
+.coverage-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2457a6, #1f7a4d); }
+.coverage-score { color: var(--muted); font-size: 12px; text-align: right; }
+.blocker-line { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+.delta-stack { display: grid; gap: 6px; min-width: 120px; }
+.delta-row { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid #edf1f7; padding-bottom: 4px; font-size: 12px; }
+.delta-row strong { color: #24324a; white-space: nowrap; }
+details { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 12px 0; }
+summary { cursor: pointer; font-weight: 700; }
+.role-card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin: 14px 0; }
+.dependency-excerpt { padding: 8px 10px; margin: 8px 0; }
+.muted { color: var(--muted); }
+.badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 700; background: #edf0f5; color: #26354d; margin: 0 2px; }
+.badge.pass, .badge.accepted, .badge.functional_best { background: #dcfce7; color: var(--green); }
+.badge.fail, .badge.blocked, .badge.repair_target { background: #fee4e2; color: var(--red); }
+.badge.not_run, .badge.provisional_pending_compile, .badge.provisional_best_pending_compile { background: #fff3d6; color: var(--amber); }
+.badge.non_gold_reference_evidence { background: #eee7ff; color: var(--violet); }
+.badge.best { background: #e0ecff; color: var(--blue); }
+.badge.agreement { background: #dcfce7; color: var(--green); }
+.badge.disagreement { background: #fff3d6; color: var(--amber); }
+.side-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.codepane { max-height: 620px; overflow: auto; border: 1px solid #cad2df; border-radius: 8px; background: #fbfcff; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 12px; line-height: 1.45; }
+.codepane.compact { max-height: 320px; margin-top: 8px; }
+.code-line { display: grid; grid-template-columns: 54px minmax(0, 1fr); min-width: 720px; }
+.line-no { user-select: none; color: #718096; text-align: right; padding: 0 10px; border-right: 1px solid #e2e8f0; background: #f1f5f9; }
+.line-code { padding: 0 10px; white-space: pre; }
+.tok-comment { color: #64748b; font-style: italic; }
+.tok-string { color: #9a3412; }
+.tok-key { color: #1d4ed8; font-weight: 700; }
+.tok-tactic { color: #047857; font-weight: 700; }
+.tok-bad { color: #b42318; font-weight: 800; background: #fee4e2; }
+.tok-num { color: #7c3aed; }
+pre { white-space: pre-wrap; overflow: auto; max-height: 620px; background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; }
+.empty-code { color: var(--muted); padding: 12px; }
+@media (max-width: 900px) { .side-grid { grid-template-columns: 1fr; } main, header, nav { padding-left: 18px; padding-right: 18px; } }
+"""
+    js = """
+const tabs = Array.from(document.querySelectorAll('button.tab'));
+const panels = Array.from(document.querySelectorAll('.panel'));
+tabs.forEach(btn => btn.addEventListener('click', () => {
+  tabs.forEach(b => b.classList.remove('active'));
+  panels.forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(btn.dataset.target).classList.add('active');
+}));
+const panes = Array.from(document.querySelectorAll('.codepane'));
+let syncing = false;
+panes.forEach(pane => pane.addEventListener('scroll', () => {
+  if (syncing) return;
+  syncing = true;
+  panes.filter(other => other !== pane && other.dataset.sync === pane.dataset.sync).forEach(other => {
+    other.scrollTop = pane.scrollTop;
+    other.scrollLeft = pane.scrollLeft;
+  });
+  syncing = false;
+}));
+"""
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FormalPhysics Comparative Analysis</title>
+<style>{css}</style>
+</head>
+<body>
+<header>
+<h1>FormalPhysics Comparative Analysis</h1>
+<div class="subtitle">Current Mathformer artifacts are compared with external Lean outputs. Reference answers are evidence, not gold standards. Mathformer candidates are judged with the full Foundations dependency surface.</div>
+</header>
+<nav>
+<button class="tab active" data-target="overview">Overview</button>
+<button class="tab" data-target="leaderboard">Leaderboard</button>
+<button class="tab" data-target="case-details">Case Details</button>
+<button class="tab" data-target="side-by-side">Lean Side By Side</button>
+<button class="tab" data-target="invoked-concepts">Invoked Concepts</button>
+<button class="tab" data-target="foundations">Foundations</button>
+<button class="tab" data-target="judge-evidence">Judge Evidence</button>
+<button class="tab" data-target="role-reviews">Role Reviews</button>
+<button class="tab" data-target="strategy-summary">Strategy Summary</button>
+<button class="tab" data-target="synthesis">Synthesis</button>
+<button class="tab" data-target="methodology">Methodology</button>
+</nav>
+<main>
+<section id="overview" class="panel active">
+<div class="metric-grid">{cards_html}</div>
+<p>{badge('not_gold_reference')} The reference answer is used to inspect deltas, not to define correctness.</p>
+</section>
+<section id="leaderboard" class="panel">
+<h2>Coverage Leaderboard</h2>
+<p class="muted">Rows are grouped by case so coverage can be compared side by side instead of alternating candidate lines.</p>
+<table class="coverage-table"><thead><tr><th>Case</th><th>Current Mathformer Lean</th><th>External FormalDiscovery Lean</th><th>Coverage Delta</th></tr></thead><tbody>{''.join(leaderboard_rows)}</tbody></table>
+</section>
+<section id="case-details" class="panel">{''.join(case_details)}</section>
+<section id="side-by-side" class="panel">{''.join(side_by_side)}</section>
+<section id="invoked-concepts" class="panel">
+<h2>Invoked External Concepts</h2>
+<p>These excerpts import the invoked concepts from external dependency files used by each candidate, currently scoped to the MathformerPhysicsLib Foundations surface.</p>
+{''.join(invoked_concept_sections)}
+</section>
+<section id="foundations" class="panel">
+<p>All Mathformer candidates are interpreted with these Foundations files in scope.</p>
+<table><thead><tr><th>File</th><th>Lines</th><th>Structures</th><th>Defs</th><th>Theorems</th><th>Axioms</th></tr></thead><tbody>{''.join(foundation_rows)}</tbody></table>
+</section>
+<section id="judge-evidence" class="panel">{''.join(evidence_cards)}</section>
+<section id="role-reviews" class="panel">
+<h2>Independent Role Reviews</h2>
+<p>The theorem-prover and physics reviewers inspect the same deterministic packet with different criteria.</p>
+{''.join(role_review_sections)}
+</section>
+<section id="strategy-summary" class="panel">
+<h2>Strategy Summary</h2>
+<ul>{strategy_observations}</ul>
+<table><thead><tr><th>Case</th><th>Theorem Prover</th><th>Physics</th><th>Agreement</th><th>Contrast</th></tr></thead><tbody>{''.join(strategy_rows)}</tbody></table>
+<details><summary>Machine-readable strategy summary</summary><pre>{json_block(strategy_summary)}</pre></details>
+</section>
+{synthesis_section}
+<section id="methodology" class="panel">
+<h2>Methodology</h2>
+<p>Hard gates are evaluated before scores. A candidate is not accepted as a functional Lean formalization unless it compiles, avoids unsound placeholders, has a non-vacuous target, and respects the non-gold reference policy.</p>
+<p>Codex-exec judge prompts are included in the JSON report and can be run independently by the consumer application or MCP layer. Generative findings are advisory until grounded by deterministic evidence.</p>
+<h3>Metric Criteria</h3>
+<table><thead><tr><th>Metric</th><th>Criterion</th></tr></thead><tbody>{metric_criteria_rows}</tbody></table>
+<h3>Critic Profiles</h3>
+{critic_profile_cards}
+</section>
+</main>
+<script type="application/json" id="comparison-data">{html.escape(data_json)}</script>
+<script>{js}</script>
+</body>
+</html>
+"""
+
+
+def render_markdown(report: dict[str, Any]) -> str:
+    lines = [
+        "# FormalPhysics Comparative Analysis",
+        "",
+        f"- Cases: {report['summary']['case_count']}",
+        f"- Candidates: {report['summary']['candidate_count']}",
+        f"- Foundations files: {report['summary']['foundations_file_count']}",
+        f"- Invoked external dependency excerpts: {report['summary'].get('invoked_external_dependency_excerpt_count', 0)}",
+        f"- Qualitative role reviewers: {report['summary']['qualitative_role_review_count']}",
+        f"- Reference answer role: `{REFERENCE_ROLE}`",
+        "",
+        "## Best Solutions",
+        "",
+    ]
+    for case in report["cases"]:
+        best = case["best_solution"]
+        lines.append(
+            f"- `{case['case_id']}`: `{best['candidate_id']}` "
+            f"({best['status']}, score {best.get('mean_score', 'n/a')})"
+        )
+    lines.extend(["", "## Metric Criteria", ""])
+    for metric, description in report.get("metric_criteria", {}).items():
+        lines.append(f"- `{metric}`: {description}")
+    lines.extend(["", "## Critic Profiles", ""])
+    for critic_id, profile in report.get("critic_profiles", {}).items():
+        lines.append(f"- `{critic_id}`: {profile.get('focus', '')}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_role_review_markdown(review: dict[str, Any]) -> str:
+    lines = [
+        f"# {review.get('label', review.get('role_id', 'Role Review'))}",
+        "",
+        f"- Review mode: `{review.get('review_mode', 'unknown')}`",
+        f"- Primary metrics: `{', '.join(review.get('rubric', {}).get('primary_metrics', []))}`",
+        "",
+        "## Criteria",
+        "",
+    ]
+    for item in review.get("rubric", {}).get("criteria", []):
+        lines.append(f"- {item}")
+    lines.extend(["", "## Case Reviews", ""])
+    for case_review in review.get("cases", []):
+        pref = case_review.get("preference", {})
+        lines.extend(
+            [
+                f"### {case_review.get('case_id')}",
+                "",
+                f"- Preferred candidate: `{pref.get('candidate_id')}`",
+                f"- Role score: `{pref.get('role_score', 'n/a')}`",
+                f"- Strategy contrast: {case_review.get('strategy_contrast', '')}",
+                "",
+            ]
+        )
+        for candidate_review in case_review.get("candidate_reviews", []):
+            lines.extend(
+                [
+                    f"#### {candidate_review.get('candidate_id')}",
+                    "",
+                    f"- Aggregate status: `{candidate_review.get('aggregate_status')}`",
+                    f"- Role score: `{candidate_review.get('role_score')}`",
+                    f"- Essential strategies: `{', '.join(candidate_review.get('essential_strategies', []))}`",
+                    f"- Essential features: {'; '.join(candidate_review.get('essential_features', []))}",
+                    f"- Strengths: {'; '.join(candidate_review.get('strengths', []))}",
+                    f"- Concerns: {'; '.join(candidate_review.get('concerns', []))}",
+                    "",
+                ]
+            )
+    return "\n".join(lines)
+
+
+def render_strategy_summary_markdown(summary: dict[str, Any]) -> str:
+    lines = [
+        "# FormalPhysics Strategy Comparison Summary",
+        "",
+        f"- Review mode: `{summary.get('review_mode', 'unknown')}`",
+        f"- Agreements: `{summary.get('aggregate', {}).get('agreement_count', 0)}`",
+        f"- Disagreements: `{summary.get('aggregate', {}).get('disagreement_count', 0)}`",
+        "",
+        "## Rubric",
+        "",
+    ]
+    for role_id, rubric in summary.get("rubric", {}).items():
+        lines.append(f"### {rubric.get('label', role_id)}")
+        for criterion in rubric.get("criteria", []):
+            lines.append(f"- {criterion}")
+        lines.append("")
+    lines.extend(["## Strategy Observations", ""])
+    for item in summary.get("strategy_observations", []):
+        lines.append(f"- {item}")
+    lines.extend(["", "## Per-Case Comparison", ""])
+    for item in summary.get("per_case", []):
+        lines.append(
+            f"- `{item.get('case_id')}`: TP=`{item.get('theorem_prover_preference')}`, "
+            f"physics=`{item.get('physics_preference')}`, agreement=`{item.get('agreement')}`. "
+            f"{item.get('contrast', '')}"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_outputs(report: dict[str, Any], output_dir: Path) -> dict[str, str]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = output_dir / "comparative_report.json"
+    html_path = output_dir / "comparative_report.html"
+    md_path = output_dir / "comparative_report.md"
+    prompts_path = output_dir / "codex_exec_judge_prompts.json"
+    role_reviews_json_path = output_dir / "qualitative_role_reviews.json"
+    strategy_json_path = output_dir / "strategy_comparison_summary.json"
+    strategy_md_path = output_dir / "strategy_comparison_summary.md"
+    write_json(json_path, report)
+    html_path.write_text(render_html(report), encoding="utf-8")
+    md_path.write_text(render_markdown(report), encoding="utf-8")
+    write_json(prompts_path, report["codex_exec_judge_prompts"])
+    write_json(role_reviews_json_path, report.get("qualitative_reviews", {}))
+    write_json(strategy_json_path, report.get("strategy_comparison_summary", {}))
+    strategy_md_path.write_text(
+        render_strategy_summary_markdown(report.get("strategy_comparison_summary", {})),
+        encoding="utf-8",
+    )
+    artifacts = {
+        "json": str(json_path),
+        "html": str(html_path),
+        "markdown": str(md_path),
+        "codex_exec_prompts": str(prompts_path),
+        "qualitative_role_reviews_json": str(role_reviews_json_path),
+        "strategy_summary_json": str(strategy_json_path),
+        "strategy_summary_markdown": str(strategy_md_path),
+    }
+    for role_id, review in report.get("qualitative_reviews", {}).items():
+        role_md_path = output_dir / f"{role_id}_review.md"
+        role_md_path.write_text(render_role_review_markdown(review), encoding="utf-8")
+        artifacts[f"{role_id}_review_markdown"] = str(role_md_path)
+    return artifacts
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input-json", type=Path)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("artifacts/formalphysics_comparative_analysis/latest"),
+    )
+    parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
+    parser.add_argument("--lean-cwd", type=Path, default=REPO_ROOT)
+    parser.add_argument("--timeout", type=int, default=60)
+    parser.add_argument("--execute-lean", action="store_true")
+    parser.add_argument("--keep-obsolete-self-output", action="store_true")
+    parser.add_argument("--codex-results-json", type=Path)
+    parser.add_argument("--synthesis-report-json", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def self_test() -> dict[str, Any]:
+    with tempfile.TemporaryDirectory() as raw_tmp:
+        tmp = Path(raw_tmp)
+        dataset = tmp / "selected_examples.json"
+        dataset.write_text(
+            json.dumps(
+                [
+                    {
+                        "FS_index": 0,
+                        "question": "A charged particle has a Lorentz force component in an electromagnetic field.",
+                        "answer": "The reference derives the force component from scalar and vector potentials.",
+                        PREPARE.OBSOLETE_SELF_FIELD: "theorem stale : True := by trivial",
+                        PREPARE.EXTERNAL_FIELD: (
+                            "import Mathlib\n\n"
+                            "noncomputable section\n"
+                            "/-- Reference-aligned Lorentz force shell. -/\n"
+                            "theorem external_lorentz_force (q Ex vx By : Real) : q * Ex = q * Ex := by ring\n"
+                        ),
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        synthesis_json = tmp / "synthesis_report.json"
+        synthesis_json.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "style": "formalphysics_judge_synthesis_report",
+                    "source_report": {
+                        "summary": {"case_count": 1, "candidate_count": 2}
+                    },
+                    "approaches": {
+                        "current_mathformer_lean": {
+                            "accepted_count": 1,
+                            "blocked_count": 0,
+                            "best_solution_count": 1,
+                            "aggregate_statuses": {"accepted": 1},
+                            "compile_statuses": {"not_run": 1},
+                            "aspect_scores": {"functional_lean": 4.0},
+                            "strengths": ["Self-test strength."],
+                            "weaknesses": [],
+                        },
+                        "external_formaldiscovery": {
+                            "accepted_count": 0,
+                            "blocked_count": 1,
+                            "best_solution_count": 0,
+                            "aggregate_statuses": {"blocked": 1},
+                            "compile_statuses": {"not_run": 1},
+                            "aspect_scores": {"functional_lean": 2.0},
+                            "strengths": [],
+                            "weaknesses": ["Self-test weakness."],
+                        },
+                    },
+                    "aspect_comparison": [
+                        {
+                            "aspect_id": "functional_lean",
+                            "label": "Functional Lean",
+                            "focus": "Self-test focus.",
+                            "scores": {
+                                "current_mathformer_lean": 4.0,
+                                "external_formaldiscovery": 2.0,
+                            },
+                            "winner": "current_mathformer_lean",
+                            "gap": 2.0,
+                            "interpretation": "Self-test interpretation.",
+                        }
+                    ],
+                    "case_synthesis": [
+                        {
+                            "case_id": "formalphysics_0000",
+                            "best_solution": {
+                                "candidate_id": "current_mathformer_lean",
+                                "status": "functional_best",
+                                "mean_score": 4.0,
+                            },
+                            "candidate_statuses": {},
+                            "role_preferences": {
+                                "theorem_prover_expert": "current_mathformer_lean",
+                                "physics_expert": "current_mathformer_lean",
+                            },
+                        }
+                    ],
+                    "judge_review_synthesis": {
+                        "codex_exec_prompt_readiness": {
+                            "completed_count": 16,
+                            "pending_count": 0,
+                            "by_judge": {"lean_tp_judge": {"completed": 2}},
+                        }
+                    },
+                    "synthesis_todos": [
+                        {
+                            "id": "FPSYN-SELF",
+                            "title": "Self-test todo",
+                            "detail": "Verify synthesis tab rendering.",
+                            "status": "test",
+                            "actionability": "repo_actionable",
+                        }
+                    ],
+                    "todo_state_summary": {"open_repo_actionable_count": 1},
+                }
+            ),
+            encoding="utf-8",
+        )
+        output_dir = tmp / "report"
+        args = argparse.Namespace(
+            input_json=dataset,
+            output_dir=output_dir,
+            repo_root=REPO_ROOT,
+            lean_cwd=REPO_ROOT,
+            timeout=5,
+            execute_lean=False,
+            keep_obsolete_self_output=False,
+            codex_results_json=None,
+            synthesis_report_json=synthesis_json,
+            self_test=False,
+            json=True,
+        )
+        report = build_report(args)
+        paths = write_outputs(report, output_dir)
+        cleaned = read_text(output_dir / "selected_examples.cleaned.json")
+        html_text = read_text(Path(paths["html"]))
+        assert PREPARE.OBSOLETE_SELF_FIELD not in cleaned
+        assert report["policy"]["reference_answer_role"] == REFERENCE_ROLE
+        assert report["summary"]["foundations_file_count"] >= 1
+        assert "Coverage Leaderboard" in html_text
+        assert "coverage-table" in html_text
+        assert "Lean Side By Side" in html_text
+        assert "Invoked Concepts" in html_text
+        assert "Role Reviews" in html_text
+        assert "Strategy Summary" in html_text
+        assert "Judge Synthesis" in html_text
+        assert "Synthesis Todos" in html_text
+        assert "comparison-data" in html_text
+        assert "current_mathformer_lean" in html_text
+        assert report["judge_synthesis"]["available"] is True
+        assert report["summary"]["judge_synthesis_loaded"] is True
+        assert report["codex_exec_judge_prompts"]
+        assert set(report["qualitative_reviews"]) == {
+            "theorem_prover_expert",
+            "physics_expert",
+        }
+        assert "mathlib_concept_grounding" in report["metric_criteria"]
+        assert "physics_completeness_critic" in report["critic_profiles"]
+        assert "critic_evidence" in report["cases"][0]["candidates"][0]
+        assert "invoked_external_dependency_excerpt_count" in report["summary"]
+        assert (
+            "invoked_external_dependency_excerpts"
+            in report["cases"][0]["candidates"][0]["foundations_dependency"]
+        )
+        assert len(report["codex_exec_judge_prompts"]) == 16
+        assert Path(paths["theorem_prover_expert_review_markdown"]).exists()
+        assert Path(paths["physics_expert_review_markdown"]).exists()
+        assert Path(paths["strategy_summary_markdown"]).exists()
+        return {
+            "ok": True,
+            "style": STYLE,
+            "artifacts": paths,
+            "summary": report["summary"],
+        }
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    if args.self_test:
+        result = self_test()
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"ok: {result['ok']}")
+        return 0
+    if args.input_json is None:
+        raise SystemExit("--input-json is required unless --self-test is used")
+    report = build_report(args)
+    paths = write_outputs(report, args.output_dir)
+    result = {
+        "ok": True,
+        "style": STYLE,
+        "summary": report["summary"],
+        "artifacts": paths,
+    }
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(f"wrote: {paths['html']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

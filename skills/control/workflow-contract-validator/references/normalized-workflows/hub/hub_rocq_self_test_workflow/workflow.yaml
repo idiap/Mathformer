@@ -1,0 +1,444 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_rocq_self_test_workflow
+version: 1.0.0
+kind: workflow
+description: Default Rocq self-test; draft five templates, reread all files, aggregate
+  structural checks.
+aliases:
+- rocq:self-test
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Defaults:
+    schema:
+      type: object
+      additionalProperties: false
+      required:
+      - manifest_file
+      - output_dir
+      properties:
+        manifest_file:
+          const: tests/latex/wiki_level/manifest.json
+        output_dir:
+          const: artifacts/rocq_self_test
+  Bool:
+    schema:
+      type: boolean
+  DraftState:
+    schema:
+      type: object
+      required:
+      - selected
+      - cursor
+      - reports
+      - output_dir
+      - manifest_file
+      - repository_root
+      - style
+      properties:
+        selected:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            type: object
+        cursor:
+          type: integer
+          minimum: 0
+          maximum: 5
+        reports:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+        output_dir:
+          type: string
+          minLength: 1
+        manifest_file:
+          type: string
+        repository_root:
+          type: string
+        style:
+          type: string
+  ValidationState:
+    schema:
+      type: object
+      required:
+      - draft
+      - cursor
+      - validations
+      - output_dir
+      properties:
+        draft:
+          type: object
+          required:
+          - reports
+          - ok
+          properties:
+            reports:
+              type: array
+              minItems: 5
+              maxItems: 5
+              items:
+                type: object
+            ok:
+              type: boolean
+        cursor:
+          type: integer
+          minimum: 0
+          maximum: 5
+        validations:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+        output_dir:
+          type: string
+          minLength: 1
+  SelfTestReport:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - backend
+      - suite
+      - generated_at_utc
+      - draft
+      - validations
+      - ok
+      properties:
+        schema_version:
+          const: 1
+        backend:
+          const: rocq
+        suite:
+          const: rocq_self_test
+        generated_at_utc:
+          type: string
+        draft:
+          type: object
+        validations:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            type: object
+        ok:
+          type: boolean
+  RepositoryRoot:
+    schema:
+      type: string
+      minLength: 1
+inputs:
+  defaults:
+    type: Defaults
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  result:
+    type: SelfTestReport
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs:
+      defaults:
+        type: Defaults
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      state:
+        type: DraftState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_rocq_self_test_initialize
+        operation: mathformer_rocq_self_test_initialize
+  draft_next:
+    inputs:
+      state:
+        type: DraftState
+    outputs:
+      state:
+        type: DraftState
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_rocq_self_test_draft_next
+        operation: mathformer_rocq_self_test_draft_next
+  begin_reread:
+    inputs:
+      state:
+        type: DraftState
+    outputs:
+      state:
+        type: ValidationState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_rocq_self_test_begin_reread
+        operation: mathformer_rocq_self_test_begin_reread
+  validate_next:
+    inputs:
+      state:
+        type: ValidationState
+    outputs:
+      state:
+        type: ValidationState
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_rocq_self_test_validate_next
+        operation: mathformer_rocq_self_test_validate_next
+  aggregate:
+    inputs:
+      state:
+        type: ValidationState
+    outputs:
+      result:
+        type: SelfTestReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_rocq_self_test_aggregate
+        operation: mathformer_rocq_self_test_aggregate
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments:
+      defaults:
+        ref: inputs.defaults
+      repository_root:
+        ref: inputs.repository_root
+  - id: drafting
+    kind: loop
+    state_type: DraftState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 5
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: draft_one
+        kind: call
+        operation: draft_next
+        arguments:
+          state:
+            ref: loop.state
+      outputs:
+        state:
+          type: DraftState
+          value:
+            ref: steps.draft_one.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: steps.draft_one.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: DraftState
+        value:
+          ref: body.outputs.state
+  - id: prepare_reread
+    kind: call
+    operation: begin_reread
+    arguments:
+      state:
+        ref: steps.drafting.outputs.state
+  - id: rereading
+    kind: loop
+    state_type: ValidationState
+    initial:
+      ref: steps.prepare_reread.outputs.state
+    max_iterations: 5
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: validate_one
+        kind: call
+        operation: validate_next
+        arguments:
+          state:
+            ref: loop.state
+      outputs:
+        state:
+          type: ValidationState
+          value:
+            ref: steps.validate_one.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: steps.validate_one.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: ValidationState
+        value:
+          ref: body.outputs.state
+  - id: aggregate
+    kind: call
+    operation: aggregate
+    arguments:
+      state:
+        ref: steps.rereading.outputs.state
+  outputs:
+    result:
+      type: SelfTestReport
+      value:
+        ref: steps.aggregate.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/rocq_self_test/
+      - artifacts/rocq_autoformalization/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 13
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Structural artifact checks only; no compilation, proof acceptance
+    or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: backends/rocq/MathformerRocq/autoformalize.py
+    selector: self_test
+    digest: sha256:f9c9d219a34c1e02c9cad4259613f1235122d3f389ac3cdfebb7c858d18bee23
+  - path: scripts/mathformer.py
+    selector: build_registry/action:rocq:self-test; prepare_leaf_boundary; launch_leaf_boundary;
+      finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/run_rocq_autoformalization.py
+    selector: import and invoke autoformalize.main
+    digest: sha256:8dd3a156108e3048e29e5ef1c038f20f2a191f4539446cf9149c48a2f09cda5b
+  - path: scripts/rocq_self_test_tools.py
+    selector: register_rocq_self_test_tools
+    digest: sha256:23ac4b5f1862a67aa5e9df8ce27ad96866fafd421a4b974308ca960b7dbcb96e
+  - path: scripts/mcp_server.py
+    selector: register_rocq_self_test_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report/mcp_tools
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  gaps:
+  - Graph models selected self_test; CLI exception handling and hub dispatch remain
+    boundary metadata.
+  - Types retain native nested report objects without exhaustively specifying every
+    helper field.
+  - Native source enforces neither the 3600-second budget nor mandatory contract receipts.
+  - Actual self-test write root differs from hub declaration; hub audit can report
+    undeclared_writes.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: rocq:self-test
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: rocq:self-test
+      family: rocq
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - scripts/run_rocq_autoformalization.py
+      - --self-test
+      - --json
+      depends_on: []
+      required_paths:
+      - scripts/run_rocq_autoformalization.py
+      - backends/rocq/MathformerRocq/
+      required_tools: []
+      writes:
+      - artifacts/rocq_autoformalization/
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Hub preflight returns before launch on errors or dry-run; otherwise
+      launch once and audit writes.
+    failure_policy: main catches FileNotFoundError, KeyError, OSError and ValueError;
+      emits error JSON and exits 1.
+    success_policy: main prints JSON and exits 0 iff payload.ok; hub audit may still
+      set ok=false.
+    scientific_payloads: Export is self_test report; HubResult transport and captured
+      JSON remain outside this graph.
+  mathformer.specialization:
+    cases:
+    - wiki_contrapositive
+    - wiki_injective_composition
+    - wiki_monotone_composition
+    - wiki_set_inter_union_distrib
+    - wiki_sum_first_odd_numbers
+    bounds: Defaults input fixes manifest/output; initialize enforces five selected
+      cases in DEFAULT_CASE_ORDER.
+    termination: Both passes finish normally at item five; done=true there, so exhaustion
+      is unreachable for valid state.
+    state: Reports and validations accumulate; cursor is positional bookkeeping, not
+      proof refinement.
+    exclusions: No compiler invocation, retry, repair, convergence test or checkpoint.
+    context: repository_root locates manifest, fixtures and fixed artifact destination;
+      absolute paths are retained in loop state. Native CLI and hub dispatch remain
+      outside this selected self_test graph.
+# REUSE-IgnoreEnd

@@ -1,0 +1,79 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Immutable pre-extraction run_action test oracle from source-original.py.
+def run_action(
+    action_id: str,
+    registry: Mapping[str, WorkflowAction],
+    context: RunContext,
+    *,
+    extra_args: Sequence[str] = (),
+    seen: Optional[Set[str]] = None,
+) -> Dict[str, Any]:
+    """Run a registered action or composed workflow sequence.
+
+    Motivation:
+        Let higher-level quality gates reuse smaller controlled actions without
+        duplicating command lists.
+
+    Intent:
+        Resolve the action id, prevent dependency cycles, run dependencies in
+        order, and stop on failure unless keep-going is requested.
+
+    Inputs:
+        The action id, registry, execution context, optional extra args, and
+        recursion guard.
+
+    Outputs:
+        A result dictionary for the action or sequence.
+    """
+
+    if action_id not in registry:
+        return {"ok": False, "status": "unknown_action", "action_id": action_id}
+    item = registry[action_id]
+    seen = set(seen or set())
+    if action_id in seen:
+        return {
+            "ok": False,
+            "status": "dependency_cycle",
+            "action_id": action_id,
+            "cycle": sorted(seen | {action_id}),
+        }
+    seen.add(action_id)
+
+    if item.depends_on:
+        if extra_args:
+            return {
+                "ok": False,
+                "status": "extra_args_for_sequence",
+                "action_id": action_id,
+            }
+        children: List[Dict[str, Any]] = []
+        dependencies_ok = True
+        for child_id in item.depends_on:
+            child = run_action(child_id, registry, context, seen=seen)
+            children.append(child)
+            if not child.get("ok", False):
+                dependencies_ok = False
+                if not context.keep_going:
+                    break
+        if item.command and (dependencies_ok or context.keep_going):
+            leaf = run_leaf_action(item, context, extra_args)
+            return {
+                "action": action_to_dict(item),
+                "status": (
+                    "completed_with_dependencies"
+                    if leaf.get("ok", False) and dependencies_ok
+                    else "failed_with_dependencies"
+                ),
+                "ok": dependencies_ok and leaf.get("ok", False),
+                "children": children,
+                "leaf": leaf,
+            }
+        return {
+            "action": action_to_dict(item),
+            "status": "sequence_completed" if dependencies_ok else "sequence_failed",
+            "ok": dependencies_ok,
+            "children": children,
+        }
+
+    return run_leaf_action(item, context, extra_args)

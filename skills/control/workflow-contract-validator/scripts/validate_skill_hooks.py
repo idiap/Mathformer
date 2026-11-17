@@ -1,0 +1,710 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+#
+# Intent:
+#   Tell coding agents what context to load, what invariants to preserve, and how to validate their work.
+#
+# Function:
+#   Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Validate Mathformer skill hook contracts and optional workflow evidence."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import re
+import sys
+from typing import Any, Dict, List, Optional, Sequence, Set
+
+HOOK_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$")
+
+
+def make_finding(
+    severity: str,
+    code: str,
+    message: str,
+    *,
+    hook_id: Optional[str] = None,
+    path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Document the responsibility of ``make_finding``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Build the local data structure or artifact used by the next workflow stage.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    result: Dict[str, Any] = {
+        "severity": severity,
+        "code": code,
+        "message": message,
+    }
+    if hook_id is not None:
+        result["hook_id"] = hook_id
+    if path is not None:
+        result["path"] = path
+    return result
+
+
+def parse_hooks_manifest(path: Path) -> Dict[str, Any]:
+    """Document the responsibility of ``parse_hooks_manifest``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    hooks: List[Dict[str, Any]] = []
+    direct_routes: Dict[str, str] = {}
+    runtime_contract: Dict[str, Any] = {
+        "orchestrator_skill": None,
+        "reasoning_log_required_payload_fields": [],
+        "recommended_payload_fields": [],
+        "shared_runtime_scripts": [],
+    }
+
+    current_section: Optional[str] = None
+    current_hook: Optional[Dict[str, Any]] = None
+    current_list: Optional[str] = None
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if stripped == "runtime_contract:":
+            current_section = "runtime"
+            current_hook = None
+            current_list = None
+            continue
+        if stripped == "hooks:":
+            current_section = "hooks"
+            current_hook = None
+            current_list = None
+            continue
+        if stripped == "loop_contracts:":
+            current_section = "loop_contracts"
+            current_hook = None
+            current_list = None
+            continue
+        if stripped == "direct_request_routing:":
+            current_section = "routing"
+            current_hook = None
+            current_list = None
+            continue
+
+        if current_section == "runtime":
+            key_value = re.match(r"^([a-zA-Z0-9_]+):\s*(.*?)\s*$", stripped)
+            if key_value:
+                key, value = key_value.groups()
+                if value == "[]":
+                    runtime_contract[key] = []
+                    current_list = None
+                elif value:
+                    runtime_contract[key] = value
+                    current_list = None
+                else:
+                    runtime_contract.setdefault(key, [])
+                    current_list = f"runtime.{key}"
+                continue
+            if stripped.startswith("- ") and current_list:
+                key = current_list.split(".", 1)[1]
+                runtime_contract.setdefault(key, []).append(stripped[2:].strip())
+            continue
+
+        if current_section == "hooks":
+            hook_match = re.match(r"^-\s+id:\s*(\S+)\s*$", stripped)
+            if hook_match:
+                current_hook = {
+                    "id": hook_match.group(1),
+                    "phase": None,
+                    "trigger": None,
+                    "owner_skill": None,
+                    "reasoning_log_steps": [],
+                    "gate": None,
+                }
+                hooks.append(current_hook)
+                current_list = None
+                continue
+
+            if current_hook is None:
+                continue
+            key_value = re.match(r"^([a-zA-Z0-9_]+):\s*(.*?)\s*$", stripped)
+            if key_value:
+                key, value = key_value.groups()
+                if value == "[]":
+                    current_hook[key] = []
+                    current_list = None
+                elif value:
+                    current_hook[key] = value
+                    current_list = None
+                else:
+                    current_hook.setdefault(key, [])
+                    current_list = f"hook.{key}"
+                continue
+            if stripped.startswith("- ") and current_list:
+                key = current_list.split(".", 1)[1]
+                current_hook.setdefault(key, []).append(stripped[2:].strip())
+            continue
+
+        if current_section == "routing":
+            if ":" in stripped:
+                key, value = stripped.split(":", 1)
+                direct_routes[key.strip()] = value.strip()
+            continue
+
+        if current_section == "loop_contracts":
+            continue
+
+    return {
+        "runtime_contract": runtime_contract,
+        "hooks": hooks,
+        "direct_request_routing": direct_routes,
+    }
+
+
+def skill_exists(skills_dir: Path, skill_name: str) -> bool:
+    """Document the responsibility of ``skill_exists``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``skill_exists`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return any(skills_dir.glob(f"*/{skill_name}/SKILL.md"))
+
+
+def skill_manifest_path(skills_dir: Path, skill_name: str) -> Path:
+    """Return the canonical nested manifest path for diagnostics."""
+    matches = list(skills_dir.glob(f"*/{skill_name}/SKILL.md"))
+    return (
+        matches[0]
+        if len(matches) == 1
+        else skills_dir / "<unknown>" / skill_name / "SKILL.md"
+    )
+
+
+def validate_manifest(
+    manifest: Dict[str, Any],
+    *,
+    hooks_file: Path,
+    skills_dir: Path,
+    repo_root: Path,
+    prompt_index_file: Optional[Path],
+) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``validate_manifest``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Validate assumptions or artifacts and return explicit evidence about whether the contract holds.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    findings: List[Dict[str, Any]] = []
+    runtime_contract = manifest["runtime_contract"]
+    hooks = manifest["hooks"]
+    direct_routes = manifest["direct_request_routing"]
+
+    orchestrator = runtime_contract.get("orchestrator_skill")
+    if not orchestrator:
+        findings.append(
+            make_finding(
+                "high",
+                "missing_orchestrator_skill",
+                "runtime_contract.orchestrator_skill is missing.",
+            )
+        )
+    elif not skill_exists(skills_dir, str(orchestrator)):
+        findings.append(
+            make_finding(
+                "high",
+                "missing_orchestrator_skill_dir",
+                f"Orchestrator skill does not exist: {orchestrator}",
+                path=str(skill_manifest_path(skills_dir, str(orchestrator))),
+            )
+        )
+
+    required_payload_fields = runtime_contract.get(
+        "reasoning_log_required_payload_fields"
+    )
+    if (
+        not isinstance(required_payload_fields, list)
+        or "skill" not in required_payload_fields
+    ):
+        findings.append(
+            make_finding(
+                "high",
+                "missing_required_payload_skill",
+                "runtime_contract.reasoning_log_required_payload_fields must include skill.",
+            )
+        )
+
+    for script in runtime_contract.get("shared_runtime_scripts", []):
+        script_path = repo_root / script
+        if not script_path.exists():
+            findings.append(
+                make_finding(
+                    "high",
+                    "missing_shared_runtime_script",
+                    f"Shared runtime script does not exist: {script}",
+                    path=str(script_path),
+                )
+            )
+
+    seen_hook_ids: Set[str] = set()
+    for hook in hooks:
+        hook_id = hook.get("id")
+        if not isinstance(hook_id, str) or not hook_id:
+            findings.append(
+                make_finding("high", "missing_hook_id", "Hook is missing an id.")
+            )
+            continue
+        if hook_id in seen_hook_ids:
+            findings.append(
+                make_finding(
+                    "high",
+                    "duplicate_hook_id",
+                    f"Duplicate hook id: {hook_id}",
+                    hook_id=hook_id,
+                )
+            )
+        seen_hook_ids.add(hook_id)
+
+        if not HOOK_ID_RE.match(hook_id):
+            findings.append(
+                make_finding(
+                    "medium",
+                    "nonstandard_hook_id",
+                    "Hook id should be lowercase dotted words.",
+                    hook_id=hook_id,
+                )
+            )
+
+        for field in ("phase", "trigger", "owner_skill"):
+            if not hook.get(field):
+                findings.append(
+                    make_finding(
+                        "high",
+                        f"missing_hook_{field}",
+                        f"Hook is missing required field: {field}",
+                        hook_id=hook_id,
+                    )
+                )
+
+        owner = hook.get("owner_skill")
+        if owner and not skill_exists(skills_dir, str(owner)):
+            findings.append(
+                make_finding(
+                    "high",
+                    "missing_owner_skill",
+                    f"owner_skill does not exist: {owner}",
+                    hook_id=hook_id,
+                    path=str(skill_manifest_path(skills_dir, str(owner))),
+                )
+            )
+
+        steps = hook.get("reasoning_log_steps")
+        if steps is None:
+            findings.append(
+                make_finding(
+                    "high",
+                    "missing_reasoning_log_steps",
+                    "Hook must declare reasoning_log_steps.",
+                    hook_id=hook_id,
+                )
+            )
+        elif not isinstance(steps, list):
+            findings.append(
+                make_finding(
+                    "high",
+                    "invalid_reasoning_log_steps",
+                    "reasoning_log_steps must be a list.",
+                    hook_id=hook_id,
+                )
+            )
+        elif not steps:
+            findings.append(
+                make_finding(
+                    "low",
+                    "empty_reasoning_log_steps",
+                    "Hook has no declared reasoning-log steps.",
+                    hook_id=hook_id,
+                )
+            )
+
+    for intent, target_skill in direct_routes.items():
+        if not target_skill:
+            findings.append(
+                make_finding(
+                    "high",
+                    "empty_direct_route_target",
+                    f"Direct request route has no target: {intent}",
+                )
+            )
+        elif not skill_exists(skills_dir, target_skill):
+            findings.append(
+                make_finding(
+                    "high",
+                    "missing_direct_route_target",
+                    f"Direct request target skill does not exist: {target_skill}",
+                    path=str(skill_manifest_path(skills_dir, target_skill)),
+                )
+            )
+
+    if not hooks_file.exists():
+        findings.append(
+            make_finding(
+                "high",
+                "hooks_file_missing",
+                f"Hook contract file does not exist: {hooks_file}",
+            )
+        )
+
+    if prompt_index_file is not None:
+        findings.extend(validate_prompt_index_references(prompt_index_file, repo_root))
+
+    return findings
+
+
+def validate_prompt_index_references(
+    prompt_index_file: Path,
+    repo_root: Path,
+) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``validate_prompt_index_references``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Validate assumptions or artifacts and return explicit evidence about whether the contract holds.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    findings: List[Dict[str, Any]] = []
+    if not prompt_index_file.exists():
+        findings.append(
+            make_finding(
+                "medium",
+                "prompt_index_missing",
+                f"Prompt index file does not exist: {prompt_index_file}",
+                path=str(prompt_index_file),
+            )
+        )
+        return findings
+
+    text = prompt_index_file.read_text(encoding="utf-8")
+    for match in re.finditer(r"`(skills/[^`]+)`", text):
+        rel_path = match.group(1)
+        # Ignore prose-only directory mentions.
+        if rel_path.endswith("/"):
+            continue
+        if rel_path == "skills/*/agents/openai.yaml":
+            continue
+        target = repo_root / rel_path
+        if not target.exists():
+            findings.append(
+                make_finding(
+                    "high",
+                    "missing_prompt_index_reference",
+                    f"Prompt index references a missing path: {rel_path}",
+                    path=str(target),
+                )
+            )
+    return findings
+
+
+def validate_reasoning_log_if_requested(
+    reasoning_log_file: Optional[Path],
+    *,
+    hooks_file: Path,
+    strict: bool,
+) -> Dict[str, Any] | None:
+    """Document the responsibility of ``validate_reasoning_log_if_requested``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Validate assumptions or artifacts and return explicit evidence about whether the contract holds.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if reasoning_log_file is None:
+        return None
+    script_dir = (
+        Path(__file__).resolve().parents[2]
+        / "reasoning-log-schema-guardian"
+        / "scripts"
+    )
+    sys.path.insert(0, str(script_dir))
+    from validate_reasoning_log import validate_reasoning_log
+
+    return validate_reasoning_log(
+        reasoning_log_file,
+        hooks_file=hooks_file,
+        strict=strict,
+    )
+
+
+def summarize(findings: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Document the responsibility of ``summarize``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``summarize`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    counts = {"info": 0, "low": 0, "medium": 0, "high": 0}
+    for item in findings:
+        counts[item["severity"]] = counts.get(item["severity"], 0) + 1
+    return {
+        "finding_count": len(findings),
+        "severity_counts": counts,
+        "blocking_findings": counts.get("high", 0),
+    }
+
+
+def render_text(report: Dict[str, Any]) -> str:
+    """Document the responsibility of ``render_text``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    summary = report["summary"]
+    lines = [
+        f"ok: {report['ok']}",
+        f"hooks: {report['hook_count']}",
+        f"routes: {report['direct_route_count']}",
+        f"findings: {summary['finding_count']}",
+        f"blocking: {summary['blocking_findings']}",
+    ]
+    for item in report["findings"][:60]:
+        hook = f" hook={item['hook_id']}" if item.get("hook_id") else ""
+        lines.append(f"- {item['severity']} {item['code']}{hook}: {item['message']}")
+    if len(report["findings"]) > 60:
+        lines.append(f"... {len(report['findings']) - 60} more findings")
+    return "\n".join(lines)
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    """Document the responsibility of ``parse_args``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--hooks-file", type=Path, default=Path("skills/SKILL_HOOKS.yaml")
+    )
+    parser.add_argument("--skills-dir", type=Path, default=Path("skills"))
+    parser.add_argument("--repo-root", type=Path, default=Path("."))
+    parser.add_argument(
+        "--prompt-index-file",
+        type=Path,
+        default=Path("skills/ALL_AGENT_SKILL_PROMPTS.md"),
+    )
+    parser.add_argument("--reasoning-log-file", type=Path)
+    parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def resolve_hooks_paths(args: argparse.Namespace) -> Dict[str, str]:
+    """Resolve native invocation paths without changing process cwd."""
+    repo_root = args.repo_root.resolve()
+    return {
+        "repo_root": str(repo_root),
+        "hooks_file": str((repo_root / args.hooks_file).resolve()),
+        "skills_dir": str((repo_root / args.skills_dir).resolve()),
+    }
+
+
+def missing_hooks_report(hooks_file: Path) -> Dict[str, Any]:
+    """Build the native missing-manifest report."""
+    return {
+        "ok": False,
+        "hooks_file": str(hooks_file),
+        "summary": {"finding_count": 1, "blocking_findings": 1},
+        "findings": [
+            make_finding(
+                "high",
+                "hooks_file_missing",
+                f"Hook contract file does not exist: {hooks_file}",
+            )
+        ],
+        "hook_count": 0,
+        "direct_route_count": 0,
+    }
+
+
+def assemble_hooks_report(
+    hooks_file: Path,
+    skills_dir: Path,
+    manifest: Dict[str, Any],
+    findings: List[Dict[str, Any]],
+    *,
+    strict: bool,
+) -> Dict[str, Any]:
+    """Summarize all findings without truncation or early stop."""
+    summary = summarize(findings)
+    return {
+        "ok": summary["blocking_findings"] == 0,
+        "strict": strict,
+        "hooks_file": str(hooks_file),
+        "skills_dir": str(skills_dir),
+        "hook_count": len(manifest["hooks"]),
+        "direct_route_count": len(manifest["direct_request_routing"]),
+        "shared_runtime_script_count": len(
+            manifest["runtime_contract"].get("shared_runtime_scripts", [])
+        ),
+        "summary": summary,
+        "findings": findings,
+    }
+
+
+def emit_hooks_report(
+    report: Dict[str, Any], *, strict: bool, json_output: bool
+) -> int:
+    """Emit the source-owned rendering and preserve the native exit status."""
+    if json_output:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(render_text(report))
+    return 3 if strict and not report["ok"] else 0
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    args = parse_args(argv)
+    paths = resolve_hooks_paths(args)
+    repo_root = Path(paths["repo_root"])
+    hooks_file = Path(paths["hooks_file"])
+    skills_dir = Path(paths["skills_dir"])
+
+    if not hooks_file.exists():
+        report = missing_hooks_report(hooks_file)
+    else:
+        manifest = parse_hooks_manifest(hooks_file)
+        findings = validate_manifest(
+            manifest,
+            hooks_file=hooks_file,
+            skills_dir=skills_dir,
+            repo_root=repo_root,
+            prompt_index_file=(
+                None
+                if args.prompt_index_file is None
+                else (repo_root / args.prompt_index_file).resolve()
+            ),
+        )
+        reasoning_log_report = validate_reasoning_log_if_requested(
+            (
+                None
+                if args.reasoning_log_file is None
+                else (repo_root / args.reasoning_log_file).resolve()
+            ),
+            hooks_file=hooks_file,
+            strict=args.strict,
+        )
+        if reasoning_log_report is not None:
+            for item in reasoning_log_report["findings"]:
+                copied = dict(item)
+                copied["code"] = "reasoning_log." + copied["code"]
+                findings.append(copied)
+        report = assemble_hooks_report(
+            hooks_file,
+            skills_dir,
+            manifest,
+            findings,
+            strict=args.strict,
+        )
+
+    return emit_hooks_report(report, strict=args.strict, json_output=args.json)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

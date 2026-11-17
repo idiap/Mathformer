@@ -1,0 +1,1 @@
+../generate_python_license_inventory.py

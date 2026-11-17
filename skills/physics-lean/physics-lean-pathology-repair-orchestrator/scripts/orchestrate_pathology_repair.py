@@ -1,0 +1,308 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Coordinate pathology repair as a library-first loop instead of direct target
+#   theorem patching.
+#
+# Intent:
+#   Make the repair state explicit enough for agents to know when target theorem
+#   edits are allowed and which MathformerPhysicsLib obligations remain.
+#
+# Function:
+#   Aggregates monitor, object, workbench, and pathology-specific repair plans
+#   into one loop plan with statuses, blockers, allowed next actions, and gates.
+#
+# Maintenance Notes:
+#   Keep expected report styles synchronized with the individual repair skills.
+
+"""Orchestrate library-first repair for Lean physics pathologies."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any, Sequence
+
+REPAIR_STYLE_TO_CATEGORY = {
+    "physics_lean_notational_collapse_repair_plan": "notational_collapse",
+    "physics_lean_abstraction_elevation_repair_plan": "abstraction_elevation",
+    "physics_lean_proof_strategy_alignment_repair_plan": "proof_strategy_substitution",
+    "physics_lean_implicit_premise_normalization_plan": "implicit_premise_selection",
+}
+
+
+def load_json(path: Path | None) -> dict[str, Any]:
+    """Load optional JSON."""
+    if path is None:
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_many(paths: Sequence[Path]) -> list[dict[str, Any]]:
+    """Load multiple JSON reports."""
+    return [load_json(path) for path in paths]
+
+
+def category_counts(monitor_report: dict[str, Any]) -> dict[str, int]:
+    """Return monitor category counts."""
+    counts = monitor_report.get("category_counts", {})
+    return (
+        {str(key): int(value) for key, value in counts.items()}
+        if isinstance(counts, dict)
+        else {}
+    )
+
+
+def workbench_blockers(workbench_plan: dict[str, Any]) -> list[str]:
+    """Collect library-first blockers."""
+    blockers = []
+    for item in workbench_plan.get("items", []):
+        if item.get("status") != "mathformer_reused":
+            blockers.append(f"library_object_not_ready:{item.get('object_class')}")
+    return blockers
+
+
+def aggregate_findings(
+    *,
+    monitor_report: dict[str, Any],
+    workbench_plan: dict[str, Any],
+    repair_plans: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Collect native categories and blockers before status selection."""
+    counts = category_counts(monitor_report)
+    active_categories = sorted(
+        category for category, count in counts.items() if count > 0
+    )
+    repair_by_category = {
+        REPAIR_STYLE_TO_CATEGORY.get(
+            str(plan.get("style")), str(plan.get("style"))
+        ): plan
+        for plan in repair_plans
+    }
+    library_blockers = workbench_blockers(workbench_plan)
+    repair_blockers: list[str] = []
+    for plan in repair_plans:
+        repair_blockers.extend(str(item) for item in plan.get("blockers", []))
+        if plan.get("status") in {"blocked_on_library", "needs_labeling"}:
+            repair_blockers.append(f"{plan.get('style')}:{plan.get('status')}")
+    missing_repair_plans = [
+        category for category in active_categories if category not in repair_by_category
+    ]
+    blockers = sorted(
+        set(
+            library_blockers
+            + repair_blockers
+            + [f"missing_repair_plan:{c}" for c in missing_repair_plans]
+        )
+    )
+    return {
+        "active_categories": active_categories,
+        "missing_repair_plans": missing_repair_plans,
+        "blockers": blockers,
+        "monitor_pass": monitor_report.get("status") == "pass",
+        "has_blockers": bool(blockers),
+    }
+
+
+def assign_status(status: str) -> str:
+    """Carry the status assigned by the native ordered branch."""
+    return status
+
+
+def assemble_plan(
+    *,
+    monitor_report: dict[str, Any],
+    object_packet: dict[str, Any],
+    workbench_plan: dict[str, Any],
+    repair_plans: list[dict[str, Any]],
+    findings: dict[str, Any],
+    status: str,
+) -> dict[str, Any]:
+    """Assemble the advisory plan without executing any described stage."""
+    active_categories = findings["active_categories"]
+    missing_repair_plans = findings["missing_repair_plans"]
+    blockers = findings["blockers"]
+    loop_steps = [
+        {
+            "step": "monitor_pathologies",
+            "owner_skill": "physics-lean-drift-pathology-monitor",
+            "status": monitor_report.get("status", "missing"),
+        },
+        {
+            "step": "detect_physics_objects",
+            "owner_skill": "physics-math-object-detector",
+            "status": object_packet.get("status", "missing"),
+        },
+        {
+            "step": "work_mathformerphysicslib_objects",
+            "owner_skill": "mathformerphysicslib-object-workbench",
+            "status": workbench_plan.get("status", "missing"),
+        },
+        {
+            "step": "run_pathology_specific_repairs",
+            "owner_skill": "pathology-specific repair skills",
+            "status": "complete" if repair_plans else "missing",
+        },
+        {
+            "step": "run_generative_repair_proposals",
+            "owner_skill": "physics-lean-generative-repair-orchestrator",
+            "status": "pending" if status != "not_required" else "not_required",
+        },
+        {
+            "step": "map_recursive_repair_expansion",
+            "owner_skill": "physics-lean-repair-expansion-cartographer",
+            "status": "pending" if status != "not_required" else "not_required",
+        },
+        {
+            "step": "control_recursive_repair_loop",
+            "owner_skill": "physics-lean-recursive-repair-loop-controller",
+            "status": "pending" if status != "not_required" else "not_required",
+        },
+        {
+            "step": "refine_target_theorem",
+            "owner_skill": "physics-lean-review-refinement-router",
+            "status": (
+                "allowed" if status == "ready_for_target_refinement" else "blocked"
+            ),
+        },
+        {
+            "step": "rerun_acceptance_gates",
+            "owner_skill": "physics-lean-consistency-report-orchestrator",
+            "status": "pending",
+        },
+    ]
+    return {
+        "style": "physics_lean_pathology_repair_loop_plan",
+        "status": status,
+        "active_categories": active_categories,
+        "object_count": object_packet.get(
+            "object_count", len(object_packet.get("objects", []))
+        ),
+        "workbench_status": workbench_plan.get("status", "missing"),
+        "repair_plan_styles": [plan.get("style", "unknown") for plan in repair_plans],
+        "missing_repair_plans": missing_repair_plans,
+        "blockers": blockers,
+        "loop_steps": loop_steps,
+        "target_refinement_policy": {
+            "may_edit_target_theorem": status == "ready_for_target_refinement",
+            "library_first_required": True,
+            "allowed_target_edits": [
+                "import accepted or explicitly blocked MathformerPhysicsLib support",
+                "replace raw scalar binders with object-backed surfaces",
+                "add projection, unit, law, or assumption bridge named by repair plans",
+                "preserve theorem conclusion and source anchors",
+            ],
+        },
+        "rerun_gates": [
+            "mathformerlib.registry",
+            "mathformerlib.promotion_gate",
+            "physics.lean.type_system.build",
+            "physics.lean.assumptions.encode",
+            "critique.physics_lean_semantics",
+            "critique.physics_lean_assumptions",
+            "critique.physics_lean_dimensions",
+            "critique.physics_lean_drift_pathology_monitor",
+            "repair.physics_lean_generative_repair",
+            "repair.physics_lean_repair_expansion_cartography",
+            "repair.physics_lean_recursive_repair_control",
+            "review.physics_final_hypotheses",
+            "consistency.physics_lean_report",
+        ],
+    }
+
+
+def build_loop_plan(
+    *,
+    monitor_report: dict[str, Any],
+    object_packet: dict[str, Any],
+    workbench_plan: dict[str, Any],
+    repair_plans: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build the aggregate repair loop plan."""
+    findings = aggregate_findings(
+        monitor_report=monitor_report,
+        workbench_plan=workbench_plan,
+        repair_plans=repair_plans,
+    )
+    if findings["monitor_pass"]:
+        status = assign_status("not_required")
+    elif findings["has_blockers"]:
+        status = assign_status("blocked_on_library_or_labels")
+    else:
+        status = assign_status("ready_for_target_refinement")
+    return assemble_plan(
+        monitor_report=monitor_report,
+        object_packet=object_packet,
+        workbench_plan=workbench_plan,
+        repair_plans=repair_plans,
+        findings=findings,
+        status=status,
+    )
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--monitor-report", type=Path)
+    parser.add_argument("--object-packet", type=Path)
+    parser.add_argument("--workbench-plan", type=Path)
+    parser.add_argument("--repair-plan", type=Path, action="append", default=[])
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run repair orchestration."""
+    args = parse_args(argv)
+    if args.self_test:
+        plan = build_loop_plan(
+            monitor_report={
+                "status": "fail",
+                "category_counts": {"notational_collapse": 1},
+            },
+            object_packet={
+                "status": "ready",
+                "object_count": 1,
+                "objects": [{"object_class": "quantum_operator"}],
+            },
+            workbench_plan={
+                "status": "library_work_required",
+                "items": [
+                    {"object_class": "quantum_operator", "status": "candidate_required"}
+                ],
+            },
+            repair_plans=[
+                {
+                    "style": "physics_lean_notational_collapse_repair_plan",
+                    "status": "blocked_on_library",
+                    "blockers": ["library_object_not_ready:quantum_operator"],
+                }
+            ],
+        )
+        assert plan["status"] == "blocked_on_library_or_labels"
+        assert plan["target_refinement_policy"]["may_edit_target_theorem"] is False
+    else:
+        plan = build_loop_plan(
+            monitor_report=load_json(args.monitor_report),
+            object_packet=load_json(args.object_packet),
+            workbench_plan=load_json(args.workbench_plan),
+            repair_plans=load_many(args.repair_plan),
+        )
+    output = json.dumps(plan, ensure_ascii=False, indent=2)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output + "\n", encoding="utf-8")
+    else:
+        print(output)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,531 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_mcp_serve_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected mcp.serve route through its one registered server action.",
+  "aliases": [
+    "mcp.serve"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "SelectedMatch": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "properties": {
+              "route_id": {
+                "type": "string",
+                "const": "mcp.serve"
+              },
+              "action_ids": {
+                "type": "array",
+                "const": [
+                  "mcp:serve"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "RouteState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "ok"
+              ],
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "mcp:serve"
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object"
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "SelectedMatch"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot",
+      "required": false
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mcp_serve_route_initialize",
+          "operation": "mathformer_mcp_serve_route_initialize"
+        }
+      }
+    },
+    "select_action": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mcp_serve_route_select",
+          "operation": "mathformer_mcp_serve_route_select"
+        }
+      }
+    },
+    "execute_action": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot",
+          "required": false
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mcp_serve_route_execute",
+          "operation": "mathformer_mcp_serve_route_execute"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mcp_serve_route_advance",
+          "operation": "mathformer_mcp_serve_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mcp_serve_route_finish",
+          "operation": "mathformer_mcp_serve_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "Exact one-action route specialization. The first completed body always returns done=true, including child failure, so the source returns normally at this bound; exhaustion is unreachable.",
+        "state_type": "RouteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select_action",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "execute",
+              "kind": "call",
+              "operation": "execute_action",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.execute.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "RouteState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "RouteState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked control-flow specification; completion grants no scientific or promotion claim."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_ask; mathformer_run_workflow; _cap_unbounded_timeouts; main",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mcp_serve_route_tools.py",
+        "selector": "register_mcp_serve_route_tools; selected_match; check_state",
+        "digest": "sha256:9877759a0a26676262715f2b62a4c72a6b24025eb1bd674ad3c02adf31078424"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "mcp_serve_route_descriptor",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Leaf admission, subprocess capture, write audit and child server internals remain inside the native execute_action call.",
+      "CLI leaves the server timeout unbounded; these MCP ports use the service-owned execution cap (default 600 seconds).",
+      "Lunar enforces descriptor budgets and records receipts; the native CLI alone does not enforce the 3600-second descriptor ceiling or mandatory v1 receipts.",
+      "Network and external effects of the served child remain partially qualified native capabilities; their names are not runtime grants."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "mcp.serve",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "mcp.serve",
+        "title": "Start the Mathformer MCP server",
+        "action_ids": [
+          "mcp:serve"
+        ],
+        "operator_note": "Launch scripts/mcp_server.py directly from the client; the hub buffers output and does not proxy interactive stdin."
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Tools call the helpers shared with run_intent_match; registry value projections must match the service execution registry. Optional repository_root must match the service mount.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "entrypoints": "CLI ask --run; MCP mathformer_ask and mathformer_run_workflow.",
+      "mcp_dispatch": "Whole-route dispatch resolves normalized ID, rejects route extra arguments, checks service write roots, then dispatches. Step execution uses the same service root checks, read-only policy and timeout cap.",
+      "child_server": "main loads configuration/defaults, rejects invalid configuration, applies policy and serves stdio or HTTP until shutdown.",
+      "failure_policy": "Preserve native negative result data; unexpected exceptions terminate execution without a fabricated route result."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "mcp:serve"
+      ],
+      "action_workflows": [
+        "hub_mcp_serve_workflow"
+      ],
+      "selection": "Already selected native route; scoring and ambiguity resolution precede this graph.",
+      "keep_going_semantics": "Aggregate failure is sticky; this one-action route cannot perform additional work."
+    }
+  }
+}

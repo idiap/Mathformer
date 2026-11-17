@@ -1,0 +1,578 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lean_grounded_sample_thoroughness_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Ordered grounded-thoroughness audits and reporting, specialized to at most 15 case arguments.",
+  "aliases": [
+    "physics-lean:grounded-sample-thoroughness"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Request": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "case_ids",
+          "output",
+          "json"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "case_ids": {
+            "type": "array",
+            "maxItems": 15,
+            "items": {
+              "type": "string"
+            }
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "json": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "pending",
+          "completed"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "pending": {
+            "type": "array",
+            "maxItems": 15,
+            "items": {
+              "type": "object",
+              "required": [
+                "case_id",
+                "spec"
+              ],
+              "properties": {
+                "case_id": {
+                  "type": "string"
+                },
+                "spec": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "completed": {
+            "type": "array",
+            "maxItems": 15,
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "CaseResult": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "case_id",
+          "ok",
+          "checks",
+          "metrics",
+          "deep_grounding_signals",
+          "missing_terms",
+          "forbidden_hits",
+          "status",
+          "lean_path"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "deep_grounding_signals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "missing_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "forbidden_hits": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lean_path": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "style",
+          "ok",
+          "case_count",
+          "cases",
+          "policy"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "style": {
+            "const": "physics_lean_grounded_sample_thoroughness_report"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "case_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 15
+          },
+          "cases": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 15,
+            "items": {
+              "type": "object"
+            }
+          },
+          "policy": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          1
+        ]
+      }
+    },
+    "Directory": {
+      "schema": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "inputs": {
+    "request": {
+      "type": "Request"
+    },
+    "repository_root": {
+      "type": "Directory"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "select_initialize": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "repository_root": {
+          "type": "Directory"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_grounded_sample_select_initialize",
+          "operation": "mathformer_grounded_sample_select_initialize"
+        }
+      }
+    },
+    "audit_next": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "repository_root": {
+          "type": "Directory"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "CaseResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_grounded_sample_audit_next",
+          "operation": "mathformer_grounded_sample_audit_next"
+        }
+      }
+    },
+    "append_guard": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "result": {
+          "type": "CaseResult"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_grounded_sample_append_guard",
+          "operation": "mathformer_grounded_sample_append_guard"
+        }
+      }
+    },
+    "finalize": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "request": {
+          "type": "Request"
+        },
+        "repository_root": {
+          "type": "Directory"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_grounded_sample_finalize",
+          "operation": "mathformer_grounded_sample_finalize"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "select",
+        "kind": "call",
+        "operation": "select_initialize",
+        "description": "Select all 15 CASE_SPECS when case_ids is empty; otherwise preserve first insertion order while deduplicating identifiers. Curated specifications remain unchanged. Uncurated identifiers require a source record; infer operator/calculus features and use proof/declaration thresholds 4/8 for operators, 2/4 otherwise, with 2 deep signals for operator/calculus and 1 otherwise. Required terms come from the record and use stripped code. Resolve the entire selection before auditing; unknown identifiers raise SystemExit, and record read/JSON errors abort. Pack ordered pending case_id/spec pairs and an empty completed list. Selection is nonempty.",
+        "arguments": {
+          "request": {
+            "ref": "inputs.request"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "id": "traverse",
+        "kind": "loop",
+        "description": "Exactly one audit per selected case, in order; no repair, retry, convergence test or adaptive expansion. The final case sets done=true, including at iteration 15, and completes normally. Exhaustion without done is unreachable for this input specialization.",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.select.outputs.state"
+        },
+        "max_iterations": 15,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "audit",
+              "kind": "call",
+              "operation": "audit_next",
+              "description": "Audit the first pending pair without changing state. Read MathformerPhysicsLib/Lean/<case_id>/MathformerPhysics.lean, then invoke the checker once on libraries/MathformerPhysicsLib/Lean/<case_id>/MathformerPhysics.lean with --recursive-frontier-count 0 --expect-complete --json and the first available source record. Use the first checker artifact. Require complete_autoformalization and ok=true, zero blocked obligations/frontier, Recursive grounding header, required terms, no forbidden shortcuts, case-specific proof/declaration minima, at least four generative probes and empty repair frontier. Strip comments/strings for deep grounding and shallow operator wrapper detection. Return all checks/metrics even when ok=false. Nonzero checker exits with JSON remain auditable; file/JSON errors or checker failure without JSON abort immediately. Checker file-index/artifact accumulation remains internal.",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "append",
+              "kind": "call",
+              "operation": "append_guard",
+              "description": "Append this result to completed, remove the first pending pair, and compute done from whether pending is empty. A false case ok never stops traversal. Return the packed next state and guard.",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "result": {
+                  "ref": "steps.audit.outputs.result"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.append.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.append.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "report",
+        "kind": "call",
+        "operation": "finalize",
+        "description": "Build the native report with ordered completed cases, case_count, ok=all(case.ok), schema_version=1, style and native policy fields. Write artifacts/physics_lean/grounded_sample_thoroughness/report.json. Then main writes the same payload to request.output if truthy, prints JSON if request.json else the native summary/report path, and returns 0 if aggregate ok else 1. Write failures abort; failed audits still produce reports and exit_code=1. No native timeout is enforced.",
+        "arguments": {
+          "state": {
+            "ref": "steps.traverse.outputs.state"
+          },
+          "request": {
+            "ref": "inputs.request"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.report.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.report.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/physics_lean/grounded_sample_thoroughness/",
+          "requested_output"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "audit_grounded_samples",
+        "write_audit_report"
+      ],
+      "forbidden": [
+        "infer_scientific_truth_from_completion",
+        "promote_artifacts"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 33
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked audit description only; no scientific truth, promotion or runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/physics_lean/run_grounded_sample_thoroughness.py",
+        "selector": "run_suite; initialize_suite; audit_next; append_guard; finalize_suite; emit_report; main; selected_case_specs; audit_case; checker_report; run_json",
+        "digest": "sha256:4c2910e1a78b95a7215146cbe03f33b122efb68137cb4c00dcec5937516b7271"
+      },
+      {
+        "path": "scripts/grounded_sample_tools.py",
+        "selector": "register_grounded_sample_tools",
+        "digest": "sha256:97e139f2e564b5dbad07f9011fb92441ff38ec96a7068049f1399ac15bf50991"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_grounded_sample_tools(mcp, _analysis_write_policy, ...)",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:physics-lean:grounded-sample-thoroughness",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "skills/physics-lean/physics-lean-derivation-completeness-checker/scripts/check_derivation_completeness.py",
+        "selector": "main; build_report; analyze_file",
+        "digest": "sha256:e0583725510d24378fc99eb74caeba2827be462e7365c415c6e740355f3be01f"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory grounded-sample-thoroughness authored contract",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Request specializes parsed main arguments to at most 15 case arguments; empty selection defaults to the 15 curated cases. Larger native selections are outside this contract.",
+      "The 3600-second wall limit and operation budget are descriptor ceilings, not source stopping behavior; neither run_suite nor its hub action enforces a timeout.",
+      "Checker internals remain a native textual-checker subprocess; no Lean compilation, model calls, repairs or promotion occur. Lunar supplies execution receipts and digests in addition to native reports."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lean:grounded-sample-thoroughness",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "physics-lean:grounded-sample-thoroughness",
+        "family": "physics_lean",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "tests/physics_lean/run_grounded_sample_thoroughness.py",
+          "--json"
+        ],
+        "depends_on": [],
+        "allows_extra_args": true,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Four registered MCP tools reuse native source helpers also called by run_suite/main. repository_root relocates source records, Lean data, checker cwd and fixed report path; the executable checker remains project-owned. Defaults preserve CLI paths. MCP redirects native stdout to stderr to preserve transport framing.",
+      "scientific_payloads": "Native grounded-thoroughness report, rather than the opaque HubResult transport envelope."
+    }
+  }
+}

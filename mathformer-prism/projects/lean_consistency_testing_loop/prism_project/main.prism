@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import converted_reasoning
+from reasoning import AssessLeanConsistency
+from lean_consistency_testing_loop import CompiledLeanArtifactSet, LeanConsistencyDisposition
+
+def main(
+    model_access: ModelGenerate,
+    disclosure: ContextDisclose,
+) -> Result[Generated[LeanConsistencyDisposition], ModelFailure] ! {AI.Generate, Context.Disclose}:
+    workflow_source = CompiledLeanArtifactSet(
+        artifact_paths = ["fixture:lean_consistency_testing_loop:artifact_paths"],
+        compiler_evidence = "fixture:lean_consistency_testing_loop:compiler_evidence",
+        consistency_scope = "fixture:lean_consistency_testing_loop:consistency_scope",
+    )
+    flow = converted_reasoning(workflow_source)
+    return solve AssessLeanConsistency(workflow_source) using flow

@@ -1,0 +1,61 @@
+{
+  "schema_version": "mathformer.meta_skills.task_registry.v0.1",
+  "task_id": "_template",
+  "title": "Template visible workflow task registry",
+  "summary": "Copy this registry when a workflow should become a visible Mathformer task object.",
+  "visible_workflows": [
+    {
+      "workflow_id": "template.workflow",
+      "description": "A user-visible workflow composed of controlled actions and skills.",
+      "entry_actions": [
+        "hub:audit"
+      ],
+      "evidence_gates": [
+        "python scripts/mathformer.py audit --strict --json"
+      ]
+    }
+  ],
+  "composed_skills": [
+    {
+      "skill_id": "mathformer-workflow-router",
+      "role": "Route the visible workflow through the controlled hub before lower-level scripts run."
+    }
+  ],
+  "controlled_actions": [
+    {
+      "action_id": "hub:audit",
+      "role": "Validate workflow-control coverage."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "meta_skills/registry/tasks/_template/task_registry.json",
+      "state": "source"
+    }
+  ],
+  "validators": [
+    {
+      "command": "python meta_skills/scripts/validate_task_registries.py --json",
+      "expected_artifact": "artifacts/meta_skills/task_registry_validation.json"
+    }
+  ],
+  "generated_skills": [
+    {
+      "id": "none",
+      "state": "none",
+      "promotion_boundary": "Template has no generated skill."
+    }
+  ],
+  "release_boundaries": [
+    {
+      "boundary": "hub_authority",
+      "rule": "Controlled action ids remain owned by scripts/mathformer.py."
+    }
+  ],
+  "risk_controls": [
+    {
+      "risk": "Template prose drifts from validators.",
+      "control": "The task registry validator checks required fields and hub references."
+    }
+  ]
+}

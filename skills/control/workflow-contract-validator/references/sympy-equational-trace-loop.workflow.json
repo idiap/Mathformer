@@ -1,0 +1,773 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "loop_sympy_equational_trace_loop_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Controlled SymPy suite with fail-fast preflight and five sequential cases.",
+  "aliases": [
+    "sympy_equational_trace_loop"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Path": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "python",
+          "root",
+          "api_index",
+          "cursor",
+          "preflight_ok",
+          "preflight_results",
+          "case_reports",
+          "json_output",
+          "working_directory"
+        ],
+        "properties": {
+          "python": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "api_index": {
+            "type": "string"
+          },
+          "cursor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "preflight_ok": {
+            "type": "boolean"
+          },
+          "preflight_results": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "type": "object"
+            }
+          },
+          "case_reports": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object"
+            }
+          },
+          "json_output": {
+            "type": "boolean"
+          },
+          "working_directory": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "CaseReport": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "source",
+          "ok",
+          "results"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "results": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 9,
+            "items": {
+              "type": "object"
+            }
+          },
+          "case_id": {
+            "type": "string"
+          },
+          "artifact": {
+            "type": "string"
+          },
+          "consistency": {
+            "type": "object"
+          },
+          "html": {
+            "type": "string"
+          },
+          "html_rel": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Completion": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "exit_code",
+          "suite_report",
+          "index_html",
+          "stdout"
+        ],
+        "properties": {
+          "exit_code": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "suite_report": {
+            "type": "string"
+          },
+          "index_html": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stdout": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "working_directory",
+          "allow_mutating"
+        ],
+        "properties": {
+          "working_directory": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "artifact_root": {
+      "type": "Path"
+    },
+    "json_output": {
+      "type": "Flag"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "completion": {
+      "type": "Completion",
+      "value": {
+        "ref": "flow.outputs.completion"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {
+        "artifact_root": {
+          "type": "Path"
+        },
+        "json_output": {
+          "type": "Flag"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_equational_trace_initialize",
+          "operation": "mathformer_sympy_equational_trace_initialize"
+        }
+      }
+    },
+    "preflight_step": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_equational_trace_preflight_step",
+          "operation": "mathformer_sympy_equational_trace_preflight_step"
+        }
+      }
+    },
+    "preflight_failure": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "completion": {
+          "type": "Completion"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_equational_trace_preflight_failure",
+          "operation": "mathformer_sympy_equational_trace_preflight_failure"
+        }
+      }
+    },
+    "prepare_cases": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_equational_trace_prepare_cases",
+          "operation": "mathformer_sympy_equational_trace_prepare_cases"
+        }
+      }
+    },
+    "suite_case": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "CaseReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_equational_trace_suite_case",
+          "operation": "mathformer_sympy_equational_trace_suite_case"
+        }
+      }
+    },
+    "collect_case": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "report": {
+          "type": "CaseReport"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_equational_trace_collect_case",
+          "operation": "mathformer_sympy_equational_trace_collect_case"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "completion": {
+          "type": "Completion"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_equational_trace_finish",
+          "operation": "mathformer_sympy_equational_trace_finish"
+        }
+      }
+    },
+    "skip_cases": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_equational_trace_skip_cases",
+          "operation": "mathformer_sympy_equational_trace_skip_cases"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "artifact_root": {
+            "ref": "inputs.artifact_root"
+          },
+          "json_output": {
+            "ref": "inputs.json_output"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "preflight",
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "body": {
+          "kind": "call",
+          "operation": "preflight_step",
+          "arguments": {
+            "state": {
+              "ref": "loop.state"
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 2,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare_cases",
+        "arguments": {
+          "state": {
+            "ref": "steps.preflight.outputs.state"
+          }
+        }
+      },
+      {
+        "id": "cases",
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.prepare.outputs.state"
+        },
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "failed_preflight",
+              "when": {
+                "not": {
+                  "ref": "loop.state.preflight_ok"
+                }
+              },
+              "body": {
+                "kind": "call",
+                "operation": "skip_cases",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "sequence",
+            "steps": [
+              {
+                "id": "run_case",
+                "kind": "call",
+                "operation": "suite_case",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              },
+              {
+                "id": "collect",
+                "kind": "call",
+                "operation": "collect_case",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  },
+                  "report": {
+                    "ref": "steps.run_case.outputs.report"
+                  }
+                }
+              }
+            ],
+            "outputs": {
+              "state": {
+                "type": "State",
+                "value": {
+                  "ref": "steps.collect.outputs.state"
+                }
+              },
+              "done": {
+                "type": "Flag",
+                "value": {
+                  "ref": "steps.collect.outputs.done"
+                }
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 5,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        },
+        "description": "Five cases after successful preflight. Failed preflight carries state once through a pure guard without case commands. Root-level exhaustion is required by the Lunar compiler."
+      },
+      {
+        "id": "disposition",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "preflight_failed",
+            "when": {
+              "not": {
+                "ref": "steps.preflight.outputs.state.preflight_ok"
+              }
+            },
+            "body": {
+              "kind": "call",
+              "operation": "preflight_failure",
+              "arguments": {
+                "state": {
+                  "ref": "steps.preflight.outputs.state"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "id": "finish",
+          "kind": "call",
+          "operation": "finish",
+          "arguments": {
+            "state": {
+              "ref": "steps.cases.outputs.state"
+            }
+          }
+        },
+        "outputs": {
+          "completion": {
+            "type": "Completion",
+            "value": {
+              "ref": "selected.outputs.completion"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "completion": {
+        "type": "Completion",
+        "value": {
+          "ref": "steps.disposition.outputs.completion"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "run_artifacts",
+          "sympy_api_index"
+        ],
+        "write": [
+          "run_artifacts",
+          "sympy_api_index"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "inspect_declared_contract",
+        "run_native_suite",
+        "produce_candidate",
+        "produce_validation_report"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 15
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Suite success reports native command outcomes; it does not establish scientific truth or authorize promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/sympy/run_controlled_suite.py",
+        "selector": "main (with run_case and state-transition helpers)",
+        "digest": "sha256:f99794902893012461fa51bf2139af6500d5042140e3d5d15cb6b2d3f29917ef"
+      },
+      {
+        "path": "scripts/sympy_controlled_suite_tools.py",
+        "selector": "register_sympy_controlled_suite_tools",
+        "digest": "sha256:9214e16759b23e4844a07730e15803e20a5b873dcfdaf64173f0dc2664563148"
+      },
+      {
+        "path": "skills/SKILL_HOOKS.yaml",
+        "selector": "loop_contracts/sympy_equational_trace_loop",
+        "digest": "sha256:6a4370a206d71da4550b976e50fd1d4863881b3f920820a3ea7b49e8de39a353"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_sympy_controlled_suite_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "mutating tool classification",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory loop specialization",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "controlled entrypoint classification",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/mcp/run_sympy_equational_trace_loop_tests.py",
+        "selector": "registered MCP and Lunar/PRISM acceptance fixtures",
+        "digest": "sha256:ba12256c0b3331faacf0c226381e49098556071447f01f3a79aa73c60f963477"
+      },
+      {
+        "path": "tests/mcp/fixtures/sympy_equational_trace_boundary.py",
+        "selector": "test-only in-process command transport",
+        "digest": "sha256:46cf88dae7d74c42529a1303c9f94ddd55a60ea1a1ad96a40772b3722c9ea5cc"
+      }
+    ],
+    "gaps": [
+      "Case command iteration, artifact payloads, timing and helper internals remain owned by native run_case; this is a partial structural model.",
+      "The retained 3600-second policy limit is a host-enforced contract ceiling; the native suite has no overall deadline. Each subprocess has its native 180-second timeout.",
+      "Lunar emits execution receipts and artifact digests. Native helpers retain command logs, timings, case reports, suite JSON, HTML index and captured console output. Completion does not assert scientific truth.",
+      "Lunar cannot scope branch-local loop exhaustion. The top-level case loop uses the native prepare_cases failed-preflight identity and skip_cases guard; neither executes a case or a command. Preflight failure still emits the native failure report, with no case work or index HTML."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "loop",
+      "native_id": "sympy_equational_trace_loop",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "sympy_equational_trace_loop"
+      }
+    },
+    "mathformer.membership": {
+      "required_hooks_are_not_an_execution_schedule": true,
+      "owner_skills": [
+        "sympy-dependency-prober",
+        "sympy-api-docs-indexer",
+        "sympy-expression-parser",
+        "sympy-assumption-modeler",
+        "sympy-concept-grounding-navigator",
+        "sympy-autoformalization-drafter",
+        "sympy-execution-runner",
+        "sympy-identity-validator",
+        "sympy-counterexample-searcher",
+        "sympy-transformation-trace-verifier",
+        "sympy-consistency-report-orchestrator"
+      ],
+      "runtime_accounting": {}
+    },
+    "mathformer.native": {
+      "route": "formalize.sympy -> sympy:controlled -> tests/sympy/run_controlled_suite.py",
+      "input_defaults": {
+        "artifact_root": "artifacts/sympy/controlled_suite",
+        "json_output": false
+      },
+      "input_materialization": "Context supplies working_directory and explicit allow_mutating. artifact_root resolves relative to that directory; json_output selects native console formatting. API index remains artifacts/sympy_api/index.json under the working directory. Python is the native resolved executable.",
+      "sources_in_order": [
+        "tests/latex/wiki_level/sum_first_odd_numbers.tex",
+        "tests/sympy/controlled_latex/binomial_square.tex",
+        "tests/sympy/controlled_latex/finite_geometric_sum.tex",
+        "tests/sympy/controlled_latex/product_rule_derivative.tex",
+        "tests/sympy/controlled_latex/matrix_distributivity.tex"
+      ],
+      "bounds": {
+        "preflight_steps": 2,
+        "cases": 5,
+        "post_parse_commands_per_case": 8,
+        "subprocess_timeout_seconds": 180,
+        "counterexample_max_n": 100
+      },
+      "bound_behavior": "Native done is true by preflight iteration 2 and successful-preflight case iteration 5, returning normally at the bound. Failed preflight traverses a single state-only case-loop guard with no case commands. on_exhausted is unreachable on normal native returns.",
+      "failure_behavior": "Nonzero preflight stops with a failure report; nonzero case commands return failed reports and later cases continue. Uncaught timeout or other exceptions abort without guaranteed final reports.",
+      "counterexample_domain": "Sampling domain is determined by the artifact; max_n=100 is passed to the searcher.",
+      "retry_and_resume": "No retry, repair, convergence test, or checkpoint support.",
+      "mcp_server": {
+        "command": "python",
+        "args": [
+          "scripts/sympy_controlled_suite_tools.py"
+        ]
+      }
+    }
+  }
+}

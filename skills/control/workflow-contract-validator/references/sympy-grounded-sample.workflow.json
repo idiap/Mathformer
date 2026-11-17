@@ -1,0 +1,622 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_sympy_grounded_sample_thoroughness_0000_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Import one SymPy artifact, collect grounded-thoroughness checks, classify and emit its report.",
+  "aliases": [
+    "physics-sympy:grounded-sample-thoroughness-0000"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Request": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "case": {
+            "type": "string",
+            "default": "formalphysics_0000"
+          },
+          "sympy_file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reasoning_log": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "GateState": {
+      "schema": {
+        "type": "object",
+        "description": "Source-local evidence snapshot with an opaque server-owned module handle. Raw validator objects and the imported module remain in the same server process; modified, replayed and out-of-order states are rejected.",
+        "properties": {
+          "case_id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "reasoning_log": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "module": {
+            "type": "string",
+            "minLength": 1
+          },
+          "checks": {
+            "type": "object"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "design_guard": {
+            "type": "object"
+          },
+          "validation": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "case_id",
+          "path",
+          "reasoning_log",
+          "module",
+          "checks",
+          "findings",
+          "design_guard"
+        ]
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "style": {
+            "const": "physics_sympy_grounded_sample_thoroughness"
+          },
+          "backend": {
+            "const": "sympy"
+          },
+          "case_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "compiled_or_executed",
+              "grounded_scaffold",
+              "derivation_partial",
+              "complete_sympy_physics_derivation",
+              "blocked"
+            ]
+          },
+          "artifact_path": {
+            "type": "string"
+          },
+          "checks": {
+            "type": "object"
+          },
+          "design_guard_summary": {
+            "type": "object"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "status_scale": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "style",
+          "backend",
+          "case_id",
+          "status",
+          "artifact_path",
+          "checks",
+          "design_guard_summary",
+          "findings",
+          "status_scale"
+        ]
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          3
+        ]
+      }
+    },
+    "EmissionContext": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "handle"
+        ],
+        "additionalProperties": false,
+        "description": "Single-use ownership handle for the original ordered native report. Transport canonicalization must not change source-owned JSON or log emission."
+      }
+    }
+  },
+  "inputs": {
+    "request": {
+      "type": "Request"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "steps.evaluate.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "steps.emit.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "import_state": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "GateState"
+        },
+        "imported": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_grounded_import_state",
+          "operation": "mathformer_sympy_grounded_import_state"
+        }
+      }
+    },
+    "blocked_report": {
+      "inputs": {
+        "state": {
+          "type": "GateState"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "emission": {
+          "type": "EmissionContext"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_grounded_blocked_report",
+          "operation": "mathformer_sympy_grounded_blocked_report"
+        }
+      }
+    },
+    "inspect_validate": {
+      "inputs": {
+        "state": {
+          "type": "GateState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "GateState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_grounded_inspect_validate",
+          "operation": "mathformer_sympy_grounded_inspect_validate"
+        }
+      }
+    },
+    "design_and_review": {
+      "inputs": {
+        "state": {
+          "type": "GateState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "GateState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_grounded_design_and_review",
+          "operation": "mathformer_sympy_grounded_design_and_review"
+        }
+      }
+    },
+    "classify_report": {
+      "inputs": {
+        "state": {
+          "type": "GateState"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "emission": {
+          "type": "EmissionContext"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_grounded_classify_report",
+          "operation": "mathformer_sympy_grounded_classify_report"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "report": {
+          "type": "Report"
+        },
+        "emission": {
+          "type": "EmissionContext"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_grounded_emit",
+          "operation": "mathformer_sympy_grounded_emit"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "import",
+        "kind": "call",
+        "operation": "import_state",
+        "arguments": {
+          "request": {
+            "ref": "inputs.request"
+          }
+        }
+      },
+      {
+        "id": "evaluate",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "imported",
+            "when": {
+              "ref": "steps.import.outputs.imported"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "validate",
+                  "kind": "call",
+                  "operation": "inspect_validate",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.import.outputs.state"
+                    }
+                  }
+                },
+                {
+                  "id": "design_review",
+                  "kind": "call",
+                  "operation": "design_and_review",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.validate.outputs.state"
+                    }
+                  }
+                },
+                {
+                  "id": "classify",
+                  "kind": "call",
+                  "operation": "classify_report",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.design_review.outputs.state"
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "report": {
+                  "type": "Report",
+                  "value": {
+                    "ref": "steps.classify.outputs.report"
+                  }
+                },
+                "emission": {
+                  "type": "EmissionContext",
+                  "value": {
+                    "ref": "steps.classify.outputs.emission"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "blocked_report",
+          "arguments": {
+            "state": {
+              "ref": "steps.import.outputs.state"
+            }
+          }
+        },
+        "outputs": {
+          "report": {
+            "type": "Report",
+            "value": {
+              "ref": "selected.outputs.report"
+            }
+          },
+          "emission": {
+            "type": "EmissionContext",
+            "value": {
+              "ref": "selected.outputs.emission"
+            }
+          }
+        }
+      },
+      {
+        "id": "emit",
+        "kind": "call",
+        "operation": "emit",
+        "arguments": {
+          "request": {
+            "ref": "inputs.request"
+          },
+          "report": {
+            "ref": "steps.evaluate.outputs.report"
+          },
+          "emission": {
+            "ref": "steps.evaluate.outputs.emission"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.evaluate.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.emit.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/",
+          "requested_output",
+          "requested_reasoning_log"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow",
+        "produce_validation_report"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Native gate classification and exit success establish neither proof nor promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/physics_sympy/run_grounded_sample_thoroughness.py",
+        "selector": "build_report/main; initialize_gate, inspect_gate, design_and_review_gate, classify_gate, blocked_gate_report, gate_report, emit_gate_report",
+        "digest": "sha256:0d1fa4540d356d1ce66b64116a1f9707436c6008750aac0f1a6579db2e67cd47"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:physics-sympy:grounded-sample-thoroughness-0000; preflight; run_leaf_action; run_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/sympy_grounded_sample_tools.py",
+        "selector": "register_sympy_grounded_sample_tools; opaque module ownership and lifecycle",
+        "digest": "sha256:38c05868901ece846fef673a0964a9e6b075321c4bf13bb832ef762af871a5a3"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "FastMCP lifecycle and register_sympy_grounded_sample_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "tests/mcp/run_sympy_grounded_sample_workflow_tests.py",
+        "selector": "deterministic synthetic artifacts, original CLI parity, MCP and Lunar PRISM integration",
+        "digest": "sha256:d9d3c739f613a63b44d871dd2b4ed1e4ca89bc1adf9140493d63687554df501c"
+      },
+      {
+        "path": "tests/mcp/fixtures/sympy_grounded_sample_original.py.txt",
+        "selector": "immutable original selected source for behavioral parity",
+        "digest": "sha256:fe5be51949bde770286123ddaa1850d6162c73b868ce7e18ebad2553950c8431"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory authored SymPy thoroughness contract override",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Hub preflight/dry-run/timeout/write audit remain in the existing hub boundary; this graph executes the selected build_report and CLI emission steps.",
+      "Imported modules and raw validator objects are process-local; abandoned handles are reclaimed at server shutdown. Resume remains disabled.",
+      "The contract call and wall-time budgets are host bounds; the native design-guard subprocess has no explicit timeout.",
+      "Artifact imports and validators execute Python under the service mutation policy; capability qualification remains required for arbitrary artifact effects."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-sympy:grounded-sample-thoroughness-0000",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "physics-sympy:grounded-sample-thoroughness-0000",
+        "summary": "Gate FormalPhysics SymPy 0000 for grounded sample thoroughness.",
+        "family": "physics_sympy",
+        "kind": "validation",
+        "safety": "read_only",
+        "command": [
+          ".venv/bin/python",
+          "tests/physics_sympy/run_grounded_sample_thoroughness.py",
+          "--case",
+          "formalphysics_0000",
+          "--json"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "tests/physics_sympy/run_grounded_sample_thoroughness.py",
+          "libraries/MathformerPhysicsLib/SymPy/formalphysics_0000/MathformerPhysics.py"
+        ],
+        "writes": [],
+        "allows_extra_args": true,
+        "timeout_seconds": 360
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Existing dependency-free hub leaf runs through preflight, dry-run, subprocess timeout and write auditing.",
+      "failure_policy": "Native hub preserves preflight/subprocess failure; CLI blocked exits 3 while partial/scaffold exit 0.",
+      "path_discrepancy": "Gate default MathformerPhysicsLib/SymPy/formalphysics_0000/MathformerPhysics.py is absent; preflight checks existing libraries/MathformerPhysicsLib/SymPy/formalphysics_0000/MathformerPhysics.py. Default invocation imports unsuccessfully unless --sympy-file overrides.",
+      "timing": "Hub invocation timeout is 360 seconds; internal design guard has no explicit timeout.",
+      "iteration": "Finite traversals only; no repair, retry, convergence or evolving scientific state.",
+      "caller": "Recursive goal runner uses this gate as an evidence stage."
+    },
+    "mathformer.runtime": {
+      "module_ownership": "Opaque process-local handles; state snapshots must match and each stage consumes its predecessor exactly once. Failures and final classification release the handle; server shutdown releases abandoned handles.",
+      "emission_ownership": "Single-use report handles retain native insertion order and raw report values across canonical JSON transport; emission compares the public report with its owned snapshot before calling the native emitter. Abandoned reports are released at shutdown.",
+      "stdio": "Native printed JSON and artifact stdout are sent to stderr while MCP owns stdout. Requested JSON output and reasoning-log events use the source emitter in native order.",
+      "execution": "No model/provider or theorem compiler boundary exists in this finite gate. Native design review runs its real public Python CLI. No repairs are dispatched."
+    }
+  }
+}

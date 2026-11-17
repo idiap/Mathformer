@@ -1,0 +1,721 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_lean_wiki_level_suite_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Native Wiki-level LaTeX-to-Lean suite with shared source stages and callable MCP ports.",
+  "aliases": [
+    "lean:wiki-level-suite"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Manifest": {
+      "representation": "file",
+      "schema": {
+        "type": "string",
+        "description": "Path to the authoritative native JSON manifest; at most 1000 cases admitted by prepare."
+      }
+    },
+    "Options": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "output_dir",
+          "output_name",
+          "reasoning_log",
+          "no_reasoning_log",
+          "append_reasoning_log",
+          "skip_concept_map",
+          "skip_hierarchy",
+          "skip_declaration_checks",
+          "verify_timeout_sec"
+        ],
+        "properties": {
+          "output_dir": {
+            "type": "string",
+            "default": "artifacts/wiki_level_suite"
+          },
+          "output_name": {
+            "type": "string",
+            "default": "report.json"
+          },
+          "reasoning_log": {
+            "type": "string",
+            "default": "artifacts/wiki_level_suite/reasoning.jsonl"
+          },
+          "no_reasoning_log": {
+            "type": "boolean",
+            "default": false
+          },
+          "append_reasoning_log": {
+            "type": "boolean",
+            "default": false
+          },
+          "skip_concept_map": {
+            "type": "boolean",
+            "default": false
+          },
+          "skip_hierarchy": {
+            "type": "boolean",
+            "default": false
+          },
+          "skip_declaration_checks": {
+            "type": "boolean",
+            "default": false
+          },
+          "verify_timeout_sec": {
+            "type": "integer",
+            "default": 30
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Session": {
+      "schema": {
+        "type": "object",
+        "description": "Manifest and paths, options, gold Lean text, import diagnostics and optional reasoning log."
+      }
+    },
+    "CaseState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "cursor",
+          "cases",
+          "expected_declarations"
+        ],
+        "properties": {
+          "cursor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "expected_declarations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Check": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "suite",
+          "generated_at_utc",
+          "manifest_file",
+          "gold_lean_file",
+          "import_check",
+          "cases",
+          "lean_execution",
+          "compatibility_audit",
+          "expected_declaration_checks",
+          "summary"
+        ],
+        "properties": {
+          "cases": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "summary": {
+            "type": "object",
+            "required": [
+              "passed"
+            ],
+            "properties": {
+              "passed": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "inputs": {
+    "manifest": {
+      "type": "Manifest"
+    },
+    "options": {
+      "type": "Options"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    }
+  },
+  "operations": {
+    "prepare": {
+      "inputs": {
+        "manifest": {
+          "type": "Manifest"
+        },
+        "options": {
+          "type": "Options"
+        }
+      },
+      "outputs": {
+        "session": {
+          "type": "Session"
+        },
+        "state": {
+          "type": "CaseState"
+        },
+        "has_cases": {
+          "type": "Flag"
+        },
+        "skip_declarations": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_wiki_suite_prepare",
+          "operation": "mathformer_wiki_suite_prepare"
+        }
+      }
+    },
+    "case_step": {
+      "inputs": {
+        "session": {
+          "type": "Session"
+        },
+        "state": {
+          "type": "CaseState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "CaseState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_wiki_suite_case_step",
+          "operation": "mathformer_wiki_suite_case_step"
+        }
+      }
+    },
+    "empty_cases": {
+      "inputs": {
+        "state": {
+          "type": "CaseState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "CaseState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_wiki_suite_empty_cases",
+          "operation": "mathformer_wiki_suite_empty_cases"
+        }
+      }
+    },
+    "compile_gold": {
+      "inputs": {
+        "session": {
+          "type": "Session"
+        }
+      },
+      "outputs": {
+        "check": {
+          "type": "Check"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_wiki_suite_compile_gold",
+          "operation": "mathformer_wiki_suite_compile_gold"
+        }
+      }
+    },
+    "audit": {
+      "inputs": {
+        "session": {
+          "type": "Session"
+        }
+      },
+      "outputs": {
+        "check": {
+          "type": "Check"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_wiki_suite_audit",
+          "operation": "mathformer_wiki_suite_audit"
+        }
+      }
+    },
+    "check_declarations": {
+      "inputs": {
+        "session": {
+          "type": "Session"
+        },
+        "state": {
+          "type": "CaseState"
+        }
+      },
+      "outputs": {
+        "check": {
+          "type": "Check"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_wiki_suite_check_declarations",
+          "operation": "mathformer_wiki_suite_check_declarations"
+        }
+      }
+    },
+    "skip_declarations": {
+      "inputs": {},
+      "outputs": {
+        "check": {
+          "type": "Check"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_wiki_suite_skip_declarations",
+          "operation": "mathformer_wiki_suite_skip_declarations"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "session": {
+          "type": "Session"
+        },
+        "state": {
+          "type": "CaseState"
+        },
+        "lean": {
+          "type": "Check"
+        },
+        "audit": {
+          "type": "Check"
+        },
+        "declarations": {
+          "type": "Check"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_wiki_suite_finish",
+          "operation": "mathformer_wiki_suite_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare",
+        "arguments": {
+          "manifest": {
+            "ref": "inputs.manifest"
+          },
+          "options": {
+            "ref": "inputs.options"
+          }
+        }
+      },
+      {
+        "id": "cases",
+        "kind": "loop",
+        "state_type": "CaseState",
+        "initial": {
+          "ref": "steps.prepare.outputs.state"
+        },
+        "max_iterations": 1000,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "nonempty",
+              "when": {
+                "ref": "steps.prepare.outputs.has_cases"
+              },
+              "body": {
+                "kind": "call",
+                "operation": "case_step",
+                "arguments": {
+                  "session": {
+                    "ref": "steps.prepare.outputs.session"
+                  },
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "empty_cases",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "CaseState",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "CaseState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "lean",
+        "kind": "call",
+        "operation": "compile_gold",
+        "arguments": {
+          "session": {
+            "ref": "steps.prepare.outputs.session"
+          }
+        }
+      },
+      {
+        "id": "audit",
+        "kind": "call",
+        "operation": "audit",
+        "arguments": {
+          "session": {
+            "ref": "steps.prepare.outputs.session"
+          }
+        }
+      },
+      {
+        "id": "declarations",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "skipped",
+            "when": {
+              "ref": "steps.prepare.outputs.skip_declarations"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "skip_declarations",
+              "arguments": {}
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "check_declarations",
+          "arguments": {
+            "session": {
+              "ref": "steps.prepare.outputs.session"
+            },
+            "state": {
+              "ref": "steps.cases.outputs.state"
+            }
+          }
+        },
+        "outputs": {
+          "check": {
+            "type": "Check",
+            "value": {
+              "ref": "selected.outputs.check"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "session": {
+            "ref": "steps.prepare.outputs.session"
+          },
+          "state": {
+            "ref": "steps.cases.outputs.state"
+          },
+          "lean": {
+            "ref": "steps.lean.outputs.check"
+          },
+          "audit": {
+            "ref": "steps.audit.outputs.check"
+          },
+          "declarations": {
+            "ref": "steps.declarations.outputs.check"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.finish.outputs.report"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/wiki_level_suite/",
+          "artifacts/workflow_hub/",
+          "configured_suite_outputs"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 1006
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Native validation results and deterministic runtime evidence; completion does not establish scientific truth or authorize promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/wiki_level/run_suite.py",
+        "selector": "run_suite; prepare_suite; advance_case; compile_suite_gold; audit_suite; check_suite_declarations; finish_suite; parse_args; main",
+        "digest": "sha256:63e016b2b4650b8be971cbba325be8610a52a785c723808d22579e3e8b3bc315"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:lean:wiki-level-suite; run_action; run_leaf_action; preflight",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/wiki_suite_tools.py",
+        "selector": "register_wiki_suite_tools",
+        "digest": "sha256:942f2ac507804bcc262af18b87893b26fe0bb5ca7586dbe75a60873a8d6f13d5"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_wiki_suite_tools(mcp, _analysis_write_policy)",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "service_coverage_report",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "contracts/lean:wiki-level-suite authored override",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_wiki_suite_workflow_tests.py",
+        "selector": "WikiSuiteTests",
+        "digest": "sha256:2a5360663c5ad11508f9f328de75846cd05d7ed705846e53d0ab5b4c412d4639"
+      },
+      {
+        "path": "tests/mcp/fixtures/wiki_suite_boundary.py",
+        "selector": "install",
+        "digest": "sha256:8439c36e1b67334f294aa2655a89d40edb5426ae141b5c5285f2ea1f8f11a88d"
+      },
+      {
+        "path": "tests/mcp/fixtures/wiki_suite_server.py",
+        "selector": "production create_server with external process fixture",
+        "digest": "sha256:614eadb7824c23865ebd9bba177ddfc2516c6052eda05c3eb5509c9d89ae638d"
+      },
+      {
+        "path": "tests/mcp/fixtures/wiki_suite_original.py.txt",
+        "selector": "original run_suite equivalence oracle",
+        "digest": "sha256:9a2c15a31b28aa3f51ec0ff772aa8715fa64d802c73027efc4e339004f8c8949"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "mcp.wiki_suite.workflow",
+        "digest": "sha256:0dd1237711f2c9a37fc0fcfb0e425461cc1a0d89e60bbf5a77efa02fa722e6a9"
+      }
+    ],
+    "gaps": [
+      "Manifest payload is specialized to at most 1000 cases; larger native manifests are rejected before output initialization.",
+      "Global 3600-second and operation-call limits are normalization metadata; native hub outer timeout remains 300 seconds.",
+      "Network/external effects inherit native capabilities; deterministic fixtures qualify control flow without a live scientific run."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "lean:wiki-level-suite",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "lean:wiki-level-suite",
+        "family": "lean",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "tests/wiki_level/run_suite.py",
+          "--json"
+        ],
+        "depends_on": [],
+        "timeout_seconds": 300,
+        "allows_extra_args": false
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "run_action dispatches dependency-free action through run_leaf_action with preflight, dry-run, subprocess timeout and write auditing.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "entrypoint": "main accepts --json, calls run_suite and exits 0 on summary.passed else 1. MCP ports share each native stage with run_suite and enforce service write policy."
+    },
+    "mathformer.blocks": {
+      "prepare": "Load manifest, create output directory, optionally reset reasoning log unless append; read gold Lean and record import diagnostics. Pack session, empty accumulators, cursor=0 and guards. Manifest is a path port preserving native manifest_file provenance; prepare admits at most 1000 cases before output initialization.",
+      "case_step": "Read next LaTeX case; extract statement/proof; extend expected declarations; static review then difficulty; if not skip_concept_map map concepts; if not skip_hierarchy navigate hierarchy; record Lean declaration presence and append result. Pack incremented cursor/state and done=(cursor reaches manifest length).",
+      "empty_cases": "Retain empty accumulators without invoking any per-case work.",
+      "checks": "Compile gold, then audit regardless of recorded failure. Declaration helper deduplicates nonempty names in order; empty list succeeds immediately; otherwise writes tmp/expected_declaration_checks.lean and runs Lean.",
+      "finish": "Build report and aggregate static, difficulty, enabled concept/hierarchy, theorem-presence, Lean, audit and declaration failures. Import diagnostics do not affect passed. Log completion, write output_dir/output_name (default report.json), return report even when passed=false.",
+      "failure": "Recorded check failures/timeouts are data and do not stop later checks; uncaught exceptions abort. No retries or proof repair.",
+      "bounds": "One iteration per manifest case; done is true on the last case, including case 1000, so admitted inputs return normally at the bound. Exhaustion indicates an inconsistent adapter, not native exhaustion behavior. The loop is top-level with an empty-case switch in its body for Lunar scoped-exit compatibility; the empty branch returns done=true without per-case work.",
+      "helper_limits": "Difficulty/hierarchy 60s; Lean/audit/declarations 120s; concept verification at most 5 concepts and 3 candidates, timeout default 30s; mapping subprocess max(120, verify_timeout_sec * 20)."
+    }
+  }
+}

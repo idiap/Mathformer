@@ -1,0 +1,392 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+def build_design_guard_review(
+    case_id: str, path: Path, reasoning_log: Path | None
+) -> dict[str, Any]:
+    """Review broader semantic-preservation debts for one SymPy artifact."""
+    findings: list[dict[str, Any]] = []
+    evidence: dict[str, Any] = {
+        "artifact_path": rel(path),
+        "artifact_exists": path.exists(),
+        "reasoning_log": None if reasoning_log is None else rel(reasoning_log),
+    }
+
+    if not path.exists():
+        findings.append(
+            design_finding(
+                code="artifact_missing",
+                severity="high",
+                message=f"SymPy artifact does not exist: {rel(path)}",
+                repair_surface="trace_realness",
+            )
+        )
+    else:
+        text = path.read_text(encoding="utf-8")
+        evidence["source_commentary_markers"] = {
+            marker: marker in text for marker in COMMENTARY_MARKERS
+        }
+        for marker, present in evidence["source_commentary_markers"].items():
+            if not present:
+                findings.append(
+                    design_finding(
+                        code="missing_source_commentary_marker",
+                        severity="high",
+                        message=f"Artifact is missing commentary marker: {marker}",
+                        repair_surface="source_anchor",
+                    )
+                )
+
+        module, import_report = load_module(path, case_id)
+        evidence["import"] = import_report
+        if module is None:
+            findings.append(
+                design_finding(
+                    code="artifact_import_failed",
+                    severity="high",
+                    message="Artifact cannot be imported, so design-guard checks cannot inspect real surfaces.",
+                    repair_surface="trace_realness",
+                    evidence=import_report,
+                )
+            )
+        else:
+            claim = getattr(module, "CLAIM", {})
+            commentary_header = (
+                str(claim.get("commentary_header", ""))
+                if isinstance(claim, dict)
+                else ""
+            )
+            evidence["claim_has_commentary_header"] = bool(commentary_header)
+            if not commentary_header or any(
+                marker not in commentary_header for marker in COMMENTARY_MARKERS
+            ):
+                findings.append(
+                    design_finding(
+                        code="stale_or_missing_structured_commentary",
+                        severity="high",
+                        message="CLAIM.commentary_header does not carry the full source commentary and SymPy alignment.",
+                        repair_surface="source_anchor",
+                    )
+                )
+
+            target_report = (
+                module.validate_no_hidden_target()
+                if hasattr(module, "validate_no_hidden_target")
+                else {"passed": False, "reason": "missing validate_no_hidden_target"}
+            )
+            evidence["target_nonleakage"] = target_report
+            if not report_passed(target_report):
+                findings.append(
+                    design_finding(
+                        code="target_nonleakage_not_proven",
+                        severity="high",
+                        message="Target nonleakage evidence is missing or failing.",
+                        repair_surface="target_nonleakage",
+                        evidence={"report": target_report},
+                    )
+                )
+
+            assumption_context = getattr(module, "ASSUMPTION_CONTEXT", {})
+            context_assumptions = (
+                assumption_context.get("CONTEXT_ASSUMPTIONS", [])
+                if isinstance(assumption_context, dict)
+                else []
+            )
+            evidence["assumption_count"] = len(context_assumptions)
+            assumption_text = " ".join(
+                str(item.get("text", ""))
+                for item in context_assumptions
+                if isinstance(item, dict)
+            ).lower()
+            if not context_assumptions:
+                findings.append(
+                    design_finding(
+                        code="assumption_provenance_missing",
+                        severity="high",
+                        message="No structured assumption provenance is available.",
+                        repair_surface="assumption_context",
+                    )
+                )
+            for item in context_assumptions:
+                if not isinstance(item, dict):
+                    continue
+                support = str(item.get("support", ""))
+                has_anchor = bool(
+                    item.get("source_anchor") or item.get("source_anchors")
+                )
+                if support not in ASSUMPTION_SUPPORT_LABELS:
+                    findings.append(
+                        design_finding(
+                            code="assumption_support_label_missing",
+                            severity="high",
+                            message="Assumption lacks a source-backed/generated-support/API-backed/blocker support label.",
+                            repair_surface="assumption_context",
+                            evidence={"assumption": item},
+                        )
+                    )
+                if support == "source_backed" and not has_anchor:
+                    findings.append(
+                        design_finding(
+                            code="assumption_source_anchor_missing",
+                            severity="high",
+                            message="Source-backed assumption lacks a source anchor.",
+                            repair_surface="assumption_context",
+                            evidence={"assumption": item},
+                        )
+                    )
+                if support == "generated_support" and not any(
+                    item.get(key)
+                    for key in (
+                        "generated_from",
+                        "rationale",
+                        "justification",
+                        "source_anchor",
+                        "source_anchors",
+                    )
+                ):
+                    findings.append(
+                        design_finding(
+                            code="silent_assumption_strengthening",
+                            severity="high",
+                            message="Generated-support assumption lacks a generated-from/rationale/justification field.",
+                            repair_surface="assumption_context",
+                            evidence={"assumption": item},
+                        )
+                    )
+
+            equation_surface = getattr(module, "EQUATION_SURFACE", {})
+            equation_graph = (
+                equation_surface.get("EQUATION_GRAPH", {})
+                if isinstance(equation_surface, dict)
+                else {}
+            )
+            frame_context = (
+                equation_graph.get("frame_context", {})
+                if isinstance(equation_graph, dict)
+                else {}
+            )
+            evidence["frame_context_present"] = bool(frame_context)
+            if (
+                "component" in text.lower()
+                and not frame_context
+                and "frame" not in assumption_text
+                and "coordinate" not in assumption_text
+            ):
+                findings.append(
+                    design_finding(
+                        code="missing_frame_or_regime_context",
+                        severity="high",
+                        message="Component-level derivation lacks explicit frame, coordinate, or regime context.",
+                        repair_surface="frame_regime",
+                    )
+                )
+
+            projection_bridges = getattr(module, "PROJECTION_BRIDGES", [])
+            evidence["projection_bridge_count"] = (
+                len(projection_bridges) if isinstance(projection_bridges, list) else 0
+            )
+            if not isinstance(projection_bridges, list) or not projection_bridges:
+                findings.append(
+                    design_finding(
+                        code="projection_bridge_missing",
+                        severity="high",
+                        message="No scalar/vector/field projection bridge is exposed.",
+                        repair_surface="projection_bridge",
+                    )
+                )
+            else:
+                for bridge in projection_bridges:
+                    status = (
+                        str(bridge.get("status", ""))
+                        if isinstance(bridge, dict)
+                        else ""
+                    )
+                    if status not in PROJECTION_PASS_STATUSES:
+                        findings.append(
+                            design_finding(
+                                code="projection_bridge_status_not_ready",
+                                severity="high",
+                                message="Projection bridge status is not provided/pass/ready/required.",
+                                repair_surface="projection_bridge",
+                                evidence={"bridge": bridge},
+                            )
+                        )
+
+            derivation_steps = getattr(module, "DERIVATION_STEPS", [])
+            evidence["derivation_step_count"] = (
+                len(derivation_steps) if isinstance(derivation_steps, list) else 0
+            )
+            if not isinstance(derivation_steps, list) or not derivation_steps:
+                findings.append(
+                    design_finding(
+                        code="derivation_steps_missing",
+                        severity="high",
+                        message="No derivation steps are exposed for generated-support labeling.",
+                        repair_surface="transformation_step",
+                    )
+                )
+            else:
+                for step in derivation_steps:
+                    if not isinstance(step, dict):
+                        continue
+                    has_generated_flag = "generated" in step
+                    has_support_label = bool(step.get("source") or step.get("support"))
+                    has_anchor = bool(
+                        step.get("source_anchors") or step.get("source_anchor")
+                    )
+                    if not has_generated_flag or not has_support_label:
+                        findings.append(
+                            design_finding(
+                                code="generated_support_label_missing",
+                                severity="high",
+                                message="Derivation step lacks generated/source support labeling.",
+                                repair_surface="transformation_step",
+                                evidence={"step": step},
+                            )
+                        )
+                    if step.get("generated") is False and not has_anchor:
+                        findings.append(
+                            design_finding(
+                                code="source_step_anchor_missing",
+                                severity="high",
+                                message="Source-backed derivation step lacks source anchors.",
+                                repair_surface="transformation_step",
+                                evidence={"step": step},
+                            )
+                        )
+
+            grounding = getattr(module, "SYMPY_LIBRARY_GROUNDING", {})
+            grounding_level = (
+                str(grounding.get("grounding_level", ""))
+                if isinstance(grounding, dict)
+                else ""
+            )
+            evidence["sympy_library_grounding_level"] = grounding_level
+            if grounding_level != "high":
+                findings.append(
+                    design_finding(
+                        code="installed_library_grounding_not_high",
+                        severity="high",
+                        message="Installed SymPy/dependency grounding is missing or below high.",
+                        repair_surface="sympy_library_grounding",
+                        evidence={"grounding_level": grounding_level},
+                    )
+                )
+
+            if not hasattr(module, "validate_numeric_samples"):
+                findings.append(
+                    design_finding(
+                        code="numeric_domain_not_exposed",
+                        severity="high",
+                        message="Artifact does not expose numeric-domain sanity evidence.",
+                        repair_surface="numeric_domain",
+                    )
+                )
+            else:
+                try:
+                    numeric_report = module.validate_numeric_samples()
+                except (
+                    Exception
+                ) as exc:  # pragma: no cover - exact artifact failures vary.
+                    numeric_report = {
+                        "passed": False,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                evidence["numeric_domain"] = {
+                    "passed": report_passed(numeric_report),
+                    "domain": (
+                        numeric_report.get("domain")
+                        if isinstance(numeric_report, dict)
+                        else None
+                    ),
+                }
+                if not report_passed(numeric_report) or not (
+                    isinstance(numeric_report, dict) and numeric_report.get("domain")
+                ):
+                    findings.append(
+                        design_finding(
+                            code="numeric_domain_hole",
+                            severity="high",
+                            message="Numeric sanity evidence is missing, failing, or lacks an explicit domain.",
+                            repair_surface="numeric_domain",
+                            evidence={"numeric_report": numeric_report},
+                        )
+                    )
+
+    if reasoning_log is None:
+        findings.append(
+            design_finding(
+                code="reasoning_log_not_requested",
+                severity="medium",
+                message="No reasoning-log path was supplied, so consumer-ready log emission was not exercised.",
+                repair_surface="consumer_reasoning_log",
+            )
+        )
+    elif (
+        not reasoning_log.exists()
+        or not reasoning_log.read_text(encoding="utf-8").strip()
+    ):
+        findings.append(
+            design_finding(
+                code="reasoning_log_missing_or_empty",
+                severity="high",
+                message="Reasoning-log path was supplied but no parseable event evidence exists yet.",
+                repair_surface="consumer_reasoning_log",
+                evidence={"path": rel(reasoning_log)},
+            )
+        )
+    else:
+        first_line = reasoning_log.read_text(encoding="utf-8").splitlines()[0]
+        try:
+            parsed = json.loads(first_line)
+            evidence["reasoning_log_first_event_step"] = parsed.get("step")
+        except json.JSONDecodeError as exc:
+            findings.append(
+                design_finding(
+                    code="reasoning_log_invalid_json",
+                    severity="high",
+                    message=f"Reasoning-log event is not JSON: {exc.msg}",
+                    repair_surface="consumer_reasoning_log",
+                    evidence={"path": rel(reasoning_log)},
+                )
+            )
+
+    repair_surfaces = sorted({str(item["repair_surface"]) for item in findings})
+    high_findings = [
+        item for item in findings if item["severity"] in {"high", "critical"}
+    ]
+    return {
+        "style": "physics_sympy_design_guard_review",
+        "backend": "sympy",
+        "case_id": case_id,
+        "status": "fail" if high_findings else "pass",
+        "high_severity_finding_count": len(high_findings),
+        "repair_surfaces": repair_surfaces,
+        "localized_actions": [
+            {
+                "repair_surface": surface,
+                "action": SURFACE_ACTIONS.get(
+                    surface, "Create the smallest local SymPy repair for this surface."
+                ),
+                "allowed_scope": "only the named commentary, evidence, grounding, projection, support-label, trace, or reasoning-log surface",
+            }
+            for surface in repair_surfaces
+        ],
+        "semantic_preservation_contract": {
+            "source_commentary_required": True,
+            "informal_to_sympy_alignment_required": True,
+            "target_nonleakage_required": True,
+            "assumption_provenance_required": True,
+            "projection_bridge_required": True,
+            "generated_support_label_required": True,
+            "installed_library_grounding_minimum": "high",
+            "consumer_reasoning_log_required_for_workflow_runs": True,
+        },
+        "evidence": evidence,
+        "findings": findings,
+        "next_action": (
+            "run localized monotonic repairs and rerun affected SymPy gates"
+            if high_findings
+            else "continue recursive SymPy gate sequence"
+        ),
+    }
+

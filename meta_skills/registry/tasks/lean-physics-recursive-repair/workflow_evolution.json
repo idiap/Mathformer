@@ -1,0 +1,162 @@
+{
+  "schema_version": "mathformer.meta_skills.workflow_evolution.v0.1",
+  "workflow_id": "physics_lean.recursive_repair.exhaustive_loop",
+  "source_report": "artifacts/physics_lean/backend_suite/lean_physics_backend_suite_report.json",
+  "states": [
+    {
+      "state_id": "monitor.pathologies",
+      "status": "active_findings",
+      "owner": "physics-lean-drift-pathology-monitor",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/drift_pathology_monitor.json"
+      ]
+    },
+    {
+      "state_id": "objects.detected",
+      "status": "ready",
+      "owner": "physics-math-object-detector",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/object_packet.json"
+      ]
+    },
+    {
+      "state_id": "library.workbench",
+      "status": "library_work_required",
+      "owner": "mathformerphysicslib-object-workbench",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/object_workbench_plan.json"
+      ]
+    },
+    {
+      "state_id": "deterministic.repair.loop",
+      "status": "blocked_on_library_or_labels",
+      "owner": "physics-lean-pathology-repair-orchestrator",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/pathology_repair_loop.json"
+      ]
+    },
+    {
+      "state_id": "generative.repair.plan",
+      "status": "advisory_plan_present",
+      "owner": "physics-lean-generative-repair-orchestrator",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/generative_repair_plan.json"
+      ]
+    },
+    {
+      "state_id": "expansion.map",
+      "status": "needs_expansion",
+      "owner": "physics-lean-repair-expansion-cartographer",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/repair_expansion_map.json"
+      ]
+    },
+    {
+      "state_id": "recursion.control",
+      "status": "recurse",
+      "owner": "physics-lean-recursive-repair-loop-controller",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/recursive_repair_control.json"
+      ]
+    }
+  ],
+  "transitions": [
+    {
+      "from": "monitor.pathologies",
+      "to": "objects.detected",
+      "condition": "Active pathology categories require physics object detection.",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/object_packet.json"
+      ]
+    },
+    {
+      "from": "objects.detected",
+      "to": "library.workbench",
+      "condition": "Detected objects must be worked through MathformerPhysicsLib before theorem edits.",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/object_workbench_plan.json"
+      ]
+    },
+    {
+      "from": "library.workbench",
+      "to": "deterministic.repair.loop",
+      "condition": "Workbench blockers drive deterministic repair planning.",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/pathology_repair_loop.json"
+      ]
+    },
+    {
+      "from": "deterministic.repair.loop",
+      "to": "generative.repair.plan",
+      "condition": "Generative repair may propose only guarded advisory deltas.",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/generative_repair_plan.json"
+      ]
+    },
+    {
+      "from": "generative.repair.plan",
+      "to": "expansion.map",
+      "condition": "Expansion map must cover deterministic and generative repair branches.",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/repair_expansion_map.json"
+      ]
+    },
+    {
+      "from": "expansion.map",
+      "to": "recursion.control",
+      "condition": "Controller decides recurse, complete, or block from exhaustive map coverage.",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/recursive_repair_control.json"
+      ]
+    }
+  ],
+  "gates": [
+    {
+      "gate_id": "expansion.exhaustive",
+      "status": "pass",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/repair_expansion_map.json"
+      ]
+    },
+    {
+      "gate_id": "recursive.control.present",
+      "status": "pass",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/recursive_repair_control.json"
+      ]
+    },
+    {
+      "gate_id": "library.first.blocker.propagated",
+      "status": "active_blocker",
+      "evidence": [
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/pathology_repair_loop.json",
+        "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/recursive_repair_control.json"
+      ]
+    }
+  ],
+  "reflective_questions": [
+    {
+      "question": "Which support object should be accepted into MathformerPhysicsLib before the next theorem refinement?",
+      "evidence_needed": [
+        "object_workbench_plan support dependency",
+        "foundation verification report"
+      ]
+    },
+    {
+      "question": "Which labels are missing for implicit premise normalization?",
+      "evidence_needed": [
+        "implicit premise repair plan",
+        "source-anchor evidence"
+      ]
+    }
+  ],
+  "next_delta": {
+    "decision": "recurse",
+    "reason": "Expansion is exhaustive but outstanding library and labeling blockers remain.",
+    "required_actions": [
+      "resolve support_dependency_not_ready:integral_or_limit",
+      "label implicit premise assumptions",
+      "rerun recursive repair control"
+    ]
+  }
+}

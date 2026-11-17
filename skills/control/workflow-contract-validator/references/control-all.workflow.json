@@ -1,0 +1,736 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_control_all_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Run the nine repository-control dependencies in native registry order.",
+  "aliases": [
+    "control:all"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Arguments": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Ancestry": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "uniqueItems": true
+      }
+    },
+    "Admission": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "accepted",
+              "unknown_action",
+              "dependency_cycle",
+              "extra_args_for_sequence"
+            ]
+          },
+          "ancestry": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "accepted",
+          "status",
+          "ancestry"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "DependencyState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 9,
+            "items": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ]
+            }
+          },
+          "dependencies_ok": {
+            "type": "boolean"
+          },
+          "ancestry": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "index",
+          "children",
+          "dependencies_ok",
+          "ancestry"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "extra_args": {
+      "type": "Arguments"
+    },
+    "ancestry": {
+      "type": "Ancestry"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "admit": {
+      "inputs": {
+        "extra_args": {
+          "type": "Arguments"
+        },
+        "ancestry": {
+          "type": "Ancestry"
+        }
+      },
+      "outputs": {
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_control_all_admit",
+          "operation": "mathformer_control_all_admit"
+        }
+      }
+    },
+    "reject": {
+      "inputs": {
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_control_all_reject",
+          "operation": "mathformer_control_all_reject"
+        }
+      }
+    },
+    "initialize": {
+      "inputs": {
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "DependencyState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_control_all_initialize",
+          "operation": "mathformer_control_all_initialize"
+        }
+      }
+    },
+    "visit": {
+      "inputs": {
+        "state": {
+          "type": "DependencyState"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_control_all_visit",
+          "operation": "mathformer_control_all_visit"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "DependencyState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "DependencyState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_control_all_advance",
+          "operation": "mathformer_control_all_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "DependencyState"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_control_all_finish",
+          "operation": "mathformer_control_all_finish"
+        }
+      }
+    },
+    "carry": {
+      "inputs": {
+        "state": {
+          "type": "DependencyState"
+        },
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "DependencyState"
+        },
+        "done": {
+          "type": "Flag"
+        },
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_control_all_carry",
+          "operation": "mathformer_control_all_carry"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "admission",
+        "kind": "call",
+        "operation": "admit",
+        "arguments": {
+          "extra_args": {
+            "ref": "inputs.extra_args"
+          },
+          "ancestry": {
+            "ref": "inputs.ancestry"
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "accepted",
+            "when": {
+              "ref": "steps.admission.outputs.admission.accepted"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "initial",
+                  "kind": "call",
+                  "operation": "initialize",
+                  "arguments": {
+                    "admission": {
+                      "ref": "steps.admission.outputs.admission"
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "state": {
+                  "type": "DependencyState",
+                  "value": {
+                    "ref": "steps.initial.outputs.state"
+                  }
+                },
+                "rejection": {
+                  "type": "HubResult",
+                  "value": {
+                    "literal": {
+                      "ok": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "kind": "call",
+              "operation": "reject",
+              "arguments": {
+                "admission": {
+                  "ref": "steps.admission.outputs.admission"
+                }
+              },
+              "id": "rejection"
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "DependencyState",
+              "value": {
+                "literal": {
+                  "index": 0,
+                  "children": [],
+                  "dependencies_ok": true,
+                  "ancestry": []
+                }
+              }
+            },
+            "rejection": {
+              "type": "HubResult",
+              "value": {
+                "ref": "steps.rejection.outputs.result"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "state": {
+            "type": "DependencyState",
+            "value": {
+              "ref": "selected.outputs.state"
+            }
+          },
+          "rejection": {
+            "type": "HubResult",
+            "value": {
+              "ref": "selected.outputs.rejection"
+            }
+          }
+        }
+      },
+      {
+        "id": "dependencies",
+        "kind": "loop",
+        "state_type": "DependencyState",
+        "initial": {
+          "ref": "steps.dispatch.outputs.state"
+        },
+        "max_iterations": 9,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "accepted",
+              "when": {
+                "ref": "steps.admission.outputs.admission.accepted"
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "child",
+                    "kind": "call",
+                    "operation": "visit",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      },
+                      "context": {
+                        "ref": "inputs.context"
+                      }
+                    }
+                  },
+                  {
+                    "id": "advance",
+                    "kind": "call",
+                    "operation": "advance",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      },
+                      "child": {
+                        "ref": "steps.child.outputs.child"
+                      },
+                      "context": {
+                        "ref": "inputs.context"
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "state": {
+                    "type": "DependencyState",
+                    "value": {
+                      "ref": "steps.advance.outputs.state"
+                    }
+                  },
+                  "done": {
+                    "type": "Flag",
+                    "value": {
+                      "ref": "steps.advance.outputs.done"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "sequence",
+            "steps": [
+              {
+                "kind": "call",
+                "operation": "carry",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  },
+                  "result": {
+                    "ref": "steps.dispatch.outputs.rejection"
+                  }
+                },
+                "id": "carry"
+              }
+            ],
+            "outputs": {
+              "state": {
+                "type": "DependencyState",
+                "value": {
+                  "ref": "steps.carry.outputs.state"
+                }
+              },
+              "done": {
+                "type": "Flag",
+                "value": {
+                  "ref": "steps.carry.outputs.done"
+                }
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "DependencyState",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "DependencyState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "completion",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "accepted",
+            "when": {
+              "ref": "steps.admission.outputs.admission.accepted"
+            },
+            "body": {
+              "id": "completion",
+              "kind": "call",
+              "operation": "finish",
+              "arguments": {
+                "state": {
+                  "ref": "steps.dependencies.outputs.state"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "kind": "call",
+              "operation": "carry",
+              "arguments": {
+                "state": {
+                  "ref": "steps.dispatch.outputs.state"
+                },
+                "result": {
+                  "ref": "steps.dispatch.outputs.rejection"
+                }
+              },
+              "id": "carry"
+            }
+          ],
+          "outputs": {
+            "result": {
+              "type": "HubResult",
+              "value": {
+                "ref": "steps.carry.outputs.result"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "HubResult",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.completion.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 21
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked description only; no runtime qualification or scientific endorsement."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/control_all_tools.py",
+        "selector": "register_control_all_tools",
+        "digest": "sha256:486079d62b0fa2b677bb867fbee3287e5c6568e725b65f1ffc0b57a0f94cd6ef"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_control_all_tools(mcp)",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "mcp_tools",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Recursive child internals stay inside visit; child envelopes retain native failure data.",
+      "Required wall/call limits are descriptor budgets; native run_action has no overall wall budget.",
+      "Native subprocess bounds come only from individual leaf timeout_seconds.",
+      "Required receipts/provenance and effect ceilings do not qualify optional native logging or effects."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "control:all",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md"
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [
+        "hub:audit",
+        "control:thematic-layout",
+        "control:workflow-contract",
+        "control:reasoning-flow-language",
+        "control:reasoning-flow-catalog",
+        "control:skill-coverage",
+        "control:reasoning-log-coverage",
+        "control:reasoning-log-smoke",
+        "repo:diff-check"
+      ],
+      "command_after_dependencies": false,
+      "specialization": "Canonical build_registry control:all with exactly nine dependencies and no command.",
+      "bound_behavior": "Advance returns done at index nine; exhaustion is unreachable for canonical inputs.",
+      "admission_bypass": "Rejected admission uses the transport-only carry adapter to bypass native dependency visits and completion. Only admit and reject invoke native controller helpers. The dependency loop is outside the admission switch for Lunar scoped-exit compatibility."
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered mathformer_control_all_* MCP tools call the shared scripts/mathformer.py admission, rejection, initialization, visit, advance and finish helpers. Canonical registry and full RunContext are passed unchanged; no server timeout cap is added.",
+      "failure_policy": "Child ok=false is result data; finish returns sequence_failed without graph retry.",
+      "scientific_payloads": "HubResult is a transport envelope, not a backend proof or report schema."
+    }
+  }
+}

@@ -1,0 +1,605 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Make knowledge-base, search, and persistence dependencies explicit and
+#   testable without confusing resource access with epistemic warrant.
+#
+# Intent:
+#   Provide independently executable tasks for the adopted compact ERFL 0.3
+#   resource syntax, runtime receipts, versioned persistence, KB index
+#   coherence, richer future schemas, migration, and adversarial validation.
+#
+# Function:
+#   Implements the backlog defined by docs/architecture/
+#   KNOWLEDGE_RESOURCES_IN_REASONING_FLOWS.md.
+#
+# Maintenance Notes:
+#   Keep resource bindings free of credentials, traversal, network endpoints,
+#   skills, hooks, tools, and agents. File targets must be repository-relative.
+
+schema_version: mathformer.knowledge_resources.todo.v0.1
+architecture: docs/architecture/KNOWLEDGE_RESOURCES_IN_REASONING_FLOWS.md
+
+todo_policy:
+  status_values:
+    - pending
+    - in_progress
+    - complete
+    - blocked
+  completion_rule: >
+    A TODO is complete only when every acceptance criterion holds, every
+    acceptance-evidence artifact exists, and every validation command succeeds
+    or has an explicit reviewed waiver.
+  self_contained_rule: >
+    Each TODO names its objective, rationale, dependencies, target paths,
+    implementation steps, non-goals, acceptance criteria, evidence, validation
+    commands, risks, and controls so that it can be executed without chat history.
+  semantic_boundary: >
+    Epistemic routes, logical resource projections, runtime bindings, and
+    execution receipts are separate layers. Resource edges never establish
+    warrant or satisfy epistemic handle conservation.
+
+todos:
+  - id: KR-001
+    status: pending
+    title: Define the knowledge-resource boundary ontology
+    objective: >
+      Make logical resources, immutable epistemic handles, resource
+      accessibility, actual access, persistence effects, and operation receipts
+      distinct normative concepts.
+    rationale: >
+      A dotted name such as KB.premises is useful only if it cannot be mistaken
+      for evidence, a semantic kind, a physical endpoint, or a mutable value
+      transported through the epistemic route.
+    dependencies: []
+    target_paths:
+      - docs/architecture/KNOWLEDGE_RESOURCES_IN_REASONING_FLOWS.md
+      - docs/architecture/REASONING_FLOW_LANGUAGE.md
+      - skills/control/reasoning-flow-language/references/erfl-0.3.json
+      - skills/OUTPUT_TYPES.yaml
+    implementation_steps:
+      - Define KnowledgeBase, SearchSpace, and PersistentStore resource classes.
+      - Define KB.*, SEARCH.*, and STORE.* as flow-local logical namespaces.
+      - Define access modes read, lookup, query, search, and snapshot.
+      - Define persistence modes append, put, upsert, checkpoint, invalidate,
+        promote, and active-pointer commit.
+      - Define required/optional access, version policy, coverage model,
+        entry-level trust, consistency model, and mutation authority facets.
+      - Define SnapshotManifest, RetrievalReceipt, SearchReceipt,
+        PersistenceReceipt, StoreSnapshot, and KnowledgeBaseRevision subjects as
+        specializations of existing epistemic root kinds.
+      - Add the non-coercions for membership, ranking, empty results,
+        unavailability, staleness, persistence, invalidation, and latest pointers.
+    non_goals:
+      - Adding a new reasoning primitive for search or persistence.
+      - Storing physical resource configuration in ERFL.
+      - Treating collection-level trust as uniform entry truth.
+    acceptance_criteria:
+      - Every resource class and access/effect mode has a definition and
+        authority ceiling.
+      - Resource declarations explicitly confer neither warrant nor availability.
+      - Search and KB query semantics are distinguished.
+      - Persistence is defined as authority-preserving unless an independent
+        curation decision changes status.
+    acceptance_evidence:
+      - docs/architecture/KNOWLEDGE_RESOURCES_IN_REASONING_FLOWS.md
+      - artifacts/meta_skills/knowledge_resource_ontology_validation.json
+    validation_commands:
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py --self-test --json
+      - python scripts/mathformer.py audit --strict --json
+    risks:
+      - Resource classes duplicate output types or implementation adapters.
+      - A broad consume mode erases important epistemic distinctions.
+    controls:
+      - Keep resource class, access mode, reasoning operation, output type, and
+        runtime implementation as separate facets.
+      - License explicit verbs rather than a generic consume relation.
+
+  - id: KR-002
+    status: in_progress
+    title: Make premise-KB access explicit in ERFL 0.3
+    objective: >
+      Replace the implicit Q dependency in the premise-retrieval profile with
+      an observed immutable KB snapshot, snapshot manifest, and retrieval receipt.
+    rationale: >
+      The current profile contains Q[query -> candidates] and does not identify
+      which KB state was queried. ERFL 0.3 can express this dependency now
+      without introducing new syntax.
+    dependencies:
+      - KR-001
+    target_paths:
+      - examples/reasoning_flows/premise_retrieval_and_verified_reuse.rflow
+      - skills/REASONING_TYPES.yaml
+      - docs/architecture/ALL_REASONING_FLOWS.md
+    implementation_steps:
+      - Add parallel S query construction and O snapshot observation.
+      - Make O consume a logical reference and version constraint and produce
+        KnowledgeBaseSnapshot and SnapshotManifest subjects.
+      - Make Q consume the query, exact snapshot, and manifest.
+      - Make Q produce typed candidates and a retrieval receipt.
+      - Preserve G, R, and E so retrieval cannot be coerced into applicability.
+      - Add stale-snapshot and resource-unavailable stopping dispositions.
+      - Regenerate the canonical catalogue after validation.
+    non_goals:
+      - Changing MathformerKB storage behavior.
+      - Treating resource binding or access declarations as runtime receipts.
+    acceptance_criteria:
+      - Q cannot run without a conserved snapshot and manifest.
+      - The profile has explicit stale and unavailable outcomes.
+      - Retrieval candidates remain ungrounded until G.
+      - Strict ERFL and cross-registry validation passes.
+    acceptance_evidence:
+      - examples/reasoning_flows/premise_retrieval_and_verified_reuse.rflow
+      - artifacts/meta_skills/premise_kb_explicit_snapshot_flow.json
+    validation_commands:
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py examples/reasoning_flows/*.rflow --strict --check-registries --json
+      - python skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py --check --json
+    risks:
+      - The bridge is mistaken for the final resource ontology.
+      - Snapshot observation appears to validate KB content.
+    controls:
+      - Mark this as an ERFL 0.3 compatibility pattern.
+      - Preserve O's ceiling at what the manifest and snapshot contain.
+
+  - id: KR-003
+    status: pending
+    title: Add schema-rich resource declarations beyond compact ERFL 0.3
+    objective: >
+      Extend the compact resource bindings with explicit external inputs,
+      typed resource schemas, version policy, and capability declarations.
+    rationale: >
+      Current flows permit undeclared external handles, and dotted names are
+      already lexically accepted as ordinary handles. A dedicated grammar is
+      needed to prevent resource addresses from masquerading as epistemic state.
+    dependencies:
+      - KR-001
+      - KR-002
+    target_paths:
+      - skills/control/reasoning-flow-language/references/erfl-0.4.json
+      - skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py
+      - skills/control/reasoning-flow-language/SKILL.md
+      - docs/architecture/REASONING_FLOW_LANGUAGE.md
+    implementation_steps:
+      - Add input handle::Kind statements and dataflow-closure validation.
+      - Add resource RESOURCE::RESOURCE_KIND declarations.
+      - Parse KB.*, SEARCH.*, and STORE.* resource ids separately from handles.
+      - Add registry-driven resource properties for capabilities,
+        required/optional status, version binding, coverage, trust, and consistency.
+      - Preserve source ranges and multiline layout behavior for new statements.
+      - Reject endpoints, paths, credential fields, skill ids, hooks, agents,
+        commands, and tools in canonical resource declarations.
+      - Add 0.3 compatibility parsing and an explicit migration report.
+    non_goals:
+      - Resolving logical resources to physical stores.
+      - Executing reads or writes during validation.
+      - Treating input declarations as availability evidence.
+    acceptance_criteria:
+      - Every unproduced handle is declared or reported precisely.
+      - Resource ids and epistemic handles have distinct AST node types.
+      - All existing 0.3 fixtures remain valid in compatibility mode.
+      - Dotted logical resources cannot appear as ordinary route ports.
+    acceptance_evidence:
+      - skills/control/reasoning-flow-language/references/erfl-0.4.json
+      - artifacts/meta_skills/erfl_0_4_resource_grammar_self_test.json
+    validation_commands:
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py --self-test --json
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py examples/reasoning_flows/*.rflow --strict --check-registries --json
+    risks:
+      - Input closure breaks profiles that intentionally rely on ambient context.
+      - Dotted legacy handles collide with resource namespace parsing.
+    controls:
+      - Provide explicit compatibility diagnostics and a migration fixer plan.
+      - Reserve only uppercase KB., SEARCH., and STORE. prefixes.
+
+  - id: KR-004
+    status: in_progress
+    title: Add inverted access arrows as a non-epistemic projection
+    objective: >
+      Implement occurrence <-mode- RESOURCE access declarations without
+      changing route-expression direction, conservation, branching, or warrant.
+    rationale: >
+      Inverted notation makes query and search dependencies readable, but it is
+      safe only when the parser and validator keep resource edges outside the
+      epistemic graph.
+    dependencies:
+      - KR-003
+    target_paths:
+      - skills/control/reasoning-flow-language/references/erfl-0.4.json
+      - skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py
+      - skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py
+    implementation_steps:
+      - Parse access ALIAS <-ACCESS_MODE- RESOURCE_REF using HANDLES yielding
+        HANDLES statements.
+      - Resolve every alias and resource to exactly one declaration.
+      - Check that using and yielding handles occur in the referenced occurrence.
+      - License read, lookup, query, search, and snapshot against resource class
+        and declared capabilities.
+      - Permit ordinary query/search on Q, observation reads on O, and
+        counterexample search on P under explicit rules.
+      - Exclude resource edges from route handle conservation, relation
+        licensing, parallel joins, alternatives, and terminal calibration.
+      - Reject inverted arrows between reasoning occurrences.
+      - Require explicit fallback, Unavailable output, or stopping status for
+        failed optional-resource access.
+    non_goals:
+      - Inferring reasoning type from an access verb.
+      - Treating an access declaration as evidence of execution.
+      - Replacing typed query, result, and receipt ports.
+    acceptance_criteria:
+      - q <-query- KB.premises parses only in an access statement.
+      - Access mode and resource-class mismatches fail with stable diagnostics.
+      - Removing an access statement does not change route conservation results.
+      - Multi-resource joins remain explicit Q branches in the route.
+    acceptance_evidence:
+      - artifacts/meta_skills/erfl_resource_access_self_test.json
+      - artifacts/meta_skills/erfl_resource_edge_isolation_test.json
+    validation_commands:
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py --self-test --json
+      - python skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py --check --json
+    risks:
+      - Users read the inverted arrow as reverse warrant flow.
+      - Access edges accidentally satisfy ordinary dataflow checks.
+    controls:
+      - Require the access keyword and document the separate graph plane.
+      - Maintain separate AST, validation, and rendering structures.
+
+  - id: KR-005
+    status: pending
+    title: Define runtime resource bindings and access receipts
+    objective: >
+      Resolve logical resources operationally and record enough versioned,
+      redacted evidence to reproduce and audit every read, lookup, query, or search.
+    rationale: >
+      A declaration establishes permitted dependency only. Reproducibility and
+      provenance require knowing which snapshot, index, method, and result set
+      an actual operation used.
+    dependencies:
+      - KR-003
+      - KR-004
+    target_paths:
+      - config/
+      - meta_skills/schemas/resource_binding.schema.json
+      - meta_skills/schemas/resource_access_receipt.schema.json
+      - meta_skills/scripts/validate_resource_bindings.py
+      - skills/control/reasoning-log-schema-guardian/references/schema.md
+      - tests/meta_skills/run_meta_skill_suite.py
+    implementation_steps:
+      - Define a logical-id to physical-adapter binding outside ERFL.
+      - Record resolver binding id without exposing credential-bearing values.
+      - Require resource revision or observed-time envelope, schema version,
+        query and normalization digests, filters, scope, top-k, coverage, method
+        and index versions, result identities, per-result provenance and trust,
+        result digest, status, and receipt digest.
+      - Distinguish success, empty, partial, stale, unavailable, unauthorized,
+        timeout, and error outcomes.
+      - Add access preflight for declared capability, availability, freshness,
+        and authorization without performing a query.
+      - Add reasoning-log events that join the receipt to the flow occurrence.
+      - Redact secrets, tokens, private endpoints, and credential material.
+    non_goals:
+      - Storing raw query results in reasoning logs.
+      - Treating runtime connectivity as epistemic warrant.
+      - Moving provider credentials out of config.
+    acceptance_criteria:
+      - Every successful result bundle is bound to an exact resource observation.
+      - Empty and unavailable outcomes are machine-distinguishable.
+      - Logs contain logical ids and digests but no secrets.
+      - A receipt can be joined to the exact flow, occurrence, and result handles.
+    acceptance_evidence:
+      - meta_skills/schemas/resource_binding.schema.json
+      - meta_skills/schemas/resource_access_receipt.schema.json
+      - artifacts/meta_skills/resource_binding_validation.json
+      - artifacts/meta_skills/resource_access_receipt_validation.json
+    validation_commands:
+      - python meta_skills/scripts/validate_resource_bindings.py --self-test --json
+      - python tests/meta_skills/run_meta_skill_suite.py --json
+      - python scripts/mathformer.py audit --strict --json
+    risks:
+      - Receipts leak sensitive resource configuration.
+      - A timestamp is used where an immutable version is available.
+    controls:
+      - Store binding identities and redacted metadata rather than raw config.
+      - Require immutable revisions for versioned stores and time envelopes only
+        for inherently live search surfaces.
+
+  - id: KR-006
+    status: pending
+    title: Add E-guarded persistence effects and receipts
+    objective: >
+      Represent authorized persistence separately from the epistemic route and
+      require immutable successor state, compare-and-swap, receipt, and rollback.
+    rationale: >
+      A direct write or reverse route arrow would hide predecessor/successor
+      identity and allow operational mutation to masquerade as epistemic progress.
+    dependencies:
+      - KR-003
+      - KR-005
+    target_paths:
+      - skills/control/reasoning-flow-language/references/erfl-0.4.json
+      - skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py
+      - meta_skills/schemas/resource_persistence_receipt.schema.json
+      - meta_skills/scripts/validate_resource_persistence.py
+      - skills/SKILL_HOOKS.yaml
+    implementation_steps:
+      - Parse persist HANDLE -WRITE_MODE-> RESOURCE_REF when E.PREDICATE yielding
+        HANDLES statements.
+      - Require an existing payload, declared resource, licensed write mode, and
+        compatible terminal E guard.
+      - Require base snapshot, immutable successor snapshot, receipt, decision
+        id, policy digest, invalidation set, and rollback target at runtime.
+      - Define append, put, upsert, checkpoint, invalidate, promote, and commit
+        as distinct effects; reject physical delete initially.
+      - Enforce predecessor compare-and-swap and atomic successor publication.
+      - Preserve payload trust, taints, provenance, and obligations.
+      - Reject same-flow reads from a newly written version; require subsequent O.
+      - Add dry-run as the default operational posture.
+    non_goals:
+      - Letting E perform a write.
+      - Promoting content merely because persistence succeeded.
+      - Treating a receipt as evidence for the persisted claim.
+    acceptance_criteria:
+      - Unguarded and stale-decision writes fail.
+      - Base and successor identities are distinct and reproducible.
+      - Interrupted or concurrent writes cannot publish partial state.
+      - Rollback restores the prior active pointer without deleting history.
+    acceptance_evidence:
+      - meta_skills/schemas/resource_persistence_receipt.schema.json
+      - artifacts/meta_skills/resource_persistence_self_test.json
+      - artifacts/meta_skills/resource_persistence_rollback_test.json
+    validation_commands:
+      - python meta_skills/scripts/validate_resource_persistence.py --self-test --json
+      - python tests/meta_skills/run_meta_skill_suite.py --json
+      - python skills/control/workflow-contract-validator/scripts/validate_skill_hooks.py --strict --json
+    risks:
+      - A successful write is mistaken for successful index publication.
+      - Mutable latest pointers become evidence identities.
+    controls:
+      - Record index visibility separately from content commit.
+      - Permit latest only as a convenience resolver, never as receipt identity.
+
+  - id: KR-007
+    status: pending
+    title: Add immutable MathformerKB entries and snapshots
+    objective: >
+      Introduce schema-versioned entry revisions, content-addressed KB snapshots,
+      append-only curation events, and atomic publication without destroying the
+      current legacy corpus.
+    rationale: >
+      KBEntry currently has a logical id but no immutable entry-version identity
+      or content digest, while status and canonical-hash updates rewrite
+      authoritative JSONL state in place.
+    dependencies:
+      - KR-001
+      - KR-006
+    target_paths:
+      - backends/premise_kb/MathformerKB/schema.py
+      - backends/premise_kb/MathformerKB/storage.py
+      - scripts/manage_premise_kb.py
+      - tests/kb/
+    implementation_steps:
+      - Add schema_version, entry_version_id, predecessor_version_id, and content
+        digest to immutable entry records.
+      - Define KnowledgeBaseSnapshot with snapshot id, parent digest, content
+        digest, entry-version set, trust-state counts, canonicalizer version,
+        commit identity, and commit time.
+      - Replace in-place status and canonical-hash rewrites with new entry
+        versions and append-only curation events.
+      - Represent rejection and invalidation as tombstone or supersession events.
+      - Build candidate snapshots in a staging location and validate them before
+        compare-and-swap publication.
+      - Keep the previous snapshot and active pointer recoverable.
+      - Add concurrent-writer, duplicate-logical-id, interrupted-write, rollback,
+        and partial-publication fixtures.
+    non_goals:
+      - Deleting or rewriting the legacy corpus during initial implementation.
+      - Changing entry truth status without curation evidence.
+    acceptance_criteria:
+      - Every authoritative entry and snapshot has a stable immutable digest.
+      - Historical status and canonicalization states remain reconstructible.
+      - Publication is atomic and predecessor-checked.
+      - Rejection and invalidation do not erase history.
+    acceptance_evidence:
+      - artifacts/kb/versioning/schema_validation.json
+      - artifacts/kb/versioning/transaction_self_test.json
+      - artifacts/kb/versioning/rollback_self_test.json
+    validation_commands:
+      - python tests/kb/run_premise_kb_e2e.py
+      - python tests/kb/run_premise_kb_skill_scripts.py
+      - python scripts/mathformer.py ask "build theorem memory and test premise search" --run --json
+    risks:
+      - Migration changes current query ordering or duplicate behavior.
+      - Append-only history grows without compaction policy.
+    controls:
+      - Preserve a read-only legacy snapshot and compare old/new query results.
+      - Design content-addressed compaction that preserves logical history.
+
+  - id: KR-008
+    status: pending
+    title: Bind indexes and query packets to exact KB snapshots
+    objective: >
+      Make Bloom, embedding, and query artifacts version-coherent with the
+      authoritative content snapshot and prevent stale indexes from producing
+      false absence or silently outdated rankings.
+    rationale: >
+      Current Bloom and embedding manifests do not record their source snapshot
+      digest, and PremiseKB loads them without a freshness check. A stale Bloom
+      negative can bypass the current authoritative hash index.
+    dependencies:
+      - KR-005
+      - KR-007
+    target_paths:
+      - backends/premise_kb/MathformerKB/indexing.py
+      - backends/premise_kb/MathformerKB/bloom.py
+      - backends/premise_kb/MathformerKB/embeddings.py
+      - backends/premise_kb/MathformerKB/search.py
+      - tests/kb/
+    implementation_steps:
+      - Add source snapshot digest, schema version, builder version, algorithm
+        parameters, canonicalizer or embedding version, build time, and artifact
+        digest to every index manifest.
+      - Validate all index manifests against the active content snapshot before use.
+      - Fall back to authoritative storage or return stale_knowledge_snapshot
+        when a Bloom or embedding index is stale.
+      - Never accept a Bloom negative for a mismatched snapshot.
+      - Extend PremiseKBPacket with snapshot, index, query-contract,
+        canonicalizer, embedding, and candidate entry-version identities.
+      - Preserve per-candidate provenance, trust state, match method, ranking
+        components, and coverage limitations.
+      - Add rebuild and publication ordering that exposes content committed but
+        index not yet visible as a distinct status.
+    non_goals:
+      - Treating semantic ranking as proof relevance.
+      - Hiding partial or stale indexes behind an empty result.
+    acceptance_criteria:
+      - Every index proves which exact content snapshot it indexes.
+      - Stale Bloom negatives cannot establish absence.
+      - Query packets can be replayed against exact versions.
+      - Index visibility and content commit are separately observable.
+    acceptance_evidence:
+      - artifacts/kb/versioning/index_manifest_validation.json
+      - artifacts/kb/versioning/stale_index_self_test.json
+      - artifacts/kb/versioning/query_packet_replay.json
+    validation_commands:
+      - python tests/kb/run_premise_kb_e2e.py
+      - python tests/kb/run_famous_theorem_corpus.py
+      - python scripts/mathformer.py ask "build theorem memory and test premise search" --run --json
+    risks:
+      - Strict freshness checks make the KB unavailable during index rebuilds.
+      - Exact query replay is impossible for inherently live search providers.
+    controls:
+      - Permit authoritative exact lookup while derived indexes rebuild.
+      - Use an observed-time and provider-method envelope for live search only.
+
+  - id: KR-009
+    status: in_progress
+    title: Add resource-access and persistence adversarial fixtures
+    objective: >
+      Verify the language and runtime reject category errors, stale-state errors,
+      unauthorized mutation, authority inflation, and resource-plane leakage.
+    rationale: >
+      Positive examples cannot establish that empty results, membership,
+      persistence receipts, or resource arrows will not be overinterpreted.
+    dependencies:
+      - KR-004
+      - KR-005
+      - KR-006
+      - KR-008
+    target_paths:
+      - skills/control/reasoning-flow-language/references/
+      - tests/meta_skills/fixtures/knowledge_resources/
+      - tests/kb/
+      - tests/meta_skills/run_meta_skill_suite.py
+    implementation_steps:
+      - Add undeclared resource, duplicate declaration, invalid namespace,
+        missing alias, missing handle, and access-mode mismatch fixtures.
+      - Add inverted occurrence-route arrow and resource-edge-as-join fixtures.
+      - Add optional resource without fallback and unavailability-as-empty fixtures.
+      - Add search result treated as grounded evidence and empty search treated as
+        proof of absence.
+      - Add collection trust leaked to entries and membership treated as truth.
+      - Add unguarded write, stale E decision, illegal SEARCH write, in-place
+        successor, same-flow write/read, and persistence-as-promotion fixtures.
+      - Add stale Bloom, stale embedding, modified-entry/old-index, concurrent
+        commit, interrupted publication, and receipt-without-index-visibility tests.
+      - Assert stable diagnostic ids rather than complete error prose.
+    non_goals:
+      - Claiming exhaustive protection against adversarial resource providers.
+      - Replacing domain grounding and proof checks.
+    acceptance_criteria:
+      - Every negative fixture fails for its intended diagnostic.
+      - Positive KB, open search, optional fallback, and governed persistence
+        fixtures pass.
+      - Resource edges never affect epistemic conservation results.
+      - Runtime tests preserve all predecessor data after failure.
+    acceptance_evidence:
+      - tests/meta_skills/fixtures/knowledge_resources/
+      - artifacts/meta_skills/knowledge_resource_adversarial_suite.json
+      - artifacts/kb/versioning/adversarial_suite.json
+    validation_commands:
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py --self-test --json
+      - python tests/meta_skills/run_meta_skill_suite.py --json
+      - python tests/kb/run_premise_kb_e2e.py
+    risks:
+      - Fixtures test field presence rather than semantic behavior.
+      - Resource-provider errors make tests nondeterministic.
+    controls:
+      - Use deterministic fake adapters and explicit stale snapshots.
+      - Assert identities, digests, state transitions, and diagnostic codes.
+
+  - id: KR-010
+    status: in_progress
+    title: Migrate profiles, stores, documentation, and one controlled pilot
+    objective: >
+      Demonstrate explicit KB query, optional open search, and governed
+      persistence end to end while preserving legacy stores and ERFL 0.3 users.
+    rationale: >
+      The design is complete only when conceptual profiles, resource bindings,
+      runtime receipts, immutable snapshots, indexes, and user documentation
+      agree on the same identities and authority boundaries.
+    dependencies:
+      - KR-002
+      - KR-003
+      - KR-004
+      - KR-005
+      - KR-006
+      - KR-007
+      - KR-008
+      - KR-009
+    target_paths:
+      - examples/reasoning_flows/premise_retrieval_and_verified_reuse.rflow
+      - examples/reasoning_flows/theory_library_curation.rflow
+      - examples/reasoning_flows/trajectory_reflection_and_process_improvement.rflow
+      - docs/architecture/ALL_REASONING_FLOWS.md
+      - docs/architecture/REASONING_FLOW_MATERIALIZATIONS.md
+      - docs/backends/PREMISE_KB.md
+      - artifacts/kb/legacy_snapshot/
+      - artifacts/meta_skills/knowledge_resource_pilot/
+    implementation_steps:
+      - Preserve current JSONL as an immutable, digested legacy snapshot.
+      - Import each logical entry as revision 1 without changing its trust status.
+      - Rebuild Bloom and embedding indexes bound to the imported snapshot.
+      - Dual-read legacy and versioned stores and compare exact membership,
+        ranking, filters, and trusted/rejected partitions.
+      - Cut over through a reversible active-pointer update after a scoped E decision.
+      - Add resource declarations and access projections to premise retrieval,
+        library curation, reflective refinement memory, and provenance logging.
+      - Generate conceptual resource explanations separately from physical
+        materialization bindings.
+      - Pilot one KB query, one optional SEARCH query, and one append-only STORE
+        persistence with redacted receipts and rollback.
+      - Document 0.3 compatibility, 0.4 syntax, failure states, and migration.
+    non_goals:
+      - Deleting the legacy store after one successful run.
+      - Automatically promoting retrieved or persisted content.
+      - Exposing physical resource configuration in generated flow documents.
+    acceptance_criteria:
+      - Legacy and versioned query behavior has a reviewed comparison report.
+      - The cutover and rollback are both executable and preserve history.
+      - Canonical flows expose logical resources without implementation ids.
+      - The pilot distinguishes empty, unavailable, stale, and successful access.
+      - Persistence produces a successor snapshot and receipt without changing
+        content authority.
+    acceptance_evidence:
+      - artifacts/kb/legacy_snapshot/manifest.json
+      - artifacts/meta_skills/knowledge_resource_pilot/query_receipt.json
+      - artifacts/meta_skills/knowledge_resource_pilot/search_receipt.json
+      - artifacts/meta_skills/knowledge_resource_pilot/persistence_receipt.json
+      - artifacts/meta_skills/knowledge_resource_pilot/migration_comparison.json
+      - artifacts/meta_skills/knowledge_resource_pilot/rollback_report.json
+    validation_commands:
+      - python tests/kb/run_premise_kb_e2e.py
+      - python tests/kb/run_premise_kb_skill_scripts.py
+      - python skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py examples/reasoning_flows/*.rflow --strict --check-registries --json
+      - python skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py --check --json
+      - python tests/meta_skills/run_meta_skill_suite.py --json
+      - python scripts/mathformer.py audit --strict --json
+    risks:
+      - Dual-read hides a semantic mismatch until after cutover.
+      - The pilot is mistaken for proof that all resources are reproducible.
+    controls:
+      - Compare per-query and per-entry identities, not only aggregate counts.
+      - Keep adoption scoped and preserve the legacy snapshot and rollback pointer.

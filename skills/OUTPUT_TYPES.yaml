@@ -1,0 +1,1018 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Distinguish the epistemic kind of a Mathformer output from its file format,
+#   backend, workflow phase, status, and human-facing rendering.
+#
+# Intent:
+#   Provide an initial ontology of reasoning outputs, their authority and
+#   validation properties, and the constraints on their downstream use.
+#
+# Function:
+#   Defines output families, leaf types, orthogonal property axes, a common
+#   output-record contract, reasoning-to-output mappings, and trust rules.
+#
+# Maintenance Notes:
+#   Keep this aligned with skills/REASONING_TYPES.yaml, skills/SKILL_HOOKS.yaml,
+#   docs/architecture/PRINCIPLES.md, and reasoning-log skill-application fields.
+#   Do not infer epistemic type from suffixes such as packet, report, JSON, or
+#   HTML.
+
+version: 2
+status: consolidated_draft
+inventory_basis:
+  - skills/SKILL_HOOKS.yaml
+  - skills/*/*/SKILL.md
+  - skills/control/reasoning-log-schema-guardian/references/schema.md
+  - docs/architecture/PRINCIPLES.md
+inventory_snapshot:
+  hook_contracts: 200
+  declared_output_labels: 325
+  distinct_output_labels: 320
+  labels_containing_report: 82
+  labels_containing_packet: 36
+  labels_containing_plan: 31
+
+semantics:
+  output_type: >
+    The primary epistemic function of an output: what kind of claim, proposal,
+    evidence, decision, or memory object it is.
+  semantic_kind: >
+    The internal epistemic object shape carried by an output: claim, evidence,
+    model, relation, assessment, decision, obligation, plan, presentation,
+    bundle, or blocker. Semantic kind is independent of the output's workflow
+    function, container label, representation, and status.
+  representation: >
+    A serialization or rendering such as JSON, YAML, JSONL, Markdown, HTML,
+    Lean, Isabelle, Rocq, TPTP, TSTP, Python, CSV, or SVG. Representation never
+    determines epistemic type.
+  status: >
+    A lifecycle or gate condition such as draft, checked, blocked, accepted, or
+    rejected. Status is not an output type and must be scoped to named checks.
+  bundle: >
+    A container that references several typed outputs. A bundle has no stronger
+    authority than its cited members and must preserve their individual status.
+
+semantic_kinds:
+  claim: A proposition capable of truth or falsity, always carrying modality, scope, provenance, and obligations.
+  evidence: An inspectable item that bears on a claim only through a typed relation.
+  model: An explicit formal, symbolic, numerical, semantic, or idealized representation.
+  relation: A typed connection among immutable output identities.
+  assessment: A criterion-scoped evaluation of a claim, artifact, model, or evidence set.
+  decision: An epistemic calibration or operational disposition that creates no object-level evidence.
+  obligation: A condition remaining before a named use or promotion.
+  plan: Prospective bounded reasoning or action with no authority until executed and assessed.
+  presentation: A communicative projection whose authority is permanently inherited from its sources.
+  bundle: A product, collection, tagged alternative, context, or handoff whose members retain their own authority.
+  blocker: A current inability to continue, not falsity or impossibility.
+
+output_families:
+  - id: descriptive
+    purpose: Record or organize what is present without endorsing a target claim.
+  - id: prospective
+    purpose: Propose candidates, hypotheses, obligations, or future actions.
+  - id: evidential
+    purpose: Record observations or certificates that bear directly on a claim.
+  - id: evaluative
+    purpose: Assess evidence or make a policy-bound status decision.
+  - id: revisionary
+    purpose: Explain failure and specify or record a controlled change.
+  - id: communicative
+    purpose: Translate or render other outputs for human understanding.
+  - id: memory
+    purpose: Preserve retrievable or curated knowledge for later workflows.
+  - id: operational
+    purpose: Preserve lineage, observability, failure, and recovery information.
+
+canonical_hierarchy:
+  descriptive_output:
+    - source_observation_packet
+    - structural_model
+    - semantic_context_model
+  proposal_output:
+    - retrieval_candidate_set
+    - hypothesis_obligation_set
+    - plan_directive
+    - candidate_artifact
+  warrant_output:
+    - grounding_evidence_link
+    - derivation_certificate
+    - execution_evidence_record
+    - counterexample_witness
+  assessment_output:
+    - scoped_assessment
+    - aggregate_synthesis
+  governance_output:
+    - decision_record
+    - blocker_record
+  intervention_output:
+    - diagnosis_repair_specification
+    - revision_record
+  interpretive_output:
+    - explanation
+  persistence_output:
+    - index_registry
+    - curated_knowledge_entry
+    - provenance_trace
+
+primary_type_selection:
+  rule: >
+    Choose the type that describes the output's intended downstream epistemic
+    use, then record other materially present roles as secondary output types.
+  tests:
+    - question: Does it state what was observed or modeled?
+      choose: descriptive_output
+    - question: Does it propose a candidate, obligation, or future action?
+      choose: proposal_output
+    - question: Does it bear directly on an exact claim under a named method?
+      choose: warrant_output
+    - question: Does it assess cited evidence against named criteria?
+      choose: assessment_output
+    - question: Does it authorize, reject, route, waive, or block a transition?
+      choose: governance_output
+    - question: Does it diagnose or record a controlled change?
+      choose: intervention_output
+    - question: Does it explain another authoritative output to an audience?
+      choose: interpretive_output
+    - question: Does it preserve, index, or trace other outputs for later use?
+      choose: persistence_output
+  tie_breaker: >
+    Prefer the role consumed by the next gate. Packaging, rendering, and
+    lifecycle status never break a tie.
+
+property_axes:
+  semantic_kind:
+    - claim
+    - evidence
+    - model
+    - relation
+    - assessment
+    - decision
+    - obligation
+    - plan
+    - presentation
+    - bundle
+    - blocker
+  container_role:
+    - packet
+    - report
+    - plan
+    - queue
+    - frontier
+    - manifest
+    - ledger
+    - trace
+    - log
+    - registry
+    - index
+    - graph
+    - map
+    - artifact
+    - decision
+    - bundle
+  epistemic_role:
+    - descriptive
+    - prospective
+    - evidential
+    - evaluative
+    - control
+    - revisionary
+    - communicative
+    - memory
+    - operational
+  assertoric_force:
+    - none
+    - descriptive_claim
+    - candidate_claim
+    - evidential_claim
+    - evaluative_claim
+    - normative_directive
+  authority_basis:
+    - generated
+    - source_anchored
+    - retrieved
+    - locally_observed
+    - backend_checked
+    - proof_checked
+    - validator_derived
+    - policy_derived
+    - human_reviewed
+    - curated
+    - inherited
+  validation_state:
+    - unvalidated
+    - structurally_validated
+    - source_linked
+    - executed
+    - locally_checked
+    - proof_checked
+    - cross_checked
+    - accepted
+    - rejected
+    - blocked
+  polarity:
+    - neutral
+    - supporting
+    - refuting
+    - mixed
+  scope:
+    - source_span
+    - claim
+    - derivation_step
+    - artifact
+    - workflow_run
+    - corpus
+    - framework
+  granularity:
+    - atomic
+    - collection
+    - graph
+    - aggregate
+    - bundle
+  production_mode:
+    - deterministic
+    - generative
+    - hybrid
+    - human
+  logical_force:
+    - none
+    - extraction
+    - heuristic_ranking
+    - source_corroboration
+    - syntax_check
+    - backend_execution
+    - kernel_check
+    - atp_proof
+    - symbolic_normalization
+    - bounded_sampling
+    - critic_judgment
+    - policy_aggregation
+  independence:
+    - self_report
+    - same_pipeline_check
+    - independent_check
+    - external_authority
+  reproducibility:
+    - unrecorded
+    - replayable
+    - reproduced
+  mutability:
+    - immutable_snapshot
+    - append_only
+    - revisioned
+    - mutable_index
+  lifecycle:
+    - active
+    - superseded
+    - invalidated
+    - archived
+  canonicality:
+    - authoritative_record
+    - derived_projection
+    - cache
+    - embedded_copy
+    - mutable_pointer
+  actionability:
+    - none
+    - recoverable
+    - requires_user
+    - requires_dependency
+    - terminal_under_current_scope
+  completeness:
+    - partial
+    - complete_for_scope
+    - open
+    - not_applicable
+
+common_output_contract:
+  required_fields:
+    - schema_version
+    - output_id
+    - primary_output_type
+    - secondary_output_types
+    - semantic_kind
+    - semantic_members
+    - container_role
+    - produced_by
+    - created_at_utc
+    - subject
+    - subject_digest
+    - scope
+    - epistemic_properties
+    - provenance
+    - validation
+    - limitations
+    - representations
+  produced_by_fields:
+    - skill
+    - skill_call_id
+    - hook_id
+    - run_id
+  provenance_fields:
+    - input_output_ids
+    - source_anchors
+    - artifact_hashes
+  validation_fields:
+    - process_status
+    - validation_status
+    - claim_status
+    - promotion_status
+    - checks
+    - evidence_ids
+    - unresolved_risks
+  representation_fields:
+    - format
+    - path
+    - media_type
+    - content_hash
+
+output_types:
+  source_observation_packet:
+    family: descriptive
+    definition: Source-linked observations extracted without endorsing their truth.
+    default_properties:
+      assertoric_force: descriptive_claim
+      authority_basis: source_anchored
+      validation_state: source_linked
+      polarity: neutral
+      granularity: collection
+    required_properties:
+      - source_anchors
+      - extraction_method
+      - uncertainty
+    can_establish:
+      - what the inspected source explicitly contains
+      - extraction provenance within the declared scope
+    cannot_establish:
+      - truth of extracted claims
+      - completeness beyond the extraction scope
+    representative_artifacts:
+      - formalizable_unit_inventory
+      - paper_layout_packet
+      - physics_source_packet
+
+  structural_model:
+    family: descriptive
+    definition: An explicit decomposition, hierarchy, dependency graph, or obligation topology.
+    default_properties:
+      assertoric_force: descriptive_claim
+      authority_basis: validator_derived
+      validation_state: structurally_validated
+      polarity: neutral
+      granularity: graph
+    required_properties:
+      - node_scope
+      - edge_semantics
+      - coverage_boundary
+    can_establish:
+      - declared organization and dependency relations
+    cannot_establish:
+      - semantic correctness of every node or edge
+    representative_artifacts:
+      - theorem_like_unit_inventory
+      - declaration_graph
+      - derivation_obligation_ledger
+      - physics_lean_repair_expansion_map
+
+  semantic_context_model:
+    family: descriptive
+    definition: A model of objects, symbols, types, assumptions, domains, frames, regimes, or equations.
+    default_properties:
+      assertoric_force: candidate_claim
+      authority_basis: generated
+      validation_state: unvalidated
+      polarity: neutral
+      granularity: graph
+    required_properties:
+      - modeled_entities
+      - assumptions
+      - scope_conditions
+      - source_or_generated_labels
+    can_establish:
+      - an explicit interpretation available for checking
+    cannot_establish:
+      - fidelity or adequacy before independent validation
+    representative_artifacts:
+      - sympy_assumption_packet
+      - physics_symbol_table
+      - physics_dimension_packet
+      - physics_lean_type_system_packet
+
+  retrieval_candidate_set:
+    family: prospective
+    definition: Ranked or exact lookup candidates returned from a search or memory system.
+    default_properties:
+      assertoric_force: candidate_claim
+      authority_basis: retrieved
+      validation_state: unvalidated
+      polarity: supporting
+      granularity: collection
+    required_properties:
+      - query
+      - candidates
+      - ranking_or_match_method
+      - per_candidate_provenance
+    can_establish:
+      - candidate relevance or exact storage presence under the declared method
+    cannot_establish:
+      - applicability
+      - correctness
+      - semantic equivalence
+    representative_artifacts:
+      - candidate_declarations
+      - ranked_candidates
+      - premise_selection_report
+
+  grounding_evidence_link:
+    family: evidential
+    definition: A provenance-bearing link between a target concept and an external or library object.
+    default_properties:
+      assertoric_force: evidential_claim
+      authority_basis: locally_observed
+      validation_state: locally_checked
+      polarity: supporting
+      granularity: atomic
+    required_properties:
+      - target_concept
+      - grounded_object
+      - provenance
+      - verification_method
+      - residual_mismatch
+    can_establish:
+      - the checked existence and scoped applicability of a grounding object
+    cannot_establish:
+      - the target theorem
+      - unstated semantic equivalence
+    representative_artifacts:
+      - mathlib_web_evidence_report
+      - physics_law_grounding_packet
+      - sympy_api_grounding_packet
+
+  hypothesis_obligation_set:
+    family: prospective
+    definition: Proposed missing premises, gaps, laws, helper claims, or open obligations.
+    default_properties:
+      assertoric_force: candidate_claim
+      authority_basis: generated
+      validation_state: unvalidated
+      polarity: neutral
+      granularity: collection
+    required_properties:
+      - items
+      - source_or_generated_status
+      - dependencies
+      - discharge_condition
+    can_establish:
+      - an explicit frontier for subsequent reasoning
+    cannot_establish:
+      - truth or necessity of proposed items
+    representative_artifacts:
+      - physics_gap_packet
+      - term_gap_ledger
+      - source_unit_dependency_queue
+
+  plan_directive:
+    family: prospective
+    definition: An ordered, branching, or conditional specification of future actions.
+    default_properties:
+      assertoric_force: normative_directive
+      authority_basis: policy_derived
+      validation_state: structurally_validated
+      polarity: neutral
+      granularity: graph
+    required_properties:
+      - actions
+      - dependencies
+      - preconditions
+      - stopping_or_gate_conditions
+    can_establish:
+      - what the workflow intends or permits next
+    cannot_establish:
+      - execution
+      - success
+      - mathematical validity
+    representative_artifacts:
+      - mathlib_web_search_plan
+      - physics_derivation_plan
+      - physics_lean_workflow_plan
+      - accumulation_plan
+
+  candidate_artifact:
+    family: prospective
+    definition: A generated formal, symbolic, textual, or executable object proposed for checking.
+    default_properties:
+      assertoric_force: candidate_claim
+      authority_basis: generated
+      validation_state: unvalidated
+      polarity: supporting
+      granularity: atomic
+    required_properties:
+      - source_anchors
+      - declared_backend
+      - placeholder_status
+      - assumptions
+    can_establish:
+      - the existence of a concrete candidate
+    cannot_establish:
+      - executability
+      - proof
+      - source fidelity
+      - acceptance
+    representative_artifacts:
+      - physics_lean_artifact
+      - sympy_python_artifact
+      - isabelle_theory_file
+      - rocq_file
+
+  derivation_certificate:
+    family: evidential
+    definition: A proof object or transformation certificate tied to an exact formal claim or step.
+    default_properties:
+      assertoric_force: evidential_claim
+      authority_basis: proof_checked
+      validation_state: proof_checked
+      polarity: supporting
+      granularity: atomic
+    required_properties:
+      - certificate_kind
+      - exact_claim_or_step_hash
+      - checker_or_rule_system
+      - checker_result
+      - dependency_set
+    can_establish:
+      - derivability of the exact checked formal object under named rules
+    cannot_establish:
+      - fidelity of that object to the informal source
+      - validity outside declared assumptions
+    representative_artifacts:
+      - tstp_proof
+      - checked_lean_proof
+      - sympy_transformation_trace_certificate
+
+  execution_evidence_record:
+    family: evidential
+    definition: Captured backend or process observations from executing a concrete artifact.
+    default_properties:
+      assertoric_force: evidential_claim
+      authority_basis: locally_observed
+      validation_state: executed
+      polarity: mixed
+      granularity: collection
+    required_properties:
+      - command_or_entrypoint
+      - environment
+      - input_hash
+      - return_status
+      - diagnostics
+    can_establish:
+      - what the named backend did for the exact input and environment
+    cannot_establish:
+      - semantic fidelity
+      - nonvacuity
+      - universal correctness beyond backend guarantees
+    representative_artifacts:
+      - lean_error_log
+      - isabelle_execution_report
+      - rocq_compile_log
+      - sympy_execution_report
+
+  counterexample_witness:
+    family: evidential
+    definition: A concrete admissible assignment or model under which a target claim fails.
+    default_properties:
+      assertoric_force: evidential_claim
+      authority_basis: locally_observed
+      validation_state: locally_checked
+      polarity: refuting
+      granularity: atomic
+    required_properties:
+      - target_claim_hash
+      - witness
+      - admissible_domain
+      - evaluation_trace
+      - model_alignment_status
+    can_establish:
+      - failure of the encoded universal claim when domain and model alignment hold
+    cannot_establish:
+      - source-claim failure when the encoding is misaligned
+      - truth when no witness is found
+    representative_artifacts:
+      - sympy_counterexample_report
+      - physics_numeric_sanity_report
+
+  scoped_assessment:
+    family: evaluative
+    definition: Findings about one named validity, quality, risk, or completeness dimension.
+    default_properties:
+      assertoric_force: evaluative_claim
+      authority_basis: validator_derived
+      validation_state: locally_checked
+      polarity: mixed
+      granularity: collection
+    required_properties:
+      - criterion
+      - assessed_output_ids
+      - findings
+      - blocking_policy
+      - evidence_ids
+      - limitations
+    can_establish:
+      - a scoped pass, warning, or failure under the named criterion
+    cannot_establish:
+      - dimensions outside the criterion
+      - mathematical truth merely from critic agreement
+    representative_artifacts:
+      - lean_semantic_preservation_critic_report
+      - nonvacuity_report
+      - physics_lean_unit_report
+      - result_realness_report
+
+  aggregate_synthesis:
+    family: evaluative
+    definition: A report that combines several typed outputs while preserving their provenance and disagreements.
+    default_properties:
+      assertoric_force: evaluative_claim
+      authority_basis: inherited
+      validation_state: cross_checked
+      polarity: mixed
+      granularity: aggregate
+    required_properties:
+      - member_output_ids
+      - aggregation_rule
+      - disagreements
+      - blocking_members
+      - inherited_limitations
+    can_establish:
+      - a transparent synthesis of the cited evidence surfaces
+    cannot_establish:
+      - stronger authority than its members and aggregation rule allow
+    representative_artifacts:
+      - lean_consistency_report
+      - physics_derivation_consistency_report
+      - formalphysics_comparative_analysis_report
+      - rfde_report_json
+
+  decision_record:
+    family: evaluative
+    definition: A policy-governed route, gate, promotion, acceptance, or stopping decision.
+    default_properties:
+      assertoric_force: normative_directive
+      authority_basis: policy_derived
+      validation_state: locally_checked
+      polarity: mixed
+      granularity: atomic
+    required_properties:
+      - policy_or_gate_id
+      - decision_status
+      - evidence_ids
+      - blocking_failures
+      - warnings
+      - waivers
+    can_establish:
+      - the workflow status warranted by the cited evidence and policy
+    cannot_establish:
+      - new domain evidence
+      - truth beyond the evidence it aggregates
+    representative_artifacts:
+      - gate_decision
+      - promotion_status
+      - proceed_to_autoformalization
+
+  diagnosis_repair_specification:
+    family: revisionary
+    definition: A causal failure classification plus a constrained proposed repair.
+    default_properties:
+      assertoric_force: candidate_claim
+      authority_basis: validator_derived
+      validation_state: unvalidated
+      polarity: neutral
+      granularity: graph
+    required_properties:
+      - diagnosed_failure
+      - supporting_evidence_ids
+      - proposed_changes
+      - protected_properties
+      - rerun_gates
+    can_establish:
+      - an evidence-linked repair hypothesis and test plan
+    cannot_establish:
+      - success of the repair
+      - validity of a future revised artifact
+    representative_artifacts:
+      - refinement_packet
+      - physics_lean_review_refinement_plan
+      - mathformerphysicslib_coherence_repair_plan
+
+  revision_record:
+    family: revisionary
+    definition: A traceable delta from one artifact version to another with affected checks named.
+    default_properties:
+      assertoric_force: descriptive_claim
+      authority_basis: locally_observed
+      validation_state: unvalidated
+      polarity: neutral
+      granularity: atomic
+    required_properties:
+      - predecessor_output_id
+      - successor_output_id
+      - delta
+      - trigger_findings
+      - invalidated_checks
+      - preserved_properties
+    can_establish:
+      - what changed and which earlier evidence remains applicable
+    cannot_establish:
+      - validity of the successor without rerun evidence
+    representative_artifacts:
+      - refinement_report
+      - history_transition
+      - monotonicity_comparison
+
+  explanation:
+    family: communicative
+    definition: A human-oriented interpretation, informalization, annotation, or rendering of other outputs.
+    default_properties:
+      assertoric_force: descriptive_claim
+      authority_basis: inherited
+      validation_state: unvalidated
+      polarity: neutral
+      granularity: bundle
+    required_properties:
+      - explained_output_ids
+      - audience
+      - fidelity_boundary
+      - authoritative_source_ids
+    can_establish:
+      - a navigable account of cited outputs
+    cannot_establish:
+      - proof or validation independently of authoritative sources
+    representative_artifacts:
+      - informal_proof
+      - lean_informalization_packet
+      - mathformer_library_module_pages
+      - rfde_dashboard_html
+
+  index_registry:
+    family: memory
+    definition: A searchable, revisioned collection of entries and their metadata.
+    default_properties:
+      assertoric_force: descriptive_claim
+      authority_basis: inherited
+      validation_state: structurally_validated
+      polarity: neutral
+      granularity: collection
+    required_properties:
+      - entries
+      - per_entry_provenance
+      - per_entry_trust_state
+      - version_stamp
+      - update_policy
+    can_establish:
+      - what the registry currently records
+    cannot_establish:
+      - uniform truth or acceptance of all entries
+    representative_artifacts:
+      - mathlib_index
+      - sympy_api_index
+      - mathformerlib_registry
+      - premise_kb_index
+
+  curated_knowledge_entry:
+    family: memory
+    definition: A reusable knowledge object promoted under an explicit curation policy.
+    default_properties:
+      assertoric_force: evidential_claim
+      authority_basis: curated
+      validation_state: accepted
+      polarity: supporting
+      granularity: atomic
+    required_properties:
+      - content
+      - provenance
+      - acceptance_evidence_ids
+      - curation_status
+      - version
+    can_establish:
+      - eligibility for reuse under the named curation policy
+    cannot_establish:
+      - applicability to every future target
+      - stronger validity than its acceptance evidence
+    representative_artifacts:
+      - accepted_mathformerlib_declaration
+      - reviewed_premise
+      - proved_generated_lemma
+
+  provenance_trace:
+    family: operational
+    definition: An append-only account of skill applications, inputs, outputs, evidence, decisions, and risks.
+    default_properties:
+      assertoric_force: descriptive_claim
+      authority_basis: locally_observed
+      validation_state: structurally_validated
+      polarity: neutral
+      granularity: collection
+    required_properties:
+      - ordered_events
+      - skill_call_ids
+      - input_and_output_references
+      - evidence_and_decision_references
+      - redaction_policy
+    can_establish:
+      - an auditable workflow lineage within recorded coverage
+    cannot_establish:
+      - correctness of every recorded claim
+      - hidden chain-of-thought
+    representative_artifacts:
+      - reasoning-log.jsonl
+      - runtime_skill_application_trace
+
+  blocker_record:
+    family: operational
+    definition: A precise account of why a requested transition or completion claim cannot proceed.
+    default_properties:
+      assertoric_force: evaluative_claim
+      authority_basis: validator_derived
+      validation_state: blocked
+      polarity: neutral
+      granularity: atomic
+    required_properties:
+      - blocked_transition
+      - cause
+      - available_evidence_ids
+      - repeated_state_or_attempts
+      - next_recoverable_action
+    can_establish:
+      - that progress is blocked under current evidence and controls
+    cannot_establish:
+      - falsity of the target claim
+      - impossibility under all future methods
+    representative_artifacts:
+      - blocked_generation_report
+      - unresolved_dependency_record
+      - repeated_repair_state_blocker
+
+output_type_semantic_kind_contracts:
+  source_observation_packet:
+    primary: bundle
+    required_members: [evidence, relation]
+  structural_model:
+    primary: model
+    required_members: [relation]
+  semantic_context_model:
+    primary: model
+    required_members: [obligation]
+  retrieval_candidate_set:
+    primary: bundle
+    required_members: [claim, relation]
+  grounding_evidence_link:
+    primary: relation
+    required_members: [evidence]
+  hypothesis_obligation_set:
+    primary: bundle
+    required_members: [claim, obligation]
+  plan_directive:
+    primary: plan
+    required_members: [obligation]
+  candidate_artifact:
+    primary: bundle
+    allowed_members: [claim, model, relation, obligation, presentation]
+  derivation_certificate:
+    primary: bundle
+    required_members: [claim, evidence, relation]
+    allowed_members: [obligation]
+  execution_evidence_record:
+    primary: evidence
+    required_members: [relation]
+  counterexample_witness:
+    primary: evidence
+    required_members: [relation, decision]
+  scoped_assessment:
+    primary: assessment
+    required_members: [relation, obligation]
+  aggregate_synthesis:
+    primary: bundle
+    required_members: [assessment, relation]
+  decision_record:
+    primary: decision
+    required_members: [relation]
+  diagnosis_repair_specification:
+    primary: bundle
+    required_members: [assessment, plan, obligation]
+  revision_record:
+    primary: relation
+    required_members: [obligation]
+  explanation:
+    primary: presentation
+    required_members: [relation]
+  index_registry:
+    primary: bundle
+    required_members: [relation]
+  curated_knowledge_entry:
+    primary: bundle
+    allowed_members: [claim, evidence, model, relation, assessment, decision, obligation, presentation]
+  provenance_trace:
+    primary: bundle
+    required_members: [relation]
+  blocker_record:
+    primary: blocker
+    required_members: [obligation, decision]
+
+reasoning_type_output_defaults:
+  source_observation:
+    primary: source_observation_packet
+    secondary: [provenance_trace]
+  structural_decomposition:
+    primary: structural_model
+    secondary: [hypothesis_obligation_set]
+  semantic_modeling:
+    primary: semantic_context_model
+    secondary: [candidate_artifact]
+  retrieval:
+    primary: retrieval_candidate_set
+    secondary: [index_registry]
+  grounding_alignment:
+    primary: grounding_evidence_link
+    secondary: [scoped_assessment]
+  abductive_completion:
+    primary: hypothesis_obligation_set
+    secondary: [plan_directive]
+  constructive_formalization:
+    primary: candidate_artifact
+    secondary: [revision_record]
+  deduction_transformation:
+    primary: derivation_certificate
+    secondary: [candidate_artifact]
+  probing_falsification:
+    primary: execution_evidence_record
+    secondary: [counterexample_witness, blocker_record]
+  critical_verification:
+    primary: scoped_assessment
+    secondary: [blocker_record]
+  diagnostic_revision:
+    primary: diagnosis_repair_specification
+    secondary: [revision_record, candidate_artifact]
+  comparative_reflection:
+    primary: aggregate_synthesis
+    secondary: [explanation, hypothesis_obligation_set]
+  epistemic_governance:
+    primary: decision_record
+    secondary: [plan_directive, blocker_record, provenance_trace]
+  inductive_generalization:
+    primary: candidate_artifact
+    secondary: [execution_evidence_record, hypothesis_obligation_set]
+  analogical_transfer:
+    primary: candidate_artifact
+    secondary: [grounding_evidence_link, hypothesis_obligation_set]
+  contrastive_counterfactual:
+    primary: execution_evidence_record
+    secondary: [scoped_assessment, hypothesis_obligation_set]
+
+composition_rules:
+  - id: observations_become_evidence_relationally
+    rule: An observation becomes evidence only when it names the exact claim, polarity, scope, and inference under which it bears on that claim.
+  - id: format_independence
+    rule: The same output type may have several representations, and one representation may carry many output types.
+  - id: candidate_nonpromotion
+    rule: Candidate artifacts and hypotheses remain proposals until named evidence and gate outputs change their status.
+  - id: exact_certificate_scope
+    rule: A derivation certificate applies only to the exact hashed formal claim, dependencies, checker, and assumptions it records.
+  - id: counterexample_asymmetry
+    rule: One admissible aligned counterexample may refute a universal encoded claim; absence of a found counterexample is never proof.
+  - id: backend_scope
+    rule: Execution evidence establishes backend behavior, not source fidelity, nonvacuity, or domain validity unless those are explicit backend guarantees.
+  - id: assessment_scope
+    rule: A scoped assessment must not silently claim validity dimensions it did not test.
+  - id: aggregation_transparency
+    rule: An aggregate synthesis must cite member outputs, preserve disagreements and waivers, and inherit member limitations.
+  - id: decision_non_evidence
+    rule: A decision record changes workflow status but creates no new mathematical evidence.
+  - id: revision_revalidation
+    rule: A revision record names invalidated checks; a successor artifact does not inherit affected validation results.
+  - id: explanation_non_authority
+    rule: An explanation or rendering points to authoritative outputs and is not a substitute for them.
+  - id: entry_level_memory_trust
+    rule: Indexes and registries preserve trust per entry; collection membership does not imply acceptance.
+  - id: blocker_semantics
+    rule: A blocker records current inability to proceed and must not be interpreted as falsity or impossibility of the target.
+  - id: bundle_weakest_link
+    rule: A bundle preserves member types and cannot acquire stronger authority merely through packaging.
+  - id: no_generic_status
+    rule: Canonical outputs use namespaced process, validation, claim, decision, and promotion statuses rather than an ambiguous top-level status or ok flag.
+  - id: digest_bound_evidence
+    rule: Evidence, assessments, and decisions identify the exact subject digest; a changed subject makes dependent outputs stale until explicitly revalidated.
+  - id: plan_evidence_separation
+    rule: A plan, prompt, queue, or repair proposal cannot satisfy a requirement for executed evidence or a completed assessment.
+  - id: authority_ceiling
+    rule: Generative critics and aggregate reports may raise risk or route work but cannot independently manufacture proof-checked validity.
+  - id: waiver_nontruth
+    rule: A waiver changes permission under a policy while preserving the failed check and residual risk; it does not change mathematical truth.
+  - id: scoped_completion
+    rule: Complete always means complete under a named gate profile and version for an exact subject digest, never globally complete.
+  - id: canonical_projection_separation
+    rule: Human renderings and embedded copies cite an immutable authoritative record; mutable latest paths are pointers rather than evidence identities.
+  - id: semantic_kind_separation
+    rule: Semantic kind describes the internal epistemic object, while output type describes its workflow function; neither is inferred from container names or file formats.

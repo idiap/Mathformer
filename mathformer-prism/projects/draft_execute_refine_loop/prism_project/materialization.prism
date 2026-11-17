@@ -1,0 +1,443 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from draft_execute_refine_loop import (
+    DraftExecuteRefineAnnotateLineCommentGuardArtifact,
+    DraftExecuteRefineCheckCompileArtifact,
+    DraftExecuteRefineCritiqueLogicalSoundnessArtifact,
+    DraftExecuteRefineCritiqueMathlibAlignmentArtifact,
+    DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact,
+    DraftExecuteRefineCritiqueSemanticArtifact,
+    DraftExecuteRefineCritiqueSemanticPreservationArtifact,
+    DraftExecuteRefineCritiqueSuiteArtifact,
+    DraftExecuteRefineCritiqueSyntaxArtifact,
+    DraftExecuteRefineDraftInitialArtifact,
+    DraftExecuteRefineDraftSeedArtifact,
+    DraftExecuteRefineExecuteInitialArtifact,
+    DraftExecuteRefineOutputDenoiseArtifact,
+    DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact,
+    DraftExecuteRefineRefineFormalArtifact,
+    DraftExecuteRefineRefineSemanticArtifact,
+    LeanDraft,
+    LeanExecutionEvidence,
+    LeanFormalAssessment,
+    LeanFormalReviewCase,
+    LeanFormalizationDraftBrief,
+    LeanLibraryAssessment,
+    LeanLibraryReviewCase,
+    LeanRefinementDisposition,
+    LeanRefinementOutcome,
+    LeanReviewCase,
+    LeanRevisionCase,
+    LeanSemanticAssessment,
+    RefinementCase,
+    RevisedLeanDraft,
+)
+from material_relations import FormalizesDraftInitialCertificate
+from material_relations import TestsCritiqueSemanticCertificate
+from material_relations import TestsCritiqueSyntaxCertificate
+from material_relations import TestsCritiqueSemanticPreservationCertificate
+from material_relations import TestsCritiqueLogicalSoundnessCertificate
+from material_relations import TestsCritiqueMathlibAlignmentCertificate
+from material_relations import TestsCritiqueSuiteCertificate
+from material_relations import FormalizesRefineFormalCertificate
+from material_relations import FormalizesRefineSemanticCertificate
+from material_relations import FormalizesOutputDenoiseCertificate
+from reasoning import RefineLeanDraft
+from relations import AssessFormalSurfaceCertificate
+from relations import AssessLibraryFitCertificate
+from relations import AssessSemanticsCertificate
+from relations import CalibrateRefinementCertificate
+from relations import ReviseFromCritiquesCertificate
+from relations import TestLeanDraftCertificate
+from generated.draft_initial_skill import lean_autoformalization_drafter_skill as draft_initial_skill_binding
+from generated.critique_semantic_skill import lean_critique_and_judging_skill as critique_semantic_skill_binding
+from generated.critique_syntax_skill import lean_syntactic_correctness_critic_skill as critique_syntax_skill_binding
+from generated.critique_semantic_preservation_skill import lean_semantic_preservation_critic_skill as critique_semantic_preservation_skill_binding
+from generated.critique_logical_soundness_skill import lean_logical_soundness_critic_skill as critique_logical_soundness_skill_binding
+from generated.critique_mathlib_alignment_skill import lean_mathlib_alignment_critic_skill as critique_mathlib_alignment_skill_binding
+from generated.critique_suite_skill import lean_critique_suite_orchestrator_skill as critique_suite_skill_binding
+from generated.refine_formal_skill import lean_formal_refinement_skill as refine_formal_skill_binding
+from generated.refine_semantic_skill import lean_formal_refinement_skill as refine_semantic_skill_binding
+from generated.output_denoise_skill import lean_output_denoiser_skill as output_denoise_skill_binding
+from generated.reasoning_draft_1_skill import lean_autoformalization_drafter_skill as draft_reasoning_skill_1
+from generated.reasoning_draft_2_skill import autoformalization_workflow_orchestrator_skill as draft_reasoning_skill_2
+from generated.reasoning_execution_evidence_1_skill import lean_execution_runner_skill as execution_evidence_reasoning_skill_1
+from generated.reasoning_execution_evidence_2_skill import lean_compile_checker_skill as execution_evidence_reasoning_skill_2
+from generated.reasoning_execution_evidence_3_skill import source_formalization_drift_guard_skill as execution_evidence_reasoning_skill_3
+from generated.reasoning_semantic_assessment_1_skill import lean_critique_and_judging_skill as semantic_assessment_reasoning_skill_1
+from generated.reasoning_semantic_assessment_2_skill import lean_semantic_preservation_critic_skill as semantic_assessment_reasoning_skill_2
+from generated.reasoning_semantic_assessment_3_skill import lean_logical_soundness_critic_skill as semantic_assessment_reasoning_skill_3
+from generated.reasoning_semantic_assessment_4_skill import reference_free_critic_monitor_skill as semantic_assessment_reasoning_skill_4
+from generated.reasoning_formal_assessment_1_skill import lean_syntactic_correctness_critic_skill as formal_assessment_reasoning_skill_1
+from generated.reasoning_formal_assessment_2_skill import lean_critique_suite_orchestrator_skill as formal_assessment_reasoning_skill_2
+from generated.reasoning_library_assessment_1_skill import lean_mathlib_alignment_critic_skill as library_assessment_reasoning_skill_1
+from generated.reasoning_revised_draft_1_skill import lean_formal_refinement_skill as revised_draft_reasoning_skill_1
+from generated.reasoning_revised_draft_2_skill import lean_output_denoiser_skill as revised_draft_reasoning_skill_2
+from generated.reasoning_refinement_status_1_skill import lean_line_annotation_skill as refinement_status_reasoning_skill_1
+from generated.reasoning_refinement_status_2_skill import lean_refinement_taxonomy_skill as refinement_status_reasoning_skill_2
+
+def execution_evidence_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestLeanDraftCertificate[SourceValue, TargetValue]:
+    return TestLeanDraftCertificate(source = source, target = target)
+
+def semantic_assessment_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AssessSemanticsCertificate[SourceValue, TargetValue]:
+    return AssessSemanticsCertificate(source = source, target = target)
+
+def formal_assessment_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AssessFormalSurfaceCertificate[SourceValue, TargetValue]:
+    return AssessFormalSurfaceCertificate(source = source, target = target)
+
+def library_assessment_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AssessLibraryFitCertificate[SourceValue, TargetValue]:
+    return AssessLibraryFitCertificate(source = source, target = target)
+
+def revised_draft_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ReviseFromCritiquesCertificate[SourceValue, TargetValue]:
+    return ReviseFromCritiquesCertificate(source = source, target = target)
+
+def refinement_status_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> CalibrateRefinementCertificate[SourceValue, TargetValue]:
+    return CalibrateRefinementCertificate(source = source, target = target)
+
+# Generative interpretation ProposeLeanDraft uses skill context selected from material steps: draft_initial, draft_seed.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-autoformalization-drafter, autoformalization-workflow-orchestrator.
+agent draft_reasoning_agent(
+    task: LeanFormalizationDraftBrief,
+) -> Result[Generated[LeanDraft], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanFormalizationDraftBrief] = [draft_reasoning_skill_1, draft_reasoning_skill_2]
+
+# Generative interpretation ExecuteLeanDraft uses skill context selected from material steps: execute_initial, check_compile, postformalization_source_anchor_drift_guard.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-execution-runner, lean-compile-checker, source-formalization-drift-guard.
+agent execution_evidence_reasoning_agent(
+    task: LeanDraft,
+) -> Result[Generated[LeanExecutionEvidence], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanDraft] = [execution_evidence_reasoning_skill_1, execution_evidence_reasoning_skill_2, execution_evidence_reasoning_skill_3]
+
+# Generative interpretation AssessLeanSemantics uses skill context selected from material steps: critique_semantic, critique_semantic_preservation, critique_logical_soundness, critique_reference_free_monitor.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-critique-and-judging, lean-semantic-preservation-critic, lean-logical-soundness-critic, reference-free-critic-monitor.
+agent semantic_assessment_reasoning_agent(
+    task: LeanReviewCase,
+) -> Result[Generated[LeanSemanticAssessment], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanReviewCase] = [semantic_assessment_reasoning_skill_1, semantic_assessment_reasoning_skill_2, semantic_assessment_reasoning_skill_3, semantic_assessment_reasoning_skill_4]
+
+# Generative interpretation AssessLeanSyntax uses skill context selected from material steps: critique_syntax, critique_suite.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-syntactic-correctness-critic, lean-critique-suite-orchestrator.
+agent formal_assessment_reasoning_agent(
+    task: LeanFormalReviewCase,
+) -> Result[Generated[LeanFormalAssessment], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanFormalReviewCase] = [formal_assessment_reasoning_skill_1, formal_assessment_reasoning_skill_2]
+
+# Generative interpretation AssessMathlibAlignment uses skill context selected from material steps: critique_mathlib_alignment.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-mathlib-alignment-critic.
+agent library_assessment_reasoning_agent(
+    task: LeanLibraryReviewCase,
+) -> Result[Generated[LeanLibraryAssessment], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanLibraryReviewCase] = [library_assessment_reasoning_skill_1]
+
+# Generative interpretation ReviseLeanDraft uses skill context selected from material steps: refine_formal, refine_semantic, output_denoise.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-formal-refinement, lean-output-denoiser.
+agent revised_draft_reasoning_agent(
+    task: LeanRevisionCase,
+) -> Result[Generated[RevisedLeanDraft], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanRevisionCase] = [revised_draft_reasoning_skill_1, revised_draft_reasoning_skill_2]
+
+# Generative interpretation CalibrateRefinementStatus uses skill context selected from material steps: annotate_line_comment_guard, transition_taxonomy.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-line-annotation, lean-refinement-taxonomy.
+agent refinement_status_reasoning_agent(
+    task: RefinementCase,
+) -> Result[Generated[LeanRefinementDisposition], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[RefinementCase] = [refinement_status_reasoning_skill_1, refinement_status_reasoning_skill_2]
+
+converted_reasoning = RefineLeanDraft(
+    draft = draft_reasoning_agent,
+    execution_evidence = execution_evidence_reasoning_agent,
+    execution_evidence_by = execution_evidence_reasoning_relation_builder,
+    semantic_assessment = semantic_assessment_reasoning_agent,
+    semantic_assessment_by = semantic_assessment_reasoning_relation_builder,
+    formal_assessment = formal_assessment_reasoning_agent,
+    formal_assessment_by = formal_assessment_reasoning_relation_builder,
+    library_assessment = library_assessment_reasoning_agent,
+    library_assessment_by = library_assessment_reasoning_relation_builder,
+    revised_draft = revised_draft_reasoning_agent,
+    revised_draft_by = revised_draft_reasoning_relation_builder,
+    refinement_status = refinement_status_reasoning_agent,
+    refinement_status_by = refinement_status_reasoning_relation_builder,
+)
+
+# Epistemic occurrence owned by `lean-autoformalization-drafter`; output assurance remains Generated.
+agent draft_initial_agent(
+    task: LeanFormalizationDraftBrief,
+) -> Result[Generated[DraftExecuteRefineDraftInitialArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanFormalizationDraftBrief] = [draft_initial_skill_binding]
+
+def draft_initial_relation_builder(
+    source: LeanFormalizationDraftBrief,
+    target: Generated[DraftExecuteRefineDraftInitialArtifact],
+) -> FormalizesDraftInitialCertificate:
+    return FormalizesDraftInitialCertificate(source = source, target = target)
+
+# Material binding descriptor for `autoformalization-workflow-orchestrator`; this does not execute the linked native resource.
+def draft_seed_material_binding(source: DraftExecuteRefineDraftInitialArtifact) -> Computed[DraftExecuteRefineDraftSeedArtifact]:
+    artifact = DraftExecuteRefineDraftSeedArtifact(
+        subject = "typed material binding for draft_seed",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: draft_seed")
+
+# Material binding descriptor for `lean-execution-runner`; this does not execute the linked native resource.
+def execute_initial_material_binding(source: DraftExecuteRefineDraftSeedArtifact) -> Computed[DraftExecuteRefineExecuteInitialArtifact]:
+    artifact = DraftExecuteRefineExecuteInitialArtifact(
+        subject = "typed material binding for execute_initial",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation execute_initial",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: execute_initial")
+
+# Material binding descriptor for `lean-compile-checker`; this does not execute the linked native resource.
+def check_compile_material_binding(source: DraftExecuteRefineExecuteInitialArtifact) -> Computed[DraftExecuteRefineCheckCompileArtifact]:
+    artifact = DraftExecuteRefineCheckCompileArtifact(
+        subject = "typed material binding for check_compile",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: check_compile")
+
+# Material binding descriptor for `source-formalization-drift-guard`; this does not execute the linked native resource.
+def postformalization_source_anchor_drift_guard_material_binding(source: DraftExecuteRefineCheckCompileArtifact) -> Computed[DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact]:
+    artifact = DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact(
+        subject = "typed material binding for postformalization_source_anchor_drift_guard",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: postformalization_source_anchor_drift_guard")
+
+# Epistemic occurrence owned by `lean-critique-and-judging`; output assurance remains Generated.
+agent critique_semantic_agent(
+    task: DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact,
+) -> Result[Generated[DraftExecuteRefineCritiqueSemanticArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact] = [critique_semantic_skill_binding]
+
+def critique_semantic_relation_builder(
+    source: DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact,
+    target: Generated[DraftExecuteRefineCritiqueSemanticArtifact],
+) -> TestsCritiqueSemanticCertificate:
+    return TestsCritiqueSemanticCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-syntactic-correctness-critic`; output assurance remains Generated.
+agent critique_syntax_agent(
+    task: DraftExecuteRefineCritiqueSemanticArtifact,
+) -> Result[Generated[DraftExecuteRefineCritiqueSyntaxArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[DraftExecuteRefineCritiqueSemanticArtifact] = [critique_syntax_skill_binding]
+
+def critique_syntax_relation_builder(
+    source: DraftExecuteRefineCritiqueSemanticArtifact,
+    target: Generated[DraftExecuteRefineCritiqueSyntaxArtifact],
+) -> TestsCritiqueSyntaxCertificate:
+    return TestsCritiqueSyntaxCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-semantic-preservation-critic`; output assurance remains Generated.
+agent critique_semantic_preservation_agent(
+    task: DraftExecuteRefineCritiqueSyntaxArtifact,
+) -> Result[Generated[DraftExecuteRefineCritiqueSemanticPreservationArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[DraftExecuteRefineCritiqueSyntaxArtifact] = [critique_semantic_preservation_skill_binding]
+
+def critique_semantic_preservation_relation_builder(
+    source: DraftExecuteRefineCritiqueSyntaxArtifact,
+    target: Generated[DraftExecuteRefineCritiqueSemanticPreservationArtifact],
+) -> TestsCritiqueSemanticPreservationCertificate:
+    return TestsCritiqueSemanticPreservationCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-logical-soundness-critic`; output assurance remains Generated.
+agent critique_logical_soundness_agent(
+    task: DraftExecuteRefineCritiqueSemanticPreservationArtifact,
+) -> Result[Generated[DraftExecuteRefineCritiqueLogicalSoundnessArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[DraftExecuteRefineCritiqueSemanticPreservationArtifact] = [critique_logical_soundness_skill_binding]
+
+def critique_logical_soundness_relation_builder(
+    source: DraftExecuteRefineCritiqueSemanticPreservationArtifact,
+    target: Generated[DraftExecuteRefineCritiqueLogicalSoundnessArtifact],
+) -> TestsCritiqueLogicalSoundnessCertificate:
+    return TestsCritiqueLogicalSoundnessCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-mathlib-alignment-critic`; output assurance remains Generated.
+agent critique_mathlib_alignment_agent(
+    task: DraftExecuteRefineCritiqueLogicalSoundnessArtifact,
+) -> Result[Generated[DraftExecuteRefineCritiqueMathlibAlignmentArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[DraftExecuteRefineCritiqueLogicalSoundnessArtifact] = [critique_mathlib_alignment_skill_binding]
+
+def critique_mathlib_alignment_relation_builder(
+    source: DraftExecuteRefineCritiqueLogicalSoundnessArtifact,
+    target: Generated[DraftExecuteRefineCritiqueMathlibAlignmentArtifact],
+) -> TestsCritiqueMathlibAlignmentCertificate:
+    return TestsCritiqueMathlibAlignmentCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-critique-suite-orchestrator`; output assurance remains Generated.
+agent critique_suite_agent(
+    task: DraftExecuteRefineCritiqueMathlibAlignmentArtifact,
+) -> Result[Generated[DraftExecuteRefineCritiqueSuiteArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[DraftExecuteRefineCritiqueMathlibAlignmentArtifact] = [critique_suite_skill_binding]
+
+def critique_suite_relation_builder(
+    source: DraftExecuteRefineCritiqueMathlibAlignmentArtifact,
+    target: Generated[DraftExecuteRefineCritiqueSuiteArtifact],
+) -> TestsCritiqueSuiteCertificate:
+    return TestsCritiqueSuiteCertificate(source = source, target = target)
+
+# Material binding descriptor for `reference-free-critic-monitor`; this does not execute the linked native resource.
+def critique_reference_free_monitor_material_binding(source: DraftExecuteRefineCritiqueSuiteArtifact) -> Computed[DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact]:
+    artifact = DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact(
+        subject = "typed material binding for critique_reference_free_monitor",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: critique_reference_free_monitor")
+
+# Epistemic occurrence owned by `lean-formal-refinement`; output assurance remains Generated.
+agent refine_formal_agent(
+    task: DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact,
+) -> Result[Generated[DraftExecuteRefineRefineFormalArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact] = [refine_formal_skill_binding]
+
+def refine_formal_relation_builder(
+    source: DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact,
+    target: Generated[DraftExecuteRefineRefineFormalArtifact],
+) -> FormalizesRefineFormalCertificate:
+    return FormalizesRefineFormalCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-formal-refinement`; output assurance remains Generated.
+agent refine_semantic_agent(
+    task: DraftExecuteRefineRefineFormalArtifact,
+) -> Result[Generated[DraftExecuteRefineRefineSemanticArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[DraftExecuteRefineRefineFormalArtifact] = [refine_semantic_skill_binding]
+
+def refine_semantic_relation_builder(
+    source: DraftExecuteRefineRefineFormalArtifact,
+    target: Generated[DraftExecuteRefineRefineSemanticArtifact],
+) -> FormalizesRefineSemanticCertificate:
+    return FormalizesRefineSemanticCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-output-denoiser`; output assurance remains Generated.
+agent output_denoise_agent(
+    task: DraftExecuteRefineRefineSemanticArtifact,
+) -> Result[Generated[DraftExecuteRefineOutputDenoiseArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[DraftExecuteRefineRefineSemanticArtifact] = [output_denoise_skill_binding]
+
+def output_denoise_relation_builder(
+    source: DraftExecuteRefineRefineSemanticArtifact,
+    target: Generated[DraftExecuteRefineOutputDenoiseArtifact],
+) -> FormalizesOutputDenoiseCertificate:
+    return FormalizesOutputDenoiseCertificate(source = source, target = target)
+
+# Material binding descriptor for `lean-line-annotation`; this does not execute the linked native resource.
+def annotate_line_comment_guard_material_binding(source: DraftExecuteRefineOutputDenoiseArtifact) -> Computed[DraftExecuteRefineAnnotateLineCommentGuardArtifact]:
+    artifact = DraftExecuteRefineAnnotateLineCommentGuardArtifact(
+        subject = "typed material binding for annotate_line_comment_guard",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation annotate_line_comment_guard",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: annotate_line_comment_guard")
+
+# Material binding descriptor for `lean-refinement-taxonomy`; this does not execute the linked native resource.
+def transition_taxonomy_material_binding(source: DraftExecuteRefineAnnotateLineCommentGuardArtifact) -> Computed[LeanRefinementOutcome]:
+    artifact = LeanRefinementOutcome(
+        subject = "typed material binding for transition_taxonomy",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation transition_taxonomy",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: transition_taxonomy")
+
+# initial draft, seed replay, Lean execution, critique, refinement, denoising, and transition logging.
+workflow DraftExecuteRefineLoop(
+    workflow_source: LeanFormalizationDraftBrief,
+) -> Computed[LeanRefinementOutcome]
+    fails ModelFailure
+    ! {AI.Generate, Context.Disclose}:
+    sequence:
+        [draft_initial: draft_initial_agent(workflow_source)]
+        [draft_seed: draft_seed_material_binding(draft_initial.value)]
+        [execute_initial: execute_initial_material_binding(draft_seed.value)]
+        [check_compile: check_compile_material_binding(execute_initial.value)]
+        [postformalization_source_anchor_drift_guard: postformalization_source_anchor_drift_guard_material_binding(check_compile.value)]
+        [critique_semantic: critique_semantic_agent(postformalization_source_anchor_drift_guard.value)]
+        [critique_syntax: critique_syntax_agent(critique_semantic.value)]
+        [critique_semantic_preservation: critique_semantic_preservation_agent(critique_syntax.value)]
+        [critique_logical_soundness: critique_logical_soundness_agent(critique_semantic_preservation.value)]
+        [critique_mathlib_alignment: critique_mathlib_alignment_agent(critique_logical_soundness.value)]
+        [critique_suite: critique_suite_agent(critique_mathlib_alignment.value)]
+        [critique_reference_free_monitor: critique_reference_free_monitor_material_binding(critique_suite.value)]
+        [refine_formal: refine_formal_agent(critique_reference_free_monitor.value)]
+        [refine_semantic: refine_semantic_agent(refine_formal.value)]
+        [output_denoise: output_denoise_agent(refine_semantic.value)]
+        [annotate_line_comment_guard: annotate_line_comment_guard_material_binding(output_denoise.value)]
+        [transition_taxonomy: transition_taxonomy_material_binding(annotate_line_comment_guard.value)]
+    return transition_taxonomy

@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Canonical epistemic projection; not an execution trace.
+erfl 0.3
+reasoning adversarial_validation {
+  goal "produce a calibrated adversarial verdict without promoting nonrefutation"
+    -> validation_status
+  steps
+    p:P[target::Claim,scope::Scope->probe_evidence::Evidence] -assess> ...
+    r:R[
+      target::Claim,
+      probe_evidence::Evidence
+      -> assessment::Assessment
+    ] -calibrate> ...
+    e:E[
+      target::Claim,
+      assessment::Assessment
+      -> validation_status::Decision
+    ]
+  on e.refuted => stop
+  on e.not_refuted_within_scope => accept
+  on e.blocked => stop
+}

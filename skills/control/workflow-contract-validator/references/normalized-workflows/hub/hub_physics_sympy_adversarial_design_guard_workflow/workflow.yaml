@@ -1,0 +1,422 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_sympy_adversarial_design_guard_workflow
+version: 1.0.0
+kind: workflow
+description: Evaluate eight fixed adversarial fixtures through the SymPy design guard.
+aliases:
+- physics-sympy:adversarial-design-guard
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Session:
+    schema:
+      type: object
+      properties:
+        session_id:
+          type: string
+      required:
+      - session_id
+      additionalProperties: false
+    representation: value
+  State:
+    schema:
+      type: object
+      properties:
+        cursor:
+          type: integer
+          minimum: 0
+          maximum: 8
+        results:
+          type: array
+          maxItems: 8
+          items:
+            type: object
+      required:
+      - cursor
+      - results
+      additionalProperties: false
+  Fixture:
+    schema:
+      type: object
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        expected_code:
+          type: string
+        repair_surface:
+          type: string
+      required:
+      - name
+      - path
+      - expected_code
+      - repair_surface
+      additionalProperties: false
+  Review:
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - pass
+          - fail
+        findings:
+          type: array
+          items:
+            type: object
+      required:
+      - status
+      - findings
+  Done:
+    schema:
+      type: boolean
+  SuiteReport:
+    schema:
+      type: object
+      properties:
+        schema_version:
+          type: integer
+          const: 1
+        ok:
+          type: boolean
+        style:
+          type: string
+          const: physics_sympy_adversarial_design_guard_suite
+        case_id:
+          type: string
+          const: formalphysics_0000
+        fixture_count:
+          type: integer
+          const: 8
+        results:
+          type: array
+          minItems: 8
+          maxItems: 8
+          items:
+            type: object
+        findings:
+          type: array
+          items:
+            type: object
+      required:
+      - schema_version
+      - ok
+      - style
+      - case_id
+      - fixture_count
+      - results
+      - findings
+      additionalProperties: false
+inputs: {}
+outputs:
+  report:
+    type: SuiteReport
+    value:
+      ref: flow.outputs.report
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      session:
+        type: Session
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adversarial_guard_initialize
+        operation: mathformer_adversarial_guard_initialize
+  materialize:
+    inputs:
+      session:
+        type: Session
+      state:
+        type: State
+    outputs:
+      fixture:
+        type: Fixture
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adversarial_guard_materialize
+        operation: mathformer_adversarial_guard_materialize
+  review:
+    inputs:
+      session:
+        type: Session
+      fixture:
+        type: Fixture
+    outputs:
+      report:
+        type: Review
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adversarial_guard_review
+        operation: mathformer_adversarial_guard_review
+  append_and_guard:
+    inputs:
+      session:
+        type: Session
+      state:
+        type: State
+      fixture:
+        type: Fixture
+      report:
+        type: Review
+    outputs:
+      state:
+        type: State
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adversarial_guard_append_and_guard
+        operation: mathformer_adversarial_guard_append_and_guard
+  finish:
+    inputs:
+      session:
+        type: Session
+      state:
+        type: State
+    outputs:
+      report:
+        type: SuiteReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_adversarial_guard_finish
+        operation: mathformer_adversarial_guard_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: fixtures
+    kind: loop
+    description: Iterate all eight FIXTURES in source order without fail-fast or repairs.
+      The eighth append computes done=true, so the bound returns normally. Reviewer
+      failure is report data; uncaught exceptions terminate execution.
+    state_type: State
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 8
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: materialize
+        kind: call
+        operation: materialize
+        arguments:
+          session:
+            ref: steps.initialize.outputs.session
+          state:
+            ref: loop.state
+      - id: review
+        kind: call
+        operation: review
+        arguments:
+          session:
+            ref: steps.initialize.outputs.session
+          fixture:
+            ref: steps.materialize.outputs.fixture
+      - id: append
+        kind: call
+        operation: append_and_guard
+        arguments:
+          state:
+            ref: loop.state
+          fixture:
+            ref: steps.materialize.outputs.fixture
+          report:
+            ref: steps.review.outputs.report
+          session:
+            ref: steps.initialize.outputs.session
+      outputs:
+        state:
+          type: State
+          value:
+            ref: steps.append.outputs.state
+        done:
+          type: Done
+          value:
+            ref: steps.append.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: State
+        value:
+          ref: loop.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      session:
+        ref: steps.initialize.outputs.session
+      state:
+        ref: steps.fixtures.outputs.state
+  outputs:
+    report:
+      type: SuiteReport
+      value:
+        ref: steps.finish.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      - temporary_fixture_directory
+      write:
+      - temporary_fixture_directory
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - evaluate_fixed_adversarial_fixtures
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 180
+    max_operation_calls: 26
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Fixture expectation checks only; no scientific result or promotion
+    is established.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/physics_sympy/run_adversarial_design_guard_suite.py
+    selector: run_suite
+    digest: sha256:e8789b2ba5ba4d32310d7b2675121a26acea3095ee7c5f526134da47143b194d
+  - path: skills/physics-sympy/physics-sympy-review-refinement-router/scripts/plan_physics_sympy_review_refinement.py
+    selector: build_design_guard_review
+    digest: sha256:4a323d615204b9c2cc6326c2f047a2e88b070644c23d7a31bd5fe7fe55ce52d2
+  - path: scripts/mathformer.py
+    selector: build_registry; prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/adversarial_design_guard_tools.py
+    selector: register_adversarial_guard_tools; adversarial_guard_lifespan
+    digest: sha256:4b53a605759cd6d6fd2f431f9930e385118cbe7e170a97e135ea395e28ef4a99
+  - path: scripts/mcp_server.py
+    selector: register_adversarial_guard_tools; FastMCP lifespan
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_adversarial_design_guard_workflow_tests.py
+    selector: AdversarialGuardTests
+    digest: sha256:94268d28831dbb78c8e1bc6d1daf91041dd6948d1d21206dcbaacf253840cfaf
+  gaps:
+  - Reviewer internals remain an opaque native call; payload schemas summarize native
+    dictionaries.
+  - Hub preflight, dry-run, subprocess timeout and repository-write auditing remain
+    outside this run_suite graph.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-sympy:adversarial-design-guard
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: physics-sympy:adversarial-design-guard
+      family: physics_sympy
+      kind: validation
+      safety: read_only
+      command:
+      - .venv/bin/python
+      - tests/physics_sympy/run_adversarial_design_guard_suite.py
+      - --json
+      depends_on: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: 180
+  mathformer.native_boundary:
+    execution: main() calls run_suite(); the hub launches main with --json.
+    cli_outputs: main prints JSON or a brief report and exits 0 if report.ok, otherwise
+      3.
+    limits: The 180-second limit belongs to the hub subprocess; run_suite has no local
+      timeout.
+    previous_limit: The existing 3600-second normalization ceiling is not a native
+      execution bound.
+    cleanup: Native TemporaryDirectory closes before aggregation or immediately on
+      tool exceptions; server lifespan closes abandoned sessions after runtime cancellation,
+      budget failure or loop exhaustion.
+    failure_policy: Uncaught exceptions propagate; failed expectations return a report
+      with ok=false.
+    wrapper: Preflight errors and dry-run skip launch; repository auditing can reject
+      undeclared writes.
+    routes: FormalPhysics 0000 and 0004 intent routes include this action.
+    receipts: Lunar PRISM runtime records native tool calls, payload digests, effect
+      records and replay artifacts; native suite JSON remains unchanged.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    modeling: Fixed suite only; localized repair suggestions do not initiate repair
+      or convergence loops.
+  mathformer.steps:
+    initialize: Load native router before creating TemporaryDirectory; return an owned
+      session and cursor=0/results=[].
+    materialize: tests/physics_sympy/run_adversarial_design_guard_suite.py:run_suite,
+      FIXTURES and fixture_source. Select the next fixed name/expectations in insertion
+      order, write fixture_source(name) to tmp/name.py as UTF-8, and pack its path
+      and expectations.
+    review: run_suite in tests/physics_sympy/run_adversarial_design_guard_suite.py
+      calls router.build_design_guard_review("formalphysics_0000", path, None). The
+      reviewer owns existence/import branches, commentary, nonleakage, assumptions,
+      frame context, projection bridges, derivation labels, library grounding, numeric
+      callbacks, evidence and finding accumulation. Any high/critical finding yields
+      fail; otherwise pass. A None reasoning log adds only a medium finding.
+    append_and_guard: tests/physics_sympy/run_adversarial_design_guard_suite.py:run_suite
+      computes fresh code and repair-surface sets from dictionary findings whose severity
+      is high or critical. Append id, status, expected_code, expected_repair_surface,
+      sorted truthy observed_codes and observed_repair_surfaces, blocked=(status=="fail"),
+      expected_code_present and expected_surface_present to results. Pack the advanced
+      iterator cursor and growing results; compute done when all eight FIXTURES have
+      been consumed.
+    finish: Close the temporary context before native expectation aggregation. All
+      eight results are required; unmet expectations return ok=false as report data.
+# REUSE-IgnoreEnd

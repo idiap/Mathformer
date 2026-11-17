@@ -1,0 +1,436 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_mathformerphysicslib_coherence_gate_workflow
+version: 1.0.0
+kind: workflow
+description: Select coherence reports and repairs, aggregate diagnostics, emit requested
+  reports, and return main's exit code.
+aliases:
+- mathformerphysicslib:coherence-gate
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type: array
+      items:
+        type: string
+  Args:
+    schema:
+      type: object
+      description: Parsed main CLI options; absent paths are null.
+      required:
+      - report
+      - repair_plan
+      - output
+      - markdown_output
+      - self_test
+      - require_release
+      - json
+      properties:
+        report:
+          type: array
+          items:
+            type: string
+        repair_plan:
+          type:
+          - string
+          - 'null'
+        output:
+          type:
+          - string
+          - 'null'
+        markdown_output:
+          type:
+          - string
+          - 'null'
+        self_test:
+          type: boolean
+        require_release:
+          type: boolean
+        json:
+          type: boolean
+      additionalProperties: false
+  Flag:
+    schema:
+      type: boolean
+  Reports:
+    schema:
+      type: array
+      items:
+        type: object
+      description: Ordered grounding/critic reports or supplied JSON reports; findings
+        are consumed by native helpers.
+  Repairs:
+    schema:
+      type: object
+      description: Loaded or proposed repair plan; actions are never applied.
+  Gate:
+    schema:
+      type: object
+      required:
+      - status
+      - high_findings
+      - medium_findings
+      - release_ok
+      - repair_plan_status
+      - repair_action_count
+      properties:
+        status:
+          enum:
+          - accepted
+          - warn
+          - blocked
+        high_findings:
+          type: integer
+          minimum: 0
+        medium_findings:
+          type: integer
+          minimum: 0
+        release_ok:
+          type: boolean
+        repair_plan_status: {}
+        repair_action_count:
+          type: integer
+          minimum: 0
+      additionalProperties: true
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+  SerializedGate:
+    schema:
+      type: string
+      description: Native aggregate JSON preserving object insertion order across
+        canonicalizing transports for requested JSON output.
+inputs:
+  argv:
+    type: Argv
+outputs:
+  payload:
+    type: Gate
+    value:
+      ref: flow.outputs.payload
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  parse:
+    inputs:
+      argv:
+        type: Argv
+    outputs:
+      args:
+        type: Args
+      supplied_reports:
+        type: Flag
+      supplied_repairs:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_gate_parse
+        operation: mathformer_coherence_gate_parse
+  load_reports:
+    inputs:
+      args:
+        type: Args
+    outputs:
+      reports:
+        type: Reports
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_gate_load_reports
+        operation: mathformer_coherence_gate_load_reports
+  default_reports:
+    inputs:
+      args:
+        type: Args
+    outputs:
+      reports:
+        type: Reports
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_gate_default_reports
+        operation: mathformer_coherence_gate_default_reports
+  load_repairs:
+    inputs:
+      args:
+        type: Args
+    outputs:
+      repairs:
+        type: Repairs
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_gate_load_repairs
+        operation: mathformer_coherence_gate_load_repairs
+  propose_repairs:
+    inputs:
+      reports:
+        type: Reports
+    outputs:
+      repairs:
+        type: Repairs
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_gate_propose_repairs
+        operation: mathformer_coherence_gate_propose_repairs
+  aggregate:
+    inputs:
+      reports:
+        type: Reports
+      repairs:
+        type: Repairs
+    outputs:
+      payload:
+        type: Gate
+      serialized_payload:
+        type: SerializedGate
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_gate_aggregate
+        operation: mathformer_coherence_gate_aggregate
+  emit_return:
+    inputs:
+      args:
+        type: Args
+      repairs:
+        type: Repairs
+      serialized_payload:
+        type: SerializedGate
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_gate_emit_return
+        operation: mathformer_coherence_gate_emit_return
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse
+    arguments:
+      argv:
+        ref: inputs.argv
+  - id: reports
+    kind: switch
+    cases:
+    - id: supplied
+      when:
+        ref: steps.parse.outputs.supplied_reports
+      body:
+        kind: call
+        operation: load_reports
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+    default:
+      kind: call
+      operation: default_reports
+      arguments:
+        args:
+          ref: steps.parse.outputs.args
+    outputs:
+      reports:
+        type: Reports
+        value:
+          ref: selected.outputs.reports
+  - id: repairs
+    kind: switch
+    cases:
+    - id: supplied
+      when:
+        ref: steps.parse.outputs.supplied_repairs
+      body:
+        kind: call
+        operation: load_repairs
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+    default:
+      kind: call
+      operation: propose_repairs
+      arguments:
+        reports:
+          ref: steps.reports.outputs.reports
+    outputs:
+      repairs:
+        type: Repairs
+        value:
+          ref: selected.outputs.repairs
+  - id: aggregate
+    kind: call
+    operation: aggregate
+    arguments:
+      reports:
+        ref: steps.reports.outputs.reports
+      repairs:
+        ref: steps.repairs.outputs.repairs
+  - id: emit_return
+    kind: call
+    operation: emit_return
+    arguments:
+      args:
+        ref: steps.parse.outputs.args
+      repairs:
+        ref: steps.repairs.outputs.repairs
+      serialized_payload:
+        ref: steps.aggregate.outputs.serialized_payload
+  outputs:
+    payload:
+      type: Gate
+      value:
+        ref: steps.aggregate.outputs.payload
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.emit_return.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - requested_json_output
+      - requested_markdown_output
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - read_coherence_inputs
+    - propose_repairs
+    - compute_diagnostics
+    - emit_requested_reports
+    forbidden:
+    - apply_repairs
+    - infer_scientific_truth_from_completion
+    - bypass_native_controls
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked diagnostics only; native release/property flags do
+    not establish scientific truth or actual artifact promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/mathformerphysicslib/mathformerphysicslib-coherence-gate/scripts/gate_coherence.py
+    selector: main
+    digest: sha256:abc851b8d1344a842bdbf72e800ba0b5570d0fa9f42f8dabf2d6fa9a4940ad0d
+  - path: skills/mathformerphysicslib/mathformerphysicslib-coherence-gate/scripts/gate_coherence.py
+    selector: default_reports
+    digest: sha256:abc851b8d1344a842bdbf72e800ba0b5570d0fa9f42f8dabf2d6fa9a4940ad0d
+  - path: skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/coherence_common.py
+    selector: repair_plan; coherence_gate; build_release_status; self_test_payload
+    digest: sha256:e1da9d47b82e23be26335e4476ba442aa58aedafe245034709d2868909deb125
+  - path: scripts/mathformer.py
+    selector: build_registry/action:mathformerphysicslib:coherence-gate; preflight;
+      run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/coherence_gate_tools.py
+    digest: sha256:95a33e99cf02cc0ee31e09c43cf4601c19ef3634c27c5038d4ff49c64a4d0e8f
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Helper internals remain inside their owning native operations; coverage models
+    main-level control flow.
+  - The 3600-second and five-call bounds are enforced by Lunar; standalone main has
+    no native timeout or input-size cap.
+  - Native stdout is emitted to the MCP stdio diagnostic channel; Lunar supplies required
+    execution receipts and artifact digests.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: mathformerphysicslib:coherence-gate
+    owner_skill: skills/mathformerphysicslib/mathformerphysicslib-coherence-gate/SKILL.md
+    contract:
+      id: mathformerphysicslib:coherence-gate
+      summary: Smoke-test MathformerPhysicsLib coherence gate.
+      family: mathformerphysicslib
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - skills/mathformerphysicslib/mathformerphysicslib-coherence-gate/scripts/gate_coherence.py
+      - --self-test
+      - --json
+      depends_on: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Existing scripts/mathformer.py controller launches one subprocess after
+      preflight; dry-run and preflight errors prevent launch.
+    failure_policy: Hub success depends on subprocess exit code and undeclared-write
+      audit; diagnostics status is separate. main returns 0 by default even for blocked
+      diagnostics; require-release may return 3. Argparse errors terminate with its
+      native exit; unhandled errors terminate execution.
+    input_scope: argv models main directly. The registered action fixes argv to --self-test
+      --json, forbids extra args, has no dependencies, and requests no output files.
+      Standalone argv may supply reports, repair plan, and output paths.
+    callers:
+    - coherence-suite
+    - physics-lib:coherence-gate
+    effects_status: partial_native_declarations
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: Single main pass; report and repair selection precede aggregation, annotation,
+      optional writes, stdout and exit. All repeated traversals are finite and input-sized,
+      contained in owning operations. No refinement loop, exhaustion status, checkpoint,
+      or retries.
+# REUSE-IgnoreEnd

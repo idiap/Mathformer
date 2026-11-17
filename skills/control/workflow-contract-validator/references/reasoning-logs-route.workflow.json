@@ -1,0 +1,916 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_control_reasoning_logs_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Selected reasoning-log route through native admission and ordered consumer-readiness dependencies.",
+  "aliases": [
+    "control.reasoning.logs"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "control:reasoning-log-consumer-readiness"
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RouteState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 1
+          }
+        },
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Admission": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "accepted",
+              "unknown_action",
+              "dependency_cycle",
+              "extra_args_for_sequence"
+            ]
+          },
+          "ancestry": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "accepted",
+          "status",
+          "ancestry"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "DependencyState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 6
+          },
+          "dependencies_ok": {
+            "type": "boolean"
+          },
+          "ancestry": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "index",
+          "children",
+          "dependencies_ok",
+          "ancestry"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "SelectedMatch": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "route_id": {
+            "type": "string",
+            "const": "control.reasoning.logs"
+          },
+          "score": {
+            "type": "number"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "route_id",
+          "score",
+          "matched_terms"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object"
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "TraversalState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "dependencies": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 6
+              },
+              "children": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "maxItems": 6
+              },
+              "dependencies_ok": {
+                "type": "boolean"
+              },
+              "ancestry": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "index",
+              "children",
+              "dependencies_ok",
+              "ancestry"
+            ],
+            "additionalProperties": false
+          },
+          "rejection": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "accepted",
+          "dependencies",
+          "rejection"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "SelectedMatch"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize_route": {
+      "inputs": {
+        "match": {
+          "type": "SelectedMatch"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_logs_route_initialize_route",
+          "operation": "mathformer_logs_route_initialize_route"
+        }
+      }
+    },
+    "admit": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_logs_route_admit",
+          "operation": "mathformer_logs_route_admit"
+        }
+      }
+    },
+    "reject": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        },
+        "state": {
+          "type": "TraversalState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_logs_route_reject",
+          "operation": "mathformer_logs_route_reject"
+        }
+      }
+    },
+    "initialize_dependencies": {
+      "inputs": {
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "TraversalState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_logs_route_initialize_dependencies",
+          "operation": "mathformer_logs_route_initialize_dependencies"
+        }
+      }
+    },
+    "visit_dependency": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "state": {
+          "type": "TraversalState"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_logs_route_visit_dependency",
+          "operation": "mathformer_logs_route_visit_dependency"
+        }
+      }
+    },
+    "advance_dependencies": {
+      "inputs": {
+        "state": {
+          "type": "TraversalState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "TraversalState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_logs_route_advance_dependencies",
+          "operation": "mathformer_logs_route_advance_dependencies"
+        }
+      }
+    },
+    "finish_dependencies": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "state": {
+          "type": "TraversalState"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_logs_route_finish_dependencies",
+          "operation": "mathformer_logs_route_finish_dependencies"
+        }
+      }
+    },
+    "finish_route": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_logs_route_finish_route",
+          "operation": "mathformer_logs_route_finish_route"
+        }
+      }
+    },
+    "retain_rejection": {
+      "inputs": {
+        "state": {
+          "type": "TraversalState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "TraversalState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_logs_route_retain_rejection",
+          "operation": "mathformer_logs_route_retain_rejection"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "description": "Native single-action route with a top-level dependency loop. Tagged transport state lets rejected admission bypass all dependency calls; retention is a pure adapter step.",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize_route",
+        "arguments": {
+          "match": {
+            "ref": "inputs.match"
+          }
+        }
+      },
+      {
+        "id": "admission",
+        "kind": "call",
+        "operation": "admit",
+        "arguments": {
+          "action_id": {
+            "ref": "steps.initialize.outputs.action_id"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      },
+      {
+        "id": "seed",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "accepted",
+            "when": {
+              "ref": "steps.admission.outputs.admission.accepted"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "initialize_dependencies",
+              "arguments": {
+                "admission": {
+                  "ref": "steps.admission.outputs.admission"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "kind": "call",
+              "operation": "reject",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.initialize.outputs.action_id"
+                },
+                "admission": {
+                  "ref": "steps.admission.outputs.admission"
+                }
+              },
+              "id": "reject"
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "TraversalState",
+              "value": {
+                "ref": "steps.reject.outputs.state"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "state": {
+            "type": "TraversalState",
+            "value": {
+              "ref": "selected.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "dependencies",
+        "kind": "loop",
+        "state_type": "TraversalState",
+        "initial": {
+          "ref": "steps.seed.outputs.state"
+        },
+        "max_iterations": 6,
+        "on_exhausted": "fail",
+        "description": "At item six done is true, so normal traversal never signals exhaustion.",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "accepted",
+              "when": {
+                "ref": "loop.state.accepted"
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "visit",
+                    "kind": "call",
+                    "operation": "visit_dependency",
+                    "arguments": {
+                      "action_id": {
+                        "ref": "steps.initialize.outputs.action_id"
+                      },
+                      "state": {
+                        "ref": "loop.state"
+                      },
+                      "context": {
+                        "ref": "inputs.context"
+                      },
+                      "registry": {
+                        "ref": "inputs.registry"
+                      },
+                      "repository_root": {
+                        "ref": "inputs.repository_root"
+                      }
+                    }
+                  },
+                  {
+                    "id": "advance",
+                    "kind": "call",
+                    "operation": "advance_dependencies",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      },
+                      "child": {
+                        "ref": "steps.visit.outputs.result"
+                      },
+                      "context": {
+                        "ref": "inputs.context"
+                      },
+                      "registry": {
+                        "ref": "inputs.registry"
+                      },
+                      "action_id": {
+                        "ref": "steps.initialize.outputs.action_id"
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "state": {
+                    "type": "TraversalState",
+                    "value": {
+                      "ref": "steps.advance.outputs.state"
+                    }
+                  },
+                  "done": {
+                    "type": "Flag",
+                    "value": {
+                      "ref": "steps.advance.outputs.done"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "retain_rejection",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "TraversalState",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "TraversalState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "readiness",
+        "kind": "call",
+        "operation": "finish_dependencies",
+        "arguments": {
+          "action_id": {
+            "ref": "steps.initialize.outputs.action_id"
+          },
+          "state": {
+            "ref": "steps.dependencies.outputs.state"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish_route",
+        "arguments": {
+          "state": {
+            "ref": "steps.initialize.outputs.state"
+          },
+          "child": {
+            "ref": "steps.readiness.outputs.result"
+          },
+          "context": {
+            "ref": "inputs.context"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/reasoning/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 17
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Native run and validation results only; completion does not confer scientific truth or artifact promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/reasoning_logs_route_tools.py",
+        "selector": "register_reasoning_logs_route_tools",
+        "digest": "sha256:9dc3960cd1e5506ee2913b165e0b667f3c9275164bbadf089f4af2a8c1a74fb9"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "MCP registration",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "reasoning_logs_route_descriptor",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Leaf internals remain native calls inside visit_dependency: real preflight, argv, subprocess capture and write audits. They are not expanded into the graph.",
+      "Native leaf timeout_seconds is None and the controller has no global budget; the retained 3600-second and 17-call ceilings are enforced by Lunar only.",
+      "Native optional hub logging remains source-owned; Lunar supplies its own required receipts and digests. Network/external capability names are qualification metadata, not grants."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "control.reasoning.logs",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "control.reasoning.logs",
+        "title": "Validate and expose reasoning logs for consumers",
+        "action_ids": [
+          "control:reasoning-log-consumer-readiness"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Native Python controller is authoritative; workflow.yaml is a generated interface projection.",
+      "entrypoints": [
+        "CLI ask --run",
+        "MCP mathformer_ask",
+        "MCP mathformer_run_workflow"
+      ],
+      "service_guard": "MCP additionally checks configured service write roots.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "failure_policy": "Preserve native failed result data; operation exceptions terminate and propagate.",
+      "scientific_payloads": "HubResult is the transport envelope, not scientific artifacts.",
+      "transport_control": "The top-level loop carries accepted native DependencyState or native rejection data. Rejection retention does not call native dependency helpers; finish_dependencies returns rejection unchanged."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "control:reasoning-log-consumer-readiness"
+      ],
+      "action_workflows": [
+        "hub_control_reasoning_log_consumer_readiness_workflow"
+      ],
+      "ordered_dependencies": [
+        "control:reasoning-log-smoke",
+        "control:reasoning-log-coverage",
+        "control:reasoning-log-quality",
+        "control:reasoning-log-consumer-contract",
+        "control:reasoning-log-index",
+        "control:reasoning-log-index-validate"
+      ],
+      "selection": "Already-selected route; native NL scoring and ambiguity resolution are outside this projection.",
+      "keep_going_semantics": "Stop on first failed child unless enabled; continued success never clears failure."
+    },
+    "mathformer.step_sources": {
+      "initialize_route": [
+        "scripts/mathformer.py:initialize_intent_state",
+        "scripts/mathformer.py:select_intent_action"
+      ],
+      "admit": [
+        "scripts/mathformer.py:admit_action"
+      ],
+      "reject": [
+        "scripts/mathformer.py:reject_action"
+      ],
+      "initialize_dependencies": [
+        "scripts/mathformer.py:initialize_dependencies"
+      ],
+      "visit_dependency": [
+        "scripts/mathformer.py:visit_dependency",
+        "scripts/mathformer.py:run_action",
+        "scripts/mathformer.py:run_leaf_action"
+      ],
+      "advance_dependencies": [
+        "scripts/mathformer.py:advance_dependencies"
+      ],
+      "finish_dependencies": [
+        "scripts/mathformer.py:finish_dependencies"
+      ],
+      "finish_route": [
+        "scripts/mathformer.py:advance_intent_state",
+        "scripts/mathformer.py:finish_intent_state"
+      ],
+      "retain_rejection": [
+        "scripts/reasoning_logs_route_tools.py:mathformer_logs_route_retain_rejection"
+      ]
+    }
+  }
+}

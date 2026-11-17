@@ -1,0 +1,464 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Make new Mathformer functionality usable by paper-writing skills without
+#   relying on ad hoc prose summaries.
+#
+# Intent:
+#   Emit a structured evidence packet that distinguishes implementation paths,
+#   generated artifacts, supported claims, non-claims, paper targets, and
+#   validation gates.
+#
+# Function:
+#   Builds JSON packets for recent platform features such as reasoning-log HTML
+#   dashboards, reference-free monitors, and controlled workflow routing.
+#
+# Maintenance Notes:
+#   Keep feature templates synchronized with
+#   `paper_skills/references/new_functionality_evidence_packet.md`.
+
+"""Build structured evidence packets for Mathformer paper updates."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def repo_path(path: str) -> Path:
+    """Return an absolute repository path for a repo-relative string."""
+
+    return REPO_ROOT / path
+
+
+def path_entry(path: str) -> dict[str, Any]:
+    """Create a path record with existence metadata.
+
+    Motivation:
+        Paper claims should know whether a cited implementation or artifact is
+        present in the current checkout.
+
+    Intent:
+        Store both the display path and a lightweight status flag.
+    """
+
+    candidate = repo_path(path)
+    return {
+        "path": path,
+        "exists": candidate.exists(),
+        "kind": (
+            "directory"
+            if candidate.is_dir()
+            else "file" if candidate.exists() else "missing"
+        ),
+    }
+
+
+def validation_command(
+    command: str, output_paths: list[str] | None = None
+) -> dict[str, Any]:
+    """Create a validation command record without executing it."""
+
+    return {
+        "command": command,
+        "output_paths": [path_entry(path) for path in (output_paths or [])],
+    }
+
+
+def reasoning_log_renderer_packet() -> dict[str, Any]:
+    """Return the evidence packet for reasoning-log HTML dashboards."""
+
+    return {
+        "feature_name": "Reasoning-log HTML renderer",
+        "feature_id": "reasoning-log-html-renderer",
+        "feature_summary": (
+            "Strict reasoning-log JSONL traces and skill-application lifecycle "
+            "logs can be rendered into self-contained HTML dashboards for "
+            "human inspection."
+        ),
+        "implementation_paths": [
+            path_entry(
+                "skills/control/reasoning-log-schema-guardian/scripts/render_reasoning_log_html.py"
+            ),
+            path_entry(
+                "skills/control/reasoning-log-schema-guardian/scripts/validate_reasoning_log.py"
+            ),
+            path_entry(
+                "skills/control/reasoning-log-schema-guardian/scripts/render_reasoning_log.py"
+            ),
+            path_entry(
+                "skills/control/reasoning-log-schema-guardian/scripts/run_with_reasoning_log.py"
+            ),
+        ],
+        "generated_artifacts": [
+            path_entry(
+                "artifacts/full_autoformalization_reasoning_log_test/reasoning.html"
+            ),
+            path_entry(
+                "artifacts/full_autoformalization_reasoning_log_test/skill_application.html"
+            ),
+            path_entry(
+                "artifacts/full_autoformalization_reasoning_log_test/reasoning.jsonl"
+            ),
+            path_entry(
+                "artifacts/full_autoformalization_reasoning_log_test/skill_application.jsonl"
+            ),
+            path_entry(
+                "artifacts/full_autoformalization_reasoning_log_test/report.json"
+            ),
+        ],
+        "validation_commands": [
+            validation_command(
+                "python skills/control/reasoning-log-schema-guardian/scripts/validate_reasoning_log.py "
+                "--input artifacts/full_autoformalization_reasoning_log_test/reasoning.jsonl --json",
+                ["artifacts/full_autoformalization_reasoning_log_test/reasoning.jsonl"],
+            ),
+            validation_command(
+                "python skills/control/reasoning-log-schema-guardian/scripts/validate_reasoning_log.py "
+                "--input artifacts/full_autoformalization_reasoning_log_test/skill_application.jsonl --json",
+                [
+                    "artifacts/full_autoformalization_reasoning_log_test/skill_application.jsonl"
+                ],
+            ),
+        ],
+        "supported_paper_claims": [
+            {
+                "claim_type": "dashboard/interface",
+                "claim": "Reasoning logs can be projected into browser-readable inspection dashboards.",
+                "evidence_type": "generated",
+            },
+            {
+                "claim_type": "reasoning-log schema",
+                "claim": "Skill-application traces can be represented as structured lifecycle evidence.",
+                "evidence_type": "validated",
+            },
+        ],
+        "explicit_non_claims": [
+            "The dashboard does not prove mathematical correctness.",
+            "The dashboard does not replace Lean, Rocq, SymPy, or ATP validation.",
+        ],
+        "target_paper_sections": [
+            "MATHFORMER_FRAMEWORK_PAPER.tex: workflow and skill architecture",
+            "MATHFORMER_FRAMEWORK_PAPER.tex: observability and demonstrations",
+            "REFERENCE_FREE_REFINEMENT_DYNAMICS.tex: measurement projections",
+        ],
+        "figure_table_implications": [
+            "reasoning-log event lifecycle table",
+            "observability-stack figure",
+            "backend validation versus inspection table",
+        ],
+        "limitations_and_blockers": [
+            "Screenshots should be included only when generated by a reproducible command.",
+        ],
+    }
+
+
+def reference_free_monitor_packet() -> dict[str, Any]:
+    """Return the evidence packet for reference-free monitor evolution outputs."""
+
+    return {
+        "feature_name": "Reference-free critic monitor",
+        "feature_id": "reference-free-critic-monitor",
+        "feature_summary": (
+            "The monitor tracks formalization evolution through score deltas, "
+            "risk deltas, weakest dimensions, blockers, regressions, and plot "
+            "artifacts."
+        ),
+        "implementation_paths": [
+            path_entry(
+                "skills/rfde/reference-free-critic-monitor/scripts/monitor_reference_free_critics.py"
+            ),
+            path_entry(
+                "skills/rfde/reference-free-critic-monitor/references/reference_free_monitor.md"
+            ),
+        ],
+        "generated_artifacts": [
+            path_entry(
+                "artifacts/reference_free_critic_monitor/platform_refinement_test/evolution/formalization_evolution.csv"
+            ),
+            path_entry(
+                "artifacts/reference_free_critic_monitor/platform_refinement_test/evolution/formalization_evolution.json"
+            ),
+            path_entry(
+                "artifacts/reference_free_critic_monitor/platform_refinement_test/evolution/formalization_evolution.svg"
+            ),
+            path_entry("examples/outputs/reference_free_monitor_evolution_demo.md"),
+        ],
+        "validation_commands": [
+            validation_command(
+                "python skills/rfde/reference-free-critic-monitor/scripts/monitor_reference_free_critics.py --help"
+            ),
+        ],
+        "supported_paper_claims": [
+            {
+                "claim_type": "reference-free monitor",
+                "claim": "The platform can emit trajectory statistics and plots for reference-free formalization evolution.",
+                "evidence_type": "generated",
+            },
+            {
+                "claim_type": "observability",
+                "claim": "Weakest-dimension reports can guide targeted refinement.",
+                "evidence_type": "inspected",
+            },
+        ],
+        "explicit_non_claims": [
+            "RFDE improvement does not replace backend validation.",
+            "Monitor plots support diagnosis, not proof.",
+        ],
+        "target_paper_sections": [
+            "MATHFORMER_FRAMEWORK_PAPER.tex: reference-free descriptive evaluation",
+            "REFERENCE_FREE_REFINEMENT_DYNAMICS.tex: trajectory diagnostics",
+        ],
+        "figure_table_implications": [
+            "trajectory-diagnostics table",
+            "monitor plot reference",
+        ],
+        "limitations_and_blockers": [
+            "Monitor claims should name the artifact paths and validation status.",
+        ],
+    }
+
+
+def controlled_hub_packet() -> dict[str, Any]:
+    """Return the evidence packet for controlled workflow routing."""
+
+    return {
+        "feature_name": "Controlled action hub",
+        "feature_id": "controlled-action-hub",
+        "feature_summary": (
+            "The repository exposes controlled actions with family, safety, "
+            "required-path, write-target, and command metadata."
+        ),
+        "implementation_paths": [
+            path_entry("scripts/mathformer.py"),
+            path_entry("docs/architecture/AGENTIC_HUB.md"),
+        ],
+        "generated_artifacts": [
+            path_entry("artifacts/workflow_hub"),
+        ],
+        "validation_commands": [
+            validation_command("python scripts/mathformer.py run control:all --json"),
+            validation_command(
+                "python scripts/mathformer.py list --family paper --json"
+            ),
+        ],
+        "supported_paper_claims": [
+            {
+                "claim_type": "workflow-control",
+                "claim": "Common workflows can be discovered and routed through registered repository actions.",
+                "evidence_type": "implemented",
+            },
+        ],
+        "explicit_non_claims": [
+            "The hub does not make arbitrary scripts safe by default.",
+            "The hub records controlled routing, not theorem correctness.",
+        ],
+        "target_paper_sections": [
+            "MATHFORMER_FRAMEWORK_PAPER.tex: repository and workflow evidence",
+            "MATHFORMER_FRAMEWORK_PAPER.tex: reproducibility and agent-client setup",
+        ],
+        "figure_table_implications": [
+            "controlled workflow action table",
+        ],
+        "limitations_and_blockers": [
+            "New top-level scripts should be registered or explicitly classified as internal helpers.",
+        ],
+    }
+
+
+def workflow_catalog_packet() -> dict[str, Any]:
+    """Return the evidence packet for workflow graph and catalogue reporting."""
+
+    return {
+        "feature_name": "Workflow catalogue and graph report",
+        "feature_id": "workflow-catalogue-graph-report",
+        "feature_summary": (
+            "The generated workflow graph report collects existing workflow "
+            "stacks, hook sequences, skill coverage, reflective edges, and a "
+            "click drill-down HTML view; a paper-skill collector turns this "
+            "model into appendix-ready workflow catalogue artifacts."
+        ),
+        "implementation_paths": [
+            path_entry("scripts/render_workflow_graphs.py"),
+            path_entry("scripts/plan_workflow_graph_layout.py"),
+            path_entry("scripts/audit_workflow_skill_integration.py"),
+            path_entry(
+                "paper_skills/framework-repository-cartographer/scripts/collect_workflow_catalog_for_paper.py"
+            ),
+        ],
+        "generated_artifacts": [
+            path_entry("artifacts/workflow_graphs/workflow_graphs.html"),
+            path_entry("artifacts/workflow_graphs/workflow_graphs.json"),
+            path_entry("artifacts/workflow_graphs/workflow_layout_plan.json"),
+            path_entry(
+                "artifacts/workflow_graphs/workflow_skill_integration_audit.json"
+            ),
+            path_entry("artifacts/paper_skills/workflow_catalog_for_paper.json"),
+            path_entry("artifacts/paper_skills/workflow_catalog_for_paper.md"),
+            path_entry("artifacts/paper_skills/workflow_catalog_for_paper.tex"),
+        ],
+        "validation_commands": [
+            validation_command(
+                "python scripts/render_workflow_graphs.py --output-dir artifacts/workflow_graphs --json",
+                [
+                    "artifacts/workflow_graphs/workflow_graphs.html",
+                    "artifacts/workflow_graphs/workflow_graphs.json",
+                ],
+            ),
+            validation_command(
+                "python scripts/plan_workflow_graph_layout.py --graph artifacts/workflow_graphs/workflow_graphs.json "
+                "--output artifacts/workflow_graphs/workflow_layout_plan.json --json",
+                ["artifacts/workflow_graphs/workflow_layout_plan.json"],
+            ),
+            validation_command(
+                "python scripts/audit_workflow_skill_integration.py --output-dir artifacts/workflow_graphs --json",
+                ["artifacts/workflow_graphs/workflow_skill_integration_audit.json"],
+            ),
+            validation_command(
+                "python paper_skills/framework-repository-cartographer/scripts/collect_workflow_catalog_for_paper.py --json",
+                ["artifacts/paper_skills/workflow_catalog_for_paper.json"],
+            ),
+        ],
+        "supported_paper_claims": [
+            {
+                "claim_type": "workflow-control",
+                "claim": "The paper can cite a generated catalogue of existing workflow stacks and hook counts.",
+                "evidence_type": "generated",
+            },
+            {
+                "claim_type": "observability",
+                "claim": "Workflow graph reporting provides a drill-down inspection surface for agentic coordination.",
+                "evidence_type": "generated",
+            },
+            {
+                "claim_type": "reasoning-log schema",
+                "claim": "Workflow stacks can be mapped to typed transition relations used in the paper's mechanistic model.",
+                "evidence_type": "derived",
+            },
+        ],
+        "explicit_non_claims": [
+            "Workflow graph coverage does not prove that every workflow has been empirically validated.",
+            "A workflow catalogue is an architectural evidence surface, not a theorem-prover result.",
+        ],
+        "target_paper_sections": [
+            "MATHFORMER_FRAMEWORK_PAPER.tex: repository and workflow evidence",
+            "MATHFORMER_FRAMEWORK_PAPER.tex: mechanistic model",
+            "MATHFORMER_FRAMEWORK_PAPER.tex: workflow catalogue appendix",
+        ],
+        "figure_table_implications": [
+            "core workflow formalization table",
+            "appendix workflow catalogue table",
+            "workflow graph report artifact citation",
+        ],
+        "limitations_and_blockers": [
+            "Appendix counts should be regenerated after changes to skills/SKILL_HOOKS.yaml or workflow graph scripts.",
+        ],
+    }
+
+
+FEATURE_BUILDERS = {
+    "reasoning-log-html-renderer": reasoning_log_renderer_packet,
+    "reference-free-critic-monitor": reference_free_monitor_packet,
+    "controlled-action-hub": controlled_hub_packet,
+    "workflow-catalogue-graph-report": workflow_catalog_packet,
+}
+
+
+def build_packet(feature: str) -> dict[str, Any]:
+    """Build one feature packet or a combined packet."""
+
+    if feature == "all":
+        packets = [builder() for builder in FEATURE_BUILDERS.values()]
+        return {
+            "schema_version": 1,
+            "packet_type": "paper_new_functionality_evidence_collection",
+            "features": packets,
+            "feature_count": len(packets),
+            "missing_paths": missing_paths(packets),
+        }
+    packet = FEATURE_BUILDERS[feature]()
+    packet["schema_version"] = 1
+    packet["packet_type"] = "paper_new_functionality_evidence"
+    packet["missing_paths"] = missing_paths([packet])
+    return packet
+
+
+def iter_path_records(value: Any) -> list[dict[str, Any]]:
+    """Collect nested path records from a packet."""
+
+    records: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        if {"path", "exists", "kind"}.issubset(value):
+            records.append(value)
+        for child in value.values():
+            records.extend(iter_path_records(child))
+    elif isinstance(value, list):
+        for child in value:
+            records.extend(iter_path_records(child))
+    return records
+
+
+def missing_paths(packets: list[dict[str, Any]]) -> list[str]:
+    """Return all packet paths that do not exist in the checkout."""
+
+    missing: list[str] = []
+    for packet in packets:
+        for record in iter_path_records(packet):
+            if not record["exists"]:
+                missing.append(record["path"])
+    return sorted(set(missing))
+
+
+def main() -> int:
+    """Parse arguments, build a packet, and optionally emit JSON output."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--feature",
+        choices=["all", *sorted(FEATURE_BUILDERS)],
+        default="all",
+        help="Feature packet to build.",
+    )
+    parser.add_argument(
+        "--output",
+        default="artifacts/paper_skills/new_functionality_evidence_packet.json",
+        help="Repository-relative or absolute output JSON path.",
+    )
+    parser.add_argument("--json", action="store_true", help="Print a JSON summary.")
+    args = parser.parse_args()
+
+    packet = build_packet(args.feature)
+    output = Path(args.output)
+    if not output.is_absolute():
+        output = REPO_ROOT / output
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    result = {
+        "ok": True,
+        "output": str(output),
+        "feature": args.feature,
+        "feature_count": packet.get("feature_count", 1),
+        "missing_path_count": len(packet.get("missing_paths", [])),
+        "missing_paths": packet.get("missing_paths", []),
+    }
+    if args.json:
+        print(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        print(f"Wrote {output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

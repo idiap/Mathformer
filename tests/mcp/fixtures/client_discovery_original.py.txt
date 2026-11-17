@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Verify project-local skill discovery folders for supported agent clients."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SKILLS_ROOT = REPO_ROOT / "skills"
+CLIENT_TARGETS = {
+    "codex": REPO_ROOT / ".agents" / "skills",
+    "claude": REPO_ROOT / ".claude" / "skills",
+    "opencode": REPO_ROOT / ".opencode" / "skills",
+}
+REQUIRED_SMOKE_SKILLS = {
+    "mathformer-generative-workflow-coordinator",
+    "workflow-contract-validator",
+    "skill-test-program-orchestrator",
+    "physics-foundation-object-intake",
+    "mathformerphysicslib-foundation-drafter",
+    "mathformerphysicslib-foundation-surface-designer",
+    "mathformerphysicslib-foundation-verifier",
+}
+
+
+def canonical_skills() -> dict[str, Path]:
+    """Return canonical skills from the nested thematic layout."""
+    result: dict[str, Path] = {}
+    for path in sorted(SKILLS_ROOT.glob("*/*/SKILL.md")):
+        result[path.parent.name] = path.parent
+    return result
+
+
+def check_client(
+    client: str, target: Path, canonical: dict[str, Path]
+) -> dict[str, Any]:
+    """Check one client discovery folder."""
+    blockers: list[str] = []
+    warnings: list[str] = []
+    if not target.exists():
+        return {
+            "client": client,
+            "target": str(target.relative_to(REPO_ROOT)),
+            "ok": False,
+            "published_count": 0,
+            "missing": sorted(canonical),
+            "extra": [],
+            "blockers": ["target_missing"],
+            "warnings": [],
+        }
+
+    entries = {
+        item.name: item
+        for item in sorted(target.iterdir())
+        if item.is_dir() or item.is_symlink()
+    }
+    missing = sorted(set(canonical) - set(entries))
+    extra = sorted(set(entries) - set(canonical))
+    if missing:
+        blockers.append("missing_canonical_skills")
+    if extra:
+        blockers.append("unexpected_extra_skills")
+    for required in sorted(REQUIRED_SMOKE_SKILLS):
+        if required not in entries:
+            blockers.append(f"missing_required_smoke_skill:{required}")
+
+    broken_links = []
+    noncanonical_links = []
+    missing_skill_md = []
+    for name, entry in entries.items():
+        if name not in canonical:
+            continue
+        if entry.is_symlink() and not entry.exists():
+            broken_links.append(name)
+            continue
+        if not (entry / "SKILL.md").exists():
+            missing_skill_md.append(name)
+        if entry.is_symlink():
+            try:
+                if entry.resolve() != canonical[name].resolve():
+                    noncanonical_links.append(name)
+            except OSError:
+                broken_links.append(name)
+    if broken_links:
+        blockers.append("broken_symlinks")
+    if missing_skill_md:
+        blockers.append("missing_skill_md")
+    if noncanonical_links:
+        warnings.append("noncanonical_symlink_targets")
+
+    return {
+        "client": client,
+        "target": str(target.relative_to(REPO_ROOT)),
+        "ok": not blockers,
+        "published_count": len(entries),
+        "expected_count": len(canonical),
+        "missing": missing,
+        "extra": extra,
+        "broken_links": sorted(broken_links),
+        "noncanonical_links": sorted(noncanonical_links),
+        "missing_skill_md": sorted(missing_skill_md),
+        "required_smoke_skills_present": sorted(REQUIRED_SMOKE_SKILLS & set(entries)),
+        "blockers": blockers,
+        "warnings": warnings,
+    }
+
+
+def build_report() -> dict[str, Any]:
+    """Build the cross-client discovery report."""
+    canonical = canonical_skills()
+    clients = [
+        check_client(client, target, canonical)
+        for client, target in CLIENT_TARGETS.items()
+    ]
+    return {
+        "ok": all(item["ok"] for item in clients),
+        "canonical_skill_count": len(canonical),
+        "clients": clients,
+        "target_roots": {
+            client: str(target.relative_to(REPO_ROOT))
+            for client, target in CLIENT_TARGETS.items()
+        },
+    }
+
+
+def main() -> int:
+    """CLI entry point."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    report = build_report()
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        status = "ok" if report["ok"] else "failed"
+        print(f"agent skill discovery: {status}")
+        for item in report["clients"]:
+            print(
+                f"- {item['client']}: {item['published_count']}/{item['expected_count']}"
+            )
+    return 0 if report["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

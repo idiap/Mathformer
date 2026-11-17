@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from lean_physics_derivation_trace_loop import (
+    AcceptanceCase,
+    FormalizationBasis,
+    GroundingBasis,
+    LeanValidityCase,
+    PhysicalFidelityCase,
+    PhysicsDisposition,
+    PhysicsLeanDerivationRequest,
+)
+import occurrences as steps
+import relations as links
+
+# Expand and interpret a physics derivation, expose its Lean obligations, ground
+# the required APIs, construct the derivation, and judge both proof and physics.
+reasoning ReconstructInLean(
+    workflow_source: PhysicsLeanDerivationRequest,
+) -> Generated[PhysicsDisposition]:
+    sequence:
+        # Expand source prerequisites and model symbols, quantities, dimensions,
+        # units, equations, regimes, frames, gaps, and physical laws.
+        [interpreted_problem: steps.InterpretPhysics(workflow_source)]
+        # Turn the interpreted derivation into explicit goals, premises, and side conditions.
+        [derived_obligations: steps.DeriveProofObligations(interpreted_problem.value)] by links.ExposeProofObligations
+        # Resolve those concepts and obligations to compatible mathlib declarations and imports.
+        [grounded_mathlib: steps.GroundInMathlib(GroundingBasis(
+            physical_semantics = interpreted_problem.value,
+            formalization_obligations = derived_obligations.value,
+        ))] by links.AlignWithMathlib
+        # Draft and refine a Lean derivation from the physical model and grounded APIs.
+        [lean_candidate: steps.SynthesizeLeanDerivation(FormalizationBasis(
+            physical_semantics = interpreted_problem.value,
+            formalization_obligations = derived_obligations.value,
+            mathlib_alignment = grounded_mathlib.value,
+        ))] by links.ProposeFormalization
+        parallel:
+            # Execute Lean and assess elaboration, kernel acceptance, and obligation coverage.
+            [formal_assessment: steps.AssessLeanValidity(LeanValidityCase(
+                candidate_derivation = lean_candidate.value,
+                required_obligations = derived_obligations.value,
+            ))] by links.TestFormalValidity
+            # Assess preservation of physical meaning, assumptions, regimes, dimensions, and laws.
+            [physical_assessment: steps.AssessPhysicalFidelity(PhysicalFidelityCase(
+                candidate_derivation = lean_candidate.value,
+                intended_semantics = interpreted_problem.value,
+            ))] by links.TestPhysicalFidelity
+        # Combine final reviewers and consistency evidence into the workflow disposition.
+        [disposition: steps.CalibrateAcceptance(AcceptanceCase(
+            candidate_derivation = lean_candidate.value,
+            formal_validity = formal_assessment.value,
+            physical_fidelity = physical_assessment.value,
+        ))] by links.CalibrateFromAssessments
+    return disposition

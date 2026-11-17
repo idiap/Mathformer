@@ -1,0 +1,492 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_skills_plugin_sync_workflow
+version: 1.0.0
+kind: workflow
+description: 'Describe synchronize(root, check): project, compare, optionally write
+  then prune, and return original differences.'
+aliases:
+- skills:plugin-sync
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Root:
+    schema:
+      type: string
+      minLength: 1
+      description: Repository root restricted to projections with at most 10000 expected
+        files and 10000 stale entrypoints; larger roots are outside this specialization.
+  Flag:
+    schema:
+      type: boolean
+  Expected:
+    schema:
+      type: object
+      maxProperties: 10000
+      additionalProperties:
+        type: string
+      description: Insertion-ordered relative-path to text mapping from expected_files;
+        ordering must survive transport.
+  Paths:
+    schema:
+      type: array
+      maxItems: 10000
+      items:
+        type: string
+  Differences:
+    schema:
+      type: array
+      items:
+        type: string
+  State:
+    schema:
+      type: object
+      properties:
+        root:
+          type: string
+        expected:
+          type: object
+          maxProperties: 10000
+          additionalProperties:
+            type: string
+        stale:
+          type: array
+          maxItems: 10000
+          items:
+            type: string
+        differences:
+          type: array
+          items:
+            type: string
+        cursor:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        expected_order:
+          type: array
+          maxItems: 10000
+          items:
+            type: string
+      required:
+      - root
+      - expected
+      - stale
+      - differences
+      - cursor
+      - expected_order
+      additionalProperties: false
+  Order:
+    schema:
+      type: array
+      maxItems: 10000
+      items:
+        type: string
+inputs:
+  root:
+    type: Root
+  check:
+    type: Flag
+outputs:
+  differences:
+    type: Differences
+    value:
+      ref: flow.outputs.differences
+operations:
+  project:
+    inputs:
+      root:
+        type: Root
+    outputs:
+      expected:
+        type: Expected
+      expected_order:
+        type: Order
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_sync_project
+        operation: mathformer_plugin_sync_project
+  discover_stale:
+    inputs:
+      root:
+        type: Root
+      expected:
+        type: Expected
+    outputs:
+      stale:
+        type: Paths
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_sync_discover_stale
+        operation: mathformer_plugin_sync_discover_stale
+  compare_pack:
+    inputs:
+      root:
+        type: Root
+      expected:
+        type: Expected
+      stale:
+        type: Paths
+      expected_order:
+        type: Order
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_sync_compare_pack
+        operation: mathformer_plugin_sync_compare_pack
+  write_next:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_sync_write_next
+        operation: mathformer_plugin_sync_write_next
+  reset_cursor:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_sync_reset_cursor
+        operation: mathformer_plugin_sync_reset_cursor
+  remove_next:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_sync_remove_next
+        operation: mathformer_plugin_sync_remove_next
+  return_differences:
+    inputs:
+      state:
+        type: State
+    outputs:
+      differences:
+        type: Differences
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_sync_return_differences
+        operation: mathformer_plugin_sync_return_differences
+  skip_sweep:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_sync_skip_sweep
+        operation: mathformer_plugin_sync_skip_sweep
+flow:
+  kind: sequence
+  steps:
+  - id: project
+    kind: call
+    operation: project
+    arguments:
+      root:
+        ref: inputs.root
+  - id: stale
+    kind: call
+    operation: discover_stale
+    arguments:
+      root:
+        ref: inputs.root
+      expected:
+        ref: steps.project.outputs.expected
+  - id: compare
+    kind: call
+    operation: compare_pack
+    arguments:
+      root:
+        ref: inputs.root
+      expected:
+        ref: steps.project.outputs.expected
+      stale:
+        ref: steps.stale.outputs.stale
+      expected_order:
+        ref: steps.project.outputs.expected_order
+  - id: write
+    kind: loop
+    description: Process one native iteration per body call; empty input completes
+      without mutation on the first call. The final item sets done=true, including
+      at the cap.
+    state_type: State
+    initial:
+      ref: steps.compare.outputs.state
+    body:
+      kind: switch
+      cases:
+      - id: check_only
+        when:
+          ref: inputs.check
+        body:
+          kind: call
+          operation: skip_sweep
+          arguments:
+            state:
+              ref: loop.state
+      default:
+        kind: call
+        operation: write_next
+        arguments:
+          state:
+            ref: loop.state
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 10000
+    on_exhausted: fail
+    outputs:
+      state:
+        type: State
+        value:
+          ref: body.outputs.state
+  - id: begin_prune
+    kind: call
+    operation: reset_cursor
+    arguments:
+      state:
+        ref: steps.write.outputs.state
+  - id: prune
+    kind: loop
+    description: Process one native iteration per body call; empty input completes
+      without mutation on the first call. The final item sets done=true, including
+      at the cap.
+    state_type: State
+    initial:
+      ref: steps.begin_prune.outputs.state
+    body:
+      kind: switch
+      cases:
+      - id: check_only
+        when:
+          ref: inputs.check
+        body:
+          kind: call
+          operation: skip_sweep
+          arguments:
+            state:
+              ref: loop.state
+      default:
+        kind: call
+        operation: remove_next
+        arguments:
+          state:
+            ref: loop.state
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 10000
+    on_exhausted: fail
+    outputs:
+      state:
+        type: State
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: return_differences
+    arguments:
+      state:
+        ref: steps.prune.outputs.state
+  outputs:
+    differences:
+      type: Differences
+      value:
+        ref: steps.finish.outputs.differences
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      write:
+      - .agents/plugins/
+      - .claude-plugin/
+      - plugins/mathformer/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - synchronize_generated_plugin_projection
+    forbidden:
+    - delete_unmanaged_entrypoints
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 20005
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Synchronizes plugin discovery files only; completion conveys no scientific
+    result or artifact promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/sync_agent_plugins.py
+    selector: synchronize
+    digest: sha256:a03705054813e88f8ef2617dcd743b9e40e31a2ef2594fe858811b0d2c68b06c
+  - path: scripts/mathformer.py
+    selector: skills:plugin-sync; skills:plugin-check; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/plugin_sync_tools.py
+    digest: sha256:6f1f2aa68f85e9ccb27a0b73aa15c1cff3d548d6d921b5ad772a484ef3319bd4
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_plugin_sync_workflow_tests.py
+    digest: sha256:8a3600bebd2195f8e2cea6da95d8bf578aac7883f0424679abdde0a141fdca3e
+  - path: tests/mcp/fixtures/plugin_sync_original.py.txt
+    digest: sha256:c7a9d1f9043ffa10605b6a09b956017ab5734222bdf92b055cd38bf8143d6824
+  gaps:
+  - Finite helper scans remain inside project/discover/compare. Filesystem state accumulates
+    without snapshots or rollback.
+  - Specialization accepts at most 10000 expected and 10000 stale paths; adapters
+    reject larger projections before writes. Empty sweeps use a terminal no-op call.
+  - Hub preflight, dry run, write audit and main JSON reporting remain native boundary
+    metadata; this graph models synchronize, not main. Lunar enforces descriptor budgets.
+  - Lunar cannot compile branch-local loops. Root-level sweeps use a read-free terminal
+    skip adapter in check mode; this adds transport-only no-op calls without changing
+    native filesystem behavior or differences.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: skills:plugin-sync
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: skills:plugin-sync
+      family: skills
+      kind: setup
+      safety: writes_environment
+      command:
+      - '{python}'
+      - scripts/sync_agent_plugins.py
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: null
+      summary: Regenerate Codex and Claude plugin entrypoints from canonical skills.
+      required_paths:
+      - scripts/sync_agent_plugins.py
+      - skills/
+      required_tools: []
+      optional_tools: []
+      writes:
+      - plugins/mathformer/
+      - .agents/plugins/
+      - .claude-plugin/
+      notes: ''
+  mathformer.native_boundary:
+    execution: scripts/mathformer.py:run_action -> run_leaf_action; no dependencies;
+      script without arguments uses check=false. Sibling skills:plugin-check supplies
+      --check. Direct synchronize callers can choose check.
+    preflight: Hub can block or return dry run before subprocess execution; afterward
+      it audits writes.
+    failure_policy: synchronize propagates OSError/ValueError with no rollback. main
+      catches these and exits 1 without success report; otherwise prints JSON {ok,mode,changed}
+      and exits 0 in sync, or 1 on check drift (0 when clean).
+    limits: Native hub action has no timeout; Lunar enforces the descriptor budgets
+      for the bound graph.
+    reporting: synchronize returns list[str]; main report is a separate wrapper output.
+      check=true performs reads only.
+    qualification_capability_names_are_not_runtime_grants: true
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    effects_status: partial_native_declarations
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+# REUSE-IgnoreEnd

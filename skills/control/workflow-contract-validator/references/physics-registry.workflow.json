@@ -1,0 +1,689 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_mathformerphysicslib_registry_build_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Build physics registry rows, optionally write manifest and README, conditionally validate, then emit status.",
+  "aliases": [
+    "mathformerphysicslib:registry-build"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Flags": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "write": {
+            "type": "boolean"
+          },
+          "check": {
+            "type": "boolean"
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "write",
+          "check",
+          "json"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Rows": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "case_id": {
+              "type": "string"
+            },
+            "backend": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "artifact_path": {
+              "type": "string"
+            },
+            "artifact_sha256": {
+              "type": "string"
+            },
+            "generator_action_id": {
+              "type": "string"
+            },
+            "provenance_status": {
+              "type": "string"
+            },
+            "source_location": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_sha256": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "generator_revision": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "decisive_report_path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "decisive_report_sha256": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "public_root_imported": {
+              "type": "boolean"
+            },
+            "provenance_blockers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "case_id",
+            "backend",
+            "status",
+            "artifact_path",
+            "artifact_sha256",
+            "generator_action_id",
+            "provenance_status",
+            "source_location",
+            "source_sha256",
+            "generator_revision",
+            "decisive_report_path",
+            "decisive_report_sha256",
+            "public_root_imported",
+            "provenance_blockers"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "Bool": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Errors": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Result": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "schema_version": {
+                "const": 1
+              },
+              "style": {
+                "const": "physics_artifact_registry"
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "case_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "counts": {
+                "type": "object",
+                "properties": {
+                  "Lean": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "Isabelle": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "SymPy": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "Lean",
+                  "Isabelle",
+                  "SymPy"
+                ],
+                "additionalProperties": false
+              },
+              "errors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "manifest": {
+                "const": "MathformerPhysicsLib/MANIFEST.json"
+              },
+              "readme": {
+                "const": "MathformerPhysicsLib/README.md"
+              }
+            },
+            "required": [
+              "schema_version",
+              "style",
+              "ok",
+              "case_count",
+              "counts",
+              "errors",
+              "manifest",
+              "readme"
+            ],
+            "additionalProperties": false
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "exit_code": {
+            "enum": [
+              0,
+              3
+            ]
+          }
+        },
+        "required": [
+          "payload",
+          "stdout",
+          "exit_code"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "repository_root": {
+            "type": "string"
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repository_root",
+          "allow_mutating"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "RowsJson": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "flags": {
+      "type": "Flags"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Result",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "build": {
+      "inputs": {
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "rows": {
+          "type": "Rows"
+        },
+        "rows_json": {
+          "type": "RowsJson"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_registry_build",
+          "operation": "mathformer_physics_registry_build"
+        }
+      }
+    },
+    "write": {
+      "inputs": {
+        "rows": {
+          "type": "Rows"
+        },
+        "context": {
+          "type": "Context"
+        },
+        "rows_json": {
+          "type": "RowsJson"
+        }
+      },
+      "outputs": {},
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_registry_write",
+          "operation": "mathformer_physics_registry_write"
+        }
+      }
+    },
+    "check_guard": {
+      "inputs": {
+        "flags": {
+          "type": "Flags"
+        }
+      },
+      "outputs": {
+        "required": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_registry_check_guard",
+          "operation": "mathformer_physics_registry_check_guard"
+        }
+      }
+    },
+    "check": {
+      "inputs": {
+        "rows": {
+          "type": "Rows"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "errors": {
+          "type": "Errors"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_registry_check",
+          "operation": "mathformer_physics_registry_check"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "flags": {
+          "type": "Flags"
+        },
+        "rows": {
+          "type": "Rows"
+        },
+        "errors": {
+          "type": "Errors"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_registry_emit",
+          "operation": "mathformer_physics_registry_emit"
+        }
+      }
+    },
+    "skip_write": {
+      "inputs": {},
+      "outputs": {},
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_registry_skip_write",
+          "operation": "mathformer_physics_registry_skip_write"
+        }
+      }
+    },
+    "skip_check": {
+      "inputs": {},
+      "outputs": {
+        "errors": {
+          "type": "Errors"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_registry_skip_check",
+          "operation": "mathformer_physics_registry_skip_check"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "build",
+        "kind": "call",
+        "operation": "build",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "write",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "enabled",
+            "when": {
+              "ref": "inputs.flags.write"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "write",
+              "arguments": {
+                "rows": {
+                  "ref": "steps.build.outputs.rows"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "rows_json": {
+                  "ref": "steps.build.outputs.rows_json"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "skip_write",
+          "arguments": {}
+        },
+        "outputs": {}
+      },
+      {
+        "id": "guard",
+        "kind": "call",
+        "operation": "check_guard",
+        "arguments": {
+          "flags": {
+            "ref": "inputs.flags"
+          }
+        }
+      },
+      {
+        "id": "check",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "required",
+            "when": {
+              "ref": "steps.guard.outputs.required"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "check",
+              "arguments": {
+                "rows": {
+                  "ref": "steps.build.outputs.rows"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "skip_check",
+          "arguments": {}
+        },
+        "outputs": {
+          "errors": {
+            "type": "Errors",
+            "value": {
+              "ref": "selected.outputs.errors"
+            }
+          }
+        }
+      },
+      {
+        "id": "emit",
+        "kind": "call",
+        "operation": "emit",
+        "arguments": {
+          "flags": {
+            "ref": "inputs.flags"
+          },
+          "rows": {
+            "ref": "steps.build.outputs.rows"
+          },
+          "errors": {
+            "ref": "steps.check.outputs.errors"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Result",
+        "value": {
+          "ref": "steps.emit.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository"
+        ],
+        "write": [
+          "MathformerPhysicsLib/MANIFEST.json",
+          "MathformerPhysicsLib/README.md",
+          "artifacts/workflow_hub/",
+          "libraries/MathformerPhysicsLib/MANIFEST.json",
+          "libraries/MathformerPhysicsLib/README.md"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Registry validation is not scientific proof or new promotion evidence."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/build_physics_registry.py",
+        "selector": "main",
+        "digest": "sha256:3f11408d4e8c4e9a7c8c98b53ae934b7421b5d35ff1591658178305e97849ced"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:mathformerphysicslib:registry-build; preflight; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/physics_registry_tools.py",
+        "selector": "register_physics_registry_tools",
+        "digest": "sha256:acd43457cf2009cd007ac1455a34444ee1a0d1183e4b877ba906f292a471327e"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_physics_registry_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "mcp_tools",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      }
+    ],
+    "gaps": [
+      "CLI flags are parsed before this main graph; argparse rejects extra arguments. Hub registered flags are write=true, check=true, json=true.",
+      "Controller preflight, dry-run, mutation authorization and post-run write audit remain external to the selected main graph. The MCP write port additionally requires context.allow_mutating and respects service read-only and write-root policies; it does not invoke the hub action.",
+      "Native paths remain repository-root MathformerPhysicsLib/, while the hub declares libraries/MathformerPhysicsLib/. Missing root manifest aborts after build, before validation/emission. Context.repository_root explicitly binds the native filesystem and Git working directory.",
+      "Filesystem/parsing errors abort without rollback; write precedes check. Finite backend/path/row collections exhaust without retry or case caps. Host limits of 3600 seconds and five calls are not native budgets. Events/receipts are supplied by Lunar."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "mathformerphysicslib:registry-build",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "mathformerphysicslib:registry-build",
+        "summary": "Rebuild the complete physics artifact registry and generated README coverage.",
+        "family": "mathformerphysicslib",
+        "kind": "generation",
+        "safety": "writes_repo",
+        "command": [
+          "{python}",
+          "scripts/build_physics_registry.py",
+          "--write",
+          "--check",
+          "--json"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "scripts/build_physics_registry.py",
+          "libraries/MathformerPhysicsLib/MANIFEST.json"
+        ],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [
+          "libraries/MathformerPhysicsLib/MANIFEST.json",
+          "libraries/MathformerPhysicsLib/README.md"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": null,
+        "notes": ""
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Callable MCP tools share native build_registry, write_registry, check_required, validate_registry and emit_result. Each call binds an independent native module namespace to context.repository_root; no source algorithm is copied. Native skip_write/no_errors expose empty branches because Lunar does not lower gate nodes.",
+      "context_fields": [
+        "repository_root",
+        "allow_mutating"
+      ],
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "failure_policy": "Keep native nonzero exit/preflight failures as failure; graph result exposes main return code.",
+      "scientific_payloads": "Result packages main payload/stdout/exit code; it is not HubResult or proof evidence."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "command_after_dependencies": false,
+      "modeling": "Dependency-free leaf. Main graph begins only after controller authorization/preflight; dry-run does not enter main."
+    }
+  }
+}

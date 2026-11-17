@@ -1,0 +1,227 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from control_validation_loop import (
+    ContractCheck,
+    ControlCase,
+    ControlDisposition,
+    ControlValidationControlReasoningFlowLanguageArtifact,
+    ControlValidationControlReasoningLogSchemaArtifact,
+    ControlValidationControlSkillHookCoverageArtifact,
+    ControlValidationControlWorkflowContractArtifact,
+    ControlValidationControlWorkflowRouterArtifact,
+    CoverageCheck,
+    CoverageCheckBasis,
+    FlowCheck,
+    FlowCheckBasis,
+    LogCheck,
+    LogCheckBasis,
+    MathformerControlSurfaceSnapshot,
+    MathformerControlValidationDecision,
+    RouteCheck,
+    RoutingCheckBasis,
+)
+from reasoning import ValidateMathformerControl
+from relations import CalibrateControlCertificate
+from relations import TestCoverageCertificate
+from relations import TestFlowIntegrityCertificate
+from relations import TestLogIntegrityCertificate
+from relations import TestRoutingCertificate
+from generated.reasoning_contract_check_1_skill import workflow_contract_validator_skill as contract_check_reasoning_skill_1
+from generated.reasoning_route_check_1_skill import mathformer_workflow_router_skill as route_check_reasoning_skill_1
+from generated.reasoning_flow_check_1_skill import reasoning_flow_language_skill as flow_check_reasoning_skill_1
+from generated.reasoning_coverage_check_1_skill import skill_hook_coverage_maximizer_skill as coverage_check_reasoning_skill_1
+from generated.reasoning_log_check_1_skill import reasoning_log_schema_guardian_skill as log_check_reasoning_skill_1
+from generated.reasoning_control_status_1_skill import gate_policy_controller_skill as control_status_reasoning_skill_1
+
+def route_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestRoutingCertificate[SourceValue, TargetValue]:
+    return TestRoutingCertificate(source = source, target = target)
+
+def flow_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestFlowIntegrityCertificate[SourceValue, TargetValue]:
+    return TestFlowIntegrityCertificate(source = source, target = target)
+
+def coverage_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestCoverageCertificate[SourceValue, TargetValue]:
+    return TestCoverageCertificate(source = source, target = target)
+
+def log_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestLogIntegrityCertificate[SourceValue, TargetValue]:
+    return TestLogIntegrityCertificate(source = source, target = target)
+
+def control_status_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> CalibrateControlCertificate[SourceValue, TargetValue]:
+    return CalibrateControlCertificate(source = source, target = target)
+
+# Generative interpretation AuditWorkflowContract uses skill context selected from material steps: control_workflow_contract.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: workflow-contract-validator.
+agent contract_check_reasoning_agent(
+    task: MathformerControlSurfaceSnapshot,
+) -> Result[Generated[ContractCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[MathformerControlSurfaceSnapshot] = [contract_check_reasoning_skill_1]
+
+# Generative interpretation AuditWorkflowRoutes uses skill context selected from material steps: control_workflow_router.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathformer-workflow-router.
+agent route_check_reasoning_agent(
+    task: RoutingCheckBasis,
+) -> Result[Generated[RouteCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[RoutingCheckBasis] = [route_check_reasoning_skill_1]
+
+# Generative interpretation ValidateReasoningFlows uses skill context selected from material steps: control_reasoning_flow_language.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: reasoning-flow-language.
+agent flow_check_reasoning_agent(
+    task: FlowCheckBasis,
+) -> Result[Generated[FlowCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[FlowCheckBasis] = [flow_check_reasoning_skill_1]
+
+# Generative interpretation AuditSkillHookCoverage uses skill context selected from material steps: control_skill_hook_coverage.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: skill-hook-coverage-maximizer.
+agent coverage_check_reasoning_agent(
+    task: CoverageCheckBasis,
+) -> Result[Generated[CoverageCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[CoverageCheckBasis] = [coverage_check_reasoning_skill_1]
+
+# Generative interpretation ValidateReasoningLogs uses skill context selected from material steps: control_reasoning_log_schema.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: reasoning-log-schema-guardian.
+agent log_check_reasoning_agent(
+    task: LogCheckBasis,
+) -> Result[Generated[LogCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LogCheckBasis] = [log_check_reasoning_skill_1]
+
+# Generative interpretation ApplyControlGate uses skill context selected from material steps: control_gate_policy.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: gate-policy-controller.
+agent control_status_reasoning_agent(
+    task: ControlCase,
+) -> Result[Generated[ControlDisposition], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ControlCase] = [control_status_reasoning_skill_1]
+
+converted_reasoning = ValidateMathformerControl(
+    contract_check = contract_check_reasoning_agent,
+    route_check = route_check_reasoning_agent,
+    route_check_by = route_check_reasoning_relation_builder,
+    flow_check = flow_check_reasoning_agent,
+    flow_check_by = flow_check_reasoning_relation_builder,
+    coverage_check = coverage_check_reasoning_agent,
+    coverage_check_by = coverage_check_reasoning_relation_builder,
+    log_check = log_check_reasoning_agent,
+    log_check_by = log_check_reasoning_relation_builder,
+    control_status = control_status_reasoning_agent,
+    control_status_by = control_status_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `workflow-contract-validator`; this does not execute the linked native resource.
+def control_workflow_contract_material_binding(source: MathformerControlSurfaceSnapshot) -> Computed[ControlValidationControlWorkflowContractArtifact]:
+    artifact = ControlValidationControlWorkflowContractArtifact(
+        subject = "typed material binding for control_workflow_contract",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation control_workflow_contract",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: control_workflow_contract")
+
+# Material binding descriptor for `mathformer-workflow-router`; this does not execute the linked native resource.
+def control_workflow_router_material_binding(source: ControlValidationControlWorkflowContractArtifact) -> Computed[ControlValidationControlWorkflowRouterArtifact]:
+    artifact = ControlValidationControlWorkflowRouterArtifact(
+        subject = "typed material binding for control_workflow_router",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        considered_dispositions = ["pass", "warn", "fail", "blocked"],
+        selected_disposition = "not_tested",
+        rationale = "native execution is outside this structural PRISM fixture",
+    )
+    return compute(artifact, procedure = "linked material binding: control_workflow_router")
+
+# Material binding descriptor for `reasoning-flow-language`; this does not execute the linked native resource.
+def control_reasoning_flow_language_material_binding(source: ControlValidationControlWorkflowRouterArtifact) -> Computed[ControlValidationControlReasoningFlowLanguageArtifact]:
+    artifact = ControlValidationControlReasoningFlowLanguageArtifact(
+        subject = "typed material binding for control_reasoning_flow_language",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation control_reasoning_flow_language",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: control_reasoning_flow_language")
+
+# Material binding descriptor for `skill-hook-coverage-maximizer`; this does not execute the linked native resource.
+def control_skill_hook_coverage_material_binding(source: ControlValidationControlReasoningFlowLanguageArtifact) -> Computed[ControlValidationControlSkillHookCoverageArtifact]:
+    artifact = ControlValidationControlSkillHookCoverageArtifact(
+        subject = "typed material binding for control_skill_hook_coverage",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation control_skill_hook_coverage",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: control_skill_hook_coverage")
+
+# Material binding descriptor for `reasoning-log-schema-guardian`; this does not execute the linked native resource.
+def control_reasoning_log_schema_material_binding(source: ControlValidationControlSkillHookCoverageArtifact) -> Computed[ControlValidationControlReasoningLogSchemaArtifact]:
+    artifact = ControlValidationControlReasoningLogSchemaArtifact(
+        subject = "typed material binding for control_reasoning_log_schema",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation control_reasoning_log_schema",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: control_reasoning_log_schema")
+
+# Material binding descriptor for `gate-policy-controller`; this does not execute the linked native resource.
+def control_gate_policy_material_binding(source: ControlValidationControlReasoningLogSchemaArtifact) -> Computed[MathformerControlValidationDecision]:
+    artifact = MathformerControlValidationDecision(
+        subject = "typed material binding for control_gate_policy",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        considered_dispositions = ["pass", "warn", "fail", "blocked"],
+        selected_disposition = "not_tested",
+        rationale = "native execution is outside this structural PRISM fixture",
+    )
+    return compute(artifact, procedure = "linked material binding: control_gate_policy")
+
+# core contract, coverage, reasoning-log, and gate normalization checks.
+workflow ControlValidationLoop(
+    workflow_source: MathformerControlSurfaceSnapshot,
+) -> Computed[MathformerControlValidationDecision]:
+    sequence:
+        [control_workflow_contract: control_workflow_contract_material_binding(workflow_source)]
+        [control_workflow_router: control_workflow_router_material_binding(control_workflow_contract.value)]
+        [control_reasoning_flow_language: control_reasoning_flow_language_material_binding(control_workflow_router.value)]
+        [control_skill_hook_coverage: control_skill_hook_coverage_material_binding(control_reasoning_flow_language.value)]
+        [control_reasoning_log_schema: control_reasoning_log_schema_material_binding(control_skill_hook_coverage.value)]
+        [control_gate_policy: control_gate_policy_material_binding(control_reasoning_log_schema.value)]
+    return control_gate_policy

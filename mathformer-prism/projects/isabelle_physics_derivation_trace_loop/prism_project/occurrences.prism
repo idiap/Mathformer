@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from isabelle_physics_derivation_trace_loop import (
+    IsabelleAcceptanceCase,
+    IsabelleDerivationPlan,
+    IsabelleFormalizationPacket,
+    IsabelleGroundingBasis,
+    IsabelleMathematicalReview,
+    IsabellePhysicsCase,
+    IsabellePhysicsDisposition,
+    IsabellePhysicsReview,
+    IsabelleProcessReview,
+    IsabelleReflectionCase,
+    IsabelleReviewCase,
+    IsabelleSessionReport,
+    IsabelleTheory,
+    IsabelleTheoryBasis,
+    PhysicalModel,
+    PhysicsIsabelleDerivationRequest,
+    SourceDerivationModel,
+)
+
+# Recover source-anchored physical meaning and applicability scope.
+type PrepareSourceDerivation = (source: PhysicsIsabelleDerivationRequest) -> Generated[SourceDerivationModel]
+
+# Review expansion completeness and bindings, expose anchored translation lines, reuse decisions, missing premises, and gap obligations.
+type PrepareFormalizationPacket = (source: SourceDerivationModel) -> Generated[IsabelleFormalizationPacket]
+
+# Model quantities, dimensions, units, frames, regimes, and laws.
+type ModelPhysicalSystem = (source: SourceDerivationModel) -> Generated[PhysicalModel]
+
+# Align obligations and physical concepts with applicable Isabelle/HOL material.
+type PlanIsabelleTheory = (source: IsabelleGroundingBasis) -> Generated[IsabelleDerivationPlan]
+
+# Draft an Isabelle theory while retaining open obligations.
+type DraftIsabelleTheory = (source: IsabelleTheoryBasis) -> Generated[IsabelleTheory]
+
+# Record session-build evidence and artifact-realness findings.
+type RunIsabelleSession = (source: IsabelleTheory) -> Generated[IsabelleSessionReport]
+
+# Assess formal hypotheses and obligation coverage.
+type ReviewIsabelleMathematics = (source: IsabelleReviewCase) -> Generated[IsabelleMathematicalReview]
+
+# Assess preservation of the intended physical meaning.
+type ReviewPhysicsFidelity = (source: IsabellePhysicsCase) -> Generated[IsabellePhysicsReview]
+
+# Record process lessons without changing the artifact's authority.
+type ReviewIsabelleProcess = (source: IsabelleReflectionCase) -> Generated[IsabelleProcessReview]
+
+# Aggregate session, realness, hypothesis, source, and process findings into an Isabelle physics disposition.
+type ReportIsabellePhysics = (source: IsabelleAcceptanceCase) -> Generated[IsabellePhysicsDisposition]

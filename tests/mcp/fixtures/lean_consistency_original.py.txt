@@ -1,0 +1,842 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+#
+# Intent:
+#   Tell coding agents what context to load, what invariants to preserve, and how to validate their work.
+#
+# Function:
+#   Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Run the unified Lean consistency report over autoformalization artifacts."""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import subprocess
+import sys
+import time
+from typing import Any, Dict, Iterable, List, Optional, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+REASONING_LOG_SCRIPTS = (
+    REPO_ROOT / "skills" / "control" / "reasoning-log-schema-guardian" / "scripts"
+)
+if str(REASONING_LOG_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(REASONING_LOG_SCRIPTS))
+
+try:
+    from reasoning_log import append_reasoning_log_entry
+except Exception:  # pragma: no cover
+    append_reasoning_log_entry = None  # type: ignore[assignment]
+
+
+SKILL_NAME = "lean-consistency-report-orchestrator"
+HOOK_ID = "consistency.unified_report"
+ARTIFACT_DIR = REPO_ROOT / "artifacts" / "lean_consistency"
+
+SCRIPTS = {
+    "line_comments": REPO_ROOT
+    / "skills"
+    / "lean"
+    / "lean-line-annotation"
+    / "scripts"
+    / "validate_lean_line_comments.py",
+    "realness": REPO_ROOT
+    / "skills"
+    / "autoformalization"
+    / "autoformalization-result-realness-verifier"
+    / "scripts"
+    / "verify_artifact_realness.py",
+    "extractor": REPO_ROOT
+    / "skills"
+    / "lean"
+    / "lean-informalization-extractor"
+    / "scripts"
+    / "extract_lean_informalization.py",
+    "shape": REPO_ROOT
+    / "skills"
+    / "lean"
+    / "lean-declaration-shape-consistency-checker"
+    / "scripts"
+    / "check_declaration_shape_consistency.py",
+    "internal": REPO_ROOT
+    / "skills"
+    / "lean"
+    / "lean-informal-proof-internal-consistency-verifier"
+    / "scripts"
+    / "verify_informal_proof_internal_consistency.py",
+    "reverse": REPO_ROOT
+    / "skills"
+    / "lean"
+    / "lean-informal-consistency-verifier"
+    / "scripts"
+    / "verify_informal_consistency.py",
+    "nonvacuity": REPO_ROOT
+    / "skills"
+    / "lean"
+    / "lean-nonvacuity-consistency-checker"
+    / "scripts"
+    / "check_lean_nonvacuity_consistency.py",
+    "cross_file": REPO_ROOT
+    / "skills"
+    / "lean"
+    / "lean-cross-file-concept-consistency-indexer"
+    / "scripts"
+    / "index_cross_file_concepts.py",
+    "grounding": REPO_ROOT
+    / "skills"
+    / "mathlib"
+    / "mathlib-grounding-maximizer"
+    / "scripts"
+    / "maximize_mathlib_grounding.py",
+    "reference_free": REPO_ROOT
+    / "skills"
+    / "rfde"
+    / "reference-free-critic-monitor"
+    / "scripts"
+    / "monitor_reference_free_critics.py",
+}
+
+
+def rel(path: Path) -> str:
+    """Document the responsibility of ``rel``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``rel`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def utc_now() -> str:
+    """Document the responsibility of ``utc_now``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``utc_now`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return datetime.now(timezone.utc).isoformat()
+
+
+def append_event(
+    reasoning_log: Optional[Path], step: str, payload: Dict[str, Any]
+) -> None:
+    """Document the responsibility of ``append_event``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``append_event`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if reasoning_log is None or append_reasoning_log_entry is None:
+        return
+    append_reasoning_log_entry(
+        reasoning_log,
+        step=step,
+        payload={"skill": SKILL_NAME, "hook_id": HOOK_ID, **payload},
+    )
+
+
+def collect_scores(value: Any) -> List[float]:
+    """Document the responsibility of ``collect_scores``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``collect_scores`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    scores: List[float] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            lowered = str(key).lower()
+            if isinstance(item, (int, float)) and (
+                lowered.endswith("_score")
+                or lowered in {"score", "composite_score", "min_compatibility_score"}
+            ):
+                scores.append(float(item))
+            else:
+                scores.extend(collect_scores(item))
+    elif isinstance(value, list):
+        for item in value:
+            scores.extend(collect_scores(item))
+    return scores
+
+
+def count_findings(payload: Dict[str, Any]) -> int:
+    """Document the responsibility of ``count_findings``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Search available candidates and return the matches needed by the caller.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    summary = (
+        payload.get("summary", {}) if isinstance(payload.get("summary"), dict) else {}
+    )
+    for key in ("finding_count", "findings_count", "issue_count"):
+        if isinstance(summary.get(key), int):
+            return int(summary[key])
+    findings = payload.get("findings")
+    if isinstance(findings, list):
+        return len(findings)
+    return 0
+
+
+def count_blockers(payload: Dict[str, Any]) -> int:
+    """Document the responsibility of ``count_blockers``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``count_blockers`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    summary = (
+        payload.get("summary", {}) if isinstance(payload.get("summary"), dict) else {}
+    )
+    for key in ("blocking_finding_count", "blocker_count", "blocking_count"):
+        if isinstance(summary.get(key), int):
+            return int(summary[key])
+    findings = payload.get("findings")
+    if isinstance(findings, list):
+        return sum(
+            1
+            for item in findings
+            if isinstance(item, dict) and item.get("severity") == "high"
+        )
+    return 0
+
+
+def run_json_layer(
+    layer_id: str,
+    cmd: Sequence[str],
+    *,
+    required: bool = True,
+    timeout_sec: int = 180,
+) -> Dict[str, Any]:
+    """Document the responsibility of ``run_json_layer``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    started = time.perf_counter()
+    proc = subprocess.run(
+        list(cmd),
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        timeout=timeout_sec,
+    )
+    duration_ms = round((time.perf_counter() - started) * 1000, 3)
+    try:
+        payload = json.loads(proc.stdout)
+        parse_ok = isinstance(payload, dict)
+    except json.JSONDecodeError:
+        payload = {
+            "ok": False,
+            "parse_error": True,
+            "stdout_tail": proc.stdout[-3000:],
+            "stderr_tail": proc.stderr[-3000:],
+        }
+        parse_ok = False
+    if not isinstance(payload, dict):
+        payload = {"ok": False, "unexpected_payload": payload}
+    layer_ok = proc.returncode == 0 and parse_ok and bool(payload.get("ok", True))
+    layer = {
+        "id": layer_id,
+        "ok": layer_ok,
+        "required": required,
+        "skipped": False,
+        "returncode": proc.returncode,
+        "duration_ms": duration_ms,
+        "cmd": list(cmd),
+        "summary": payload.get("summary", {}),
+        "finding_count": count_findings(payload),
+        "blocking_finding_count": count_blockers(payload),
+        "score_candidates": collect_scores(payload.get("summary", {})),
+    }
+    if proc.stderr:
+        layer["stderr_tail"] = proc.stderr[-3000:]
+    if not layer_ok:
+        layer["payload_tail"] = payload
+    return layer
+
+
+def run_lean_compile_layer(paths: Sequence[Path], *, required: bool) -> Dict[str, Any]:
+    """Document the responsibility of ``run_lean_compile_layer``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if not required:
+        return {
+            "id": "lean_compile",
+            "ok": True,
+            "required": False,
+            "skipped": True,
+            "duration_ms": 0,
+            "summary": {"file_count": len(paths), "skipped": True},
+            "finding_count": 0,
+            "blocking_finding_count": 0,
+            "score_candidates": [],
+        }
+    started = time.perf_counter()
+    checks: List[Dict[str, Any]] = []
+    for path in paths:
+        proc = subprocess.run(
+            ["lake", "env", "lean", rel(path)],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=240,
+        )
+        checks.append(
+            {
+                "file": rel(path),
+                "ok": proc.returncode == 0,
+                "returncode": proc.returncode,
+                "stdout_tail": proc.stdout[-2000:],
+                "stderr_tail": proc.stderr[-3000:],
+            }
+        )
+    duration_ms = round((time.perf_counter() - started) * 1000, 3)
+    failures = [item for item in checks if not item["ok"]]
+    return {
+        "id": "lean_compile",
+        "ok": not failures,
+        "required": True,
+        "skipped": False,
+        "duration_ms": duration_ms,
+        "summary": {"file_count": len(paths), "failed_file_count": len(failures)},
+        "finding_count": len(failures),
+        "blocking_finding_count": len(failures),
+        "score_candidates": [100.0 if not failures else 0.0],
+        "checks": checks,
+    }
+
+
+def add_files(
+    cmd: List[str], paths: Iterable[Path], flag: str = "--lean-file"
+) -> List[str]:
+    """Document the responsibility of ``add_files``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``add_files`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    for path in paths:
+        cmd.extend([flag, rel(path)])
+    return cmd
+
+
+def build_report(args: argparse.Namespace) -> Dict[str, Any]:
+    """Document the responsibility of ``build_report``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Build the local data structure or artifact used by the next workflow stage.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    paths = [Path(path) for path in args.lean_file]
+    informalization_report = args.informalization_report or (
+        ARTIFACT_DIR / "informalization.latest.json"
+    )
+    output_file = args.output_file or (ARTIFACT_DIR / "latest.json")
+    layers: List[Dict[str, Any]] = []
+
+    append_event(
+        args.reasoning_log_file,
+        "lean_consistency_report_start",
+        {"file_count": len(paths)},
+    )
+
+    layers.append(run_lean_compile_layer(paths, required=args.run_lean_check))
+    append_event(
+        args.reasoning_log_file, "lean_consistency_report_layer_complete", layers[-1]
+    )
+
+    if paths:
+        layers.append(
+            run_json_layer(
+                "line_comment_guard",
+                [
+                    sys.executable,
+                    str(SCRIPTS["line_comments"]),
+                    *[rel(path) for path in paths],
+                    "--require-semantic-comments",
+                    "--json",
+                ],
+                timeout_sec=60,
+            )
+        )
+        append_event(
+            args.reasoning_log_file,
+            "lean_consistency_report_layer_complete",
+            layers[-1],
+        )
+
+        layers.append(
+            run_json_layer(
+                "artifact_realness",
+                add_files([sys.executable, str(SCRIPTS["realness"]), "--json"], paths),
+                timeout_sec=120,
+            )
+        )
+        append_event(
+            args.reasoning_log_file,
+            "lean_consistency_report_layer_complete",
+            layers[-1],
+        )
+
+    extractor_cmd = add_files(
+        [
+            sys.executable,
+            str(SCRIPTS["extractor"]),
+            "--json",
+            "--output-file",
+            rel(informalization_report),
+        ],
+        paths,
+    )
+    layers.append(
+        run_json_layer("informalization_extractor", extractor_cmd, timeout_sec=120)
+    )
+    append_event(
+        args.reasoning_log_file, "lean_consistency_report_layer_complete", layers[-1]
+    )
+
+    layers.append(
+        run_json_layer(
+            "declaration_shape",
+            [
+                sys.executable,
+                str(SCRIPTS["shape"]),
+                "--extractor-report",
+                rel(informalization_report),
+                "--json",
+            ],
+            timeout_sec=90,
+        )
+    )
+    append_event(
+        args.reasoning_log_file, "lean_consistency_report_layer_complete", layers[-1]
+    )
+
+    layers.append(
+        run_json_layer(
+            "informal_proof_internal_consistency",
+            [
+                sys.executable,
+                str(SCRIPTS["internal"]),
+                "--informalization-report",
+                rel(informalization_report),
+                "--no-reasoning-log",
+                "--json",
+            ],
+            timeout_sec=120,
+        )
+    )
+    append_event(
+        args.reasoning_log_file, "lean_consistency_report_layer_complete", layers[-1]
+    )
+
+    layers.append(
+        run_json_layer(
+            "reverse_informal_consistency",
+            add_files(
+                [
+                    sys.executable,
+                    str(SCRIPTS["reverse"]),
+                    "--no-reasoning-log",
+                    "--json",
+                ],
+                paths,
+            ),
+            timeout_sec=150,
+        )
+    )
+    append_event(
+        args.reasoning_log_file, "lean_consistency_report_layer_complete", layers[-1]
+    )
+
+    layers.append(
+        run_json_layer(
+            "nonvacuity",
+            [
+                sys.executable,
+                str(SCRIPTS["nonvacuity"]),
+                "--extractor-report",
+                rel(informalization_report),
+                "--json",
+            ],
+            timeout_sec=90,
+        )
+    )
+    append_event(
+        args.reasoning_log_file, "lean_consistency_report_layer_complete", layers[-1]
+    )
+
+    layers.append(
+        run_json_layer(
+            "cross_file_concepts",
+            [
+                sys.executable,
+                str(SCRIPTS["cross_file"]),
+                "--extractor-report",
+                rel(informalization_report),
+                "--json",
+            ],
+            timeout_sec=90,
+        )
+    )
+    append_event(
+        args.reasoning_log_file, "lean_consistency_report_layer_complete", layers[-1]
+    )
+
+    if not args.skip_mathlib_grounding and paths:
+        layers.append(
+            run_json_layer(
+                "mathlib_grounding",
+                add_files(
+                    [
+                        sys.executable,
+                        str(SCRIPTS["grounding"]),
+                        "--target-compatibility-score",
+                        str(args.target_mathlib_compatibility),
+                        "--target-reference-free-score",
+                        str(args.target_reference_free_score),
+                        "--json",
+                    ],
+                    paths,
+                ),
+                timeout_sec=240,
+            )
+        )
+        append_event(
+            args.reasoning_log_file,
+            "lean_consistency_report_layer_complete",
+            layers[-1],
+        )
+
+    if not args.skip_reference_free_monitor and paths:
+        layers.append(
+            run_json_layer(
+                "reference_free_monitor",
+                add_files(
+                    [
+                        sys.executable,
+                        str(SCRIPTS["reference_free"]),
+                        "--min-composite-score",
+                        str(args.target_reference_free_score),
+                        "--no-reasoning-log",
+                        "--json",
+                    ],
+                    paths,
+                ),
+                timeout_sec=120,
+            )
+        )
+        append_event(
+            args.reasoning_log_file,
+            "lean_consistency_report_layer_complete",
+            layers[-1],
+        )
+
+    blocking_layers = [
+        layer["id"]
+        for layer in layers
+        if layer.get("required", True) and not layer.get("ok")
+    ]
+    score_values = [
+        score
+        for layer in layers
+        for score in layer.get("score_candidates", [])
+        if isinstance(score, (int, float))
+    ]
+    consistency_score = (
+        round(sum(score_values) / len(score_values), 3)
+        if score_values
+        else (100.0 if not blocking_layers else 0.0)
+    )
+    min_layer_score = round(min(score_values), 3) if score_values else consistency_score
+    report = {
+        "generated_at_utc": utc_now(),
+        "skill": SKILL_NAME,
+        "hook_id": HOOK_ID,
+        "ok": not blocking_layers,
+        "summary": {
+            "file_count": len(paths),
+            "layer_count": len(layers),
+            "blocking_layer_count": len(blocking_layers),
+            "finding_count": sum(
+                int(layer.get("finding_count", 0)) for layer in layers
+            ),
+            "blocking_finding_count": sum(
+                int(layer.get("blocking_finding_count", 0)) for layer in layers
+            ),
+            "consistency_score": consistency_score,
+            "min_layer_score": min_layer_score,
+        },
+        "lean_files": [rel(path) for path in paths],
+        "layers": layers,
+        "blocking_layers": blocking_layers,
+        "output_files": {
+            "report": rel(output_file),
+            "informalization_report": rel(informalization_report),
+        },
+    }
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    append_event(
+        args.reasoning_log_file,
+        "lean_consistency_report_complete",
+        report.get("summary", {}),
+    )
+    return report
+
+
+def run_self_test() -> Dict[str, Any]:
+    """Document the responsibility of ``run_self_test``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    self_test_specs = [
+        (
+            "informalization_extractor",
+            [sys.executable, str(SCRIPTS["extractor"]), "--self-test", "--json"],
+        ),
+        (
+            "declaration_shape",
+            [sys.executable, str(SCRIPTS["shape"]), "--self-test", "--json"],
+        ),
+        (
+            "informal_proof_internal_consistency",
+            [sys.executable, str(SCRIPTS["internal"]), "--self-test", "--json"],
+        ),
+        (
+            "reverse_informal_consistency",
+            [sys.executable, str(SCRIPTS["reverse"]), "--self-test", "--json"],
+        ),
+        (
+            "nonvacuity",
+            [sys.executable, str(SCRIPTS["nonvacuity"]), "--self-test", "--json"],
+        ),
+        (
+            "cross_file_concepts",
+            [sys.executable, str(SCRIPTS["cross_file"]), "--self-test", "--json"],
+        ),
+        (
+            "mathlib_grounding",
+            [sys.executable, str(SCRIPTS["grounding"]), "--self-test", "--json"],
+        ),
+        (
+            "reference_free_monitor",
+            [sys.executable, str(SCRIPTS["reference_free"]), "--self-test", "--json"],
+        ),
+    ]
+    layers = [
+        run_json_layer(layer_id, cmd, timeout_sec=180)
+        for layer_id, cmd in self_test_specs
+    ]
+    blocking_layers = [layer["id"] for layer in layers if not layer.get("ok")]
+    return {
+        "generated_at_utc": utc_now(),
+        "skill": SKILL_NAME,
+        "hook_id": HOOK_ID,
+        "ok": not blocking_layers,
+        "summary": {
+            "self_test_layer_count": len(layers),
+            "blocking_layer_count": len(blocking_layers),
+            "blocking_layers": blocking_layers,
+        },
+        "layers": layers,
+    }
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    """Document the responsibility of ``parse_args``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--lean-file", action="append", default=[], help="Lean file to test."
+    )
+    parser.add_argument(
+        "--run-lean-check",
+        action="store_true",
+        help="Run `lake env lean` on each file.",
+    )
+    parser.add_argument(
+        "--informalization-report",
+        type=Path,
+        help="Optional path for the extracted informalization report.",
+    )
+    parser.add_argument("--target-mathlib-compatibility", type=int, default=80)
+    parser.add_argument("--target-reference-free-score", type=int, default=80)
+    parser.add_argument("--skip-mathlib-grounding", action="store_true")
+    parser.add_argument("--skip-reference-free-monitor", action="store_true")
+    parser.add_argument(
+        "--reasoning-log-file", type=Path, help="Optional JSONL reasoning log path."
+    )
+    parser.add_argument("--output-file", type=Path, help="Optional JSON output path.")
+    parser.add_argument(
+        "--expect-ok",
+        action="store_true",
+        help="Return nonzero when the report is not ok.",
+    )
+    parser.add_argument(
+        "--self-test", action="store_true", help="Run built-in orchestrator self-test."
+    )
+    parser.add_argument("--json", action="store_true", help="Emit JSON output.")
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    args = parse_args(argv)
+    if args.self_test:
+        report = run_self_test()
+    else:
+        report = build_report(args)
+
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(
+            f"ok={report.get('ok')} consistency_score={report.get('summary', {}).get('consistency_score')} "
+            f"blocking_layers={','.join(report.get('blocking_layers', report.get('summary', {}).get('blocking_layers', [])))}"
+        )
+    return 1 if args.expect_ok and not report.get("ok") else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

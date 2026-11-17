@@ -1,0 +1,562 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_meta_skills_runtime_trace_validate_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Source-level projection of run(): discover traces, validate each file, accumulate findings, write and return the report.",
+  "aliases": [
+    "meta-skills:runtime-trace-validate"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "DiscoveryCount": {
+      "schema": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000,
+        "description": "Specialization precondition: exact count of native sorted nonrecursive discovery at invocation; not a native CLI argument. Only repositories with at most 1000 discovered traces are in this descriptor's domain."
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RunState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema",
+          "traces",
+          "cursor",
+          "results",
+          "all_findings",
+          "repository_root",
+          "output_path"
+        ],
+        "properties": {
+          "schema": {
+            "type": "object"
+          },
+          "traces": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "type": "string"
+            }
+          },
+          "cursor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "all_findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "repository_root": {
+            "type": "string"
+          },
+          "output_path": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "FileCheck": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "path",
+          "event_count",
+          "findings"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "event_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "style",
+          "ok",
+          "trace_count",
+          "results",
+          "findings"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "style": {
+            "const": "mathformer_meta_runtime_trace_validation"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "trace_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": "string",
+        "description": "Repository context containing native schema and artifacts; empty string selects the service repository."
+      }
+    }
+  },
+  "inputs": {
+    "discovered_trace_count": {
+      "type": "DiscoveryCount"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {
+        "discovered_trace_count": {
+          "type": "DiscoveryCount"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RunState"
+        },
+        "has_traces": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_trace_validation_initialize",
+          "operation": "mathformer_trace_validation_initialize"
+        }
+      }
+    },
+    "validate_file": {
+      "inputs": {
+        "state": {
+          "type": "RunState"
+        }
+      },
+      "outputs": {
+        "check": {
+          "type": "FileCheck"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_trace_validation_validate_file",
+          "operation": "mathformer_trace_validation_validate_file"
+        }
+      }
+    },
+    "accumulate": {
+      "inputs": {
+        "state": {
+          "type": "RunState"
+        },
+        "check": {
+          "type": "FileCheck"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RunState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_trace_validation_accumulate",
+          "operation": "mathformer_trace_validation_accumulate"
+        }
+      }
+    },
+    "empty_state": {
+      "inputs": {
+        "state": {
+          "type": "RunState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RunState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_trace_validation_empty_state",
+          "operation": "mathformer_trace_validation_empty_state"
+        }
+      }
+    },
+    "write_report": {
+      "inputs": {
+        "state": {
+          "type": "RunState"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_trace_validation_write_report",
+          "operation": "mathformer_trace_validation_write_report"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "discovered_trace_count": {
+            "ref": "inputs.discovered_trace_count"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "kind": "loop",
+        "state_type": "RunState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1000,
+        "on_exhausted": "fail",
+        "description": "At most 1000 sorted files; the empty discovery branch forwards unchanged state and terminates on its first iteration. Native run has no numeric cap; input count is an enforced specialization assertion.",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "nonempty",
+              "when": {
+                "ref": "steps.initialize.outputs.has_traces"
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "validate",
+                    "kind": "call",
+                    "operation": "validate_file",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      }
+                    }
+                  },
+                  {
+                    "id": "accumulate",
+                    "kind": "call",
+                    "operation": "accumulate",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      },
+                      "check": {
+                        "ref": "steps.validate.outputs.check"
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "state": {
+                    "type": "RunState",
+                    "value": {
+                      "ref": "steps.accumulate.outputs.state"
+                    }
+                  },
+                  "done": {
+                    "type": "Flag",
+                    "value": {
+                      "ref": "steps.accumulate.outputs.done"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "sequence",
+            "steps": [
+              {
+                "id": "empty",
+                "kind": "call",
+                "operation": "empty_state",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            ],
+            "outputs": {
+              "state": {
+                "type": "RunState",
+                "value": {
+                  "ref": "steps.empty.outputs.state"
+                }
+              },
+              "done": {
+                "type": "Flag",
+                "value": {
+                  "ref": "steps.empty.outputs.done"
+                }
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "RunState",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "RunState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        },
+        "id": "files"
+      },
+      {
+        "id": "write",
+        "kind": "call",
+        "operation": "write_report",
+        "arguments": {
+          "state": {
+            "ref": "steps.files.outputs.state"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.write.outputs.report"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/meta_skills/runtime_trace_validation.json"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "validate_runtime_traces",
+        "write_validation_report"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 2002
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Explicit runtime-trace checks only; no general JSON Schema validation or scientific endorsement."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "meta_skills/scripts/validate_runtime_traces.py",
+        "digest": "sha256:19abff4dfbc2b1fbdaf8a9f79af713c3c8efead087d4b94ab8c63e0f477af733",
+        "selector": "run; initialize; validate_current; validate_file; accumulate; write_report; main"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/runtime_trace_validation_tools.py",
+        "digest": "sha256:9d5825ba0ca4c8775baa5feeaabc9d799aa119abd872f32c0c4a9c362038d2ef"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Bounded specialization requires the input count to equal actual discovery and be <=1000. Native CLI discovery has no count limit; larger runs are outside this contract domain. Exactly 1000 files completes normally.",
+      "Lunar enforces descriptor time/call/loop budgets; the native CLI has no corresponding limits. Hub/CLI envelopes remain outside the selected run graph.",
+      "Helper internals remain owned by validate_file. Native findings are ordinary report data, not runtime exceptions. Lunar supplies mandatory runtime receipts and digests."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "meta-skills:runtime-trace-validate",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "meta-skills:runtime-trace-validate",
+        "family": "meta_skills",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "meta_skills/scripts/validate_runtime_traces.py",
+          "--json"
+        ],
+        "depends_on": [],
+        "writes": [
+          "artifacts/meta_skills/runtime_trace_validation.json"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "run() and MCP tools share initialize, validate_current (calling validate_file), accumulate and write_report. repository_root supplies native filesystem context without changing CLI defaults.",
+      "failure_policy": "Findings accumulate and return normally with report.ok=false. Uncaught I/O, schema access or incompatible JSON-value errors abort, potentially before report writing. main() prints JSON or PASS/FAIL and returns 0 iff ok, else 1.",
+      "hub_controls": "run_action -> run_leaf_action launches --json with no dependencies. Preflight failure or dry-run prevents launch; post-execution write auditing can fail the hub result.",
+      "callers": "Parent runtime-trace action records then validates; tests/meta_skills/run_meta_skill_suite.py also invokes the script directly."
+    }
+  }
+}

@@ -1,0 +1,110 @@
+% SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+% SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+% SPDX-License-Identifier: MIT
+% Neuro-symbolic AI Group
+% File Documentation
+%
+% Motivation:
+%   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+%
+% Intent:
+%   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+%
+% Function:
+%   Contains executable tests, fixtures, and manifests used for local and CI validation.
+%
+% Maintenance Notes:
+%   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{Choquet Theory}
+\author{}
+\date{}
+
+\newtheorem{theorem}{Theorem}
+
+\begin{document}
+\maketitle
+
+\section*{Overview}
+
+Choquet theory is an area of functional analysis and convex analysis concerned with measures supported on the extreme points of a convex set. Roughly speaking, every vector in a suitable convex set should be representable as a weighted average of extreme points, where the notion of weighted average is generalized from a finite convex combination to an integral over the set of extreme points.
+
+Let $C$ be a subset of a real vector space $V$, and let $E$ denote the set of extreme points of $C$. In the infinite-dimensional setting, one studies cases where $V$ is a locally convex Hausdorff topological vector space, extending ideas that are familiar from finite-dimensional convexity.
+
+Choquet theory has also become a general paradigm for studying convex cones via their extreme rays and, more broadly, for analyzing positivity structures in mathematics.
+
+\section*{Finite-dimensional motivation}
+
+For points $v,w \in V$, the line segment joining them is
+\[
+\{ \lambda v + (1-\lambda) w : 0 \le \lambda \le 1 \}.
+\]
+
+A classical result of Minkowski says that in Euclidean space, a bounded closed convex set $C$ is the convex hull of its set $E$ of extreme points. Thus every $c \in C$ can be written as a finite convex combination of points of $E$.
+
+Equivalently, assigning nonnegative weights $w(e)$ to points $e \in E$, with all but finitely many equal to zero, one may write
+\[
+c = \sum_{e \in E} w(e)\, e,
+\qquad
+\sum_{e \in E} w(e) = 1.
+\]
+The coefficients $w(e)$ determine a probability measure supported on a finite subset of $E$. For any affine function $f$ on $C$, one then has
+\[
+f(c) = \int f(e)\, dw(e).
+\]
+
+\section*{Choquet's theorem}
+
+\begin{theorem}[Choquet]
+Let $C$ be a compact convex metrizable subset of a locally convex topological vector space $V$. For every $c \in C$, there exists a probability measure $w$ on $C$, supported on the set $E$ of extreme points of $C$, such that for every affine function $f$ on $C$,
+\[
+f(c) = \int f(e)\, dw(e).
+\]
+\end{theorem}
+
+In many applications, $V$ may be a Banach space, but the theorem is useful more generally, including settings in which $V$ itself is not metrizable, for example when it is equipped with the weak-$^\ast$ topology.
+
+The Krein--Milman theorem follows from Choquet's theorem. Another corollary is the Riesz representation theorem for states on the continuous functions on a metrizable compact Hausdorff space.
+
+\section*{Nonmetrizable case}
+
+When $C$ is not metrizable, the Choquet--Bishop--de Leeuw theorem provides a related representation: one obtains a probability measure that vanishes on Baire subsets of $C$ containing no extreme points.
+
+\section*{Uniqueness and Choquet simplices}
+
+Besides existence of representing measures, one may ask whether such a measure is unique.
+
+Uniqueness fails in general, even in finite dimensions; examples include a cube or a ball in $\mathbb{R}^3$. However, uniqueness does hold for finite-dimensional simplices. This leads to the notion of a \emph{Choquet simplex}: a convex set in which every point is represented by a unique probability measure on the extreme points.
+
+\section*{See also}
+
+\begin{itemize}
+    \item Carath\'eodory's theorem
+    \item Helly's theorem
+    \item Krein--Milman theorem
+    \item Shapley--Folkman lemma
+    \item Convex analysis
+    \item Functional analysis
+\end{itemize}
+
+\section*{References}
+
+\begin{itemize}
+    \item Robert R. Phelps, \emph{Lectures on Choquet's Theorem}, Lecture Notes in Mathematics, vol.~1757, Springer, 2001.
+    \item Yassine El Maazouz, \emph{On Choquet's Theorem}.
+    \item Errett Bishop and Karl de Leeuw, ``The representations of linear functionals by measures on sets of extreme points,'' \emph{Annales de l'Institut Fourier}, 9 (1959), 305--331.
+\end{itemize}
+
+\bigskip
+\noindent\textbf{Source note.} This \LaTeX{} file is a clean article-style conversion based on the Wikipedia page ``Choquet theory.''
+
+\end{document}

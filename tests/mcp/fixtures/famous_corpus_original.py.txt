@@ -1,0 +1,222 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+# File Documentation
+#
+# Motivation:
+#   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+#
+# Intent:
+#   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+#
+# Function:
+#   Contains executable tests, fixtures, and manifests used for local and CI validation.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Regression for the 500-entry famous theorem/axiom corpus."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import argparse
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from backends.premise_kb.MathformerKB.search import (
+    PremiseKB,
+)
+
+GENERATOR = (
+    REPO_ROOT
+    / "skills"
+    / "premise-kb"
+    / "premise-kb-theorem-seed-generator"
+    / "scripts"
+    / "generate_famous_theorem_axiom_corpus.py"
+)
+INDEXER = (
+    REPO_ROOT
+    / "skills"
+    / "premise-kb"
+    / "premise-kb-indexer"
+    / "scripts"
+    / "index_premise_kb.py"
+)
+
+
+def run_json(command: list[str]) -> dict[str, Any]:
+    """Document the responsibility of ``run_json``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    completed = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"command failed: {' '.join(command)}\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+        )
+    return json.loads(completed.stdout)
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--artifact-root", type=Path, default=Path("artifacts/kb/famous_corpus_test")
+    )
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+
+    artifact_root = (
+        args.artifact_root
+        if args.artifact_root.is_absolute()
+        else REPO_ROOT / args.artifact_root
+    )
+    if artifact_root.exists():
+        shutil.rmtree(artifact_root)
+    corpus_path = artifact_root / "famous_theorems_axioms_500.jsonl"
+    kb_root = artifact_root / "kb"
+
+    generated = run_json(
+        [
+            sys.executable,
+            str(GENERATOR),
+            "--output",
+            str(corpus_path),
+            "--json",
+        ]
+    )
+    lines = [
+        json.loads(line)
+        for line in corpus_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    indexed = run_json(
+        [
+            sys.executable,
+            str(INDEXER),
+            "--kb-root",
+            str(kb_root),
+            "--seed-jsonl",
+            str(corpus_path),
+            "--build-bloom",
+            "--build-embeddings",
+            "--embedding-dimension",
+            "256",
+            "--smoke-query",
+            "Fundamental theorem of algebra",
+            "--json",
+        ]
+    )
+    hit_ids = [hit["entry"]["id"] for hit in indexed["smoke_hits"]]
+    kb = PremiseKB(kb_root)
+    title_presence = kb.has_exact("Fundamental theorem of algebra", surface="name")
+    any_presence = kb.has_exact("Fundamental theorem of algebra", surface="any")
+    absent_presence = kb.has_exact(
+        "A made-up theorem not in this corpus", surface="any"
+    )
+    target_distance = kb.geometric_distance(
+        "Fundamental theorem of algebra",
+        entry_id="famous.complex_analysis.fundamental_theorem_of_algebra",
+    )
+    unrelated_distance = kb.geometric_distance(
+        "Fundamental theorem of algebra",
+        entry_id="famous.geometry.pythagorean_theorem",
+    )
+    ids = [entry["id"] for entry in lines]
+    assertions = {
+        "generated_ok": generated["ok"],
+        "exactly_500_entries": generated["entry_count"] == 500 and len(lines) == 500,
+        "all_ids_unique": len(ids) == len(set(ids)),
+        "all_generated_candidates": all(
+            entry["status"] == "generated_candidate" for entry in lines
+        ),
+        "all_have_hashes": all(
+            entry["canonical_hashes"].get("informal") for entry in lines
+        ),
+        "indexer_added_500": indexed["added_count"] == 500
+        and indexed["entry_count"] == 500,
+        "bloom_manifest_written": Path(indexed["bloom_paths"]["manifest"]).is_file(),
+        "embedding_index_written": Path(indexed["embedding_index"]).is_file(),
+        "search_finds_fundamental_theorem_algebra": any(
+            hit_id == "famous.complex_analysis.fundamental_theorem_of_algebra"
+            for hit_id in hit_ids
+        ),
+        "search_reports_geometric_distance": all(
+            "cosine_distance" in hit for hit in indexed["smoke_hits"]
+        ),
+        "name_presence_resolves_title": title_presence.probably_present
+        and title_presence.resolved_entry_ids
+        == ["famous.complex_analysis.fundamental_theorem_of_algebra"],
+        "any_presence_uses_name_surface": any_presence.probably_present
+        and "name" in any_presence.matched_surfaces
+        and "famous.complex_analysis.fundamental_theorem_of_algebra"
+        in any_presence.resolved_entry_ids,
+        "absent_presence_definitely_absent": absent_presence.definitely_absent,
+        "target_distance_beats_unrelated_distance": target_distance["cosine_distance"]
+        < unrelated_distance["cosine_distance"],
+    }
+    payload = {
+        "ok": all(assertions.values()),
+        "artifact_root": str(artifact_root),
+        "assertions": assertions,
+        "top_hit_ids": hit_ids,
+        "target_distance": target_distance,
+        "unrelated_distance": unrelated_distance,
+    }
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"ok: {payload['ok']}")
+        print(f"artifact_root: {payload['artifact_root']}")
+        print(f"top_hit_ids: {', '.join(hit_ids)}")
+    return 0 if payload["ok"] else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

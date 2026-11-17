@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import converted_reasoning
+from reasoning import PreparePaperTheoryForLean
+from preformalization_readiness_loop import PaperFormalizationSourceSelection, DraftingDisposition
+
+def run_reasoning(
+    workflow_source: PaperFormalizationSourceSelection,
+    model_access: ModelGenerate,
+    disclosure: ContextDisclose,
+) -> Result[Generated[DraftingDisposition], ModelFailure] ! {AI.Generate, Context.Disclose}:
+    flow = converted_reasoning(workflow_source)
+    return solve PreparePaperTheoryForLean(workflow_source) using flow

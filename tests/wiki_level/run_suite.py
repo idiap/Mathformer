@@ -1,0 +1,1165 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+# File Documentation
+#
+# Motivation:
+#   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+#
+# Intent:
+#   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+#
+# Function:
+#   Contains executable tests, fixtures, and manifests used for local and CI validation.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Run deterministic checks for the controlled Wikipedia-level LaTeX-to-Lean suite."""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+import time
+from typing import Any, Dict, List, Optional, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+REASONING_LOG_SCRIPTS = (
+    REPO_ROOT / "skills" / "control" / "reasoning-log-schema-guardian" / "scripts"
+)
+if str(REASONING_LOG_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(REASONING_LOG_SCRIPTS))
+
+from reasoning_log import (
+    append_reasoning_log_entry,
+)
+
+DEFAULT_MANIFEST = REPO_ROOT / "tests" / "latex" / "wiki_level" / "manifest.json"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "wiki_level_suite"
+
+
+def append_reasoning_event(
+    path: Optional[Path],
+    *,
+    step: str,
+    payload: Dict[str, Any],
+) -> None:
+    """Document the responsibility of ``append_reasoning_event``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``append_reasoning_event`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if path is None:
+        return
+    append_reasoning_log_entry(path, step=step, payload=payload)
+
+
+def rel(path: Path) -> str:
+    """Document the responsibility of ``rel``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``rel`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def resolve_repo_path(value: str | Path) -> Path:
+    """Document the responsibility of ``resolve_repo_path``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``resolve_repo_path`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return REPO_ROOT / path
+
+
+def run_command(
+    cmd: Sequence[str],
+    *,
+    input_text: Optional[str] = None,
+    timeout_sec: int = 120,
+) -> Dict[str, Any]:
+    """Document the responsibility of ``run_command``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    started = time.perf_counter()
+    try:
+        proc = subprocess.run(
+            list(cmd),
+            cwd=REPO_ROOT,
+            input=input_text,
+            text=True,
+            capture_output=True,
+            timeout=timeout_sec,
+        )
+        duration_ms = round((time.perf_counter() - started) * 1000, 3)
+        return {
+            "cmd": list(cmd),
+            "ok": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "duration_ms": duration_ms,
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+            "timeout": False,
+        }
+    except subprocess.TimeoutExpired as exc:
+        duration_ms = round((time.perf_counter() - started) * 1000, 3)
+        return {
+            "cmd": list(cmd),
+            "ok": False,
+            "returncode": None,
+            "duration_ms": duration_ms,
+            "stdout": exc.stdout or "",
+            "stderr": exc.stderr or f"timeout after {timeout_sec}s",
+            "timeout": True,
+        }
+
+
+def parse_json_stdout(result: Dict[str, Any]) -> Optional[Any]:
+    """Document the responsibility of ``parse_json_stdout``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    text = str(result.get("stdout") or "").strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def load_manifest(path: Path) -> Dict[str, Any]:
+    """Document the responsibility of ``load_manifest``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Load data from the declared source while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def extract_metadata(text: str) -> Dict[str, str]:
+    """Document the responsibility of ``extract_metadata``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``extract_metadata`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    metadata: Dict[str, str] = {}
+    for raw in text.splitlines():
+        match = re.match(r"^\s*%\s*([A-Za-z0-9_-]+):\s*(.*?)\s*$", raw)
+        if match is None:
+            continue
+        metadata[match.group(1)] = match.group(2)
+    return metadata
+
+
+def strip_latex_comments(text: str) -> str:
+    """Document the responsibility of ``strip_latex_comments``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``strip_latex_comments`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return re.sub(r"(?<!\\)%.*", "", text)
+
+
+def extract_statement_and_proof(text: str) -> str:
+    """Document the responsibility of ``extract_statement_and_proof``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``extract_statement_and_proof`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    body = text
+    document_match = re.search(
+        r"\\begin\{document\}(.*?)\\end\{document\}",
+        body,
+        flags=re.DOTALL,
+    )
+    if document_match is not None:
+        body = document_match.group(1)
+
+    section_match = re.search(
+        r"\\section\*\{Statement and Proof\}(.*?)(?:\\section\*\{Lean Target\}|$)",
+        body,
+        flags=re.DOTALL,
+    )
+    if section_match is not None:
+        body = section_match.group(1)
+
+    return re.sub(r"\s+", " ", strip_latex_comments(body)).strip()
+
+
+def static_latex_review(
+    case: Dict[str, Any], latex_path: Path, text: str
+) -> Dict[str, Any]:
+    """Document the responsibility of ``static_latex_review``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``static_latex_review`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    metadata = extract_metadata(text)
+    errors: List[str] = []
+    warnings: List[str] = []
+
+    if metadata.get("mathformer-case-id") != case.get("id"):
+        errors.append("metadata mathformer-case-id does not match manifest id")
+    if metadata.get("expected-lean-name") != case.get("lean_theorem"):
+        errors.append(
+            "metadata expected-lean-name does not match manifest lean_theorem"
+        )
+    if metadata.get("controlled-suite") != "wiki_level_latex_to_lean":
+        errors.append("missing or wrong controlled-suite metadata")
+    if not re.search(r"\\begin\{theorem\}", text):
+        errors.append("missing theorem environment")
+    if not re.search(r"\\begin\{proof\}", text):
+        errors.append("missing proof environment")
+    if "\\section*{Lean Target}" not in text:
+        errors.append("missing Lean Target section")
+    if "`" in text:
+        errors.append("LaTeX source contains Markdown backticks")
+    if re.search(r"\b(TODO|FIXME|\?\?)\b", text, flags=re.IGNORECASE):
+        errors.append("placeholder marker detected")
+
+    normalized = re.sub(r"[_\\{}$]", " ", text).lower()
+    for concept in case.get("concepts", []):
+        phrase = str(concept).replace("_", " ").lower()
+        if phrase and phrase not in normalized:
+            warnings.append(f"concept tag not literal in LaTeX text: {concept}")
+
+    return {
+        "latex_file": rel(latex_path),
+        "passed": not errors,
+        "metadata": metadata,
+        "errors": errors,
+        "warnings": warnings,
+        "theorem_environment_count": len(re.findall(r"\\begin\{theorem\}", text)),
+        "proof_environment_count": len(re.findall(r"\\begin\{proof\}", text)),
+    }
+
+
+def parse_lean_imports(lean_text: str) -> List[str]:
+    """Document the responsibility of ``parse_lean_imports``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    imports: List[str] = []
+    for raw in lean_text.splitlines():
+        match = re.match(r"^\s*import\s+(.+?)\s*$", raw)
+        if match is not None:
+            imports.extend(match.group(1).split())
+    return imports
+
+
+def lean_decl_present(lean_text: str, qualified_name: str) -> bool:
+    """Document the responsibility of ``lean_decl_present``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``lean_decl_present`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    local = qualified_name.split(".")[-1]
+    pattern = (
+        r"^\s*(?:@[A-Za-z0-9_'.` ]+\s*)*"
+        r"(?:theorem|lemma|def|abbrev)\s+" + re.escape(local) + r"\b"
+    )
+    return re.search(pattern, lean_text, flags=re.MULTILINE) is not None
+
+
+def run_difficulty(
+    case: Dict[str, Any],
+    case_text: str,
+    *,
+    reasoning_log: Optional[Path],
+) -> Dict[str, Any]:
+    """Document the responsibility of ``run_difficulty``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    cmd = [
+        sys.executable,
+        "skills/autoformalization/proof-expansion-difficulty-estimator/scripts/estimate_proof_expansion_difficulty.py",
+        "--max-words-per-segment",
+        "80",
+        "--json",
+    ]
+    if reasoning_log is not None:
+        cmd.extend(["--reasoning-log-file", str(reasoning_log)])
+    result = run_command(cmd, input_text=case_text, timeout_sec=60)
+    parsed = parse_json_stdout(result)
+    return {
+        "ok": result["ok"] and isinstance(parsed, dict),
+        "returncode": result["returncode"],
+        "duration_ms": result["duration_ms"],
+        "report": parsed,
+        "stderr": result["stderr"],
+        "max_difficulty_score": (
+            parsed.get("max_difficulty_score") if isinstance(parsed, dict) else None
+        ),
+        "web_search_recommended_count": (
+            parsed.get("web_search_recommended_count")
+            if isinstance(parsed, dict)
+            else None
+        ),
+        "expected_difficulty": case.get("difficulty"),
+    }
+
+
+def run_concept_map(
+    case: Dict[str, Any],
+    case_text: str,
+    *,
+    reasoning_log: Optional[Path],
+    verify_timeout_sec: int,
+) -> Dict[str, Any]:
+    """Document the responsibility of ``run_concept_map``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    cmd = [
+        sys.executable,
+        "skills/mathlib/informal-proof-mathlib-concepts/scripts/map_mathlib_concepts.py",
+        "--proof-text",
+        case_text,
+        "--top-k",
+        "5",
+        "--top-modules",
+        "5",
+        "--show-modules",
+        "0",
+        "--verify-checks",
+        "--verify-max-concepts",
+        "5",
+        "--verify-max-candidates",
+        "3",
+        "--verify-timeout-sec",
+        str(verify_timeout_sec),
+        "--lean-workdir",
+        ".",
+        "--json",
+    ]
+    for concept in case.get("concepts", []):
+        cmd.extend(["--concept", str(concept)])
+    if reasoning_log is not None:
+        cmd.extend(["--reasoning-log-file", str(reasoning_log)])
+    result = run_command(cmd, timeout_sec=max(120, verify_timeout_sec * 20))
+    parsed = parse_json_stdout(result)
+
+    concept_summaries: Dict[str, Any] = {}
+    if isinstance(parsed, dict):
+        for concept, payload in parsed.items():
+            if not isinstance(payload, dict):
+                continue
+            candidates = payload.get("candidates")
+            modules = payload.get("relevant_modules")
+            top_candidate = (
+                candidates[0] if isinstance(candidates, list) and candidates else None
+            )
+            concept_summaries[concept] = {
+                "candidate_count": (
+                    len(candidates) if isinstance(candidates, list) else 0
+                ),
+                "module_count": len(modules) if isinstance(modules, list) else 0,
+                "top_candidate": (
+                    None
+                    if not isinstance(top_candidate, dict)
+                    else {
+                        "name": top_candidate.get("qualified_name")
+                        or top_candidate.get("name"),
+                        "kind": top_candidate.get("kind"),
+                        "module": top_candidate.get("module"),
+                        "check_ok": top_candidate.get("check_ok"),
+                        "score": top_candidate.get("score"),
+                    }
+                ),
+                "top_modules": [
+                    {
+                        "module": item.get("module"),
+                        "score": item.get("score"),
+                    }
+                    for item in (modules[:3] if isinstance(modules, list) else [])
+                    if isinstance(item, dict)
+                ],
+            }
+
+    return {
+        "ok": result["ok"] and isinstance(parsed, dict),
+        "returncode": result["returncode"],
+        "duration_ms": result["duration_ms"],
+        "concept_count": len(case.get("concepts", [])),
+        "summary": concept_summaries,
+        "stderr": result["stderr"],
+    }
+
+
+def run_hierarchy_navigation(
+    case: Dict[str, Any],
+    *,
+    reasoning_log: Optional[Path],
+) -> Dict[str, Any]:
+    """Document the responsibility of ``run_hierarchy_navigation``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    query = " ".join(
+        str(item).replace("_", " ") for item in case.get("concepts", [])[:3]
+    )
+    cmd = [
+        sys.executable,
+        "skills/mathlib/mathlib-hierarchy-navigator/scripts/navigate_mathlib_hierarchy.py",
+        "--query",
+        query,
+        "--max-children",
+        "8",
+        "--max-modules",
+        "8",
+        "--max-search-modules",
+        "80",
+        "--max-decls",
+        "12",
+        "--json",
+    ]
+    if reasoning_log is not None:
+        cmd.extend(["--reasoning-log-file", str(reasoning_log)])
+    result = run_command(cmd, timeout_sec=60)
+    parsed = parse_json_stdout(result)
+    query_results = parsed.get("query_results") if isinstance(parsed, dict) else None
+    return {
+        "ok": result["ok"] and isinstance(parsed, dict),
+        "returncode": result["returncode"],
+        "duration_ms": result["duration_ms"],
+        "query": query,
+        "matching_module_count": (
+            len(query_results.get("matching_modules", []))
+            if isinstance(query_results, dict)
+            else None
+        ),
+        "matching_declaration_count": (
+            len(query_results.get("matching_declarations", []))
+            if isinstance(query_results, dict)
+            else None
+        ),
+        "top_matching_modules": (
+            query_results.get("matching_modules", [])[:3]
+            if isinstance(query_results, dict)
+            else []
+        ),
+        "top_matching_declarations": (
+            query_results.get("matching_declarations", [])[:5]
+            if isinstance(query_results, dict)
+            else []
+        ),
+        "stderr": result["stderr"],
+    }
+
+
+def run_gold_lean(
+    gold_file: Path,
+    *,
+    reasoning_log: Optional[Path],
+) -> Dict[str, Any]:
+    """Document the responsibility of ``run_gold_lean``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    append_reasoning_event(
+        reasoning_log,
+        step="lean_execution_initial_start",
+        payload={
+            "skill": "lean-execution-runner",
+            "hook_id": "execute.initial",
+            "lean_file": rel(gold_file),
+        },
+    )
+    result = run_command(["lake", "env", "lean", str(gold_file)], timeout_sec=120)
+    errors = [
+        line.strip()
+        for line in f"{result['stdout']}\n{result['stderr']}".splitlines()
+        if ": error" in line
+    ]
+    append_reasoning_event(
+        reasoning_log,
+        step="lean_execution_initial_output",
+        payload={
+            "skill": "lean-execution-runner",
+            "hook_id": "execute.initial",
+            "lean_file": rel(gold_file),
+            "ok": result["ok"],
+            "returncode": result["returncode"],
+            "error_count": len(errors),
+            "duration_ms": result["duration_ms"],
+        },
+    )
+    return {
+        "ok": result["ok"],
+        "returncode": result["returncode"],
+        "duration_ms": result["duration_ms"],
+        "error_count": len(errors),
+        "errors": errors[:25],
+        "stderr": result["stderr"],
+    }
+
+
+def run_compatibility_audit(
+    gold_file: Path,
+    *,
+    output_dir: Path,
+    reasoning_log: Optional[Path],
+) -> Dict[str, Any]:
+    """Document the responsibility of ``run_compatibility_audit``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    audit_output = output_dir / "compatibility_audit.json"
+    cmd = [
+        sys.executable,
+        "skills/mathlib/mathlib-compatibility-auditor/scripts/check_mathlib_compat.py",
+        "--lean-file",
+        str(gold_file),
+        "--run-lake-check",
+        "--lake-workdir",
+        ".",
+        "--output",
+        str(audit_output),
+        "--json",
+    ]
+    if reasoning_log is not None:
+        cmd.extend(["--reasoning-log-file", str(reasoning_log)])
+    result = run_command(cmd, timeout_sec=120)
+    parsed = parse_json_stdout(result)
+    return {
+        "ok": result["ok"] and isinstance(parsed, dict),
+        "returncode": result["returncode"],
+        "duration_ms": result["duration_ms"],
+        "output_file": rel(audit_output),
+        "report": parsed,
+        "stderr": result["stderr"],
+    }
+
+
+def run_expected_declaration_checks(
+    declarations: Sequence[str],
+    *,
+    output_dir: Path,
+    reasoning_log: Optional[Path],
+) -> Dict[str, Any]:
+    """Document the responsibility of ``run_expected_declaration_checks``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    ordered = []
+    seen = set()
+    for declaration in declarations:
+        if declaration and declaration not in seen:
+            ordered.append(declaration)
+            seen.add(declaration)
+
+    if not ordered:
+        return {"ok": True, "checks": {}, "checked_count": 0}
+
+    scratch_dir = output_dir / "tmp"
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+    scratch_file = scratch_dir / "expected_declaration_checks.lean"
+    scratch_file.write_text(
+        "\n".join(["import Mathlib", *[f"#check {name}" for name in ordered], ""]),
+        encoding="utf-8",
+    )
+    append_reasoning_event(
+        reasoning_log,
+        step="concept_mapping_verify_result",
+        payload={
+            "skill": "mathlib-candidate-verifier/map_mathlib_concepts.py",
+            "hook_id": "mathlib.verify",
+            "checked_declarations": ordered,
+            "scratch_file": rel(scratch_file),
+        },
+    )
+    result = run_command(["lake", "env", "lean", str(scratch_file)], timeout_sec=120)
+    combined = f"{result['stdout']}\n{result['stderr']}"
+    checks: Dict[str, Any] = {}
+    for declaration in ordered:
+        checks[declaration] = {
+            "check_ok": result["ok"] and declaration in combined,
+            "errors": [],
+        }
+    if not result["ok"]:
+        errors = [line.strip() for line in combined.splitlines() if ": error" in line]
+        for declaration in ordered:
+            checks[declaration]["check_ok"] = False
+            checks[declaration]["errors"] = errors[:10]
+    return {
+        "ok": result["ok"] and all(item["check_ok"] for item in checks.values()),
+        "returncode": result["returncode"],
+        "duration_ms": result["duration_ms"],
+        "checked_count": len(ordered),
+        "checks": checks,
+        "scratch_file": rel(scratch_file),
+    }
+
+
+def build_summary(report: Dict[str, Any]) -> Dict[str, Any]:
+    """Document the responsibility of ``build_summary``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Build the local data structure or artifact used by the next workflow stage.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    cases = report["cases"]
+    static_failed = [
+        case["id"] for case in cases if not case["static_latex_review"]["passed"]
+    ]
+    difficulty_failed = [case["id"] for case in cases if not case["difficulty"]["ok"]]
+    concept_failed = [
+        case["id"]
+        for case in cases
+        if case.get("concept_map") is not None and not case["concept_map"]["ok"]
+    ]
+    hierarchy_failed = [
+        case["id"]
+        for case in cases
+        if case.get("hierarchy_navigation") is not None
+        and not case["hierarchy_navigation"]["ok"]
+    ]
+    missing_theorems = [
+        case["id"] for case in cases if not case["lean_theorem_present"]
+    ]
+    web_search_cases = [
+        case["id"]
+        for case in cases
+        if (case["difficulty"].get("web_search_recommended_count") or 0) > 0
+    ]
+    max_difficulty = max(
+        (case["difficulty"].get("max_difficulty_score") or 0 for case in cases),
+        default=0,
+    )
+    audit = report.get("compatibility_audit", {})
+    audit_report = audit.get("report") if isinstance(audit, dict) else None
+    audit_score = (
+        audit_report.get("compatibility_score")
+        if isinstance(audit_report, dict)
+        else None
+    )
+    declaration_checks = report.get("expected_declaration_checks", {})
+
+    passed = not any(
+        [
+            static_failed,
+            difficulty_failed,
+            concept_failed,
+            hierarchy_failed,
+            missing_theorems,
+            not report["lean_execution"]["ok"],
+            not audit.get("ok"),
+            not declaration_checks.get("ok", True),
+        ]
+    )
+    return {
+        "passed": passed,
+        "case_count": len(cases),
+        "static_failed": static_failed,
+        "difficulty_failed": difficulty_failed,
+        "concept_map_failed": concept_failed,
+        "hierarchy_failed": hierarchy_failed,
+        "missing_lean_theorems": missing_theorems,
+        "web_search_recommended_cases": web_search_cases,
+        "max_difficulty_score": max_difficulty,
+        "lean_execution_ok": report["lean_execution"]["ok"],
+        "compatibility_audit_ok": audit.get("ok"),
+        "compatibility_score": audit_score,
+        "expected_declaration_checks_ok": declaration_checks.get("ok", True),
+    }
+
+
+def prepare_suite(
+    args: argparse.Namespace, *, max_cases: Optional[int] = None
+) -> Dict[str, Any]:
+    """Load native inputs and begin the source-owned reasoning history."""
+    manifest_path = args.manifest.resolve()
+    manifest = load_manifest(manifest_path)
+    if max_cases is not None and len(manifest.get("cases", [])) > max_cases:
+        raise ValueError(f"Wiki suite admission limit is {max_cases} cases")
+    output_dir = args.output_dir.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    reasoning_log = None if args.no_reasoning_log else args.reasoning_log.resolve()
+    if (
+        reasoning_log is not None
+        and reasoning_log.exists()
+        and not args.append_reasoning_log
+    ):
+        reasoning_log.unlink()
+
+    append_reasoning_event(
+        reasoning_log,
+        step="workflow_start",
+        payload={
+            "skill": "autoformalization-workflow-orchestrator",
+            "hook_id": "intake.workflow_start",
+            "suite": manifest.get("suite"),
+            "manifest": rel(manifest_path),
+        },
+    )
+
+    gold_file = resolve_repo_path(manifest["gold_lean_file"])
+    lean_text = gold_file.read_text(encoding="utf-8")
+    actual_imports = parse_lean_imports(lean_text)
+    expected_imports = list(manifest.get("gold_expected_imports", []))
+    import_check = {
+        "actual_imports": actual_imports,
+        "expected_imports": expected_imports,
+        "missing_imports": sorted(set(expected_imports) - set(actual_imports)),
+        "unexpected_broad_mathlib": "Mathlib" in actual_imports,
+    }
+
+    return {
+        "session": {
+            "manifest_path": str(manifest_path),
+            "manifest": manifest,
+            "output_dir": str(output_dir),
+            "reasoning_log": str(reasoning_log) if reasoning_log is not None else None,
+            "gold_file": str(gold_file),
+            "lean_text": lean_text,
+            "import_check": import_check,
+            "options": {
+                key: str(value) if isinstance(value, Path) else value
+                for key, value in vars(args).items()
+            },
+        },
+        "state": {"cursor": 0, "cases": [], "expected_declarations": []},
+        "has_cases": bool(manifest.get("cases", [])),
+        "skip_declarations": args.skip_declaration_checks,
+    }
+
+
+def suite_context(session: Dict[str, Any]):
+    """Restore JSON context without repeating initialization or log reset."""
+    args = argparse.Namespace(**session["options"])
+    return (
+        args,
+        Path(session["output_dir"]),
+        (
+            Path(session["reasoning_log"])
+            if session["reasoning_log"] is not None
+            else None
+        ),
+    )
+
+
+def advance_case(session: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
+    """Run exactly one manifest case, retaining ordered accumulators."""
+    args, output_dir, reasoning_log = suite_context(session)
+    lean_text = session["lean_text"]
+    case = session["manifest"].get("cases", [])[state["cursor"]]
+    cases = list(state["cases"])
+    all_expected_declarations = list(state["expected_declarations"])
+    latex_path = resolve_repo_path(case["latex_file"])
+    latex_text = latex_path.read_text(encoding="utf-8")
+    case_text = extract_statement_and_proof(latex_text)
+    all_expected_declarations.extend(case.get("expected_mathlib_declarations", []))
+    static_review = static_latex_review(case, latex_path, latex_text)
+    append_reasoning_event(
+        reasoning_log,
+        step="latex_expansion_review_suite_complete",
+        payload={
+            "skill": "latex-expansion-review-orchestrator",
+            "hook_id": "preformalization.review.suite",
+            "case_id": case.get("id"),
+            "passed": static_review["passed"],
+            "errors": static_review["errors"],
+            "warnings": static_review["warnings"],
+        },
+    )
+
+    difficulty = run_difficulty(case, case_text, reasoning_log=reasoning_log)
+    concept_map = None
+    if not args.skip_concept_map:
+        concept_map = run_concept_map(
+            case,
+            case_text,
+            reasoning_log=reasoning_log,
+            verify_timeout_sec=args.verify_timeout_sec,
+        )
+    hierarchy = None
+    if not args.skip_hierarchy:
+        hierarchy = run_hierarchy_navigation(case, reasoning_log=reasoning_log)
+
+    cases.append(
+        {
+            "id": case.get("id"),
+            "latex_file": case.get("latex_file"),
+            "lean_theorem": case.get("lean_theorem"),
+            "lean_theorem_present": lean_decl_present(
+                lean_text, str(case.get("lean_theorem"))
+            ),
+            "static_latex_review": static_review,
+            "difficulty": difficulty,
+            "concept_map": concept_map,
+            "hierarchy_navigation": hierarchy,
+        }
+    )
+    cursor = state["cursor"] + 1
+    return {
+        "state": {
+            "cursor": cursor,
+            "cases": cases,
+            "expected_declarations": all_expected_declarations,
+        },
+        "done": cursor == len(session["manifest"].get("cases", [])),
+    }
+
+
+def compile_suite_gold(session: Dict[str, Any]) -> Dict[str, Any]:
+    _, _, reasoning_log = suite_context(session)
+    return run_gold_lean(Path(session["gold_file"]), reasoning_log=reasoning_log)
+
+
+def audit_suite(session: Dict[str, Any]) -> Dict[str, Any]:
+    _, output_dir, reasoning_log = suite_context(session)
+    return run_compatibility_audit(
+        Path(session["gold_file"]), output_dir=output_dir, reasoning_log=reasoning_log
+    )
+
+
+def check_suite_declarations(
+    session: Dict[str, Any], state: Dict[str, Any]
+) -> Dict[str, Any]:
+    _, output_dir, reasoning_log = suite_context(session)
+    return run_expected_declaration_checks(
+        state["expected_declarations"],
+        output_dir=output_dir,
+        reasoning_log=reasoning_log,
+    )
+
+
+def skipped_declarations() -> Dict[str, Any]:
+    return {"ok": True, "checks": {}, "checked_count": 0}
+
+
+def finish_suite(
+    session: Dict[str, Any],
+    state: Dict[str, Any],
+    lean_execution: Dict[str, Any],
+    compatibility_audit: Dict[str, Any],
+    declaration_checks: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Aggregate all checks, append completion and publish the native report."""
+    args, output_dir, reasoning_log = suite_context(session)
+    manifest = session["manifest"]
+    manifest_path = Path(session["manifest_path"])
+    gold_file = Path(session["gold_file"])
+    import_check = session["import_check"]
+    cases = state["cases"]
+    report = {
+        "suite": manifest.get("suite"),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "manifest_file": rel(manifest_path),
+        "gold_lean_file": rel(gold_file),
+        "import_check": import_check,
+        "cases": cases,
+        "lean_execution": lean_execution,
+        "compatibility_audit": compatibility_audit,
+        "expected_declaration_checks": declaration_checks,
+    }
+    report["summary"] = build_summary(report)
+
+    append_reasoning_event(
+        reasoning_log,
+        step="workflow_complete",
+        payload={
+            "skill": "autoformalization-workflow-orchestrator",
+            "hook_id": "artifact.statistics",
+            "suite": manifest.get("suite"),
+            "passed": report["summary"]["passed"],
+            "summary": report["summary"],
+        },
+    )
+
+    output_path = output_dir / args.output_name
+    output_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return report
+
+
+def run_suite(args: argparse.Namespace) -> Dict[str, Any]:
+    """Execute the shared native stages in manifest order, without retries."""
+    prepared = prepare_suite(args)
+    session, state = prepared["session"], prepared["state"]
+    for _ in session["manifest"].get("cases", []):
+        state = advance_case(session, state)["state"]
+    lean = compile_suite_gold(session)
+    audit = audit_suite(session)
+    declarations = (
+        skipped_declarations()
+        if args.skip_declaration_checks
+        else check_suite_declarations(session, state)
+    )
+    return finish_suite(session, state, lean, audit, declarations)
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    """Document the responsibility of ``parse_args``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--json", action="store_true", help="Print the complete JSON report"
+    )
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--output-name", default="report.json")
+    parser.add_argument(
+        "--reasoning-log",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR / "reasoning.jsonl",
+    )
+    parser.add_argument("--append-reasoning-log", action="store_true")
+    parser.add_argument("--no-reasoning-log", action="store_true")
+    parser.add_argument("--skip-concept-map", action="store_true")
+    parser.add_argument("--skip-hierarchy", action="store_true")
+    parser.add_argument("--skip-declaration-checks", action="store_true")
+    parser.add_argument("--verify-timeout-sec", type=int, default=30)
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    args = parse_args(argv)
+    report = run_suite(args)
+    summary = report["summary"]
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if summary["passed"] else 1
+    print(
+        "wiki_level_suite: "
+        f"passed={summary['passed']} "
+        f"cases={summary['case_count']} "
+        f"lean={summary['lean_execution_ok']} "
+        f"compatibility={summary['compatibility_score']} "
+        f"max_difficulty={summary['max_difficulty_score']}"
+    )
+    print(f"report: {rel(args.output_dir.resolve() / args.output_name)}")
+    if not args.no_reasoning_log:
+        print(f"reasoning_log: {rel(args.reasoning_log.resolve())}")
+    return 0 if summary["passed"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

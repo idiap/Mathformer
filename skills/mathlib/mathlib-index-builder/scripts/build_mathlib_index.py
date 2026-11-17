@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Build or validate the shared Mathlib index."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Sequence
+
+from mathlib_index_common import (
+    DEFAULT_INDEX,
+    DEFAULT_MATHLIB_ROOT,
+    DEFAULT_RERANKER_CACHE,
+    build_optional_reranker_cache,
+    current_stamp_matches,
+    load_index,
+    parse_mathlib,
+    rel,
+)
+
+
+def path_exists(path: Path) -> bool:
+    """Shared admission check for the CLI and validation workflow."""
+    return path.exists()
+
+
+def missing_root(mathlib_root: Path) -> dict:
+    return {
+        "ok": False,
+        "error": f"mathlib root does not exist: {mathlib_root}",
+        "mathlib_root": rel(mathlib_root),
+    }
+
+
+def missing_index(output: Path) -> dict:
+    return {"ok": False, "error": "index artifact missing", "output": rel(output)}
+
+
+def compare_and_return(index, mathlib_root: Path, output: Path) -> dict:
+    ok = current_stamp_matches(index, mathlib_root)
+    return {
+        "ok": ok,
+        "style": "mathlib_index_validation",
+        "output": rel(output),
+        "stale": not ok,
+        "version_stamp": index.get("version_stamp", {}),
+    }
+
+
+def build(args: argparse.Namespace) -> dict:
+    mathlib_root = args.mathlib_root
+    if not path_exists(mathlib_root):
+        return missing_root(mathlib_root)
+    if args.validate_existing:
+        if not path_exists(args.output):
+            return missing_index(args.output)
+        return load_validate(args)
+    index = parse_mathlib(mathlib_root, max_files=args.max_files)
+    reranker_cache = build_optional_reranker_cache(index)
+    return write_return(args, index, reranker_cache)
+
+
+def load_validate(args: argparse.Namespace) -> dict:
+    """Load and compare without rebuilding, shared by CLI and MCP steps."""
+    index = load_index(args.output)
+    return compare_and_return(index, args.mathlib_root, args.output)
+
+
+def write_return(args: argparse.Namespace, index: dict, reranker_cache: dict) -> dict:
+    """Persist in native order; an error leaves any earlier write intact."""
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
+        json.dumps(index, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    args.reranker_cache.parent.mkdir(parents=True, exist_ok=True)
+    args.reranker_cache.write_text(
+        json.dumps(reranker_cache, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    return {
+        "ok": True,
+        "style": "mathlib_index_build",
+        "output": rel(args.output),
+        "reranker_cache": rel(args.reranker_cache),
+        "module_count": len(index["modules"]),
+        "declaration_count": len(index["declarations"]),
+        "reranker_entry_count": reranker_cache["entry_count"],
+        "version_stamp": index["version_stamp"],
+        "metadata_hash": index["metadata_hash"],
+    }
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--mathlib-root", type=Path, default=DEFAULT_MATHLIB_ROOT)
+    parser.add_argument("--output", type=Path, default=DEFAULT_INDEX)
+    parser.add_argument("--reranker-cache", type=Path, default=DEFAULT_RERANKER_CACHE)
+    parser.add_argument("--max-files", type=int)
+    parser.add_argument("--validate-existing", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    payload = build(args)
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print("PASS mathlib index" if payload.get("ok") else "FAIL mathlib index")
+    return 0 if payload.get("ok") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

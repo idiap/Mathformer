@@ -1,0 +1,351 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+"""Generate repository-backed Codex and Claude plugin discovery surfaces.
+
+Canonical skills and runtime files stay in the checkout. The plugin contains
+portable, flat entrypoints that load those sources, even from a host cache.
+"""
+
+from __future__ import annotations
+
+import argparse
+from fnmatch import fnmatchcase
+from functools import lru_cache
+import hashlib
+import json
+from pathlib import Path
+import re
+import tomllib
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from workflow_catalog import WORKFLOWS, descriptor_text, load_catalog, plugin_skill_name  # noqa: E402
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PLUGIN = Path("plugins/mathformer")
+SKILL_LICENSE = """version = 1
+
+[[annotations]]
+path = ["REUSE.toml", "skills/*/SKILL.md", "skills/*/workflow.yaml"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright © 2026 Idiap Research Institute <contact@idiap.ch>"
+SPDX-License-Identifier = "MIT"
+SPDX-FileContributor = ["Danilo Gusicuma <danilo.gusicuma@idiap.ch>"]
+comment = "Neuro-symbolic AI Group"
+
+[[annotations]]
+path = ["REUSE.toml"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright © 2026 Idiap Research Institute <contact@idiap.ch>"
+SPDX-License-Identifier = "MIT"
+SPDX-FileContributor = ["Andre Freitas <andre.freitas@idiap.ch>", "Danilo Gusicuma <danilo.gusicuma@idiap.ch>"]
+comment = "Neuro-symbolic AI Group; retained notice and Git authorship."
+"""
+
+
+@lru_cache(maxsize=32)
+def attribution_annotations(path: Path, modified_ns: int) -> list[dict]:
+    """Cache TOML parsing while invalidating whenever the metadata changes."""
+    return tomllib.loads(path.read_text()).get("annotations", [])
+
+
+def contributors_for(root: Path, source: Path) -> list[str]:
+    """Read per-file TOML credits and retain existing source notices."""
+    contributors: set[str] = set()
+    for directory in reversed((root / source).parents):
+        if not directory.is_relative_to(root):
+            continue
+        metadata = directory / "REUSE.toml"
+        if not metadata.is_file():
+            continue
+        relative = (root / source).relative_to(directory).as_posix()
+        for annotation in attribution_annotations(metadata, metadata.stat().st_mtime_ns):
+            patterns = annotation["path"]
+            if isinstance(patterns, str):
+                patterns = [patterns]
+            if any(fnmatchcase(relative, pattern) for pattern in patterns):
+                values = annotation.get("SPDX-FileContributor", [])
+                contributors.update([values] if isinstance(values, str) else values)
+    path = root / source
+    if path.is_file():
+        try:
+            header = "\n".join(path.read_text().splitlines()[:80])
+        except UnicodeError:
+            header = ""
+        contributors.update(re.findall(r"SPDX-FileContributor:\s*([^<>\n\\]+ <[^<>\n]+>)", header))
+    return sorted(contributors)
+
+
+def plugin_licenses(root: Path, sources: dict[Path, Path]) -> str:
+    """Publish source attribution with the standalone plugin distribution."""
+    groups: dict[tuple[str, ...], list[str]] = {}
+    for destination, source in sources.items():
+        authors = tuple(sorted(set(contributors_for(root, source)) | {
+            "Danilo Gusicuma <danilo.gusicuma@idiap.ch>"
+        }))
+        groups.setdefault(authors, []).append(destination.relative_to(PLUGIN).as_posix())
+    result = SKILL_LICENSE
+    for authors, paths in sorted(groups.items()):
+        result += "\n[[annotations]]\npath = " + json.dumps(sorted(paths), indent=2) + "\n"
+        result += 'precedence = "override"\n'
+        result += 'SPDX-FileCopyrightText = "Copyright © 2026 Idiap Research Institute <contact@idiap.ch>"\n'
+        result += 'SPDX-License-Identifier = "MIT"\n'
+        result += "SPDX-FileContributor = " + json.dumps(authors) + "\n"
+        result += 'comment = "Neuro-symbolic AI Group; canonical source credits and plugin authorship."\n'
+    return result
+
+
+def json_text(value: object) -> str:
+    """Serialize generated metadata consistently."""
+    return json.dumps(value, indent=2, ensure_ascii=False) + "\n"
+
+
+def expected_files(root: Path) -> dict[Path, str]:
+    """Build the complete plugin projection without touching the filesystem."""
+    version = tomllib.loads((root / "pyproject.toml").read_text())["project"]["version"]
+    description = (
+        "Mathformer formal reasoning skills and typed workflow contracts for Lean, Isabelle, Rocq, Vampire ATP "
+        "and SymPy. Requires a local Mathformer checkout and backend setup."
+    )
+    identity = {"name": "mathformer", "version": version, "description": description}
+    files = {
+        PLUGIN
+        / ".codex-plugin/plugin.json": json_text(
+            {
+                **identity,
+                "skills": "./skills/",
+                "interface": {
+                    "displayName": "Mathformer",
+                    "shortDescription": "Formal reasoning workflows for mathematics and physics",
+                    "developerName": "Idiap Research Institute",
+                },
+            }
+        ),
+        PLUGIN
+        / ".claude-plugin/plugin.json": json_text(
+            {
+                **identity,
+                "author": {"name": "Idiap Research Institute"},
+                "license": "MIT",
+            }
+        ),
+        PLUGIN / "LICENSE": (root / "LICENSE").read_text(),
+        PLUGIN / "LICENSES/MIT.txt": (root / "LICENSES/MIT.txt").read_text(),
+        PLUGIN / "REUSE.toml": SKILL_LICENSE,
+        Path(".agents/plugins/marketplace.json"): json_text(
+            {
+                "name": "mathformer-plugins",
+                "interface": {"displayName": "Mathformer plugins"},
+                "plugins": [
+                    {
+                        "name": "mathformer",
+                        "source": {"source": "local", "path": "./plugins/mathformer"},
+                        "policy": {
+                            "installation": "AVAILABLE",
+                            "authentication": "ON_USE",
+                        },
+                        "category": "Productivity",
+                    }
+                ],
+            }
+        ),
+        Path(".claude-plugin/marketplace.json"): json_text(
+            {
+                "name": "mathformer-plugins",
+                "owner": {"name": "Idiap Research Institute"},
+                "plugins": [
+                    {
+                        "name": "mathformer",
+                        "source": "./plugins/mathformer",
+                        "description": description,
+                    }
+                ],
+            }
+        ),
+    }
+    sources = sorted((root / "skills").glob("*/*/SKILL.md"))
+    if not sources:
+        raise ValueError("No canonical skills found")
+    names: set[str] = set()
+    attribution_sources: dict[Path, Path] = {}
+    for source in sources:
+        text = source.read_text()
+        match = re.search(r"^---\s*\n(.*?)\n---\s*$", text, re.M | re.S)
+        if not match:
+            raise ValueError(f"Missing frontmatter: {source}")
+        frontmatter = match.group(1)
+        name_match = re.search(r"^name:\s*([a-z0-9-]+)\s*$", frontmatter, re.M)
+        if not name_match or not re.search(r"^description:\s*\S", frontmatter, re.M):
+            raise ValueError(f"Missing name or description: {source}")
+        name = name_match.group(1)
+        if name != source.parent.name or name in names:
+            raise ValueError(f"Duplicate or mismatched skill name: {source}")
+        names.add(name)
+        canonical = source.relative_to(root).as_posix()
+        attribution_sources[PLUGIN / "skills" / name / "SKILL.md"] = source.relative_to(root)
+        files[PLUGIN / "skills" / name / "SKILL.md"] = (
+            f"---\n{frontmatter}\n---\n\n"
+            "Generated by `scripts/sync_agent_plugins.py`; edit the canonical skill.\n\n"
+            f"# Mathformer: {name}\n\n"
+            "This entrypoint requires a local Mathformer checkout. The installed plugin\n"
+            "cache is a discovery surface, not the runtime workspace.\n\n"
+            "1. Locate the checkout: use `MATHFORMER_ROOT` when set; otherwise search\n"
+            "   the current working directory and its parents for both\n"
+            "   `scripts/mathformer.py` and the canonical skill below. If neither\n"
+            "   identifies a checkout, ask for its path before executing anything.\n"
+            "   Do not infer the checkout from the plugin cache location.\n"
+            f"2. Read `<checkout>/{canonical}` in full and follow its instructions.\n"
+            "   Resolve its relative references from that canonical file's directory.\n"
+            "   Load any companion skills from the same checkout.\n"
+            "3. Run repository commands with the checkout as the working directory.\n"
+            "   Prefer its configured Python environment and the controlled\n"
+            '   `scripts/mathformer.py ask "<goal>"` interface. Inspect declared\n'
+            "   actions and writes before enabling mutations; preserve the user's\n"
+            "   authorization boundaries and backend verification requirements.\n"
+        )
+    catalog_path = root / WORKFLOWS / 'catalog.json'
+    if (root / WORKFLOWS.parent / 'workflow.schema.json').is_file() and not catalog_path.is_file():
+        raise ValueError('Normalized workflow catalog missing; regenerate it before syncing plugins')
+    if catalog_path.is_file():
+        catalog = load_catalog(root)
+        workflow_index = []
+        for row in catalog['workflows']:
+            name = plugin_skill_name(row['id'])
+            if name in names:
+                raise ValueError(f'Duplicate workflow discovery name: {name}')
+            names.add(name)
+            canonical = (WORKFLOWS / row['path']).as_posix()
+            attribution_sources[PLUGIN / 'skills' / name / 'SKILL.md'] = Path(canonical)
+            attribution_sources[PLUGIN / 'skills' / name / 'workflow.yaml'] = Path(canonical)
+            description = row['description']
+            files[PLUGIN / 'skills' / name / 'SKILL.md'] = (
+                f'---\nname: {name}\ndescription: {json.dumps(description, ensure_ascii=False)}\n---\n\n'
+                'Generated by `scripts/sync_agent_plugins.py`; edit canonical workflow sources.\n\n'
+                f'# Mathformer workflow: {row["id"]}\n\n'
+                f'Canonical ID: `{row["id"]}`. Native aliases: {json.dumps(row["aliases"])}.\n\n'
+                'The adjacent `workflow.yaml` is the complete normalized contract. '
+                'Read it before selecting or running this workflow.\n\n'
+                'Locate the runtime checkout using `MATHFORMER_ROOT` or the current directory '
+                'and its parents, requiring `scripts/mathformer.py` and the canonical path below. '
+                'If the checkout cannot be found, ask for its path. The plugin cache is a '
+                'discovery surface; run repository commands only in the selected checkout.\n\n'
+                f'Read `<checkout>/{canonical}` and `<checkout>/{row["owner_skill"]}`. '
+                'Resolve companion skills and source references in that checkout. '
+                'Preserve native safety, backend gates and authorization boundaries.\n\n'
+                + (
+                    f'For native execution, use the existing hub action `{row["aliases"][0]}` '
+                    'through `scripts/mathformer.py run`, or call MCP '
+                    f'`mathformer_run_workflow(workflow_id="{row["id"]}")`. Inspect declared '
+                    'writes first; pass mutation authorization only within the user’s request.\n'
+                    if row['category'] == 'hub' else
+                    'For this already selected route, use MCP '
+                    f'`mathformer_run_workflow(workflow_id="{row["id"]}")` or the native NL hub '
+                    'with the route’s documented examples. Keep its action order and failure policy.\n'
+                    if row['category'] == 'route' else
+                    'This is a declarative contract: inspect its source, participants and gaps. '
+                    'It has no executable normalized binding; do not invent a scheduler or report execution success.\n'
+                )
+            )
+            files[PLUGIN / 'skills' / name / 'workflow.yaml'] = (
+                '# Generated by `scripts/sync_agent_plugins.py`; canonical descriptor follows.\n'
+                + descriptor_text(row, root)
+            )
+            workflow_index.append({**row, 'plugin_skill': name,
+                                   'canonical_path': canonical,
+                                   'canonical_descriptor_digest': row['descriptor_digest'],
+                                   'descriptor_digest': 'sha256:' + hashlib.sha256(files[PLUGIN / 'skills' / name / 'workflow.yaml'].encode()).hexdigest(),
+                                   'path': f'skills/{name}/workflow.yaml'})
+        files[PLUGIN / 'workflow-catalog.json'] = json_text({
+            'schema_version': catalog['schema_version'], 'counts': catalog['counts'],
+            'workflows': workflow_index,
+        })
+        # Unchanged descriptor-relative ../../hub-interface.schema.json references
+        # resolve from skills/<client-name>/workflow.yaml to the plugin root.
+        for filename, source_path in (
+            ('hub-interface.schema.json', WORKFLOWS / 'hub-interface.schema.json'),
+            ('workflow.schema.json', WORKFLOWS.parent / 'workflow.schema.json'),
+        ):
+            files[PLUGIN / filename] = (root / source_path).read_text()
+    files[PLUGIN / "REUSE.toml"] = plugin_licenses(root, attribution_sources)
+    # REUSE-IgnoreStart
+    # These strings are generated metadata, not this Python file's license header.
+    for path in list(files):
+        if path.suffix == ".json" or path.name == "LICENSE":
+            authors = {"Danilo Gusicuma <danilo.gusicuma@idiap.ch>"}
+            if path == PLUGIN / "LICENSE":
+                authors.update(contributors_for(root, Path("LICENSE")))
+                authors.update(contributors_for(root, Path("LICENSE.license")))
+            files[Path(str(path) + ".license")] = (
+                "SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>\n"
+                + "".join(f"SPDX-FileContributor: {author}\n" for author in sorted(authors))
+                + "Neuro-symbolic AI Group\n"
+                "SPDX-License-Identifier: MIT\n"
+            )
+    # REUSE-IgnoreEnd
+    return files
+
+
+def synchronize(root: Path, *, check: bool) -> list[str]:
+    """Write or check generated files; never remove unmanaged plugin content."""
+    expected = expected_files(root)
+    stale = sorted(
+        path.relative_to(root)
+        for path in (root / PLUGIN / "skills").glob("*/SKILL.md")
+        if path.relative_to(root) not in expected
+    )
+    differences = [
+        str(path)
+        for path, content in expected.items()
+        if not (root / path).is_file() or (root / path).read_text() != content
+    ]
+    differences.extend(str(path) for path in stale)
+    if not check:
+        for path, content in expected.items():
+            destination = root / path
+            if destination.is_file() and destination.read_text() == content:
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(content)
+        for path in stale:
+            # Only delete entrypoints produced by this generator.
+            destination = root / path
+            if (
+                "Generated by `scripts/sync_agent_plugins.py`"
+                not in destination.read_text()
+            ):
+                raise ValueError(f"Refusing to remove unmanaged entrypoint: {path}")
+            destination.unlink()
+            companion = destination.parent / 'workflow.yaml'
+            if companion.is_file() and companion.read_text().startswith('# Generated by `scripts/sync_agent_plugins.py`'):
+                companion.unlink()
+            if not any(destination.parent.iterdir()):
+                destination.parent.rmdir()
+    return differences
+
+
+def main() -> int:
+    """Sync plugin entrypoints or report drift without writing."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--check", action="store_true", help="Fail on drift; do not write"
+    )
+    args = parser.parse_args()
+    try:
+        differences = synchronize(REPO_ROOT, check=args.check)
+    except (OSError, ValueError) as error:
+        parser.exit(1, f"{error}\n")
+    print(
+        json_text(
+            {
+                "ok": not differences or not args.check,
+                "mode": "check" if args.check else "sync",
+                "changed": differences,
+            }
+        )
+    )
+    return int(args.check and bool(differences))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

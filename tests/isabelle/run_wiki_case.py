@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+#
+# Intent:
+#   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+#
+# Function:
+#   Contains executable tests, fixtures, and manifests used for local and CI validation.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Run an end-to-end Isabelle/HOL smoke path for one controlled wiki-level case."""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import subprocess
+import sys
+import time
+from typing import Any, Dict, Optional, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts/isabelle/wiki_level"
+
+
+def rel(path: Path) -> str:
+    """Document the responsibility of ``rel``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Provide the local operation named ``rel`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def run_command(cmd: Sequence[str], *, timeout_sec: int) -> Dict[str, Any]:
+    """Document the responsibility of ``run_command``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    started = time.perf_counter()
+    try:
+        proc = subprocess.run(
+            list(cmd),
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=timeout_sec,
+        )
+        return {
+            "cmd": list(cmd),
+            "ok": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "duration_ms": round((time.perf_counter() - started) * 1000, 3),
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+            "timeout": False,
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "cmd": list(cmd),
+            "ok": False,
+            "returncode": None,
+            "duration_ms": round((time.perf_counter() - started) * 1000, 3),
+            "stdout": exc.stdout or "",
+            "stderr": exc.stderr or f"timeout after {timeout_sec}s",
+            "timeout": True,
+        }
+
+
+def parse_json(text: str) -> Optional[Any]:
+    """Document the responsibility of ``parse_json``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def prepare_case(*, output_dir: Path) -> Dict[str, Any]:
+    """Create native paths and initial report for sequential execution."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    session_dir = output_dir / "session"
+    session_dir.mkdir(parents=True, exist_ok=True)
+    theory_file = session_dir / "AutoformalizedWikiInjectiveComposition.thy"
+    latex_file = REPO_ROOT / "tests/latex/wiki_level/injective_composition.tex"
+    report: Dict[str, Any] = {
+        "schema_version": 1,
+        "suite": "isabelle_wiki_level",
+        "case_id": "wiki_injective_composition",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "style": "isar_direct",
+        "steps": {},
+        "ok": False,
+    }
+
+    return {
+        "output_dir": str(output_dir),
+        "session_dir": str(session_dir),
+        "theory_file": str(theory_file),
+        "latex_file": str(latex_file),
+        "report": report,
+    }
+
+
+def ground_case(*, state: Dict[str, Any]) -> Dict[str, Any]:
+    """Run the native command, retaining failure as report data."""
+    output_dir = Path(state["output_dir"])
+    Path(state["session_dir"])
+    Path(state["theory_file"])
+    Path(state["latex_file"])
+    report = state["report"]
+    grounding_cmd = [
+        sys.executable,
+        "skills/isabelle/isarmathlib-grounding-navigator/scripts/search_isarmathlib.py",
+        "--concept",
+        "injective",
+        "--concept",
+        "composition",
+        "--output-file",
+        rel(output_dir / "wiki_injective_composition.grounding.json"),
+        "--json",
+    ]
+    grounding = run_command(grounding_cmd, timeout_sec=60)
+    report["steps"]["grounding"] = {
+        **grounding,
+        "parsed": parse_json(grounding["stdout"]),
+    }
+
+    return state
+
+
+def draft_case(*, state: Dict[str, Any]) -> Dict[str, Any]:
+    """Run the native command, retaining failure as report data."""
+    output_dir = Path(state["output_dir"])
+    Path(state["session_dir"])
+    theory_file = Path(state["theory_file"])
+    latex_file = Path(state["latex_file"])
+    report = state["report"]
+    draft_cmd = [
+        sys.executable,
+        "skills/isabelle/isabelle-autoformalization-drafter/scripts/draft_isabelle_wiki_case.py",
+        "--latex-file",
+        rel(latex_file),
+        "--case-id",
+        "wiki_injective_composition",
+        "--output-file",
+        rel(theory_file),
+        "--report-file",
+        rel(output_dir / "wiki_injective_composition.draft.json"),
+        "--json",
+    ]
+    draft = run_command(draft_cmd, timeout_sec=60)
+    report["steps"]["draft"] = {
+        **draft,
+        "parsed": parse_json(draft["stdout"]),
+    }
+
+    return state
+
+
+def execute_case(*, state: Dict[str, Any], timeout_sec: int) -> Dict[str, Any]:
+    """Run the native command, retaining failure as report data."""
+    output_dir = Path(state["output_dir"])
+    session_dir = Path(state["session_dir"])
+    theory_file = Path(state["theory_file"])
+    Path(state["latex_file"])
+    report = state["report"]
+    execution_cmd = [
+        sys.executable,
+        "skills/isabelle/isabelle-execution-runner/scripts/check_isabelle_theory.py",
+        "--theory-file",
+        rel(theory_file),
+        "--session-dir",
+        rel(session_dir),
+        "--report-file",
+        rel(output_dir / "wiki_injective_composition.execution.json"),
+        "--timeout-sec",
+        str(timeout_sec),
+        "--json",
+    ]
+    execution = run_command(execution_cmd, timeout_sec=timeout_sec + 15)
+    report["steps"]["execution"] = {
+        **execution,
+        "parsed": parse_json(execution["stdout"]),
+    }
+    return state
+
+
+def finalize_case(*, state: Dict[str, Any]) -> Dict[str, Any]:
+    """Compute the source success predicate and return its report."""
+    Path(state["output_dir"])
+    Path(state["session_dir"])
+    theory_file = Path(state["theory_file"])
+    Path(state["latex_file"])
+    report = state["report"]
+    parsed_execution = report["steps"]["execution"]["parsed"]
+    report["theory_file"] = rel(theory_file)
+    report["ok"] = bool(
+        report["steps"]["grounding"]["ok"]
+        and report["steps"]["draft"]["ok"]
+        and isinstance(parsed_execution, dict)
+        and parsed_execution.get("ok") is True
+    )
+    return report
+
+
+def run_case(*, output_dir: Path, timeout_sec: int) -> Dict[str, Any]:
+    """Document the responsibility of ``run_case``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    state = prepare_case(output_dir=output_dir)
+    state = ground_case(state=state)
+    state = draft_case(state=state)
+    state = execute_case(state=state, timeout_sec=timeout_sec)
+    return finalize_case(state=state)
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--timeout-sec", type=int, default=240)
+    parser.add_argument("--report-file", type=Path)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+
+    report = run_case(output_dir=args.output_dir, timeout_sec=args.timeout_sec)
+    report_file = (
+        args.report_file or args.output_dir / "wiki_injective_composition.e2e.json"
+    )
+    report_file.parent.mkdir(parents=True, exist_ok=True)
+    report_file.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        print("PASS" if report["ok"] else "FAIL")
+    return 0 if report["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

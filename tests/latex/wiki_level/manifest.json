@@ -1,0 +1,95 @@
+{
+  "suite": "wiki_level_latex_to_lean",
+  "description": "Five synthetic, controlled Wikipedia-level proof cases for testing LaTeX expansion review, mathlib concept alignment, Lean drafting, critique, and execution loops.",
+  "gold_lean_file": "tests/lean/WikiLevelGold.lean",
+  "gold_expected_imports": [
+    "Mathlib.Algebra.BigOperators.Group.Finset.Basic",
+    "Mathlib.Data.Set.Basic",
+    "Mathlib.Order.Monotone.Basic",
+    "Mathlib.Tactic.Ring"
+  ],
+  "cases": [
+    {
+      "id": "wiki_contrapositive",
+      "latex_file": "tests/latex/wiki_level/contrapositive.tex",
+      "lean_theorem": "WikiLevelGold.wiki_contrapositive",
+      "difficulty": "very_easy",
+      "concepts": ["proposition", "implication", "negation", "contradiction"],
+      "expected_imports": [],
+      "expected_mathlib_declarations": [],
+      "pipeline_checks": [
+        "latex_expansion_binding_review",
+        "lean_syntactic_correctness",
+        "lean_semantic_preservation",
+        "lean_execution"
+      ]
+    },
+    {
+      "id": "wiki_injective_composition",
+      "latex_file": "tests/latex/wiki_level/injective_composition.tex",
+      "lean_theorem": "WikiLevelGold.wiki_injective_comp",
+      "difficulty": "easy",
+      "concepts": ["function", "composition", "injective", "type_variables"],
+      "expected_imports": [],
+      "expected_mathlib_declarations": ["Function.Injective"],
+      "pipeline_checks": [
+        "latex_expansion_binding_review",
+        "mathlib_concept_coverage",
+        "lean_semantic_preservation",
+        "lean_execution"
+      ]
+    },
+    {
+      "id": "wiki_monotone_composition",
+      "latex_file": "tests/latex/wiki_level/monotone_composition.tex",
+      "lean_theorem": "WikiLevelGold.wiki_monotone_comp",
+      "difficulty": "easy",
+      "concepts": ["preorder", "monotone", "composition", "order_relation"],
+      "expected_imports": [
+        "Mathlib.Order.Monotone.Basic"
+      ],
+      "expected_mathlib_declarations": ["Preorder", "Monotone"],
+      "pipeline_checks": [
+        "latex_expansion_completeness_review",
+        "mathlib_api_compatibility",
+        "lean_semantic_preservation",
+        "lean_execution"
+      ]
+    },
+    {
+      "id": "wiki_set_inter_union_distrib",
+      "latex_file": "tests/latex/wiki_level/set_inter_union_distrib.tex",
+      "lean_theorem": "WikiLevelGold.wiki_set_inter_union_distrib",
+      "difficulty": "easy",
+      "concepts": ["set", "intersection", "union", "extensionality", "case_split"],
+      "expected_imports": [
+        "Mathlib.Data.Set.Basic"
+      ],
+      "expected_mathlib_declarations": ["Set.inter_union_distrib_left"],
+      "pipeline_checks": [
+        "latex_expansion_binding_review",
+        "lean_logical_soundness",
+        "lean_semantic_preservation",
+        "lean_execution"
+      ]
+    },
+    {
+      "id": "wiki_sum_first_odd_numbers",
+      "latex_file": "tests/latex/wiki_level/sum_first_odd_numbers.tex",
+      "lean_theorem": "WikiLevelGold.wiki_sum_first_odd_numbers",
+      "difficulty": "medium",
+      "concepts": ["natural_number", "finite_sum", "induction", "arithmetic_normalization"],
+      "expected_imports": [
+        "Mathlib.Algebra.BigOperators.Group.Finset.Basic",
+        "Mathlib.Tactic.Ring"
+      ],
+      "expected_mathlib_declarations": ["Finset.sum_range_succ"],
+      "pipeline_checks": [
+        "latex_expansion_completeness_review",
+        "mathlib_hierarchy_navigation",
+        "proof_expansion_difficulty_estimation",
+        "lean_execution"
+      ]
+    }
+  ]
+}

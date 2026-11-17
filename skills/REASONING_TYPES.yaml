@@ -1,0 +1,1153 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Relate operational Mathformer skills to backend-independent epistemic
+#   reasoning types without confusing workflow phases with kinds of reasoning.
+#
+# Intent:
+#   Provide an initial, machine-readable ontology in which a reasoning style is
+#   an ordered or looping composition of one or more skill applications.
+#
+# Function:
+#   Defines epistemic primitives, orthogonal facets, trust-state dimensions,
+#   and representative skill compositions for framework-level discussion and
+#   later validation tooling.
+#
+# Maintenance Notes:
+#   The style compositions are a draft seed; the skill_bindings map exhaustively
+#   classifies the current canonical inventory. Keep skill ids aligned with
+#   skills/<theme>/<name>/SKILL.md and update bindings from skill-contract evidence, not
+#   from directory-name heuristics.
+
+version: 2
+status: consolidated_draft
+inventory_snapshot:
+  canonical_skill_count: 188
+  counted_from: skills/*/*/SKILL.md
+  binding_coverage: exhaustive
+
+semantics:
+  primitive: >
+    A backend-independent epistemic operation. A skill application may realize
+    one primary primitive and several supporting primitives.
+  reasoning_style: >
+    A directed composition of skill applications. Styles may be sequential,
+    branching, nested, or cyclic, and a skill may participate in many styles.
+  infrastructure_role: >
+    A supporting capability such as orchestration, observability, explanation,
+    or curation. Infrastructure is not promoted to a domain-reasoning primitive
+    merely because it is implemented as a skill.
+  relationship_to_workflow_taxonomy: >
+    This epistemic ontology complements rather than replaces the operational
+    reasoning_types coordinate in meta_skills/taxonomy/workflow_taxonomy.json.
+    Existing labels such as autoformalization and pathology_repair describe
+    workflow families; the primitives below describe the reasoning performed
+    inside those workflows.
+  output_type_registry: skills/OUTPUT_TYPES.yaml
+  skill_type_registry: skills/SKILL_TYPES.yaml
+  reasoning_flow_language: skills/control/reasoning-flow-language/references/erfl-0.3.json
+  reasoning_flow_profiles: examples/reasoning_flows/*.rflow
+
+primitive_types:
+  - id: source_observation
+    question: What does the source explicitly contain?
+    output_claim: provenance-bearing observations
+    cannot_establish:
+      - truth
+      - formal validity
+  - id: structural_decomposition
+    question: What are the units, dependencies, binders, and internal shape?
+    output_claim: an explicit structural analysis
+    cannot_establish:
+      - external grounding
+      - proof
+  - id: semantic_modeling
+    question: What objects, meanings, assumptions, domains, and contexts are intended?
+    output_claim: an explicit semantic or constraint model
+    cannot_establish:
+      - derivability
+      - adequacy of the model
+  - id: retrieval
+    question: Which existing facts, APIs, declarations, or precedents may be relevant?
+    output_claim: ranked or exact candidates with provenance
+    cannot_establish:
+      - candidate correctness
+      - semantic alignment
+  - id: grounding_alignment
+    question: Which retrieved object is actually applicable and meaning-preserving here?
+    output_claim: a justified source-to-knowledge or artifact-to-library link
+    cannot_establish:
+      - the target theorem
+  - id: abductive_completion
+    question: Which missing premise, law, bridge, or plan could explain or complete the gap?
+    output_claim: explicit candidate hypotheses or obligations
+    cannot_establish:
+      - proof of the candidate
+  - id: constructive_formalization
+    question: How can the intended object be synthesized in a formal representation?
+    output_claim: a candidate formal artifact
+    cannot_establish:
+      - executability
+      - truth
+      - source fidelity
+  - id: deduction_transformation
+    question: What follows under the declared rules, premises, or valid transformations?
+    output_claim: a proof, derivation, or semantics-preserving transformation
+    cannot_establish:
+      - source fidelity without separate evidence
+  - id: probing_falsification
+    question: What happens under execution, bounded samples, or adversarial probes?
+    output_claim: execution evidence, diagnostics, or a counterexample
+    cannot_establish:
+      - universal truth from absence of failures
+  - id: critical_verification
+    question: Is the artifact adequate along a named independent criterion?
+    output_claim: a scoped assessment backed by inspectable evidence
+    cannot_establish:
+      - dimensions outside the named criterion
+  - id: diagnostic_revision
+    question: Why did the artifact fail, and which localized change can repair it?
+    output_claim: a diagnosis, repair plan, or revised candidate
+    cannot_establish:
+      - inherited validity after revision
+  - id: comparative_reflection
+    question: What is learned by comparing artifacts, explanations, or trajectories?
+    output_claim: contrasts, synthesized lessons, or improvement hypotheses
+    cannot_establish:
+      - truth merely from agreement or relative score
+  - id: epistemic_governance
+    question: Which reasoning runs next, when should it stop, and what status is warranted?
+    output_claim: a route, gate, trust transition, or stopping decision
+    cannot_establish:
+      - new mathematical conclusions
+  - id: inductive_generalization
+    question: Which scoped pattern is provisionally supported across the observed cases?
+    output_claim: a provisional generalization with population, sampling, and boundary obligations
+    cannot_establish:
+      - deductive universality
+      - validity outside the sampled or declared scope
+  - id: analogical_transfer
+    question: Which structure can be transported through an explicit correspondence, and what must be preserved?
+    output_claim: a candidate transfer plus correspondence and preservation obligations
+    cannot_establish:
+      - target truth without a validated transfer relation
+      - preservation of properties not named in the correspondence
+  - id: contrastive_counterfactual
+    question: What changes under a controlled alternative, intervention, or relevant contrast?
+    output_claim: a scope-bound contrast supported by an explicit baseline and controlled difference
+    cannot_establish:
+      - causal identification without the required assumptions
+      - validity beyond the controlled contrast
+
+orthogonal_facets:
+  backend:
+    - lean
+    - isabelle
+    - rocq
+    - vampire
+    - sympy
+    - knowledge_base
+    - backend_neutral
+  domain:
+    - mathematics
+    - physics
+    - framework
+  inference_form:
+    - deduction
+    - abduction
+    - induction
+    - analogy
+    - contrastive_counterfactual
+    - model_based_reasoning
+    - symbolic_computation
+    - numerical_sampling
+    - hermeneutic_interpretation
+  infrastructure_role:
+    - orchestrator
+    - evidence_recorder
+    - explainer
+    - curator
+    - reporter
+    - compatibility_wrapper
+
+epistemic_state_dimensions:
+  provenance:
+    - absent
+    - source_linked
+    - source_verified
+  retrieval_status:
+    - unsearched
+    - candidate
+    - locally_verified
+    - source_verified
+  executability:
+    - untested
+    - failed
+    - passed
+  formal_validity:
+    - unproved
+    - proof_candidate
+    - proof_checked
+  semantic_fidelity:
+    - unchecked
+    - at_risk
+    - passed
+  nonvacuity:
+    - unchecked
+    - failed
+    - passed
+  domain_validity:
+    - unchecked
+    - at_risk
+    - passed
+  promotion_status:
+    - generated
+    - source_backed_candidate
+    - formal_candidate
+    - accepted
+    - rejected
+    - blocked
+
+reasoning_styles:
+  - id: source_grounded_autoformalization
+    goal: Produce a source-faithful, library-grounded, backend-checked formal artifact.
+    control_skills:
+      - autoformalization-workflow-orchestrator
+    stages:
+      - primitive: source_observation
+        skill_options:
+          - source-formalizable-unit-extractor
+          - latex-archive-theory-extractor
+          - paper-main-theory-localizer
+      - primitive: structural_decomposition
+        skill_options:
+          - source-line-translation-packet-builder
+          - latex-prerequisite-expander
+          - latex-expansion-review-orchestrator
+      - primitive: semantic_modeling
+        skill_options:
+          - source-line-translation-packet-builder
+          - latex-expansion-binding-reviewer
+      - primitive: abductive_completion
+        skill_options:
+          - proof-expansion-difficulty-estimator
+          - proof-expansion-support-orchestrator
+          - latex-prerequisite-expander
+      - primitive: retrieval
+        skill_options:
+          - mathlib-concept-candidate-mapper
+          - isarmathlib-grounding-navigator
+          - sympy-concept-grounding-navigator
+      - primitive: grounding_alignment
+        skill_options:
+          - mathlib-candidate-verifier
+          - mathlib-concept-coverage-reviewer
+          - mathlib-api-compatibility-planner
+      - primitive: constructive_formalization
+        skill_options:
+          - lean-autoformalization-drafter
+          - isabelle-autoformalization-drafter
+          - rocq-autoformalization-drafter
+          - sympy-autoformalization-drafter
+      - primitive: probing_falsification
+        skill_options:
+          - lean-execution-runner
+          - isabelle-execution-runner
+          - rocq-execution-runner
+          - sympy-execution-runner
+      - primitive: critical_verification
+        skill_options:
+          - lean-critique-suite-orchestrator
+          - lean-consistency-report-orchestrator
+          - sympy-consistency-report-orchestrator
+          - source-formalization-drift-guard
+      - primitive: diagnostic_revision
+        skill_options:
+          - lean-formal-refinement
+        repeats_from: constructive_formalization
+      - primitive: epistemic_governance
+        skill_options:
+          - gate-policy-controller
+          - autoformalization-result-realness-verifier
+    trust_transition:
+      from: source_linked
+      to: backend_checked_candidate_or_blocker
+
+  - id: premise_retrieval_and_verified_reuse
+    goal: Reuse an existing result without confusing relevance with validity.
+    control_skills:
+      - result-existence-precheck-orchestrator
+    stages:
+      - primitive: source_observation
+      - primitive: structural_decomposition
+        skill_options:
+          - mathlib-term-expansion-annotator
+          - mathlib-concept-ontology-manager
+      - primitive: retrieval
+        skill_options:
+          - premise-kb-indexer
+          - mathlib-index-builder
+          - mathlib-hierarchy-navigator
+          - mathlib-declaration-neighborhood-navigator
+          - mathlib-concept-candidate-mapper
+      - primitive: grounding_alignment
+        skill_options:
+          - mathlib-candidate-verifier
+          - mathlib-web-evidence-validator
+          - mathlib-result-existence-checker
+      - primitive: critical_verification
+        skill_options:
+          - mathlib-candidate-verifier
+          - mathlib-result-existence-checker
+      - primitive: epistemic_governance
+        skill_options:
+          - result-existence-precheck-orchestrator
+    trust_transition:
+      from: unresolved_concept_or_result
+      to: snapshot_bound_verified_reuse_candidate_or_explicit_gap
+
+  - id: formal_proof_discovery
+    goal: Derive a conclusion and retain authoritative formal proof evidence.
+    stages:
+      - primitive: semantic_modeling
+        skill_options:
+          - vampire-atp-orchestrator
+      - primitive: retrieval
+        skill_options:
+          - premise-kb-indexer
+          - mathlib-concept-candidate-mapper
+      - primitive: constructive_formalization
+        skill_options:
+          - vampire-atp-orchestrator
+          - lean-autoformalization-drafter
+          - rocq-autoformalization-drafter
+      - primitive: deduction_transformation
+        skill_options:
+          - vampire-atp-orchestrator
+      - primitive: probing_falsification
+        skill_options:
+          - lean-execution-runner
+          - rocq-execution-runner
+          - vampire-atp-orchestrator
+      - primitive: critical_verification
+        skill_options:
+          - lean-logical-soundness-critic
+          - lean-nonvacuity-consistency-checker
+      - primitive: comparative_reflection
+        skill_options:
+          - vampire-proof-informalizer
+          - lean-informalization-extractor
+    trust_transition:
+      from: formal_claim_candidate
+      to: proof_checked_artifact_or_search_failure
+
+  - id: executable_symbolic_derivation
+    goal: Build and check an explicit symbolic transformation trace.
+    control_skills:
+      - sympy-consistency-report-orchestrator
+    stages:
+      - primitive: source_observation
+        skill_options:
+          - sympy-expression-parser
+      - primitive: semantic_modeling
+        skill_options:
+          - sympy-assumption-modeler
+      - primitive: retrieval
+        skill_options:
+          - sympy-api-docs-indexer
+      - primitive: grounding_alignment
+        skill_options:
+          - sympy-concept-grounding-navigator
+      - primitive: constructive_formalization
+        skill_options:
+          - sympy-autoformalization-drafter
+      - primitive: deduction_transformation
+        skill_options:
+          - sympy-identity-validator
+          - sympy-transformation-trace-verifier
+      - primitive: probing_falsification
+        skill_options:
+          - sympy-execution-runner
+          - sympy-counterexample-searcher
+      - primitive: critical_verification
+        skill_options:
+          - sympy-consistency-report-orchestrator
+    trust_transition:
+      from: source_expression
+      to: executable_checked_trace_or_counterexample
+
+  - id: physics_derivation_reconstruction
+    goal: Recover and validate a physically meaningful derivation, not only scalar algebra.
+    stages:
+      - primitive: source_observation
+        skill_options:
+          - physics-derivation-source-extractor
+          - physics-informal-derivation-elicitor
+      - primitive: structural_decomposition
+        skill_options:
+          - physics-equation-parser
+          - physics-derivation-plan-builder
+      - primitive: semantic_modeling
+        skill_options:
+          - physics-symbol-table-builder
+          - physics-dimension-modeler
+          - physics-coordinate-frame-context-builder
+          - physics-regime-assumption-modeler
+      - primitive: abductive_completion
+        skill_options:
+          - physics-implicit-gap-detector
+          - physics-derivation-gap-expander
+      - primitive: grounding_alignment
+        skill_options:
+          - physics-law-concept-grounding-navigator
+          - physics-unit-system-grounder
+      - primitive: deduction_transformation
+        skill_options:
+          - physics-derivation-step-verifier
+      - primitive: probing_falsification
+        skill_options:
+          - physics-unit-analysis-verifier
+          - physics-numeric-sanity-sampler
+      - primitive: critical_verification
+        skill_options:
+          - physics-final-hypothesis-reviewer
+          - physics-derivation-consistency-report-orchestrator
+    trust_transition:
+      from: terse_physics_source
+      to: explicit_physically_checked_derivation_or_gap_ledger
+
+  - id: adversarial_validation
+    goal: Seek decisive failures across independent validity dimensions.
+    stages:
+      - primitive: probing_falsification
+        skill_options:
+          - sympy-counterexample-searcher
+          - physics-numeric-sanity-sampler
+          - mathformerphysicslib-generative-coherence-critic
+          - physics-lean-generative-critic-orchestrator
+          - physics-sympy-generative-critic-orchestrator
+      - primitive: critical_verification
+        skill_options:
+          - lean-syntactic-correctness-critic
+          - lean-semantic-preservation-critic
+          - lean-logical-soundness-critic
+          - lean-mathlib-alignment-critic
+          - lean-nonvacuity-consistency-checker
+          - autoformalization-result-realness-verifier
+      - primitive: epistemic_governance
+        skill_options:
+          - gate-policy-controller
+    trust_transition:
+      from: apparently_successful_candidate
+      to: dimensioned_evidence_vector_with_blockers
+
+  - id: critic_driven_recursive_repair
+    goal: Repair localized failures while preserving already-passing dimensions.
+    stages:
+      - primitive: critical_verification
+        skill_options:
+          - lean-critique-suite-orchestrator
+          - physics-lean-drift-pathology-monitor
+          - physics-sympy-final-equation-reviewer
+      - primitive: diagnostic_revision
+        skill_options:
+          - lean-formal-refinement
+          - physics-lean-execution-interpreter
+          - physics-lean-review-refinement-router
+          - physics-sympy-execution-interpreter
+          - physics-sympy-review-refinement-router
+      - primitive: abductive_completion
+        skill_options:
+          - physics-lean-repair-expansion-cartographer
+          - physics-sympy-repair-expansion-cartographer
+      - primitive: constructive_formalization
+        skill_options:
+          - physics-lean-generative-repair-orchestrator
+          - physics-lean-refinement-loop
+      - primitive: epistemic_governance
+        skill_options:
+          - physics-lean-recursive-repair-loop-controller
+          - physics-sympy-recursive-repair-loop-controller
+        repeats_from: critical_verification
+    protected_properties:
+      - source_fidelity
+      - executability
+      - nonvacuity
+      - grounding
+      - explicit_assumptions
+    trust_transition:
+      from: checked_candidate_with_localized_failures
+      to: rechecked_repair_or_precise_blocker
+
+  - id: theory_library_curation
+    goal: Turn reusable candidates into coherent, provenance-bearing library knowledge.
+    control_skills:
+      - mathformerlib-accumulation-orchestrator
+      - mathformerphysicslib-coherence-gate
+    stages:
+      - primitive: retrieval
+        skill_options:
+          - mathformerphysicslib-coherence-inventory-builder
+      - primitive: grounding_alignment
+        skill_options:
+          - mathformerphysicslib-concept-canonicalizer
+          - mathformerphysicslib-mathlib-grounding-auditor
+      - primitive: critical_verification
+        skill_options:
+          - mathformerphysicslib-api-operability-critic
+          - mathformerphysicslib-integration-critic
+          - mathformerphysicslib-redefinition-critic
+          - mathformerphysicslib-foundation-verifier
+      - primitive: diagnostic_revision
+        skill_options:
+          - mathformerphysicslib-coherence-repair-planner
+      - primitive: constructive_formalization
+        skill_options:
+          - mathformerphysicslib-foundation-surface-designer
+          - mathformerphysicslib-foundation-drafter
+      - primitive: epistemic_governance
+        skill_options:
+          - mathformerlib-promotion-gate
+          - mathformerphysicslib-coherence-gate
+    infrastructure_skills:
+      - mathformerlib-registry-manager
+      - mathformer-library-docs-generator
+    trust_transition:
+      from: reusable_candidate
+      to: accepted_curated_entry_or_repair_plan
+
+  - id: trajectory_reflection_and_process_improvement
+    goal: Propose and independently test an immutable reasoning revision without weakening prior successful behavior.
+    stages:
+      - primitive: comparative_reflection
+        skill_options:
+          - reference-free-descriptive-evaluator
+          - reference-free-critic-monitor
+          - formalphysics-comparative-analysis-reporter
+          - formalphysics-judge-synthesis-reporter
+      - primitive: diagnostic_revision
+        skill_options:
+          - autoformalization-reflective-refinement-loop
+      - primitive: constructive_formalization
+      - primitive: probing_falsification
+        skill_options:
+          - skill-test-program-orchestrator
+      - primitive: comparative_reflection
+        skill_options:
+          - reference-free-descriptive-evaluator
+          - reference-free-critic-monitor
+          - formalphysics-comparative-analysis-reporter
+          - formalphysics-judge-synthesis-reporter
+      - primitive: critical_verification
+        skill_options:
+          - workflow-contract-validator
+          - skill-hook-coverage-maximizer
+      - primitive: epistemic_governance
+        skill_options:
+          - gate-policy-controller
+    infrastructure_skills:
+      - reasoning-log-schema-guardian
+      - mathformer-workflow-router
+    protected_properties:
+      - prior_successful_cases
+      - hook_coverage
+      - reasoning_log_validity
+      - evaluation_contract_integrity
+      - candidate_lineage
+      - rollback_target
+    trust_transition:
+      from: observed_workflow_trajectory
+      to: tested_scoped_reasoning_revision_or_retained_baseline
+
+skill_binding_policy:
+  coverage: every canonical skills/*/*/SKILL.md directory
+  primary_cardinality: exactly_one
+  secondary_cardinality: zero_or_more_unique
+  assignment_basis: declared SKILL.md contract and dominant epistemic output
+  wrappers_and_infrastructure: explicitly_classified
+  note: >
+    Secondary primitives record materially present reasoning operations, not
+    every downstream use of the artifact. Backend and workflow family remain
+    orthogonal facets.
+
+skill_bindings:
+  autoformalization-agentc:
+    primary: epistemic_governance
+    secondary: [constructive_formalization, diagnostic_revision]
+  autoformalization-reflective-refinement-loop:
+    primary: comparative_reflection
+    secondary: [abductive_completion, epistemic_governance]
+  autoformalization-result-realness-verifier:
+    primary: critical_verification
+    secondary: [probing_falsification, epistemic_governance]
+  autoformalization-workflow-orchestrator:
+    primary: epistemic_governance
+    secondary: [constructive_formalization, critical_verification, diagnostic_revision]
+  final-derivation-review-orchestrator:
+    primary: epistemic_governance
+    secondary: [critical_verification, diagnostic_revision]
+  formalphysics-comparative-analysis-reporter:
+    primary: comparative_reflection
+    secondary: [critical_verification]
+  formalphysics-judge-synthesis-reporter:
+    primary: comparative_reflection
+    secondary: [critical_verification, abductive_completion]
+  gate-policy-controller:
+    primary: epistemic_governance
+    secondary: [critical_verification]
+  informal-proof-mathlib-concepts:
+    primary: retrieval
+    secondary: [grounding_alignment]
+  isabelle-autoformalization-drafter:
+    primary: constructive_formalization
+    secondary: [semantic_modeling, abductive_completion]
+  isabelle-execution-runner:
+    primary: probing_falsification
+    secondary: [critical_verification]
+  isarmathlib-grounding-navigator:
+    primary: retrieval
+    secondary: [grounding_alignment]
+  latex-archive-theory-extractor:
+    primary: source_observation
+    secondary: [structural_decomposition]
+  latex-expansion-binding-reviewer:
+    primary: critical_verification
+    secondary: [structural_decomposition, semantic_modeling]
+  latex-expansion-completeness-reviewer:
+    primary: critical_verification
+    secondary: [structural_decomposition, abductive_completion]
+  latex-expansion-review-orchestrator:
+    primary: epistemic_governance
+    secondary: [critical_verification]
+  latex-prerequisite-expander:
+    primary: abductive_completion
+    secondary: [structural_decomposition, semantic_modeling]
+  lean-autoformalization-drafter:
+    primary: constructive_formalization
+    secondary: [semantic_modeling, abductive_completion]
+  lean-compile-checker:
+    primary: probing_falsification
+    secondary: [critical_verification]
+  lean-consistency-report-orchestrator:
+    primary: critical_verification
+    secondary: [comparative_reflection, epistemic_governance]
+  lean-critique-and-judging:
+    primary: critical_verification
+    secondary: [comparative_reflection]
+  lean-critique-suite-orchestrator:
+    primary: epistemic_governance
+    secondary: [critical_verification]
+  lean-cross-file-concept-consistency-indexer:
+    primary: critical_verification
+    secondary: [retrieval, structural_decomposition]
+  lean-declaration-shape-consistency-checker:
+    primary: critical_verification
+    secondary: [structural_decomposition, grounding_alignment]
+  lean-execution-runner:
+    primary: probing_falsification
+    secondary: [critical_verification]
+  lean-formal-refinement:
+    primary: diagnostic_revision
+    secondary: [constructive_formalization, critical_verification]
+  lean-import-context-verifier:
+    primary: critical_verification
+    secondary: [grounding_alignment, probing_falsification]
+  lean-informal-consistency-verifier:
+    primary: critical_verification
+    secondary: [grounding_alignment, comparative_reflection]
+  lean-informal-proof-internal-consistency-verifier:
+    primary: critical_verification
+    secondary: [structural_decomposition]
+  lean-informalization-extractor:
+    primary: semantic_modeling
+    secondary: [comparative_reflection]
+  lean-line-annotation:
+    primary: grounding_alignment
+    secondary: [comparative_reflection, critical_verification]
+  lean-logical-soundness-critic:
+    primary: critical_verification
+    secondary: [deduction_transformation]
+  lean-mathlib-alignment-critic:
+    primary: critical_verification
+    secondary: [grounding_alignment, retrieval]
+  lean-nonvacuity-consistency-checker:
+    primary: critical_verification
+    secondary: [probing_falsification]
+  lean-output-denoiser:
+    primary: diagnostic_revision
+    secondary: [constructive_formalization]
+  lean-refinement-taxonomy:
+    primary: comparative_reflection
+    secondary: [structural_decomposition, diagnostic_revision]
+  lean-semantic-preservation-critic:
+    primary: critical_verification
+    secondary: [grounding_alignment, semantic_modeling]
+  lean-syntactic-correctness-critic:
+    primary: critical_verification
+    secondary: [probing_falsification]
+  mathematical-final-hypothesis-reviewer:
+    primary: critical_verification
+    secondary: [semantic_modeling, deduction_transformation]
+  mathematical-isabelle-final-hypothesis-reviewer:
+    primary: critical_verification
+    secondary: [semantic_modeling, deduction_transformation]
+  mathematical-sympy-final-equation-reviewer:
+    primary: critical_verification
+    secondary: [deduction_transformation, probing_falsification]
+  mathformer-library-docs-generator:
+    primary: comparative_reflection
+    secondary: [grounding_alignment]
+  mathformer-generative-workflow-coordinator:
+    primary: epistemic_governance
+    secondary: [structural_decomposition, abductive_completion]
+  mathformer-workflow-router:
+    primary: epistemic_governance
+    secondary: [structural_decomposition]
+  mathformerlib-accumulation-orchestrator:
+    primary: epistemic_governance
+    secondary: [grounding_alignment, critical_verification]
+  mathformerlib-promotion-gate:
+    primary: epistemic_governance
+    secondary: [critical_verification]
+  mathformerlib-registry-manager:
+    primary: retrieval
+    secondary: [structural_decomposition, epistemic_governance]
+  mathformerphysicslib-api-operability-critic:
+    primary: critical_verification
+    secondary: [grounding_alignment]
+  mathformerphysicslib-coherence-gate:
+    primary: epistemic_governance
+    secondary: [critical_verification]
+  mathformerphysicslib-coherence-inventory-builder:
+    primary: source_observation
+    secondary: [structural_decomposition, retrieval]
+  mathformerphysicslib-coherence-repair-planner:
+    primary: diagnostic_revision
+    secondary: [critical_verification, epistemic_governance]
+  mathformerphysicslib-concept-canonicalizer:
+    primary: grounding_alignment
+    secondary: [structural_decomposition, critical_verification]
+  mathformerphysicslib-foundation-drafter:
+    primary: constructive_formalization
+    secondary: [grounding_alignment, semantic_modeling]
+  mathformerphysicslib-foundation-surface-designer:
+    primary: constructive_formalization
+    secondary: [grounding_alignment, semantic_modeling]
+  mathformerphysicslib-foundation-verifier:
+    primary: critical_verification
+    secondary: [probing_falsification, grounding_alignment]
+  mathformerphysicslib-generative-coherence-critic:
+    primary: probing_falsification
+    secondary: [critical_verification, abductive_completion]
+  mathformerphysicslib-integration-critic:
+    primary: critical_verification
+    secondary: [structural_decomposition, grounding_alignment]
+  mathformerphysicslib-mathlib-grounding-auditor:
+    primary: grounding_alignment
+    secondary: [retrieval, critical_verification]
+  mathformerphysicslib-object-workbench:
+    primary: epistemic_governance
+    secondary: [retrieval, grounding_alignment, constructive_formalization]
+  mathformerphysicslib-redefinition-critic:
+    primary: critical_verification
+    secondary: [grounding_alignment, retrieval]
+  mathlib-abstraction-auditor:
+    primary: critical_verification
+    secondary: [grounding_alignment]
+  mathlib-api-compatibility-planner:
+    primary: grounding_alignment
+    secondary: [semantic_modeling, constructive_formalization]
+  mathlib-candidate-verifier:
+    primary: grounding_alignment
+    secondary: [probing_falsification, critical_verification]
+  mathlib-compatibility-auditor:
+    primary: critical_verification
+    secondary: [grounding_alignment]
+  mathlib-compatibility-loop-orchestrator:
+    primary: epistemic_governance
+    secondary: [retrieval, grounding_alignment, critical_verification]
+  mathlib-concept-candidate-mapper:
+    primary: retrieval
+    secondary: [structural_decomposition]
+  mathlib-concept-coverage-reviewer:
+    primary: critical_verification
+    secondary: [retrieval, grounding_alignment]
+  mathlib-concept-ontology-manager:
+    primary: semantic_modeling
+    secondary: [grounding_alignment, epistemic_governance]
+  mathlib-declaration-neighborhood-navigator:
+    primary: retrieval
+    secondary: [structural_decomposition]
+  mathlib-grounding-maximizer:
+    primary: grounding_alignment
+    secondary: [retrieval, critical_verification, diagnostic_revision]
+  mathlib-hierarchy-navigator:
+    primary: retrieval
+    secondary: [structural_decomposition]
+  mathlib-import-minimizer:
+    primary: diagnostic_revision
+    secondary: [probing_falsification, grounding_alignment]
+  mathlib-import-set-builder:
+    primary: grounding_alignment
+    secondary: [retrieval, constructive_formalization]
+  mathlib-index-builder:
+    primary: retrieval
+    secondary: [structural_decomposition]
+  mathlib-module-tree-cartographer:
+    primary: structural_decomposition
+    secondary: [retrieval]
+  mathlib-navigation-state-planner:
+    primary: epistemic_governance
+    secondary: [retrieval, structural_decomposition]
+  mathlib-result-existence-checker:
+    primary: retrieval
+    secondary: [grounding_alignment, critical_verification]
+  mathlib-term-expansion-annotator:
+    primary: semantic_modeling
+    secondary: [retrieval, grounding_alignment]
+  mathlib-web-evidence-validator:
+    primary: grounding_alignment
+    secondary: [retrieval, critical_verification]
+  mathlib-web-grounding-orchestrator:
+    primary: epistemic_governance
+    secondary: [retrieval, grounding_alignment]
+  mathlib-web-search-strategist:
+    primary: retrieval
+    secondary: [epistemic_governance]
+  paper-docling-layout-extractor:
+    primary: source_observation
+    secondary: [structural_decomposition]
+  paper-main-theory-localizer:
+    primary: structural_decomposition
+    secondary: [source_observation, retrieval]
+  paper-theory-autoformalization-orchestrator:
+    primary: epistemic_governance
+    secondary: [structural_decomposition, constructive_formalization]
+  physics-coordinate-frame-context-builder:
+    primary: semantic_modeling
+    secondary: [abductive_completion]
+  physics-derivation-consistency-report-orchestrator:
+    primary: critical_verification
+    secondary: [comparative_reflection, epistemic_governance]
+  physics-derivation-gap-expander:
+    primary: abductive_completion
+    secondary: [structural_decomposition, deduction_transformation]
+  physics-derivation-plan-builder:
+    primary: epistemic_governance
+    secondary: [structural_decomposition, abductive_completion]
+  physics-derivation-source-extractor:
+    primary: source_observation
+    secondary: [structural_decomposition]
+  physics-derivation-step-verifier:
+    primary: critical_verification
+    secondary: [deduction_transformation]
+  physics-dimension-modeler:
+    primary: semantic_modeling
+    secondary: [structural_decomposition]
+  physics-equation-parser:
+    primary: structural_decomposition
+    secondary: [semantic_modeling, source_observation]
+  physics-final-hypothesis-reviewer:
+    primary: critical_verification
+    secondary: [semantic_modeling, deduction_transformation]
+  physics-formal-answer-comparison-reflector:
+    primary: comparative_reflection
+    secondary: [critical_verification, abductive_completion]
+  physics-foundation-object-intake:
+    primary: source_observation
+    secondary: [structural_decomposition, semantic_modeling]
+  physics-implicit-gap-detector:
+    primary: abductive_completion
+    secondary: [structural_decomposition, critical_verification]
+  physics-informal-derivation-elicitor:
+    primary: source_observation
+    secondary: [abductive_completion, semantic_modeling]
+  physics-informal-derivation-expander:
+    primary: abductive_completion
+    secondary: [semantic_modeling, deduction_transformation]
+  physics-informal-derivation-readiness-reviewer:
+    primary: critical_verification
+    secondary: [structural_decomposition, abductive_completion]
+  physics-isabelle-assumption-context-encoder:
+    primary: semantic_modeling
+    secondary: [constructive_formalization]
+  physics-isabelle-consistency-report-orchestrator:
+    primary: critical_verification
+    secondary: [comparative_reflection, epistemic_governance]
+  physics-isabelle-derivation-drafter:
+    primary: constructive_formalization
+    secondary: [semantic_modeling, abductive_completion]
+  physics-isabelle-final-hypothesis-reviewer:
+    primary: critical_verification
+    secondary: [semantic_modeling, deduction_transformation]
+  physics-isabelle-type-system-builder:
+    primary: semantic_modeling
+    secondary: [constructive_formalization]
+  physics-isabelle-workflow-orchestrator:
+    primary: epistemic_governance
+    secondary: [semantic_modeling, constructive_formalization, critical_verification]
+  physics-law-concept-grounding-navigator:
+    primary: grounding_alignment
+    secondary: [retrieval, semantic_modeling]
+  physics-lean-abstraction-elevation-repairer:
+    primary: diagnostic_revision
+    secondary: [constructive_formalization, grounding_alignment]
+  physics-lean-assumption-context-encoder:
+    primary: semantic_modeling
+    secondary: [constructive_formalization]
+  physics-lean-assumption-critic:
+    primary: critical_verification
+    secondary: [semantic_modeling]
+  physics-lean-consistency-report-orchestrator:
+    primary: critical_verification
+    secondary: [comparative_reflection, epistemic_governance]
+  physics-lean-derivation-completeness-checker:
+    primary: critical_verification
+    secondary: [structural_decomposition, abductive_completion]
+  physics-lean-derivation-drafter:
+    primary: constructive_formalization
+    secondary: [semantic_modeling, abductive_completion]
+  physics-lean-dimension-critic:
+    primary: critical_verification
+    secondary: [semantic_modeling]
+  physics-lean-drift-pathology-monitor:
+    primary: probing_falsification
+    secondary: [critical_verification, comparative_reflection]
+  physics-lean-execution-interpreter:
+    primary: diagnostic_revision
+    secondary: [probing_falsification, critical_verification]
+  physics-lean-generative-critic-orchestrator:
+    primary: epistemic_governance
+    secondary: [probing_falsification, critical_verification]
+  physics-lean-generative-repair-orchestrator:
+    primary: epistemic_governance
+    secondary: [diagnostic_revision, constructive_formalization]
+  physics-lean-goal-sample-autoformalizer:
+    primary: epistemic_governance
+    secondary: [constructive_formalization, diagnostic_revision]
+  physics-lean-implicit-premise-normalizer:
+    primary: semantic_modeling
+    secondary: [abductive_completion, diagnostic_revision]
+  physics-lean-notational-collapse-repairer:
+    primary: diagnostic_revision
+    secondary: [semantic_modeling, constructive_formalization]
+  physics-lean-pathology-repair-orchestrator:
+    primary: epistemic_governance
+    secondary: [diagnostic_revision, grounding_alignment]
+  physics-lean-physical-semantics-critic:
+    primary: critical_verification
+    secondary: [grounding_alignment, semantic_modeling]
+  physics-lean-proof-strategy-alignment-repairer:
+    primary: diagnostic_revision
+    secondary: [deduction_transformation, grounding_alignment]
+  physics-lean-recursive-repair-loop-controller:
+    primary: epistemic_governance
+    secondary: [diagnostic_revision, critical_verification]
+  physics-lean-refinement-loop:
+    primary: epistemic_governance
+    secondary: [diagnostic_revision, critical_verification]
+  physics-lean-repair-expansion-cartographer:
+    primary: structural_decomposition
+    secondary: [diagnostic_revision, epistemic_governance]
+  physics-lean-review-refinement-router:
+    primary: diagnostic_revision
+    secondary: [epistemic_governance, critical_verification]
+  physics-lean-type-system-builder:
+    primary: semantic_modeling
+    secondary: [constructive_formalization]
+  physics-lean-unit-analysis-verifier:
+    primary: critical_verification
+    secondary: [semantic_modeling, probing_falsification]
+  physics-lean-workflow-orchestrator:
+    primary: epistemic_governance
+    secondary: [semantic_modeling, constructive_formalization, critical_verification]
+  physics-math-object-detector:
+    primary: structural_decomposition
+    secondary: [source_observation, semantic_modeling]
+  physics-numeric-sanity-sampler:
+    primary: probing_falsification
+    secondary: [critical_verification]
+  physics-regime-assumption-modeler:
+    primary: semantic_modeling
+    secondary: [abductive_completion]
+  physics-symbol-table-builder:
+    primary: semantic_modeling
+    secondary: [structural_decomposition]
+  physics-sympy-assumption-context-encoder:
+    primary: semantic_modeling
+    secondary: [constructive_formalization]
+  physics-sympy-dependency-prober:
+    primary: probing_falsification
+    secondary: [retrieval]
+  physics-sympy-derivation-drafter:
+    primary: constructive_formalization
+    secondary: [semantic_modeling, abductive_completion]
+  physics-sympy-dimension-projection-critic:
+    primary: critical_verification
+    secondary: [semantic_modeling, probing_falsification]
+  physics-sympy-equation-surface-builder:
+    primary: semantic_modeling
+    secondary: [structural_decomposition, constructive_formalization]
+  physics-sympy-equational-semantics-critic:
+    primary: critical_verification
+    secondary: [grounding_alignment, semantic_modeling]
+  physics-sympy-execution-interpreter:
+    primary: diagnostic_revision
+    secondary: [probing_falsification, critical_verification]
+  physics-sympy-execution-runner:
+    primary: probing_falsification
+    secondary: [critical_verification]
+  physics-sympy-final-equation-reviewer:
+    primary: critical_verification
+    secondary: [semantic_modeling, probing_falsification]
+  physics-sympy-formal-answer-reflector:
+    primary: comparative_reflection
+    secondary: [critical_verification, abductive_completion]
+  physics-sympy-generative-critic-orchestrator:
+    primary: epistemic_governance
+    secondary: [probing_falsification, critical_verification]
+  physics-sympy-goal-sample-autoformalizer:
+    primary: epistemic_governance
+    secondary: [constructive_formalization, diagnostic_revision]
+  physics-sympy-library-grounding-builder:
+    primary: grounding_alignment
+    secondary: [retrieval, semantic_modeling]
+  physics-sympy-recursive-repair-loop-controller:
+    primary: epistemic_governance
+    secondary: [diagnostic_revision, critical_verification]
+  physics-sympy-repair-expansion-cartographer:
+    primary: structural_decomposition
+    secondary: [diagnostic_revision, epistemic_governance]
+  physics-sympy-review-refinement-router:
+    primary: diagnostic_revision
+    secondary: [epistemic_governance, critical_verification]
+  physics-sympy-workflow-orchestrator:
+    primary: epistemic_governance
+    secondary: [semantic_modeling, constructive_formalization, critical_verification]
+  physics-unit-analysis-verifier:
+    primary: critical_verification
+    secondary: [semantic_modeling, probing_falsification]
+  physics-unit-system-grounder:
+    primary: grounding_alignment
+    secondary: [semantic_modeling, retrieval]
+  premise-kb-indexer:
+    primary: retrieval
+    secondary: [structural_decomposition, epistemic_governance]
+  premise-kb-theorem-seed-generator:
+    primary: abductive_completion
+    secondary: [constructive_formalization, retrieval]
+  proof-expansion-difficulty-estimator:
+    primary: structural_decomposition
+    secondary: [critical_verification, epistemic_governance]
+  proof-expansion-support-orchestrator:
+    primary: epistemic_governance
+    secondary: [critical_verification, retrieval]
+  proof-expansion-web-researcher:
+    primary: retrieval
+    secondary: [grounding_alignment]
+  proofnet-benchmark-runner:
+    primary: probing_falsification
+    secondary: [comparative_reflection, critical_verification]
+  reasoning-log-schema-guardian:
+    primary: epistemic_governance
+    secondary: [structural_decomposition, critical_verification]
+  reasoning-flow-language:
+    primary: critical_verification
+    secondary: [structural_decomposition, epistemic_governance]
+  reference-free-critic-monitor:
+    primary: comparative_reflection
+    secondary: [critical_verification, epistemic_governance]
+  reference-free-descriptive-evaluator:
+    primary: comparative_reflection
+    secondary: [critical_verification, epistemic_governance]
+  result-existence-precheck-orchestrator:
+    primary: epistemic_governance
+    secondary: [retrieval, grounding_alignment]
+  rocq-autoformalization-drafter:
+    primary: constructive_formalization
+    secondary: [semantic_modeling, abductive_completion]
+  rocq-execution-runner:
+    primary: probing_falsification
+    secondary: [critical_verification]
+  skill-hook-coverage-maximizer:
+    primary: epistemic_governance
+    secondary: [critical_verification]
+  skill-test-program-orchestrator:
+    primary: probing_falsification
+    secondary: [epistemic_governance, critical_verification]
+  source-formalizable-unit-extractor:
+    primary: source_observation
+    secondary: [structural_decomposition]
+  source-formalization-drift-guard:
+    primary: critical_verification
+    secondary: [grounding_alignment]
+  source-line-translation-packet-builder:
+    primary: semantic_modeling
+    secondary: [source_observation, grounding_alignment]
+  sympy-api-docs-indexer:
+    primary: retrieval
+    secondary: [structural_decomposition]
+  sympy-assumption-modeler:
+    primary: semantic_modeling
+    secondary: [abductive_completion]
+  sympy-autoformalization-drafter:
+    primary: constructive_formalization
+    secondary: [semantic_modeling, abductive_completion]
+  sympy-concept-grounding-navigator:
+    primary: grounding_alignment
+    secondary: [retrieval]
+  sympy-consistency-report-orchestrator:
+    primary: critical_verification
+    secondary: [comparative_reflection, epistemic_governance]
+  sympy-counterexample-searcher:
+    primary: probing_falsification
+    secondary: [critical_verification]
+  sympy-dependency-prober:
+    primary: probing_falsification
+    secondary: [retrieval]
+  sympy-execution-runner:
+    primary: probing_falsification
+    secondary: [critical_verification]
+  sympy-expression-parser:
+    primary: structural_decomposition
+    secondary: [semantic_modeling, source_observation]
+  sympy-identity-validator:
+    primary: deduction_transformation
+    secondary: [probing_falsification, critical_verification]
+  sympy-transformation-trace-verifier:
+    primary: critical_verification
+    secondary: [deduction_transformation, probing_falsification]
+  textbook-autoformalization-batch-orchestrator:
+    primary: epistemic_governance
+    secondary: [constructive_formalization, critical_verification]
+  textbook-chapter-autoformalization-orchestrator:
+    primary: epistemic_governance
+    secondary: [source_observation, structural_decomposition, constructive_formalization]
+  textbook-theory-tex-organizer:
+    primary: structural_decomposition
+    secondary: [source_observation]
+  vampire-atp-orchestrator:
+    primary: deduction_transformation
+    secondary: [constructive_formalization, probing_falsification, epistemic_governance]
+  vampire-proof-informalizer:
+    primary: semantic_modeling
+    secondary: [deduction_transformation, comparative_reflection]
+  workflow-contract-validator:
+    primary: epistemic_governance
+    secondary: [critical_verification]
+
+category_errors_to_reject:
+  - Backend names are evidence-regime facets, not epistemic primitives.
+  - Workflow phases are lifecycle positions, not epistemic primitives.
+  - Retrieved relevance is not validity or semantic alignment.
+  - A generated artifact is not a proved or accepted artifact.
+  - Compilation or execution success is not source fidelity or nonvacuity.
+  - Failure to find a counterexample is not proof.
+  - A gate aggregates evidence; it does not create mathematical evidence.
+  - A revised artifact must be rechecked rather than inheriting prior validity.
+  - Reports, logs, indexes, and explanations support reasoning but are not proofs.
+  - A coherent reasoning-flow projection is not evidence that its skills ran or its epistemic goal was achieved.

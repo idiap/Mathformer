@@ -1,0 +1,615 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_lean_foundation_intake_workflow
+version: 1.0.0
+kind: workflow
+description: Normalize physics concepts and detected objects through the native main
+  control flow.
+aliases:
+- physics-lean:foundation-intake
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type:
+      - array
+      - 'null'
+      items:
+        type: string
+  Args:
+    schema:
+      type: object
+      required:
+      - concept
+      - concept_file
+      - detected_object_packet
+      - packet_id
+      - source
+      - output
+      - self_test
+      - json
+      additionalProperties: false
+      properties:
+        concept:
+          type: array
+          items:
+            type: string
+        concept_file:
+          type:
+          - string
+          - 'null'
+        detected_object_packet:
+          type:
+          - string
+          - 'null'
+        packet_id:
+          type: string
+        source:
+          type: string
+        output:
+          type:
+          - string
+          - 'null'
+        self_test:
+          type: boolean
+        json:
+          type: boolean
+  Intake:
+    schema:
+      type: object
+      required:
+      - concepts
+      - detected_packet
+      - packet_id
+      - source
+      additionalProperties: false
+      properties:
+        concepts:
+          type: array
+          items:
+            type: string
+        detected_packet: {}
+        packet_id:
+          type: string
+        source:
+          type: string
+  Packet:
+    schema:
+      type:
+      - object
+      - 'null'
+      required:
+      - style
+      - packet_id
+      - source
+      - object_count
+      - objects
+      - terminal_state
+      additionalProperties: false
+      properties:
+        style:
+          const: physics_foundation_object_packet
+        packet_id:
+          type: string
+        source:
+          type: string
+        object_count:
+          type: integer
+          minimum: 0
+        terminal_state:
+          enum:
+          - intake_complete
+          - no_objects
+        objects:
+          type: array
+          items:
+            type: object
+            required:
+            - object_id
+            - object_class
+            - display_name
+            - source_concepts
+            - source
+            - physics_roles
+            - required_semantics
+            - mathlib_search_terms
+            - candidate_imports
+            - foundation_module
+            - source_examples
+            - priority
+            - state
+            additionalProperties: false
+            properties:
+              object_id:
+                type: string
+              object_class:
+                type: string
+              display_name:
+                type: string
+              source_concepts:
+                type: array
+                items:
+                  type: string
+              source:
+                type: string
+              physics_roles:
+                type: array
+                items:
+                  type: string
+              required_semantics:
+                type: array
+                items:
+                  type: string
+              mathlib_search_terms:
+                type: array
+                items:
+                  type: string
+              candidate_imports:
+                type: array
+                maxItems: 0
+              foundation_module:
+                type: string
+              source_examples:
+                type: array
+                items:
+                  type: string
+              priority:
+                enum:
+                - high
+                - medium
+              state:
+                const: intake_normalized
+  Text:
+    schema:
+      type: string
+    media_type: application/json
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+  Bool:
+    schema:
+      type: boolean
+  Stdout:
+    schema:
+      type: string
+  Context:
+    schema:
+      type: object
+      required:
+      - working_directory
+      - allow_mutating
+      - process_argv
+      - program_name
+      additionalProperties: false
+      properties:
+        working_directory:
+          type: string
+        allow_mutating:
+          type: boolean
+        process_argv:
+          type: array
+          items:
+            type: string
+        program_name:
+          type: string
+inputs:
+  argv:
+    type: Argv
+  context:
+    type: Context
+outputs:
+  packet:
+    type: Packet
+    value:
+      ref: flow.outputs.packet
+  json_text:
+    type: Text
+    value:
+      ref: flow.outputs.json_text
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  stdout:
+    type: Stdout
+    value:
+      ref: flow.outputs.stdout
+operations:
+  parse:
+    inputs:
+      argv:
+        type: Argv
+      context:
+        type: Context
+    outputs:
+      args:
+        type: Args
+      halted:
+        type: Bool
+      help_text:
+        type: Stdout
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_foundation_intake_parse
+        operation: mathformer_foundation_intake_parse
+  self_test_inputs:
+    inputs: {}
+    outputs:
+      intake:
+        type: Intake
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_foundation_intake_self_test_inputs
+        operation: mathformer_foundation_intake_self_test_inputs
+  load_inputs:
+    inputs:
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      intake:
+        type: Intake
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_foundation_intake_load_inputs
+        operation: mathformer_foundation_intake_load_inputs
+  normalize:
+    inputs:
+      intake:
+        type: Intake
+    outputs:
+      packet:
+        type: Packet
+      packet_json:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_foundation_intake_normalize
+        operation: mathformer_foundation_intake_normalize
+  serialize:
+    inputs:
+      args:
+        type: Args
+      packet:
+        type: Packet
+      packet_json:
+        type: Text
+    outputs:
+      text:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_foundation_intake_serialize
+        operation: mathformer_foundation_intake_serialize
+  emit:
+    inputs:
+      args:
+        type: Args
+      text:
+        type: Text
+      context:
+        type: Context
+    outputs:
+      exit_code:
+        type: ExitCode
+      stdout:
+        type: Stdout
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_foundation_intake_emit
+        operation: mathformer_foundation_intake_emit
+  help:
+    inputs:
+      help_text:
+        type: Stdout
+    outputs:
+      packet:
+        type: Packet
+      json_text:
+        type: Text
+      exit_code:
+        type: ExitCode
+      stdout:
+        type: Stdout
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_foundation_intake_help
+        operation: mathformer_foundation_intake_help
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse
+    arguments:
+      argv:
+        ref: inputs.argv
+      context:
+        ref: inputs.context
+  - id: dispatch
+    kind: switch
+    cases:
+    - id: help
+      when:
+        ref: steps.parse.outputs.halted
+      body:
+        kind: call
+        operation: help
+        arguments:
+          help_text:
+            ref: steps.parse.outputs.help_text
+    default:
+      kind: sequence
+      steps:
+      - id: prepare
+        kind: switch
+        cases:
+        - id: self_test
+          when:
+            ref: steps.parse.outputs.args.self_test
+          body:
+            kind: call
+            operation: self_test_inputs
+            arguments: {}
+        default:
+          kind: call
+          operation: load_inputs
+          arguments:
+            args:
+              ref: steps.parse.outputs.args
+            context:
+              ref: inputs.context
+        outputs:
+          intake:
+            type: Intake
+            value:
+              ref: selected.outputs.intake
+      - id: normalize
+        kind: call
+        operation: normalize
+        arguments:
+          intake:
+            ref: steps.prepare.outputs.intake
+        description: Accumulate objects across concepts first, then detected_packet.objects.
+          For concepts, scan CLASSIFICATION_ORDER and select the first substring-cue
+          match, otherwise boundary_or_regime_assumption. Skip nondictionary detected
+          entries; supplied object_class takes precedence. Unknown classes retain
+          their supplied class and use assumption-profile metadata. Detected concepts
+          use display_name or object_class; examples are stringified, source=detected_pathology.
+          merge carries a dictionary keyed by canonical object_id, retains first metadata,
+          extends concepts/roles; duplicate IDs combine examples using sorted(set(...)).
+          Finally deduplicate/sort concepts and roles, retaining a unique object's
+          original examples, then sort objects high-priority first and by object_id.
+          Return object_count and intake_complete iff objects exist, otherwise no_objects.
+          Each traversal ends at its supplied collection or fixed cue list; no retries,
+          convergence condition, input-size/time cap or exhaustion signal exists.
+          Malformed detected packets/fields and other native exceptions propagate.
+      - id: serialize
+        kind: call
+        operation: serialize
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+          packet:
+            ref: steps.normalize.outputs.packet
+          packet_json:
+            ref: steps.normalize.outputs.packet_json
+      - id: emit
+        kind: call
+        operation: emit
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+          text:
+            ref: steps.serialize.outputs.text
+          context:
+            ref: inputs.context
+      outputs:
+        packet:
+          type: Packet
+          value:
+            ref: steps.normalize.outputs.packet
+        json_text:
+          type: Text
+          value:
+            ref: steps.serialize.outputs.text
+        exit_code:
+          type: ExitCode
+          value:
+            ref: steps.emit.outputs.exit_code
+        stdout:
+          type: Stdout
+          value:
+            ref: steps.emit.outputs.stdout
+    outputs:
+      packet:
+        type: Packet
+        value:
+          ref: selected.outputs.packet
+      json_text:
+        type: Text
+        value:
+          ref: selected.outputs.json_text
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+      stdout:
+        type: Stdout
+        value:
+          ref: selected.outputs.stdout
+  outputs:
+    packet:
+      type: Packet
+      value:
+        ref: steps.dispatch.outputs.packet
+    json_text:
+      type: Text
+      value:
+        ref: steps.dispatch.outputs.json_text
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.dispatch.outputs.exit_code
+    stdout:
+      type: Stdout
+      value:
+        ref: steps.dispatch.outputs.stdout
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - native_runtime_outputs
+      - artifacts/mathformerphysicslib/foundations/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    - normalize_foundation_objects
+    - emit_requested_packet
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Intake normalization only; no proof, compilation, promotion or scientific
+    endorsement.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/physics-common/physics-foundation-object-intake/scripts/intake_physics_foundation_objects.py
+    selector: main
+    digest: sha256:9f2b4c46fc26545adb3d3d4751b2e3e11c0589733185a94a0b7d08fcade8a227
+  - path: scripts/mathformer.py
+    selector: build_registry/action:physics-lean:foundation-intake; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/mcp/run_foundation_intake_workflow_tests.py
+    selector: 'IntakeTests: native differential and registered MCP/Lunar/PRISM fixtures'
+    digest: sha256:c896b1bd75e4db3d06e0775ff9f10cd137334938eadbe2a4b14f2fd5be36a935
+  - path: tests/mcp/fixtures/foundation_intake_original.py.txt
+    selector: frozen original main oracle
+    digest: sha256:da394dd5d899a94c262ce07d20e68da9820a0c802647c4dba03533ae28fe4f56
+  - path: scripts/foundation_intake_tools.py
+    selector: register_foundation_intake_tools
+    digest: sha256:fd61004eae58b6e7ac083ffe43dcf7cf70a6045dec8a275af1637d76b9c19d17
+  - path: scripts/mcp_server.py
+    selector: register_foundation_intake_tools; _analysis_write_policy; _path_allowed
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory:physics-lean:foundation-intake
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Graph models native main and shared helper steps, not the hub preflight/dry-run/subprocess/write-audit
+    envelope or its HubResult.
+  - Native finite helper traversals have no input-size, retry, convergence, time or
+    exhaustion budget. Lunar enforces the retained 3600-second/five-call host limits
+    and required runtime receipts.
+  - MCP redirects native console output to stderr for protocol framing and also exports
+    exact stdout; parse errors terminate the step with the native exit code in the
+    diagnostic. Explicit context supplies argv=None, program name and cwd.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-lean:foundation-intake
+    owner_skill: skills/physics-common/physics-foundation-object-intake/SKILL.md
+    contract:
+      id: physics-lean:foundation-intake
+      summary: Normalize physics concepts or detected objects into a MathformerPhysicsLib
+        foundations object packet.
+      family: physics_lean
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - skills/physics-common/physics-foundation-object-intake/scripts/intake_physics_foundation_objects.py
+      depends_on: []
+      required_paths:
+      - skills/physics-common/physics-foundation-object-intake/scripts/intake_physics_foundation_objects.py
+      required_tools: []
+      optional_tools: []
+      writes:
+      - artifacts/mathformerphysicslib/foundations/
+      allows_extra_args: true
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Registered MCP tools call the same parse/load/build_packet/serialize/emit
+      functions used by native main. No provider, compiler or theorem prover is part
+      of intake.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Native exceptions fail the owning MCP step; there is no retry
+      or rollback. Argparse help stops successfully before input loading or normalization.
+      Service write policy additionally gates remote output paths.
+    output_paths: main accepts an arbitrary requested output path; native_runtime_outputs
+      denotes that destination, not native path containment.
+    scientific_payloads: Exports describe native main values, not a HubResult transport
+      envelope.
+    context_fields:
+    - working_directory
+    - allow_mutating
+    - process_argv
+    - program_name
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: Source main decomposition with explicit argparse help stop and fixed
+      self-test/loaded-input switch. Native classify/build_object/merge traversals
+      stay inside normalize; packet_json preserves source JSON insertion order across
+      PRISM record transport.
+# REUSE-IgnoreEnd

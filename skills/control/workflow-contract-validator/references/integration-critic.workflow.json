@@ -1,0 +1,435 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_mathformerphysicslib_integration_critic_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Native integration critic traversal; bounded specialization with shared callable steps.",
+  "aliases": [
+    "mathformerphysicslib:integration-critic"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Inventory": {
+      "schema": {
+        "type": "object"
+      }
+    },
+    "ConceptGraph": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "concepts": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "Root": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Traversal": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "concepts",
+          "index",
+          "findings",
+          "foundations_index"
+        ],
+        "properties": {
+          "concepts": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "type": "object"
+            }
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "foundations_index": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "style",
+          "schema_version",
+          "ok",
+          "finding_count",
+          "findings"
+        ],
+        "properties": {
+          "style": {
+            "const": "mathformerphysicslib_integration_report"
+          },
+          "schema_version": {
+            "const": 1
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "finding_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "severity",
+                "kind",
+                "message"
+              ],
+              "properties": {
+                "severity": {
+                  "enum": [
+                    "high",
+                    "medium"
+                  ]
+                },
+                "kind": {
+                  "enum": [
+                    "missing_foundations_index",
+                    "manifest_missing_foundations",
+                    "foundation_owner_not_indexed"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "concept_id": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "inputs": {
+    "inventory": {
+      "type": "Inventory"
+    },
+    "concept_graph": {
+      "type": "ConceptGraph"
+    },
+    "repository_root": {
+      "type": "Root"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {
+        "inventory": {
+          "type": "Inventory"
+        },
+        "concept_graph": {
+          "type": "ConceptGraph"
+        },
+        "repository_root": {
+          "type": "Root"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Traversal"
+        },
+        "empty": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_integration_critic_initialize",
+          "operation": "mathformer_integration_critic_initialize"
+        }
+      }
+    },
+    "inspect_and_advance": {
+      "inputs": {
+        "state": {
+          "type": "Traversal"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Traversal"
+        },
+        "done": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_integration_critic_visit",
+          "operation": "mathformer_integration_critic_visit"
+        }
+      }
+    },
+    "assemble_report": {
+      "inputs": {
+        "state": {
+          "type": "Traversal"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_integration_critic_finish",
+          "operation": "mathformer_integration_critic_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "inventory": {
+            "ref": "inputs.inventory"
+          },
+          "concept_graph": {
+            "ref": "inputs.concept_graph"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "id": "traverse",
+        "kind": "loop",
+        "state_type": "Traversal",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "body": {
+          "kind": "call",
+          "operation": "inspect_and_advance",
+          "arguments": {
+            "state": {
+              "ref": "loop.state"
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 1000,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "Traversal",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "assemble_report",
+        "arguments": {
+          "state": {
+            "ref": "steps.traverse.outputs.state"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.finish.outputs.report"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": []
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "inspect_integration_metadata"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 1002
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Structural integration findings only; no proof or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/coherence_common.py",
+        "selector": "critic_integration",
+        "digest": "sha256:e1da9d47b82e23be26335e4476ba442aa58aedafe245034709d2868909deb125"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-integration-critic/scripts/critic_integration.py",
+        "selector": "main",
+        "digest": "sha256:7d13162c57fc29f2d519218fd847b8bf4187d2ec75fb03db5bed64b039c2b51a"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry; preflight; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/integration_critic_tools.py",
+        "selector": "register_integration_critic_tools",
+        "digest": "sha256:ebf041f54047f4e4cb9c7f3a1adaad44bb80c4e8498711dcf3e91f4e2fe776a3"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_integration_critic_tools(mcp)",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "scripts/api_critic_tools.py",
+        "selector": "source",
+        "digest": "sha256:46706cf03140e664151ee695cee449ae7207c467dc4e585d3e9acfc56d021d77"
+      }
+    ],
+    "gaps": [
+      "Function scope only. CLI input construction, output writing/printing and hub launch/write auditing remain native boundary behavior, not graph nodes.",
+      "Specializes valid concept lists to at most 1000 objects; source has no numeric cap. Empty lists perform one exhaustion-only adapter call with no concept inspection. At exactly 1000 concepts done becomes true on the final iteration and returns normally. Exhaustion failure is unreachable for conforming inputs and faithful adapters.",
+      "3600 seconds and 1002 operation calls are host runtime ceilings, not native budgets. Native action has no timeout or retry. Host receipts describe workflow execution; they do not imply native receipt emission."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "mathformerphysicslib:integration-critic",
+      "owner_skill": "skills/mathformerphysicslib/mathformerphysicslib-integration-critic/SKILL.md",
+      "contract": {
+        "id": "mathformerphysicslib:integration-critic",
+        "summary": "Smoke-test MathformerPhysicsLib integration critic.",
+        "family": "mathformerphysicslib",
+        "kind": "validation",
+        "safety": "read_only",
+        "command": [
+          "{python}",
+          "skills/mathformerphysicslib/mathformerphysicslib-integration-critic/scripts/critic_integration.py",
+          "--self-test",
+          "--json"
+        ],
+        "depends_on": [],
+        "writes": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Dependency-free one-shot hub CLI; direct callers use the shared function.",
+      "cli": "Self-test obtains self_test_payload() then canonicalize(inventory). Otherwise load inventory path or build_inventory(), then load graph path or canonicalize(inventory). Invoke critic, optionally write output, always print JSON, return 0 even for report.ok=false. Exceptions or assertions interrupt. The self-test report envelope lacks inventory flags, causing high and medium findings and no canonical concepts.",
+      "hub": "Preflight failure or dry-run prevents launch. Completion follows subprocess exit status and write auditing, not printed report.ok. Suite and compatibility alias reach this action; report, planning and gate callers can invoke critic_integration directly."
+    },
+    "mathformer.traversal_adapter": {
+      "empty_input": "PRISM loops execute at least once. The visit tool returns unchanged empty state and done=true without inspecting a concept; all nonempty visits inspect exactly one concept. The root loop avoids branch-local exhaustion, which Lunar does not support."
+    }
+  }
+}

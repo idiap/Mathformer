@@ -1,0 +1,230 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Domain-specific source boundary for the named mathformerlib_accumulation_loop Mathformer workflow.
+type MathformerLibraryCandidateSet:
+    # Candidate formal artifacts proposed for MathformerLib accumulation.
+    candidate_paths: List[String]
+    # Exact library registry revision used by promotion checks.
+    registry_revision: String
+    # Named policy defining realness and promotion requirements.
+    promotion_policy: String
+
+# Domain-specific result of artifact.realness_gate within the named mathformerlib_accumulation_loop workflow.
+type MathformerlibAccumulationArtifactRealnessGateArtifact:
+    # Exact subject processed by the artifact.realness_gate occurrence.
+    subject: String
+    # Source anchors retained by the artifact.realness_gate occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical artifact.realness_gate contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to artifact.realness_gate.
+    gate_disposition: String
+    # Known limitations that constrain use of the artifact.realness_gate result.
+    limitations: List[String]
+    # Dispositions considered by the named workflow gate.
+    considered_dispositions: List[String]
+    # Policy-selected disposition without creating object-level evidence.
+    selected_disposition: String
+    # Scope-bounded rationale for the selected operational disposition.
+    rationale: String
+
+# Domain-specific result of mathformerlib.promotion_gate within the named mathformerlib_accumulation_loop workflow.
+type MathformerlibAccumulationMathformerlibPromotionGateArtifact:
+    # Exact subject processed by the mathformerlib.promotion_gate occurrence.
+    subject: String
+    # Source anchors retained by the mathformerlib.promotion_gate occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical mathformerlib.promotion_gate contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to mathformerlib.promotion_gate.
+    gate_disposition: String
+    # Known limitations that constrain use of the mathformerlib.promotion_gate result.
+    limitations: List[String]
+    # Dispositions considered by the named workflow gate.
+    considered_dispositions: List[String]
+    # Policy-selected disposition without creating object-level evidence.
+    selected_disposition: String
+    # Scope-bounded rationale for the selected operational disposition.
+    rationale: String
+
+# Domain-specific result of mathformerlib.accumulate within the named mathformerlib_accumulation_loop workflow.
+type MathformerlibAccumulationMathformerlibAccumulateArtifact:
+    # Exact subject processed by the mathformerlib.accumulate occurrence.
+    subject: String
+    # Source anchors retained by the mathformerlib.accumulate occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical mathformerlib.accumulate contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to mathformerlib.accumulate.
+    gate_disposition: String
+    # Known limitations that constrain use of the mathformerlib.accumulate result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of mathformerlib.registry within the named mathformerlib_accumulation_loop workflow.
+type MathformerlibAccumulationMathformerlibRegistryArtifact:
+    # Exact subject processed by the mathformerlib.registry occurrence.
+    subject: String
+    # Source anchors retained by the mathformerlib.registry occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical mathformerlib.registry contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to mathformerlib.registry.
+    gate_disposition: String
+    # Known limitations that constrain use of the mathformerlib.registry result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of library.documentation within the named mathformerlib_accumulation_loop workflow.
+type MathformerlibAccumulationLibraryDocumentationArtifact:
+    # Exact subject processed by the library.documentation occurrence.
+    subject: String
+    # Source anchors retained by the library.documentation occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical library.documentation contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to library.documentation.
+    gate_disposition: String
+    # Known limitations that constrain use of the library.documentation result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of library.aligned_html_documentation within the named mathformerlib_accumulation_loop workflow.
+type MathformerLibraryAccumulationDisposition:
+    # Exact subject processed by the library.aligned_html_documentation occurrence.
+    subject: String
+    # Source anchors retained by the library.aligned_html_documentation occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical library.aligned_html_documentation contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to library.aligned_html_documentation.
+    gate_disposition: String
+    # Known limitations that constrain use of the library.aligned_html_documentation result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Candidate classifications and verification results used by the promotion gate.
+type CandidateAssessment:
+    # Draft, candidate, or accepted classifications.
+    candidate_statuses: List[String]
+    # Artifact realness findings.
+    realness_findings: List[String]
+    # Lean compilation results.
+    compilation_results: List[String]
+    # Intended-import validation results.
+    import_context_results: List[String]
+    # Source and registry provenance findings.
+    provenance_findings: List[String]
+    # Blocking findings.
+    blockers: List[String]
+
+# Candidate request and assessment supplied to the promotion gate.
+type PromotionCase:
+    # Candidate set.
+    candidates: MathformerLibraryCandidateSet
+    # Candidate assessment.
+    assessment: CandidateAssessment
+
+# Per-candidate promotion decisions and target library locations.
+type PromotionDecision:
+    # Candidates accepted for placement.
+    accepted_candidates: List[String]
+    # Candidates blocked from placement.
+    blocked_candidates: List[String]
+    # Domain-specific target modules.
+    target_modules: List[String]
+    # Reasons for each promotion decision.
+    decision_reasons: List[String]
+
+# Candidate set and promotion decisions supplied to accumulation.
+type AccumulationCase:
+    # Candidate set.
+    candidates: MathformerLibraryCandidateSet
+    # Promotion decisions.
+    promotion: PromotionDecision
+
+# Results of placing accepted modules while retaining draft boundaries.
+type LibraryPlacement:
+    # Modules placed in MathformerLib.
+    promoted_modules: List[String]
+    # Drafts retained outside accepted imports.
+    retained_drafts: List[String]
+    # Imports affected by placement.
+    affected_imports: List[String]
+    # Compilation receipts after placement.
+    compile_receipts: List[String]
+    # Placement blockers.
+    blockers: List[String]
+
+# Authoritative registry state after accumulation.
+type RegistryUpdate:
+    # New registry revision.
+    registry_revision: String
+    # Registered modules.
+    module_entries: List[String]
+    # Registered declarations.
+    declaration_entries: List[String]
+    # Registered provenance records.
+    provenance_entries: List[String]
+    # Duplicate declaration findings.
+    duplicate_findings: List[String]
+
+# Placement and registry state used for documentation.
+type DocumentationBasis:
+    # Library placement.
+    placement: LibraryPlacement
+    # Refreshed registry.
+    registry: RegistryUpdate
+
+# Generated Markdown library documentation and indexes.
+type LibraryDocumentation:
+    # Markdown module pages.
+    markdown_pages: List[String]
+    # Module indexes.
+    module_indexes: List[String]
+    # Declaration indexes.
+    declaration_indexes: List[String]
+    # Documentation manifest.
+    manifest_path: String
+
+# Placement, registry, and Markdown documentation used for aligned publication.
+type PublicationBasis:
+    # Library placement.
+    placement: LibraryPlacement
+    # Refreshed registry.
+    registry: RegistryUpdate
+    # Markdown documentation.
+    documentation: LibraryDocumentation
+
+# Complete result of the controlled MathformerLib update.
+type MathformerLibUpdate:
+    # Overall update status.
+    status: String
+    # Promoted modules.
+    promoted_modules: List[String]
+    # Retained drafts.
+    retained_drafts: List[String]
+    # New registry revision.
+    registry_revision: String
+    # Markdown pages.
+    markdown_pages: List[String]
+    # Aligned HTML pages.
+    html_pages: List[String]
+    # Update blockers.
+    blockers: List[String]
+    # Limits on interpreting the update.
+    limitations: List[String]

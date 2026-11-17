@@ -1,0 +1,701 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_test_family_generative_workflow
+version: 1.0.0
+kind: workflow
+description: Hub-controlled generative matrix traversal, specialized to at most 4096
+  selected rows.
+aliases:
+- test:family:generative
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+        json_output:
+          type: boolean
+        keep_going:
+          type: boolean
+        allow_mutating:
+          type: boolean
+        write_report:
+          type: boolean
+      required:
+      - dry_run
+      - json_output
+      - keep_going
+      - allow_mutating
+      - write_report
+      additionalProperties: false
+  HubResult:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        status:
+          type: string
+        schema_version:
+          type: integer
+        action:
+          type: object
+          properties:
+            id:
+              type: string
+            summary:
+              type: string
+            family:
+              type: string
+            kind:
+              type: string
+            safety:
+              type: string
+            command:
+              type: array
+              items:
+                type: string
+            depends_on:
+              type: array
+              items:
+                type: string
+            required_paths:
+              type: array
+              items:
+                type: string
+            required_tools:
+              type: array
+              items:
+                type: string
+            optional_tools:
+              type: array
+              items:
+                type: string
+            writes:
+              type: array
+              items:
+                type: string
+            allows_extra_args:
+              type: boolean
+            timeout_seconds:
+              type:
+              - integer
+              - 'null'
+            notes:
+              type: string
+          required:
+          - id
+          - summary
+          - family
+          - kind
+          - safety
+          - command
+          - depends_on
+          - required_paths
+          - required_tools
+          - optional_tools
+          - writes
+          - allows_extra_args
+          - timeout_seconds
+          - notes
+          additionalProperties: false
+        action_id:
+          type: string
+        argv:
+          type: array
+          items:
+            type: string
+        cwd:
+          type: string
+        dry_run:
+          type: boolean
+        preflight_errors:
+          type: array
+          items:
+            type: string
+        returncode:
+          type:
+          - integer
+          - 'null'
+        stdout:
+          type: string
+        stderr:
+          type: string
+        timeout_seconds:
+          type: integer
+        write_audit:
+          type: object
+        route:
+          type: object
+        cycle:
+          type: array
+          items:
+            type: string
+        report_file:
+          type: string
+      required:
+      - ok
+      additionalProperties: false
+  Domain:
+    schema:
+      type: object
+      properties:
+        max_selected_rows:
+          const: 4096
+        restriction:
+          const: canonical generative selection has at most 4096 rows
+      required:
+      - max_selected_rows
+      - restriction
+  Bool:
+    schema:
+      type: boolean
+  Args:
+    schema:
+      type: object
+      properties:
+        module_family:
+          const:
+          - generative
+        profile:
+          const: workstation
+        fail_on_warning:
+          const: false
+        validate_matrix:
+          const: false
+        changed_files_only:
+          const: false
+        emit_dependency_map_only:
+          const: false
+        json:
+          const: true
+        write_jsonl:
+          type: 'null'
+        write_junit:
+          type: 'null'
+        output_file:
+          type: string
+        run_id:
+          type: string
+      required:
+      - module_family
+      - profile
+      - fail_on_warning
+      - validate_matrix
+      - changed_files_only
+      - emit_dependency_map_only
+      - json
+      - write_jsonl
+      - write_junit
+      - output_file
+      - run_id
+  State:
+    schema:
+      type: object
+      properties:
+        matrix:
+          type: array
+          items:
+            type: object
+        selected:
+          type: array
+          items:
+            type: object
+          maxItems: 4096
+        families:
+          type: array
+          items:
+            type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 4096
+        results:
+          type: array
+          items:
+            type: object
+          maxItems: 4096
+      required:
+      - matrix
+      - selected
+      - families
+      - index
+      - results
+  Report:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        results:
+          type: array
+          items:
+            type: object
+        summary:
+          type: object
+        schema_errors:
+          type: array
+          items:
+            type: string
+        matrix_errors:
+          type: array
+          items:
+            type: string
+        capability_ledger:
+          type: object
+        dependency_map:
+          type: string
+      required:
+      - ok
+      - results
+      - summary
+      - schema_errors
+      - matrix_errors
+      - capability_ledger
+      - dependency_map
+  Runtime:
+    schema:
+      type: object
+      properties:
+        handle:
+          type: string
+      required:
+      - handle
+      additionalProperties: false
+inputs:
+  context:
+    type: RunContext
+  domain:
+    type: Domain
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  enter:
+    inputs:
+      context:
+        type: RunContext
+      domain:
+        type: Domain
+    outputs:
+      proceed:
+        type: Bool
+      args:
+        type: Args
+      result:
+        type: HubResult
+      runtime:
+        type: Runtime
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generative_family_enter
+        operation: mathformer_generative_family_enter
+  prepare:
+    inputs:
+      args:
+        type: Args
+      domain:
+        type: Domain
+      runtime:
+        type: Runtime
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generative_family_prepare
+        operation: mathformer_generative_family_prepare
+  advance:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+      runtime:
+        type: Runtime
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generative_family_advance
+        operation: mathformer_generative_family_advance
+  retain:
+    inputs:
+      state:
+        type: State
+      runtime:
+        type: Runtime
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generative_family_retain
+        operation: mathformer_generative_family_retain
+  finalize:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+      runtime:
+        type: Runtime
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generative_family_finalize
+        operation: mathformer_generative_family_finalize
+  publish:
+    inputs:
+      report:
+        type: Report
+      args:
+        type: Args
+      context:
+        type: RunContext
+      runtime:
+        type: Runtime
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generative_family_publish
+        operation: mathformer_generative_family_publish
+  stop:
+    inputs:
+      result:
+        type: HubResult
+      runtime:
+        type: Runtime
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generative_family_stop
+        operation: mathformer_generative_family_stop
+  bypass:
+    inputs:
+      runtime:
+        type: Runtime
+    outputs:
+      state:
+        type: State
+      done:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_generative_family_bypass
+        operation: mathformer_generative_family_bypass
+flow:
+  kind: sequence
+  steps:
+  - id: entry
+    kind: call
+    operation: enter
+    arguments:
+      context:
+        ref: inputs.context
+      domain:
+        ref: inputs.domain
+  - id: prepare
+    kind: switch
+    cases:
+    - id: execute
+      when:
+        ref: steps.entry.outputs.proceed
+      body:
+        id: prepare
+        kind: call
+        operation: prepare
+        arguments:
+          args:
+            ref: steps.entry.outputs.args
+          domain:
+            ref: inputs.domain
+          runtime:
+            ref: steps.entry.outputs.runtime
+    default:
+      kind: call
+      operation: bypass
+      arguments:
+        runtime:
+          ref: steps.entry.outputs.runtime
+    outputs:
+      state:
+        type: State
+        value:
+          ref: selected.outputs.state
+      done:
+        type: Bool
+        value:
+          ref: selected.outputs.done
+  - kind: loop
+    state_type: State
+    initial:
+      ref: steps.prepare.outputs.state
+    body:
+      kind: switch
+      cases:
+      - id: already_done
+        when:
+          ref: steps.prepare.outputs.done
+        body:
+          id: empty_state
+          kind: call
+          operation: retain
+          arguments:
+            state:
+              ref: loop.state
+            runtime:
+              ref: steps.entry.outputs.runtime
+      default:
+        id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          args:
+            ref: steps.entry.outputs.args
+          runtime:
+            ref: steps.entry.outputs.runtime
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Bool
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 4096
+    on_exhausted: fail
+    outputs:
+      state:
+        type: State
+        value:
+          ref: loop.state
+    id: traverse
+  - id: finish
+    kind: switch
+    cases:
+    - id: execute
+      when:
+        ref: steps.entry.outputs.proceed
+      body:
+        kind: sequence
+        steps:
+        - id: finalize
+          kind: call
+          operation: finalize
+          arguments:
+            state:
+              ref: steps.traverse.outputs.state
+            args:
+              ref: steps.entry.outputs.args
+            runtime:
+              ref: steps.entry.outputs.runtime
+        - id: publish
+          kind: call
+          operation: publish
+          arguments:
+            report:
+              ref: steps.finalize.outputs.report
+            args:
+              ref: steps.entry.outputs.args
+            context:
+              ref: inputs.context
+            runtime:
+              ref: steps.entry.outputs.runtime
+        outputs:
+          result:
+            type: HubResult
+            value:
+              ref: steps.publish.outputs.result
+    default:
+      id: return_stopped
+      kind: call
+      operation: stop
+      arguments:
+        result:
+          ref: steps.entry.outputs.result
+        runtime:
+          ref: steps.entry.outputs.runtime
+    outputs:
+      result:
+        type: HubResult
+        value:
+          ref: selected.outputs.result
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 4100
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked description only; no scientific truth, runtime qualification
+    or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: run
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: scripts/mathformer.py
+    selector: build_registry/action:test:family:generative; run_action; run_leaf_action;
+      preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/generative_family_workflow_tools.py
+    digest: sha256:9aab15aad8d4b0e235f7f7206c674e6045ff52f832eea10d8294a613566022be
+  - path: scripts/comprehensive_strict_tools.py
+    digest: sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  gaps:
+  - Specialization excludes dependency-map-only, strict/warning-sensitive, changed-files
+    and optional publication flags because the hub forbids extra args.
+  - Only canonical selections of 0..4096 rows are admitted. There is no source cap
+    or truncation; larger selections are outside this descriptor's input domain. At
+    4096, done is true and finalization proceeds normally; exhaustion indicates an
+    inconsistent adapter/state.
+  - 3600s and operation-call ceilings are normalization metadata; native hub subprocess
+    timeout is 900s. Unexpected exceptions can abort before finalization/publication.
+  - Receipt requirements do not upgrade optional native logs. Network/external effects
+    and runtime-policy enforcement remain unqualified.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: test:family:generative
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: test:family:generative
+      summary: Run the comprehensive test matrix for the generative module family.
+      family: generative
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/test_program/run_comprehensive_tests.py
+      - --module-family
+      - generative
+      - --json
+      depends_on: []
+      required_paths:
+      - tests/test_program/run_comprehensive_tests.py
+      - tests/test_matrix.json
+      required_tools: []
+      optional_tools: []
+      writes:
+      - artifacts/
+      allows_extra_args: false
+      timeout_seconds: 900
+  mathformer.native_boundary:
+    execution: Owned worker calls shared native runner steps with fixed registry argv,
+      native preflight and snapshot auditing, cumulative 900-second process deadline
+      and captured publication output. Runtime handle asserts server-owned arguments,
+      cursor history, and stage.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Keep native failure/dry-run status and payload; no failed preflight,
+      subprocess or audit is acceptance.
+    scientific_payloads: HubResult is a transport envelope; Report contains native
+      test results.
+    plumbing: Root-scoped loop supports Lunar exhaustion checks. Empty and stopped
+      paths retain a consumed cursor once without invoking a native check; bypass
+      creates only stopped-path plumbing.
+# REUSE-IgnoreEnd

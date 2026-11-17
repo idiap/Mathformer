@@ -1,0 +1,851 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "loop_textbook_theory_autoformalization_loop_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Sequential chapter inventory, section organization, object queue preparation and explicitly selected execution; no convergence retry.",
+  "aliases": [
+    "textbook_theory_autoformalization_loop"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Path": {
+      "schema": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Options": {
+      "schema": {
+        "type": "object",
+        "description": "Native argparse options; omitted fields use parse_args defaults. Run selectors are mutually exclusive.",
+        "properties": {
+          "archive": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_dir": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "chapter_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "chapter_index": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_chapters": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_jobs_per_chapter": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "no_proof_jobs": {
+            "type": "boolean",
+            "default": false
+          },
+          "run_chapter_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "run_chapter_index": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "none",
+              "codex-cli"
+            ],
+            "default": "none"
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "max_run_jobs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "start_at": {
+            "type": "integer",
+            "default": 1
+          },
+          "skip_lean_check": {
+            "type": "boolean",
+            "default": false
+          },
+          "force": {
+            "type": "boolean",
+            "default": false
+          },
+          "timeout_sec": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 600
+          },
+          "run_timeout_sec": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1800
+          }
+        },
+        "additionalProperties": false,
+        "not": {
+          "required": [
+            "run_chapter_id",
+            "run_chapter_index"
+          ],
+          "properties": {
+            "run_chapter_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "run_chapter_index": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "Theory": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "units"
+        ],
+        "properties": {
+          "units": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "description": "Resolved full_report. Specialization admits at most 1000 units, hence at most 1000 chapters; payload retains source provenance."
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "remaining",
+          "entries",
+          "commands",
+          "all_chapters",
+          "has_chapters"
+        ],
+        "properties": {
+          "remaining": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "type": "object"
+            }
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "all_chapters": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "has_chapters": {
+            "type": "boolean"
+          }
+        },
+        "description": "Ordered remaining chapters, accumulated chapter entries and command records; all_chapters retains the unfiltered inventory."
+      }
+    },
+    "Prepared": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "entry",
+          "commands",
+          "should_run"
+        ],
+        "properties": {
+          "entry": {
+            "type": "object"
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "should_run": {
+            "type": "boolean"
+          }
+        },
+        "description": "Native chapter entry with inventory, organized/batch paths and summaries, nullable run_manifest; commands for this chapter."
+      }
+    },
+    "Plan": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "manifest_file",
+          "chapters",
+          "all_chapters",
+          "commands",
+          "summary"
+        ],
+        "properties": {
+          "manifest_file": {
+            "type": "string"
+          },
+          "chapters": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "all_chapters": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "summary": {
+            "type": "object"
+          }
+        },
+        "description": "Returned chapter_plan.json payload, including source, selection, counts and per-chapter artifact references."
+      }
+    }
+  },
+  "inputs": {
+    "options": {
+      "type": "Options"
+    },
+    "full_report": {
+      "type": "Theory"
+    },
+    "theory_path": {
+      "type": "Path"
+    },
+    "output_dir": {
+      "type": "Path"
+    }
+  },
+  "outputs": {
+    "chapter_plan": {
+      "type": "Plan",
+      "value": {
+        "ref": "flow.outputs.plan"
+      }
+    }
+  },
+  "operations": {
+    "inventory_and_pack": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "full_report": {
+          "type": "Theory"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "has_chapters": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_textbook_chapter_inventory",
+          "operation": "mathformer_textbook_chapter_inventory"
+        }
+      }
+    },
+    "prepare_chapter": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "options": {
+          "type": "Options"
+        },
+        "full_report": {
+          "type": "Theory"
+        },
+        "output_dir": {
+          "type": "Path"
+        }
+      },
+      "outputs": {
+        "prepared": {
+          "type": "Prepared"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_textbook_chapter_prepare",
+          "operation": "mathformer_textbook_chapter_prepare"
+        }
+      }
+    },
+    "run_objects": {
+      "inputs": {
+        "prepared": {
+          "type": "Prepared"
+        },
+        "options": {
+          "type": "Options"
+        },
+        "output_dir": {
+          "type": "Path"
+        }
+      },
+      "outputs": {
+        "prepared": {
+          "type": "Prepared"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_textbook_chapter_run",
+          "operation": "mathformer_textbook_chapter_run"
+        }
+      }
+    },
+    "append_and_advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "prepared": {
+          "type": "Prepared"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_textbook_chapter_advance",
+          "operation": "mathformer_textbook_chapter_advance"
+        }
+      }
+    },
+    "write_plan": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "options": {
+          "type": "Options"
+        },
+        "theory_path": {
+          "type": "Path"
+        },
+        "output_dir": {
+          "type": "Path"
+        }
+      },
+      "outputs": {
+        "plan": {
+          "type": "Plan"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_textbook_chapter_write",
+          "operation": "mathformer_textbook_chapter_write"
+        }
+      }
+    },
+    "empty_selection": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_textbook_chapter_empty",
+          "operation": "mathformer_textbook_chapter_empty"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "inventory",
+        "kind": "call",
+        "operation": "inventory_and_pack",
+        "arguments": {
+          "options": {
+            "ref": "inputs.options"
+          },
+          "full_report": {
+            "ref": "inputs.full_report"
+          }
+        }
+      },
+      {
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.inventory.outputs.state"
+        },
+        "max_iterations": 1000,
+        "on_exhausted": "fail",
+        "description": "One selected chapter per nonempty iteration; an empty inventory takes a pure identity adapter and stops without native chapter calls. At most 1000 units guarantee chapter exhaustion within 1000 iterations.",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "nonempty",
+              "when": {
+                "ref": "loop.state.has_chapters"
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "prepare",
+                    "kind": "call",
+                    "operation": "prepare_chapter",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      },
+                      "options": {
+                        "ref": "inputs.options"
+                      },
+                      "full_report": {
+                        "ref": "inputs.full_report"
+                      },
+                      "output_dir": {
+                        "ref": "inputs.output_dir"
+                      }
+                    }
+                  },
+                  {
+                    "id": "run_or_queue",
+                    "kind": "switch",
+                    "cases": [
+                      {
+                        "id": "run",
+                        "when": {
+                          "ref": "steps.prepare.outputs.prepared.should_run"
+                        },
+                        "body": {
+                          "kind": "sequence",
+                          "steps": [
+                            {
+                              "kind": "call",
+                              "operation": "run_objects",
+                              "arguments": {
+                                "prepared": {
+                                  "ref": "steps.prepare.outputs.prepared"
+                                },
+                                "options": {
+                                  "ref": "inputs.options"
+                                },
+                                "output_dir": {
+                                  "ref": "inputs.output_dir"
+                                }
+                              },
+                              "id": "run"
+                            },
+                            {
+                              "id": "advance",
+                              "kind": "call",
+                              "operation": "append_and_advance",
+                              "arguments": {
+                                "state": {
+                                  "ref": "loop.state"
+                                },
+                                "prepared": {
+                                  "ref": "steps.run.outputs.prepared"
+                                }
+                              }
+                            }
+                          ],
+                          "outputs": {
+                            "state": {
+                              "type": "State",
+                              "value": {
+                                "ref": "steps.advance.outputs.state"
+                              }
+                            },
+                            "done": {
+                              "type": "Flag",
+                              "value": {
+                                "ref": "steps.advance.outputs.done"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "default": {
+                      "id": "advance",
+                      "kind": "call",
+                      "operation": "append_and_advance",
+                      "arguments": {
+                        "state": {
+                          "ref": "loop.state"
+                        },
+                        "prepared": {
+                          "ref": "steps.prepare.outputs.prepared"
+                        }
+                      }
+                    },
+                    "outputs": {
+                      "state": {
+                        "type": "State",
+                        "value": {
+                          "ref": "selected.outputs.state"
+                        }
+                      },
+                      "done": {
+                        "type": "Flag",
+                        "value": {
+                          "ref": "selected.outputs.done"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "state": {
+                    "type": "State",
+                    "value": {
+                      "ref": "steps.run_or_queue.outputs.state"
+                    }
+                  },
+                  "done": {
+                    "type": "Flag",
+                    "value": {
+                      "ref": "steps.run_or_queue.outputs.done"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "empty_selection",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        },
+        "id": "iterate"
+      },
+      {
+        "id": "finalize",
+        "kind": "call",
+        "operation": "write_plan",
+        "arguments": {
+          "state": {
+            "ref": "steps.iterate.outputs.state"
+          },
+          "options": {
+            "ref": "inputs.options"
+          },
+          "theory_path": {
+            "ref": "inputs.theory_path"
+          },
+          "output_dir": {
+            "ref": "inputs.output_dir"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "plan": {
+        "type": "Plan",
+        "value": {
+          "ref": "steps.finalize.outputs.plan"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "textbook_source",
+          "run_artifacts"
+        ],
+        "write": [
+          "run_artifacts"
+        ]
+      },
+      "network": [
+        "configured_generation_provider"
+      ],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "prepare_chapter_queues",
+        "run_explicitly_selected_chapters",
+        "record_gate_results"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion",
+        "automatic_promotion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 3002
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked specification; completion establishes neither scientific truth nor promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/latex-textbook/textbook-chapter-autoformalization-orchestrator/scripts/orchestrate_textbook_chapters.py",
+        "selector": "build_chapter_plan",
+        "digest": "sha256:1396bf9d480b642da900eb54c7672aa9c17e9355fcc4ffbb1d645000bf5bfd7e"
+      },
+      {
+        "path": "skills/latex-textbook/textbook-autoformalization-batch-orchestrator/scripts/run_textbook_autoformalization_batch.py",
+        "selector": "run_batch; select_jobs; process_job; run_gates",
+        "digest": "sha256:93c11b180060bf221c75a93f64bb5e85754ea659c949b805ac8da15daafa4f63"
+      },
+      {
+        "path": "skills/SKILL_HOOKS.yaml",
+        "selector": "loop_contracts/textbook_theory_autoformalization_loop",
+        "digest": "sha256:6a4370a206d71da4550b976e50fd1d4863881b3f920820a3ea7b49e8de39a353"
+      },
+      {
+        "path": "scripts/textbook_chapter_workflow_tools.py",
+        "digest": "sha256:89330e7a389743c00b2470b7d72f94809923c98ef1305cbd9beba97d3de3af61"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/latex-textbook/textbook-theory-tex-organizer/scripts/organize_theory_tex.py",
+        "digest": "sha256:a753845b74d969f54cda8d355f026eaa9a68970da09ab600f81655128a48410d"
+      },
+      {
+        "path": "skills/latex-textbook/textbook-autoformalization-batch-orchestrator/scripts/build_textbook_autoformalization_batch.py",
+        "digest": "sha256:5a3e3f604311930a791707422151c8bb8a5a1e170f23f813d45b1d7ea3f5e31c"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "digest": "sha256:5b411351dcccccd41a05ac268dbf9dc2ea7d6d34614f58d0ee44b420e653d83f"
+      },
+      {
+        "path": "tests/mcp/run_textbook_chapter_workflow_tests.py",
+        "digest": "sha256:ce3071132e1fb885ce262f134042a718baec7298271fe7dd48e813683d7f6c7d"
+      },
+      {
+        "path": "tests/mcp/fixtures/textbook_chapter_boundary.py",
+        "digest": "sha256:78425419c9020864cffab0117d527f545d608ca0982056d2f281f3c429d11553"
+      },
+      {
+        "path": "tests/mcp/fixtures/textbook_boundaries/sitecustomize.py",
+        "digest": "sha256:c964729fe1a01af3c4fc9b0a201479c5a60d2ef6555349e5db0880f0825041fb"
+      },
+      {
+        "path": "tests/mcp/fixtures/textbook_chapter_original.py.txt",
+        "digest": "sha256:15dcfb746e99515501217998f272a89ec07c39a99f616a38c4432c910855814e"
+      }
+    ],
+    "gaps": [
+      "Scope is build_chapter_plan with resolved inventory. The existing full_report, theory_path, output_dir and options ports supply its complete native context. Caller main obtains JSON or extraction, including optional prose fallback, and prepends extraction records outside this contract.",
+      "Input specialization limits full_report to 1000 units; larger inventories are outside this contract. Delegated job loops/gates and helper internals remain inside their owning operations; additional declarative hooks are not scheduled.",
+      "Inherited 3600s workflow ceiling is a host policy, not a native aggregate timeout. Required-command failures, outer subprocess timeouts and unhandled exceptions abort; recorded object blocks/gate failures do not. Result reuse is native persistence, not checkpoint resume."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "loop",
+      "native_id": "textbook_theory_autoformalization_loop",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md"
+    },
+    "mathformer.membership": {
+      "required_hooks_are_not_an_execution_schedule": true,
+      "owner_skills": [
+        "latex-archive-theory-extractor",
+        "textbook-theory-tex-organizer",
+        "textbook-chapter-autoformalization-orchestrator",
+        "textbook-autoformalization-batch-orchestrator",
+        "result-existence-precheck-orchestrator",
+        "source-line-translation-packet-builder",
+        "mathlib-grounding-maximizer",
+        "lean-execution-runner",
+        "lean-compile-checker",
+        "source-formalization-drift-guard",
+        "autoformalization-result-realness-verifier",
+        "lean-consistency-report-orchestrator"
+      ],
+      "runtime_accounting": {
+        "shared_steps": "inventory_and_pack, prepare_chapter, run_objects, append_and_advance, write_plan are shared with build_chapter_plan; delegated job processing and gates remain native subprocesses."
+      }
+    },
+    "mathformer.steps": {
+      "inventory_and_pack": "orchestrate_textbook_chapters.py::build_chapter_plan calls chapter_inventory then select_chapters; pack selected/all inventories and empty entries/commands, compute nonempty guard. Unmatched explicit chapter filters raise.",
+      "prepare_chapter": "build_chapter_plan loop: write_chapter_theory_report (preserve paired units), run section organizer, then batch builder; optional max_jobs_per_chapter and no_proof_jobs. Pack entry/commands and compute should_run by index equality OR case-insensitive ID equality/title substring; absent run selectors mean false. Required preparation commands default to 600s each.",
+      "run_objects": "build_chapter_plan should_run branch invokes run_textbook_autoformalization_batch.py::run_batch via required subprocess (1800s default), then attaches run_manifest/run_summary and command record. Runner filters kind, start offset, max count (chapter caller supplies no kind); processes jobs sequentially, reusing result.json unless forced. Otherwise provider availability, one generation attempt (900s), then realness and unified consistency with Lean unless skipped. Unavailable provider => blocked_no_generative_provider; failed/timed-out/blocked/empty generation => blocked_generation; both gates pass => complete, otherwise draft_failed_gates. These statuses continue later jobs; unhandled exceptions abort. Persists per-job results, Lean/gate artifacts and manifests, collecting existing recorded summaries. No proof feedback or repair. Gate success uses the native gate-command exit codes. In particular, a consistency report can record a failed compiler layer while its CLI exits zero; the batch can then record complete. The report payload and recorded status are preserved independently.",
+      "append_and_advance": "build_chapter_plan commands.append and chapter_entries.append plus native for-loop advancement: append chapter records, remove consumed chapter from remaining selection, pack next state and compute done when selection exhausted. Does not inspect object status to stop.",
+      "write_plan": "build_chapter_plan final manifest assembly, summary aggregation and write_json(output_dir/chapter_plan.json), returning manifest. Empty selection succeeds. CLI success is not evidence that every object passed.",
+      "empty_selection": "Pure transport identity for an initially empty selection; no source command, preparation, or extra native inventory call. The root loop guard is inside its body to support Lunar scoped exhaustion."
+    }
+  }
+}

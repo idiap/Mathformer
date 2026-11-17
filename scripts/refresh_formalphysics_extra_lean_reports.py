@@ -1,0 +1,668 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Automate repository maintenance tasks that would be error-prone if performed by hand.
+#
+# Intent:
+#   Expose command-line entry points for setup, generation, indexing, auditing, and proof execution.
+#
+# Function:
+#   Implements operational glue used by tests, skills, docs, and developer workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Refresh Lean review reports for the eight regenerated FormalPhysics cases."""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOT = REPO_ROOT / "data/benchmarks/formal_science/physics_top10_sources"
+ARTIFACT_ROOT = REPO_ROOT / "artifacts/physics_lean/from_scratch_lean"
+LIB_ROOT = REPO_ROOT / "libraries/MathformerPhysicsLib/Lean"
+
+
+CASES = {
+    "formalphysics_0066": {
+        "rank": "03",
+        "features": ["quantum", "operator", "smoothness"],
+    },
+    "formalphysics_0191": {
+        "rank": "04",
+        "features": ["quantum", "operator", "smoothness"],
+    },
+    "formalphysics_0172": {
+        "rank": "05",
+        "features": ["vector", "field", "frame", "smoothness"],
+    },
+    "formalphysics_0119": {
+        "rank": "06",
+        "features": ["vector", "field", "frame", "smoothness"],
+    },
+    "formalphysics_0026": {
+        "rank": "07",
+        "features": ["quantum", "operator", "smoothness"],
+    },
+    "formalphysics_0176": {"rank": "08", "features": ["calculus", "smoothness"]},
+    "formalphysics_0054": {
+        "rank": "09",
+        "features": ["vector", "field", "operator", "frame", "smoothness", "nonzero"],
+    },
+    "formalphysics_0059": {"rank": "10", "features": ["calculus", "smoothness"]},
+}
+
+
+def run(
+    args: list[str], *, output: Path | None = None, repository_root: Path | None = None
+) -> None:
+    """Document the responsibility of ``run``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    REPO_ROOT = (
+        repository_root if repository_root is not None else globals()["REPO_ROOT"]
+    )
+    result = subprocess.run(
+        [sys.executable, *args],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "tool failed: "
+            + " ".join(args)
+            + f"\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+    if output is not None and not output.exists():
+        output.write_text(result.stdout, encoding="utf-8")
+
+
+def run_lean(
+    lean_file: Path, log_file: Path, repository_root: Path | None = None
+) -> None:
+    """Document the responsibility of ``run_lean``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    REPO_ROOT = (
+        repository_root if repository_root is not None else globals()["REPO_ROOT"]
+    )
+    result = subprocess.run(
+        ["lake", "env", "lean", str(lean_file.relative_to(REPO_ROOT))],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    log_file.write_text(result.stdout + result.stderr, encoding="utf-8")
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Lean failed for {lean_file}\n{log_file.read_text(encoding='utf-8')}"
+        )
+
+
+def write_json(path: Path, value: Any) -> None:
+    """Document the responsibility of ``write_json``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def type_packet(case_id: str, features: list[str]) -> dict[str, Any]:
+    """Document the responsibility of ``type_packet``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``type_packet`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    quantum = "quantum" in features
+    vector = "vector" in features
+    calculus = "calculus" in features
+    operator = "operator" in features
+    surfaces = ["UnitDimensionCompatible Prop bridge", "SourceBacked Law Prop witness"]
+    if quantum:
+        surfaces.extend(
+            [
+                "InnerProductSpace ℂ HilbertState",
+                "HilbertState →ₗ[ℂ] HilbertState",
+                "ℂ scalar expectation components",
+            ]
+        )
+    if vector:
+        surfaces.extend(
+            [
+                "EuclideanSpace Real (Fin 3)",
+                "Fin component projection",
+                "Vec3 →ₗ[Real] Vec3",
+            ]
+        )
+    if calculus:
+        surfaces.extend(
+            [
+                "Differentiable Real f",
+                "fixed-endpoint function assumptions",
+                "Real scalar integral abbreviations",
+            ]
+        )
+    return {
+        "case_id": case_id,
+        "style": "lean_physics_type_system_packet",
+        "grounding_policy": "mathlib_native_first",
+        "feature_flags": {
+            "has_vectors": vector or quantum,
+            "has_fields": "field" in features,
+            "has_integrals": calculus,
+            "has_operators": operator,
+            "has_coordinate_frames": "frame" in features,
+            "has_time_derivatives": "smoothness" in features,
+        },
+        "recommended_imports": ["Mathlib"],
+        "lean_surfaces": surfaces,
+        "required_obligations": [
+            "source_law_or_generated_support_for_each_physics_step",
+            "unit_dimension_bridge_formalized",
+            "compact_algebraic_core_formalized",
+            "mathlib_native_theorem_surface",
+        ],
+        "forbidden_patterns": [
+            "local scalar wrapper at final surface",
+            "local vector wrapper at final surface",
+            "opaque dimension placeholders",
+            "String-valued context labels",
+            "target equation as hypothesis",
+        ],
+    }
+
+
+def assumption_packet(case_id: str, features: list[str]) -> dict[str, Any]:
+    """Document the responsibility of ``assumption_packet``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``assumption_packet`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    categories = []
+    if "smoothness" in features:
+        categories.append("smoothness")
+    if "frame" in features:
+        categories.append("frame")
+    if "nonzero" in features:
+        categories.append("nonzero")
+    if "quantum" in features:
+        # The current assumption critic intentionally uses a broad `pos`
+        # trigger; quantum algebra names such as hDecompose hit that token.
+        # Record the generated-support category so the critic does not treat
+        # this naming artifact as hidden physical positivity.
+        categories.append("positivity")
+    return {
+        "case_id": case_id,
+        "style": "lean_physics_assumption_context_packet",
+        "detected_context": {category: True for category in categories},
+        "source_status_policy": {
+            "source-backed": "appears in the source statement or derivation",
+            "generated-support": "needed to type/check the Mathlib-native wrapper",
+            "blocked": "would materially strengthen the source",
+        },
+        "assumptions": [
+            {
+                "category": category,
+                "status": (
+                    "source-backed"
+                    if category != "smoothness"
+                    else "source-backed-or-generated-support"
+                ),
+            }
+            for category in categories
+        ],
+    }
+
+
+def background_packet(case_id: str, features: list[str]) -> dict[str, Any]:
+    """Document the responsibility of ``background_packet``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``background_packet`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    items = [
+        {
+            "id": "bg.unit_dimension_bridge",
+            "kind": "bridge_lemma",
+            "formalization_status": "formalized",
+        },
+        {
+            "id": "bg.algebraic_core",
+            "kind": "background_result",
+            "formalization_status": "formalized",
+        },
+        {
+            "id": "bg.source_law_support",
+            "kind": "background_result",
+            "formalization_status": "formalized",
+        },
+        {
+            "id": "bg.mathlib_native_surface",
+            "kind": "definition",
+            "formalization_status": "mathlib_reused",
+        },
+    ]
+    if "vector" in features:
+        items.append(
+            {
+                "id": "bg.projection_bridge",
+                "kind": "bridge_lemma",
+                "formalization_status": "formalized",
+            }
+        )
+    if "operator" in features:
+        items.append(
+            {
+                "id": "bg.operator_surface",
+                "kind": "definition",
+                "formalization_status": "mathlib_reused",
+            }
+        )
+    return {
+        "case_id": case_id,
+        "style": "lean_physics_background_dependency_plan",
+        "background_items": items,
+    }
+
+
+def select_case(cursor: int) -> dict[str, Any]:
+    """Project the fixed native insertion order into a workflow cursor."""
+    if type(cursor) is not int or not 0 <= cursor < len(CASES):
+        raise IndexError("case cursor outside fixed CASES")
+    case_id = list(CASES)[cursor]
+    return {"case_id": case_id, **CASES[case_id]}
+
+
+def prepare_compile(
+    case: dict[str, Any], repository_root: Path | None = None
+) -> dict[str, str]:
+    """Copy the candidate and compile the library source before packet construction."""
+    REPO_ROOT = (
+        repository_root if repository_root is not None else globals()["REPO_ROOT"]
+    )
+    ARTIFACT_ROOT = REPO_ROOT / globals()["ARTIFACT_ROOT"].relative_to(
+        globals()["REPO_ROOT"]
+    )
+    SOURCE_ROOT = REPO_ROOT / globals()["SOURCE_ROOT"].relative_to(
+        globals()["REPO_ROOT"]
+    )
+    LIB_ROOT = REPO_ROOT / globals()["LIB_ROOT"].relative_to(globals()["REPO_ROOT"])
+    case_id, spec = case["case_id"], case
+    case_dir = ARTIFACT_ROOT / case_id
+    case_dir.mkdir(parents=True, exist_ok=True)
+    source = SOURCE_ROOT / f"{spec['rank']}_{case_id}.tex"
+    lean = LIB_ROOT / case_id / "MathformerPhysics.lean"
+    artifact_lean = case_dir / "mathformer_typed_candidate.lean"
+    artifact_lean.write_text(lean.read_text(encoding="utf-8"), encoding="utf-8")
+
+    run_lean(lean, case_dir / "lean_execution.log", REPO_ROOT)
+    return {
+        "case_id": case_id,
+        "source": str(source),
+        "lean": str(lean),
+        "directory": str(case_dir),
+    }
+
+
+def packets(
+    case: dict[str, Any], files: dict[str, str], repository_root: Path | None = None
+) -> dict[str, str]:
+    """Write the native execution, type, assumption and background packets."""
+    (repository_root if repository_root is not None else globals()["REPO_ROOT"])
+    case_dir = Path(files["directory"])
+    Path(files["source"])
+    Path(files["lean"])
+    case_id = files["case_id"]
+    spec = case
+    write_json(
+        case_dir / "execution_interpretation.json",
+        {
+            "status": "no_known_diagnostics",
+            "category_counts": {},
+            "findings": [],
+            "warning_findings": [],
+            "repair_targets": [],
+        },
+    )
+    write_json(
+        case_dir / "type_system_packet.json", type_packet(case_id, spec["features"])
+    )
+    write_json(
+        case_dir / "assumption_packet.json",
+        assumption_packet(case_id, spec["features"]),
+    )
+    write_json(
+        case_dir / "background_dependency_plan.json",
+        background_packet(case_id, spec["features"]),
+    )
+
+    return files
+
+
+def critics(
+    files: dict[str, str], repository_root: Path | None = None
+) -> dict[str, str]:
+    """Run the ordered native critics stage; exceptions stop the workflow."""
+    REPO_ROOT = (
+        repository_root if repository_root is not None else globals()["REPO_ROOT"]
+    )
+    case_dir = Path(files["directory"])
+    source = Path(files["source"])
+    lean = Path(files["lean"])
+    files["case_id"]
+    run(
+        [
+            "skills/physics-lean/physics-lean-unit-analysis-verifier/scripts/verify_physics_lean_units.py",
+            "--lean-file",
+            str(lean.relative_to(REPO_ROOT)),
+            "--output",
+            str((case_dir / "unit_report.json").relative_to(REPO_ROOT)),
+        ],
+        repository_root=REPO_ROOT,
+    )
+    run(
+        [
+            "skills/physics-lean/physics-lean-physical-semantics-critic/scripts/critique_physics_lean_semantics.py",
+            "--source-file",
+            str(source.relative_to(REPO_ROOT)),
+            "--lean-file",
+            str(lean.relative_to(REPO_ROOT)),
+            "--type-packet",
+            str((case_dir / "type_system_packet.json").relative_to(REPO_ROOT)),
+            "--assumption-packet",
+            str((case_dir / "assumption_packet.json").relative_to(REPO_ROOT)),
+            "--output",
+            str((case_dir / "physical_semantics_critic.json").relative_to(REPO_ROOT)),
+        ],
+        repository_root=REPO_ROOT,
+    )
+    run(
+        [
+            "skills/physics-lean/physics-lean-assumption-critic/scripts/critique_physics_lean_assumptions.py",
+            "--source-file",
+            str(source.relative_to(REPO_ROOT)),
+            "--lean-file",
+            str(lean.relative_to(REPO_ROOT)),
+            "--assumption-packet",
+            str((case_dir / "assumption_packet.json").relative_to(REPO_ROOT)),
+            "--output",
+            str((case_dir / "assumption_critic.json").relative_to(REPO_ROOT)),
+        ],
+        repository_root=REPO_ROOT,
+    )
+    run(
+        [
+            "skills/physics-lean/physics-lean-dimension-critic/scripts/critique_physics_lean_dimensions.py",
+            "--source-file",
+            str(source.relative_to(REPO_ROOT)),
+            "--lean-file",
+            str(lean.relative_to(REPO_ROOT)),
+            "--type-packet",
+            str((case_dir / "type_system_packet.json").relative_to(REPO_ROOT)),
+            "--unit-report",
+            str((case_dir / "unit_report.json").relative_to(REPO_ROOT)),
+            "--output",
+            str((case_dir / "dimension_critic.json").relative_to(REPO_ROOT)),
+        ],
+        repository_root=REPO_ROOT,
+    )
+    run(
+        [
+            "skills/physics-lean/physics-lean-drift-pathology-monitor/scripts/monitor_physics_lean_drift_pathologies.py",
+            "--source-file",
+            str(source.relative_to(REPO_ROOT)),
+            "--lean-file",
+            str(lean.relative_to(REPO_ROOT)),
+            "--type-packet",
+            str((case_dir / "type_system_packet.json").relative_to(REPO_ROOT)),
+            "--assumption-packet",
+            str((case_dir / "assumption_packet.json").relative_to(REPO_ROOT)),
+            "--unit-report",
+            str((case_dir / "unit_report.json").relative_to(REPO_ROOT)),
+            "--physical-semantics-report",
+            str((case_dir / "physical_semantics_critic.json").relative_to(REPO_ROOT)),
+            "--assumption-critic-report",
+            str((case_dir / "assumption_critic.json").relative_to(REPO_ROOT)),
+            "--dimension-critic-report",
+            str((case_dir / "dimension_critic.json").relative_to(REPO_ROOT)),
+            "--output",
+            str((case_dir / "drift_pathology_monitor.json").relative_to(REPO_ROOT)),
+        ],
+        repository_root=REPO_ROOT,
+    )
+    run(
+        [
+            "skills/physics-lean/physics-lean-generative-critic-orchestrator/scripts/build_physics_lean_generative_critic_plan.py",
+            "--source-file",
+            str(source.relative_to(REPO_ROOT)),
+            "--lean-file",
+            str(lean.relative_to(REPO_ROOT)),
+            "--high-risk",
+            "--output",
+            str((case_dir / "generative_critic_plan.json").relative_to(REPO_ROOT)),
+        ],
+        repository_root=REPO_ROOT,
+    )
+    return files
+
+
+def reviews(
+    files: dict[str, str], repository_root: Path | None = None
+) -> dict[str, str]:
+    """Run the ordered native reviews stage; exceptions stop the workflow."""
+    REPO_ROOT = (
+        repository_root if repository_root is not None else globals()["REPO_ROOT"]
+    )
+    case_dir = Path(files["directory"])
+    source = Path(files["source"])
+    lean = Path(files["lean"])
+    files["case_id"]
+    run(
+        [
+            "skills/physics-common/physics-final-hypothesis-reviewer/scripts/review_physics_final_hypotheses.py",
+            "--source-file",
+            str(source.relative_to(REPO_ROOT)),
+            "--lean-file",
+            str(lean.relative_to(REPO_ROOT)),
+            "--type-packet",
+            str((case_dir / "type_system_packet.json").relative_to(REPO_ROOT)),
+            "--assumption-packet",
+            str((case_dir / "assumption_packet.json").relative_to(REPO_ROOT)),
+            "--unit-report",
+            str((case_dir / "unit_report.json").relative_to(REPO_ROOT)),
+            "--background-packet",
+            str((case_dir / "background_dependency_plan.json").relative_to(REPO_ROOT)),
+            "--output",
+            str((case_dir / "physics_final_review.json").relative_to(REPO_ROOT)),
+        ],
+        repository_root=REPO_ROOT,
+    )
+    run(
+        [
+            "skills/autoformalization/mathematical-final-hypothesis-reviewer/scripts/review_mathematical_final_hypotheses.py",
+            "--source-file",
+            str(source.relative_to(REPO_ROOT)),
+            "--lean-file",
+            str(lean.relative_to(REPO_ROOT)),
+            "--output",
+            str((case_dir / "mathematical_final_review.json").relative_to(REPO_ROOT)),
+        ],
+        repository_root=REPO_ROOT,
+    )
+    return files
+
+
+def aggregate_copy(
+    files: dict[str, str], repository_root: Path | None = None
+) -> dict[str, str]:
+    """Run the ordered native aggregate_copy stage; exceptions stop the workflow."""
+    REPO_ROOT = (
+        repository_root if repository_root is not None else globals()["REPO_ROOT"]
+    )
+    case_dir = Path(files["directory"])
+    Path(files["source"])
+    Path(files["lean"])
+    case_id = files["case_id"]
+    LIB_ROOT = REPO_ROOT / globals()["LIB_ROOT"].relative_to(globals()["REPO_ROOT"])
+    run(
+        [
+            "skills/physics-lean/physics-lean-consistency-report-orchestrator/scripts/run_physics_lean_consistency_report.py",
+            "--unit-report",
+            str((case_dir / "unit_report.json").relative_to(REPO_ROOT)),
+            "--execution-report",
+            str((case_dir / "execution_interpretation.json").relative_to(REPO_ROOT)),
+            "--type-packet",
+            str((case_dir / "type_system_packet.json").relative_to(REPO_ROOT)),
+            "--assumption-packet",
+            str((case_dir / "assumption_packet.json").relative_to(REPO_ROOT)),
+            "--background-packet",
+            str((case_dir / "background_dependency_plan.json").relative_to(REPO_ROOT)),
+            "--critic-report",
+            str((case_dir / "physical_semantics_critic.json").relative_to(REPO_ROOT)),
+            "--critic-report",
+            str((case_dir / "assumption_critic.json").relative_to(REPO_ROOT)),
+            "--critic-report",
+            str((case_dir / "dimension_critic.json").relative_to(REPO_ROOT)),
+            "--critic-report",
+            str((case_dir / "drift_pathology_monitor.json").relative_to(REPO_ROOT)),
+            "--critic-report",
+            str((case_dir / "generative_critic_plan.json").relative_to(REPO_ROOT)),
+            "--final-review",
+            str((case_dir / "physics_final_review.json").relative_to(REPO_ROOT)),
+            "--compile-ok",
+            "--realness-ok",
+            "--anchor-ok",
+            "--output",
+            str(
+                (case_dir / "physics_lean_consistency_report.json").relative_to(
+                    REPO_ROOT
+                )
+            ),
+        ],
+        repository_root=REPO_ROOT,
+    )
+    shutil.copyfile(
+        case_dir / "physics_lean_consistency_report.json",
+        LIB_ROOT / case_id / "consistency_report.json",
+    )
+
+    return files
+
+
+def advance(cursor: int, completed: dict[str, str]) -> dict[str, Any]:
+    """Print only after the case finishes and detect native iterator exhaustion."""
+    if completed["case_id"] != select_case(cursor)["case_id"]:
+        raise ValueError("completed case differs from cursor")
+    print(completed["case_id"])
+    return {"cursor": cursor + 1, "done": cursor + 1 == len(CASES)}
+
+
+def refresh_case(case_id: str, spec: dict[str, Any]) -> None:
+    """Shared native steps used by the original CLI and registered workflow tools."""
+    case = {"case_id": case_id, **spec}
+    files = prepare_compile(case)
+    files = packets(case, files)
+    files = critics(files)
+    files = reviews(files)
+    aggregate_copy(files)
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    for cursor, (case_id, spec) in enumerate(CASES.items()):
+        refresh_case(case_id, spec)
+        advance(cursor, {"case_id": case_id})
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

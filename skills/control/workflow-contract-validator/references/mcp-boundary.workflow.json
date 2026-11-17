@@ -1,0 +1,700 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_meta_skills_mcp_boundary_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Ordered projection of run(); accumulate boundary errors, write and return the validation payload.",
+  "aliases": [
+    "meta-skills:mcp-boundary"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "SourceScope": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "max_workflow_actions"
+        ],
+        "properties": {
+          "max_workflow_actions": {
+            "const": 1024
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Manifest": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "workflow_actions": {
+            "type": "array",
+            "maxItems": 1024,
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Findings": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        }
+      }
+    },
+    "ScanState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "cursor",
+          "findings"
+        ],
+        "properties": {
+          "cursor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1024
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "ToolSets": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "allowed",
+          "actual"
+        ],
+        "properties": {
+          "allowed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "actual": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Payload": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "style",
+          "ok",
+          "workflow_actions",
+          "allowed_mcp_tools",
+          "actual_mcp_tools",
+          "config_root",
+          "workflow_actions_path",
+          "findings"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "style": {
+            "const": "mathformer_meta_mcp_boundary_validation"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "workflow_actions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "allowed_mcp_tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "actual_mcp_tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "config_root": {
+            "const": "config/"
+          },
+          "workflow_actions_path": {
+            "const": "meta_skills/registry/workflow_actions.yaml"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "inputs": {
+    "scope": {
+      "type": "SourceScope"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Payload",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "load_and_pack": {
+      "inputs": {
+        "scope": {
+          "type": "SourceScope"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "data": {
+          "type": "Manifest"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "state": {
+          "type": "ScanState"
+        },
+        "has_actions": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_boundary_load",
+          "operation": "mathformer_boundary_load"
+        }
+      }
+    },
+    "check_action": {
+      "inputs": {
+        "data": {
+          "type": "Manifest"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "state": {
+          "type": "ScanState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "ScanState"
+        },
+        "findings": {
+          "type": "Findings"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_boundary_action",
+          "operation": "mathformer_boundary_action"
+        }
+      }
+    },
+    "empty_actions": {
+      "inputs": {
+        "state": {
+          "type": "ScanState"
+        }
+      },
+      "outputs": {
+        "findings": {
+          "type": "Findings"
+        },
+        "state": {
+          "type": "ScanState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_boundary_empty",
+          "operation": "mathformer_boundary_empty"
+        }
+      }
+    },
+    "check_tools": {
+      "inputs": {
+        "data": {
+          "type": "Manifest"
+        },
+        "findings": {
+          "type": "Findings"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "findings": {
+          "type": "Findings"
+        },
+        "tools": {
+          "type": "ToolSets"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_boundary_tools",
+          "operation": "mathformer_boundary_tools"
+        }
+      }
+    },
+    "check_docs": {
+      "inputs": {
+        "findings": {
+          "type": "Findings"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "findings": {
+          "type": "Findings"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_boundary_docs",
+          "operation": "mathformer_boundary_docs"
+        }
+      }
+    },
+    "check_denials": {
+      "inputs": {
+        "data": {
+          "type": "Manifest"
+        },
+        "findings": {
+          "type": "Findings"
+        }
+      },
+      "outputs": {
+        "findings": {
+          "type": "Findings"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_boundary_denials",
+          "operation": "mathformer_boundary_denials"
+        }
+      }
+    },
+    "write_payload": {
+      "inputs": {
+        "data": {
+          "type": "Manifest"
+        },
+        "tools": {
+          "type": "ToolSets"
+        },
+        "findings": {
+          "type": "Findings"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Payload"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_boundary_write",
+          "operation": "mathformer_boundary_write"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "load",
+        "kind": "call",
+        "operation": "load_and_pack",
+        "arguments": {
+          "scope": {
+            "ref": "inputs.scope"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "kind": "loop",
+        "state_type": "ScanState",
+        "initial": {
+          "ref": "steps.load.outputs.state"
+        },
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "nonempty",
+              "when": {
+                "ref": "steps.load.outputs.has_actions"
+              },
+              "body": {
+                "kind": "call",
+                "operation": "check_action",
+                "arguments": {
+                  "data": {
+                    "ref": "steps.load.outputs.data"
+                  },
+                  "registry": {
+                    "ref": "steps.load.outputs.registry"
+                  },
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "empty_actions",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "ScanState",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "findings": {
+              "type": "Findings",
+              "value": {
+                "ref": "selected.outputs.findings"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 1024,
+        "on_exhausted": "fail",
+        "outputs": {
+          "findings": {
+            "type": "Findings",
+            "value": {
+              "ref": "body.outputs.findings"
+            }
+          }
+        },
+        "id": "actions"
+      },
+      {
+        "id": "tools",
+        "kind": "call",
+        "operation": "check_tools",
+        "arguments": {
+          "data": {
+            "ref": "steps.load.outputs.data"
+          },
+          "findings": {
+            "ref": "steps.actions.outputs.findings"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "id": "docs",
+        "kind": "call",
+        "operation": "check_docs",
+        "arguments": {
+          "findings": {
+            "ref": "steps.tools.outputs.findings"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "id": "denials",
+        "kind": "call",
+        "operation": "check_denials",
+        "arguments": {
+          "data": {
+            "ref": "steps.load.outputs.data"
+          },
+          "findings": {
+            "ref": "steps.docs.outputs.findings"
+          }
+        }
+      },
+      {
+        "id": "write",
+        "kind": "call",
+        "operation": "write_payload",
+        "arguments": {
+          "data": {
+            "ref": "steps.load.outputs.data"
+          },
+          "tools": {
+            "ref": "steps.tools.outputs.tools"
+          },
+          "findings": {
+            "ref": "steps.denials.outputs.findings"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Payload",
+        "value": {
+          "ref": "steps.write.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository"
+        ],
+        "write": [
+          "artifacts/mcp/meta_skill_service_self_test.json"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "validate_mcp_boundary",
+        "write_validation_payload"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "execute_draft_skills",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 1029
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked boundary validation only; ok is not scientific validity or runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "meta_skills/scripts/validate_mcp_boundary.py",
+        "selector": "run",
+        "digest": "sha256:f79f9c965ab54901bf4426e0e538c1aa2f0784b7e112f14b6995404784dfe2b3"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry; preflight; run_leaf_action; meta-skills:mcp-boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/meta_skills/run_meta_skill_suite.py",
+        "selector": "validate_mcp_boundary.py invocation",
+        "digest": "sha256:06c35f2abb57248a44871776621cfe6612c81e24ad802517780d88a29a8e9fab"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_mcp_boundary_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "mcp.boundary.workflow",
+        "digest": "sha256:a6aa8289ab8762600c8346fa28ea30d9d8c5f4e736a293416a92f36e623086d6"
+      },
+      {
+        "path": "tests/mcp/run_mcp_boundary_workflow_tests.py",
+        "selector": "BoundaryTests",
+        "digest": "sha256:724e44cedf8a3d1da64686a340641f8b2d5cefea36eb1621dc03446bd7b62663"
+      },
+      {
+        "path": "tests/mcp/fixtures/mcp_boundary_original.py.txt",
+        "selector": "frozen original run oracle",
+        "digest": "sha256:7bff3a132a5a637a8b8d7e7c4b7c50916bf6e836989da5c545d5a90ddb0cdebe"
+      },
+      {
+        "path": "scripts/mcp_boundary_tools.py",
+        "selector": "register_mcp_boundary_tools",
+        "digest": "sha256:3061026eb118368dcab23f7f25a9864f07a99d68d65996f24ae684100c51a98d"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory authored mcp-boundary contract",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "The bounded loop surrounds a per-iteration switch to support Lunar compilation. Empty declarations project their initialized findings once and check zero rows; nonempty declarations visit exactly one row per iteration.",
+      "Projection accepts at most 1024 declaration rows; native run has no fixed row cap. The load adapter rejects larger manifests after the native load and registry build.",
+      "Cursor is the source iterator position; findings are its only accumulated semantic state. Every row is checked once in order regardless of findings. The 1024th row terminates normally; exhaustion is unreachable within the declared domain.",
+      "Repository root is an explicit read/write context port. Native run retains its original repository paths. The MCP writer also enforces server write policy.",
+      "Read, parse, registry-build and write exceptions terminate execution. False payload.ok is normal result data. main and hub preflight, dry-run and write auditing remain contextual boundaries.",
+      "Wall time, call budgets, receipts, digests and events are enforced by the Lunar host; native run has no configured timeout. The suite subprocess has a separate 180-second timeout."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "meta-skills:mcp-boundary",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "meta-skills:mcp-boundary",
+        "family": "meta_skills",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "meta_skills/scripts/validate_mcp_boundary.py",
+          "--json"
+        ],
+        "depends_on": [],
+        "writes": [
+          "artifacts/mcp/meta_skill_service_self_test.json"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "main invokes run once, prints JSON or PASS/FAIL, and exits 0 iff payload.ok else 1.",
+      "hub": "Dependency-free leaf. Preflight errors and dry-run return before launch; otherwise launch once, audit writes and potentially fail for undeclared writes.",
+      "failure_policy": "Preserve a false payload.ok; it is a normal validation result, not an exception."
+    }
+  }
+}

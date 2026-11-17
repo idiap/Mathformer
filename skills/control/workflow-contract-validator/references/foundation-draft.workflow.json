@@ -1,0 +1,790 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lean_foundation_draft_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Model main → build_draft: select static foundation templates, preview or overwrite them once, then emit a candidate report.",
+  "aliases": [
+    "physics-lean:foundation-draft"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Argv": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Options": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "surface_plan",
+          "write",
+          "output",
+          "self_test",
+          "json"
+        ],
+        "properties": {
+          "surface_plan": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "write": {
+            "type": "boolean"
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "self_test": {
+            "type": "boolean"
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Request": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "plan",
+          "write"
+        ],
+        "properties": {
+          "plan": true,
+          "write": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "DraftState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "modules",
+          "cursor",
+          "items",
+          "item_history"
+        ],
+        "properties": {
+          "modules": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "Carriers",
+                "Contexts",
+                "Fields",
+                "HilbertSpace",
+                "Laws",
+                "Operators",
+                "PositionMomentumModels",
+                "UnboundedOperators",
+                "Units",
+                "VectorCalculus"
+              ]
+            }
+          },
+          "cursor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "required": [
+                "module",
+                "path",
+                "state",
+                "contains_mathlib_grounding",
+                "declaration_count"
+              ],
+              "properties": {
+                "module": {
+                  "enum": [
+                    "Carriers",
+                    "Contexts",
+                    "Fields",
+                    "HilbertSpace",
+                    "Laws",
+                    "Operators",
+                    "PositionMomentumModels",
+                    "UnboundedOperators",
+                    "Units",
+                    "VectorCalculus"
+                  ]
+                },
+                "path": {
+                  "type": "string"
+                },
+                "state": {
+                  "const": "candidate_generated"
+                },
+                "contains_mathlib_grounding": {
+                  "type": "boolean"
+                },
+                "declaration_count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "item_history": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "description": "Native item JSON preserves insertion order through canonical transport."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "style",
+          "source_surface_plan",
+          "write",
+          "accepted_index",
+          "modules",
+          "terminal_state"
+        ],
+        "properties": {
+          "style": {
+            "const": "physics_foundation_generation_report"
+          },
+          "source_surface_plan": true,
+          "write": {
+            "type": "boolean"
+          },
+          "accepted_index": {
+            "const": "MathformerPhysicsLib/Lean/Foundations.lean"
+          },
+          "modules": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "required": [
+                "module",
+                "path",
+                "state",
+                "contains_mathlib_grounding",
+                "declaration_count"
+              ],
+              "properties": {
+                "module": {
+                  "enum": [
+                    "Carriers",
+                    "Contexts",
+                    "Fields",
+                    "HilbertSpace",
+                    "Laws",
+                    "Operators",
+                    "PositionMomentumModels",
+                    "UnboundedOperators",
+                    "Units",
+                    "VectorCalculus"
+                  ]
+                },
+                "path": {
+                  "type": "string"
+                },
+                "state": {
+                  "const": "candidate_generated"
+                },
+                "contains_mathlib_grounding": {
+                  "type": "boolean"
+                },
+                "declaration_count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "terminal_state": {
+            "enum": [
+              "draft_written",
+              "draft_preview"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "const": 0,
+        "type": "integer"
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "repository_root",
+          "allow_mutating"
+        ],
+        "properties": {
+          "repository_root": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "RenderedReport": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Argv"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "parse": {
+      "inputs": {
+        "argv": {
+          "type": "Argv"
+        }
+      },
+      "outputs": {
+        "options": {
+          "type": "Options"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_foundation_draft_parse",
+          "operation": "mathformer_foundation_draft_parse"
+        }
+      }
+    },
+    "self_test_request": {
+      "inputs": {},
+      "outputs": {
+        "request": {
+          "type": "Request"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_foundation_draft_self_test_request",
+          "operation": "mathformer_foundation_draft_self_test_request"
+        }
+      }
+    },
+    "load_request": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "request": {
+          "type": "Request"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_foundation_draft_load_request",
+          "operation": "mathformer_foundation_draft_load_request"
+        }
+      }
+    },
+    "initialize": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "DraftState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_foundation_draft_initialize",
+          "operation": "mathformer_foundation_draft_initialize"
+        }
+      }
+    },
+    "draft_next": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "state": {
+          "type": "DraftState"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "DraftState"
+        },
+        "done": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_foundation_draft_draft_next",
+          "operation": "mathformer_foundation_draft_draft_next"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "state": {
+          "type": "DraftState"
+        },
+        "options": {
+          "type": "Options"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "rendered_report": {
+          "type": "RenderedReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_foundation_draft_finish",
+          "operation": "mathformer_foundation_draft_finish"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "report": {
+          "type": "Report"
+        },
+        "context": {
+          "type": "Context"
+        },
+        "rendered_report": {
+          "type": "RenderedReport"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_foundation_draft_emit",
+          "operation": "mathformer_foundation_draft_emit"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "parse",
+        "kind": "call",
+        "operation": "parse",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          }
+        }
+      },
+      {
+        "id": "choose_request",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "self_test",
+            "when": {
+              "ref": "steps.parse.outputs.options.self_test"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "self_test_request",
+              "arguments": {}
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "load_request",
+          "arguments": {
+            "options": {
+              "ref": "steps.parse.outputs.options"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "outputs": {
+          "request": {
+            "type": "Request",
+            "value": {
+              "ref": "selected.outputs.request"
+            }
+          }
+        }
+      },
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "request": {
+            "ref": "steps.choose_request.outputs.request"
+          }
+        }
+      },
+      {
+        "id": "draft_modules",
+        "kind": "loop",
+        "description": "Exactly one visit per selected template (1–10). The tenth visit completes normally with done=true; exhaustion is unreachable for source-selected modules.",
+        "state_type": "DraftState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "body": {
+          "kind": "call",
+          "operation": "draft_next",
+          "arguments": {
+            "request": {
+              "ref": "steps.choose_request.outputs.request"
+            },
+            "state": {
+              "ref": "loop.state"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 10,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "DraftState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "request": {
+            "ref": "steps.choose_request.outputs.request"
+          },
+          "state": {
+            "ref": "steps.draft_modules.outputs.state"
+          },
+          "options": {
+            "ref": "steps.parse.outputs.options"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "emit",
+        "kind": "call",
+        "operation": "emit",
+        "arguments": {
+          "options": {
+            "ref": "steps.parse.outputs.options"
+          },
+          "report": {
+            "ref": "steps.finish.outputs.report"
+          },
+          "context": {
+            "ref": "inputs.context"
+          },
+          "rendered_report": {
+            "ref": "steps.finish.outputs.rendered_report"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.finish.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.emit.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/",
+          "MathformerPhysicsLib/Lean/Foundations/",
+          "MathformerPhysicsLib/Lean/Foundations.lean",
+          "native_output_path"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow",
+        "preview_static_candidates",
+        "overwrite_selected_templates_when_write"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion",
+        "promote_candidates"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 15
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Candidate generation only; no missing-declaration comparison, Lean compilation, scientific verification, or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py",
+        "selector": "main → build_draft (with modules_from_plan)",
+        "digest": "sha256:d14bb61926812e2d07d4e2982e2ea9d4866688f3af12a4cae946fd1e0622abfc"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry physics-lean:foundation-draft; run_action; run_leaf_action; preflight",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/physics_lean/run_foundations_workflow.py",
+        "selector": "direct preview invocation with surface plan",
+        "digest": "sha256:4210287f342c91859bf7ec88ff6d7737a0c0c14c05204aacbeb5018bb9713492"
+      },
+      {
+        "path": "scripts/foundation_draft_tools.py",
+        "selector": "register_foundation_draft_tools",
+        "digest": "sha256:88f25dde251f803a48e23c3224d6810e6e38d2e8b694c0e195303c5a81bfc864"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "foundation draft MCP registration and service write controls",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "foundation-draft authored contract projection",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_foundation_draft_workflow_tests.py",
+        "selector": "native equivalence and actual MCP/Lunar/PRISM execution fixtures",
+        "digest": "sha256:444bfabedb01a9ef766eafacacbb279151f63381eec5d4940cf46a18bec8e8e4"
+      },
+      {
+        "path": "tests/mcp/fixtures/foundation_draft_original.py.txt",
+        "selector": "unmodified original entrypoint oracle",
+        "digest": "sha256:c670f6f168caad032f5d5d27b64d239be592b0fb05d8d610f70dba20c5885ba9"
+      }
+    ],
+    "gaps": [
+      "Native output constants use repository-root MathformerPhysicsLib/Lean; the hub declares libraries/MathformerPhysicsLib/Lean. Native hub writes may fail its post-execution audit; this path discrepancy is preserved.",
+      "3600 seconds and 15 calls are contract budgets, not native bounds; the native action has no timeout. Ten iterations reflect the fixed template set, with normal completion at the bound.",
+      "The graph covers the Python entrypoint. Hub preflight, dry-run and post-execution write auditing remain outer controller boundaries. MCP enforces service write policy, allowed roots and explicit context.allow_mutating for actual writes.",
+      "Argparse help/errors retain native diagnostics and terminate the tool call with the native exit code in its error; they do not terminate the MCP transport.",
+      "Required receipts/digests/provenance are Lunar runtime obligations, not claims that native optional reporting implements them."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lean:foundation-draft",
+      "owner_skill": "skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/SKILL.md",
+      "contract": {
+        "id": "physics-lean:foundation-draft",
+        "summary": "Draft or preview MathformerPhysicsLib Lean foundation modules from a surface plan.",
+        "family": "physics_lean",
+        "kind": "generation",
+        "safety": "writes_repo",
+        "command": [
+          "{python}",
+          "skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py"
+        ],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [
+          "libraries/MathformerPhysicsLib/Lean/Foundations/",
+          "libraries/MathformerPhysicsLib/Lean/Foundations.lean"
+        ],
+        "allows_extra_args": true,
+        "timeout_seconds": null,
+        "notes": ""
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Graph calls shared native entrypoint steps through registered MCP tools; context.repository_root mounts the native repository and CLI working directory without mutating process globals. Native stdout is preserved on MCP stderr. No provider/compiler boundary exists in this static generator.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "failure_policy": "Propagate parsing, assertions, JSON and file failures; hub failures or write-audit rejection must not become acceptance.",
+      "scientific_payloads": "Report describes generated candidates only."
+    },
+    "mathformer.step_sources": {
+      "parse": "skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py::main/parse_args. Parse CLI flags; argparse errors/help retain their native exits.",
+      "self_test_request": "skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py::main self_test branch. Pack source_packet_id=self_test, surfaces=[{foundation_module: Fields}], write=false; ignore --surface-plan and --write.",
+      "load_request": "skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py::main/load_json. Read and parse --surface-plan when provided, otherwise {}; pack plan and args.write. JSON/file errors propagate.",
+      "initialize": "skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py::modules_from_plan/build_draft. Collect str(foundation_module) from dictionary surface entries, deduplicate, filter recognized templates, sort; if empty use all 10 sorted templates. Pack modules, cursor=0, items=[]. Malformed plan access fails naturally.",
+      "draft_next": "skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py::build_draft for module in modules. Visit modules[cursor]; if request.write, mkdir parents and overwrite the complete static template before appending its report item. Record relative path, candidate_generated, grounding substring and /-- count. Pack updated items and advanced iterator cursor; compute done when all selected modules were consumed. These are explicit iterator/state/guard projections, not extra source passes. File errors fail immediately; earlier writes remain.",
+      "finish": "skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py::build_draft return and main self_test assertions. After traversal, if request.write overwrite the fixed index importing all 10 templates, even for a subset. Build report with source_packet_id or null, accepted_index, items, and draft_written/draft_preview. If options.self_test assert first module Fields and its grounding marker. Assertions/file errors propagate.",
+      "emit": "skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py::main output tail. Serialize ensure_ascii=false, indent=2; if --output mkdir parents and overwrite JSON plus newline; print if --json or no output path; return 0. Serialization/file errors propagate; no rollback."
+    }
+  }
+}

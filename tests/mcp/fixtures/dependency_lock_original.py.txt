@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Validate the committed, profile-complete uv dependency lock."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import subprocess
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    pyproject = REPO_ROOT / "pyproject.toml"
+    lock = REPO_ROOT / "uv.lock"
+    result = subprocess.run(
+        ["uv", "lock", "--check"], cwd=REPO_ROOT, text=True, capture_output=True
+    )
+    project_text = pyproject.read_text(encoding="utf-8") if pyproject.exists() else ""
+    lock_text = lock.read_text(encoding="utf-8") if lock.exists() else ""
+    profiles = ["physics", "mcp", "documents", "providers", "knowledge-base"]
+    cases = {
+        "pyproject_present": pyproject.exists(),
+        "lock_present": lock.exists(),
+        "lock_current": result.returncode == 0,
+        "profiles_declared": all(
+            f"{profile} = [" in project_text for profile in profiles
+        ),
+        "reference_packages_locked": all(
+            f'name = "{package}"' in lock_text
+            for package in (
+                "sympy",
+                "mcp",
+                "docling",
+                "openai",
+                "anthropic",
+                "huggingface-hub",
+            )
+        ),
+        "python_abi_range_locked": "requires-python" in lock_text,
+    }
+    payload = {
+        "schema_version": 1,
+        "suite": "dependency_lock_contract",
+        "ok": all(cases.values()),
+        "cases": cases,
+        "profiles": profiles,
+        "uv_stdout": result.stdout,
+        "uv_stderr": result.stderr,
+    }
+    print(
+        json.dumps(payload, indent=2, sort_keys=True)
+        if args.json
+        else ("PASS" if payload["ok"] else "FAIL")
+    )
+    return 0 if payload["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

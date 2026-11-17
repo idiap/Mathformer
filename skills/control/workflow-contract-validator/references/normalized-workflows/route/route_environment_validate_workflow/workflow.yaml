@@ -1,0 +1,441 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_environment_validate_workflow
+version: 1.0.0
+kind: workflow
+description: Selected environment.validate route through the authoritative native
+  controller.
+aliases:
+- environment.validate
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  ActionId:
+    schema:
+      type: string
+      const: test:family:environment
+  Flag:
+    schema:
+      type: boolean
+  RouteState:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+      required:
+      - ok
+      - children
+      additionalProperties: false
+  Match:
+    schema:
+      type: object
+      required:
+      - route
+      - score
+      - matched_terms
+      properties:
+        route:
+          type: object
+          required:
+          - route_id
+          - action_ids
+          properties:
+            route_id:
+              const: environment.validate
+            action_ids:
+              type: array
+              const:
+              - test:family:environment
+              items:
+                type: string
+        score:
+          type: number
+        matched_terms:
+          type: array
+          items:
+            type: string
+  Registry:
+    schema:
+      type: object
+  Mount:
+    schema:
+      type: object
+      properties:
+        repository_root:
+          type: string
+      additionalProperties: false
+  Count:
+    schema:
+      type: integer
+      const: 1
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: Match
+  registry:
+    type: Registry
+  mount:
+    type: Mount
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_environment_route_initialize
+        operation: mathformer_environment_route_initialize
+  select:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: Match
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_environment_route_select
+        operation: mathformer_environment_route_select
+  execute:
+    inputs:
+      action_id:
+        type: ActionId
+      context:
+        type: RunContext
+      registry:
+        type: Registry
+      mount:
+        type: Mount
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_environment_route_execute
+        operation: mathformer_environment_route_execute
+  advance:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+      action_count:
+        type: Count
+    outputs:
+      state:
+        type: RouteState
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_environment_route_advance
+        operation: mathformer_environment_route_advance
+  finish:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: Match
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_environment_route_finish
+        operation: mathformer_environment_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+    description: Initialize ok=true and children=[] with no retained history.
+  - id: actions
+    kind: loop
+    state_type: RouteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    description: Exactly one native action. advance sets done at action_count=1, so
+      the bound returns normally even for a failed child; exhaustion is unreachable.
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+        description: Select match.route.action_ids[len(state.children)] in route order.
+      - id: execute
+        kind: call
+        operation: execute
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          context:
+            ref: inputs.context
+          registry:
+            ref: inputs.registry
+          mount:
+            ref: inputs.mount
+        description: run_action applies native admission/preflight, dry-run and subprocess/write
+          controls. Returned child.ok=false is data, not a graph exception. Unexpected
+          native exceptions propagate.
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.execute.outputs.child
+          context:
+            ref: inputs.context
+          action_count:
+            literal: 1
+        description: Append child in order; ok=previous.ok and bool(child.get("ok",false)).
+          done=len(updated.children)==1 or (not child.get("ok",false) and not context.keep_going).
+          keep_going cannot extend this one-action route.
+      outputs:
+        state:
+          type: RouteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RouteState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+    description: Return schema_version=1, aggregate ok, native route metadata, ordered
+      children, and status intent_run_completed if ok else intent_run_failed.
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked controlled execution; completion establishes no scientific
+    truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: initialize_intent_state; select_intent_action; advance_intent_state;
+      finish_intent_state
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes/environment.validate; build_registry; run_action;
+      run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: run; prepare_checks; checks_pending; advance_check; finalize_checks;
+      snapshot_report; publish_report
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: tests/test_matrix.json
+    selector: environment.dependency_map; environment.dependency_lock.contract
+    digest: sha256:07fc9f4af361375e6a7f12a2cefbbd028a842a87b7c4ee8b3f70eb11bd63f740
+  - path: scripts/mcp_server.py
+    selector: mathformer_run_workflow; natural-language runner
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/environment_validate_route_tools.py
+    selector: register_environment_validate_route_tools; selected_match; checked_registry;
+      check_state
+    digest: sha256:d63be1525d88a404816fcc1ff26d857e0b529f68ae84735fe50e888d14bdddee
+  - path: scripts/adoption_check_tools.py
+    selector: Context
+    digest: sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac
+  - path: scripts/workflow_write_audit.py
+    selector: snapshot_repository; audit_snapshots
+    digest: sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: environment_validate_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_environment_validate_route_workflow_tests.py
+    selector: EnvironmentRouteTests
+    digest: sha256:2333bcc18b5ae81cf676f12ebfa6032fb69b640b6b57334c4cbb268ba51ee83b
+  - path: tests/mcp/fixtures/environment_route_boundary.py
+    selector: install_external; serve
+    digest: sha256:288b51e1484abef364d5436231dfd4624983a2b5dea4f6f18909f9e5dbe5fef5
+  - path: tests/mcp/fixtures/environment_route_startup/sitecustomize.py
+    selector: test-only external boundary installation
+    digest: sha256:617c9642ab46174c822b7630e7ceda45f1bbed2590b2287b59b483eda6668c5e
+  - path: tests/mcp/fixtures/environment_validate_route_original.py.txt
+    selector: frozen selected source oracle
+    digest: sha256:99ec23b0c2ca42439cbad903d90196151e619ec3b6da6609ef6a6c676a9be14b
+  - path: tests/environment/run_dependency_lock_contract.py
+    selector: main; check_uv; read_files; build_payload; print_and_return
+    digest: sha256:3a503fa055c76ccc76d418b2d20cd8ebda3f6c7846104df01130442a04bb3618
+  gaps:
+  - Action and downstream runner internals remain inside native run_action and its
+    real subprocess, rather than expanded into graph nodes.
+  - Lunar enforces the 3600-second ceiling and five-call limit; these are not native
+    route budgets. The native leaf subprocess timeout remains 900 seconds.
+  - Lunar supplies graph receipts, digests and provenance; native reports, output
+    capture and filesystem write audits remain source-owned. Full effects of arbitrary
+    selected matrix checks require qualification.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: environment.validate
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: environment.validate
+      title: Validate environment and dependency probes
+      action_ids:
+      - test:family:environment
+      skill_routes:
+      - skill-test-program-orchestrator
+  mathformer.native_boundary:
+    execution: Registered mathformer_environment_route_* tools share the native intent-state
+      helpers and run_action with run_intent_match.
+    callers: main ask --run; scripts/mcp_server.py NL runner and mathformer_run_workflow.
+    mcp_controls: Non-dry execution checks service read-only policy and artifact write
+      roots. Route extra arguments have no port and remain rejected by native MCP
+      dispatch.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Preserve native failed payloads; never accept preflight, subprocess
+      or write-audit failure.
+    scientific_payloads: HubResult is the transport envelope, not a scientific artifact
+      schema.
+    context: Selected match metadata, exact native registry projection, RunContext
+      and optional repository_root mount are explicit input ports.
+  mathformer.composition:
+    ordered_actions:
+    - test:family:environment
+    action_workflows:
+    - hub_test_family_environment_workflow
+    selection: Already selected route; NL scoring and ambiguity resolution remain
+      native.
+  mathformer.execute_details:
+    command:
+    - '{python}'
+    - tests/test_program/run_comprehensive_tests.py
+    - --module-family
+    - environment
+    - --json
+    subprocess_timeout_seconds: 900
+    boundary: Required paths are checked before execution; dry-run returns without
+      launching. Native subprocess output capture and filesystem auditing remain inside
+      execute. Timeout, nonzero exit, and undeclared writes fail the child; no retries.
+    downstream: run selects environment rows from tests/test_matrix.json in matrix
+      order. State retains matrix, selected, families, index and results; index increments
+      once per row until len(selected), including after ordinary check failure. Individual
+      timeouts become failed results. Current dependency-map and lock checks have
+      120s and 30s limits; absent optional uv skips under default workstation. Finalization
+      validates results, computes status/capability summaries, writes dependency snapshot
+      and report, and exits 0 on success or 3 on failure. Dependency-map-only invocation
+      writes its snapshot report and returns early. Unexpected exceptions propagate;
+      no downstream loop bound is invented here.
+# REUSE-IgnoreEnd

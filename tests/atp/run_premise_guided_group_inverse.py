@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+# File Documentation
+#
+# Motivation:
+#   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+#
+# Intent:
+#   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+#
+# Function:
+#   Contains executable tests, fixtures, and manifests used for local and CI validation.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Run the premise-guided group inverse-of-product proof regression."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from backends.atp.MathformerATP.vampire import (
+    discover_proof,
+)
+
+DEFAULT_STATEMENT = (
+    "Let G be a group with multiplication mul, identity element e, and inverse operation inv. "
+    "Prove that for all elements x and y of G, the inverse of the product mul(x,y) "
+    "is the product of the inverses in reverse order: inv(mul(x,y)) = mul(inv(y),inv(x))."
+)
+
+
+def resolve_request(args: dict) -> dict:
+    """Resolve the native CLI defaults and fixed discovery arguments."""
+    artifact_root = Path(
+        args.get(
+            "artifact_root", "artifacts/vampire_atp/premise_guided_group_inverse_test"
+        )
+    )
+    if not artifact_root.is_absolute():
+        artifact_root = REPO_ROOT / artifact_root
+    return dict(
+        artifact_root=str(artifact_root),
+        json=args.get("json", False),
+        statement=DEFAULT_STATEMENT,
+        time_limit=3,
+        premise_loop=True,
+    )
+
+
+def discover_request(request: dict) -> dict:
+    """Invoke the source-owned discovery algorithm with the native constants."""
+    return discover_proof(
+        request["statement"],
+        artifact_root=Path(request["artifact_root"]),
+        time_limit=request["time_limit"],
+        premise_loop=request["premise_loop"],
+    )
+
+
+def check_report(report: dict) -> dict:
+    """Apply the original regression assertions; malformed reports raise."""
+    attempt = report["attempts"][0]
+    selection = attempt["premise_selection_report"]
+    generation = attempt["premise_generation_report"]
+    generated = {lemma["id"]: lemma for lemma in generation["generated_lemmas"]}
+    final_ids = set(report["winning_final_premise_ids"])
+    selected_ids = set(selection["selected_ids"])
+    unsafe = generated["unsafe_group_commutativity_shortcut"]
+
+    assertions = {
+        "proof_found": report["ok"],
+        "premise_loop_enabled": report["premise_loop"]["enabled"],
+        "selected_source_group_axioms": selected_ids
+        == {
+            "mul_associative",
+            "left_identity",
+            "right_identity",
+            "left_inverse",
+            "right_inverse",
+        },
+        "generated_lemmas_promoted": set(generation["promoted_ids"])
+        == {
+            "product_candidate_right_inverse",
+            "product_candidate_left_inverse",
+            "two_sided_inverse_unique",
+        },
+        "unsafe_shortcut_rejected": unsafe["proof_status"] == "rejected"
+        and not unsafe["promoted"],
+        "unsafe_shortcut_not_final": "generated_unsafe_group_commutativity_shortcut"
+        not in final_ids,
+        "final_uses_proved_generated_lemmas": final_ids
+        == {
+            "generated_product_candidate_right_inverse",
+            "generated_product_candidate_left_inverse",
+            "generated_two_sided_inverse_unique",
+        },
+        "selection_report_written": Path(
+            report["winning_premise_selection_report_path"]
+        ).is_file(),
+        "generation_report_written": Path(
+            report["winning_premise_generation_report_path"]
+        ).is_file(),
+        "minimization_report_written": Path(
+            report["winning_premise_minimization_report_path"]
+        ).is_file(),
+    }
+    report["test_assertions"] = assertions
+    report["ok"] = all(assertions.values())
+    return report
+
+
+def emit_report(request: dict, report: dict, exit_code: int) -> int:
+    """Print the checked native report and return the source-selected code."""
+    if request["json"]:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(f"ok: {report['ok']}")
+        print(f"winning_status: {report['winning_status']}")
+        print(f"final_premises: {', '.join(report['winning_final_premise_ids'])}")
+        print(f"premise_selection: {report['winning_premise_selection_report_path']}")
+        print(f"premise_generation: {report['winning_premise_generation_report_path']}")
+        print(
+            f"premise_minimization: {report['winning_premise_minimization_report_path']}"
+        )
+    return exit_code
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--artifact-root",
+        type=Path,
+        default=Path("artifacts/vampire_atp/premise_guided_group_inverse_test"),
+    )
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+
+    request = resolve_request(vars(args))
+    report = check_report(discover_request(request))
+    return emit_report(request, report, 0 if report["ok"] else 3)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

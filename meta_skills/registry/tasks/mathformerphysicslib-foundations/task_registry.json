@@ -1,0 +1,118 @@
+{
+  "schema_version": "mathformer.meta_skills.task_registry.v0.1",
+  "task_id": "mathformerphysicslib-foundations",
+  "title": "MathformerPhysicsLib foundations workflow",
+  "summary": "Autoformalize fundamental physics concepts and mathematical objects through Mathlib-first foundation intake, surface design, drafting, and verification.",
+  "visible_workflows": [
+    {
+      "workflow_id": "mathformerphysicslib.foundations.controlled_loop",
+      "description": "Given physics concepts or object packets, produce MathformerPhysicsLib foundation surfaces grounded in existing Mathlib objects whenever possible.",
+      "entry_actions": [
+        "physics-lean:foundation-formalization-loop"
+      ],
+      "evidence_gates": [
+        "python scripts/mathformer.py ask \"run MathformerPhysicsLib foundations workflow\" --run --json",
+        "python tests/physics_lean/run_foundations_workflow.py --json"
+      ]
+    }
+  ],
+  "composed_skills": [
+    {
+      "skill_id": "physics-foundation-object-intake",
+      "role": "Normalize fundamental objects into explicit foundation packets."
+    },
+    {
+      "skill_id": "mathformerphysicslib-foundation-surface-designer",
+      "role": "Design Mathlib-grounded Lean surfaces before drafting local support."
+    },
+    {
+      "skill_id": "mathformerphysicslib-foundation-drafter",
+      "role": "Draft controlled foundation modules from accepted surface plans."
+    },
+    {
+      "skill_id": "mathformerphysicslib-foundation-verifier",
+      "role": "Check promotion readiness and structural evidence for drafted modules."
+    },
+    {
+      "skill_id": "mathformerphysicslib-object-workbench",
+      "role": "Route detected physics objects through MathformerPhysicsLib-first workbench planning."
+    }
+  ],
+  "controlled_actions": [
+    {
+      "action_id": "physics-lean:foundation-intake",
+      "role": "Object intake."
+    },
+    {
+      "action_id": "physics-lean:foundation-surface-design",
+      "role": "Surface design."
+    },
+    {
+      "action_id": "physics-lean:foundation-draft",
+      "role": "Draft controlled Lean foundation modules."
+    },
+    {
+      "action_id": "physics-lean:foundation-verify",
+      "role": "Verify generated foundations."
+    },
+    {
+      "action_id": "physics-lean:foundation-formalization-loop",
+      "role": "End-to-end controlled workflow."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/libraries/MATHFORMERPHYSICSLIB_FOUNDATIONS_WORKFLOW.md",
+      "state": "accepted"
+    },
+    {
+      "path": "artifacts/mathformerphysicslib/foundations/controlled_suite/intake.json",
+      "state": "validated"
+    },
+    {
+      "path": "artifacts/mathformerphysicslib/foundations/controlled_suite/surface_plan.json",
+      "state": "validated"
+    },
+    {
+      "path": "artifacts/mathformerphysicslib/foundations/controlled_suite/verification_report.json",
+      "state": "validated"
+    }
+  ],
+  "validators": [
+    {
+      "command": "python meta_skills/scripts/validate_task_registries.py --json",
+      "expected_artifact": "artifacts/meta_skills/task_registry_validation.json"
+    },
+    {
+      "command": "python tests/physics_lean/run_foundations_workflow.py --json",
+      "expected_artifact": "artifacts/mathformerphysicslib/foundations/controlled_suite/verification_report.json"
+    }
+  ],
+  "generated_skills": [
+    {
+      "id": "foundation-surface-drafts",
+      "state": "task_local_validated",
+      "promotion_boundary": "Generated foundation modules may support MathformerPhysicsLib after verification, but do not become general skills without lifecycle evidence."
+    }
+  ],
+  "release_boundaries": [
+    {
+      "boundary": "mathlib_first",
+      "rule": "Existing Mathlib declarations must be checked before adding local foundation support."
+    },
+    {
+      "boundary": "no_single_run_promotion",
+      "rule": "A foundation surface is not promoted from one successful controlled suite run alone."
+    }
+  ],
+  "risk_controls": [
+    {
+      "risk": "Local physics support duplicates Mathlib.",
+      "control": "Surface design records Mathlib grounding and blockers before drafting."
+    },
+    {
+      "risk": "Generated surfaces are overpromoted.",
+      "control": "Verification report and generated skill lifecycle must pass before promotion."
+    }
+  ]
+}

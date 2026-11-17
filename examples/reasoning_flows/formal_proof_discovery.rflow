@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Canonical epistemic projection; not an execution trace.
+erfl 0.3
+@SEARCH search0 connect(file("MathformerKB"))
+reasoning formal_proof_discovery {
+  goal "produce a proof-checked claim or preserved proof obstruction" -> proof_status
+  steps
+    m:M[theorem_context::Context->semantic_model::Model] -constrain> ...
+    (
+      q:Q[semantic_model::Model,search0->premises::Bundle]
+      & a:A[semantic_model::Model->route::Claim]
+    ) -construct> ...
+    f:F[
+      premises::Bundle,
+      route::Claim
+      -> proof_candidate::Bundle
+    ] -derive> ...
+    d:D[
+      proof_candidate::Bundle,
+      premises::Bundle
+      -> claim::Claim
+    ] -test> ...
+    p:P[claim::Claim->checker_evidence::Evidence] -assess> ...
+    r:R[
+      claim::Claim,
+      checker_evidence::Evidence
+      -> assessment::Assessment
+    ] -calibrate> ...
+    e:E[
+      claim::Claim,
+      assessment::Assessment
+      -> proof_status::Decision
+    ]
+  q <-search- search0
+  on e.proof_checked => accept
+  on e.repair_required => stop
+  on e.blocked => stop
+}

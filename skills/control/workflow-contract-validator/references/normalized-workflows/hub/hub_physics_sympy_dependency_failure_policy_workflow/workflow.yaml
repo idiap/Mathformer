@@ -1,0 +1,591 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_sympy_dependency_failure_policy_workflow
+version: 1.0.0
+kind: workflow
+description: Collect two missing-SymPy subprocess reports, then validate both; return
+  ok unless a high-severity finding exists.
+aliases:
+- physics-sympy:dependency-failure-policy
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Boolean:
+    schema:
+      type: boolean
+  Results:
+    schema:
+      type: array
+      maxItems: 2
+      items:
+        type: object
+        properties:
+          script:
+            type: string
+          returncode:
+            type: integer
+          stdout_json: {}
+          stderr:
+            type: string
+          raw_stdout:
+            type: string
+        required:
+        - script
+        - returncode
+        - stdout_json
+        - stderr
+        - raw_stdout
+        additionalProperties: false
+  Result:
+    schema:
+      type: object
+      properties:
+        script:
+          type: string
+        returncode:
+          type: integer
+        stdout_json: {}
+        stderr:
+          type: string
+        raw_stdout:
+          type: string
+      required:
+      - script
+      - returncode
+      - stdout_json
+      - stderr
+      - raw_stdout
+      additionalProperties: false
+  Findings:
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          severity:
+            enum:
+            - high
+            - medium
+          code:
+            type: string
+          script:
+            type: string
+        required:
+        - severity
+        - code
+        - script
+  ValidationState:
+    schema:
+      type: object
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          maximum: 2
+        results:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            properties:
+              script:
+                type: string
+              returncode:
+                type: integer
+              stdout_json: {}
+              stderr:
+                type: string
+              raw_stdout:
+                type: string
+            required:
+            - script
+            - returncode
+            - stdout_json
+            - stderr
+            - raw_stdout
+            additionalProperties: false
+          minItems: 2
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                enum:
+                - high
+                - medium
+              code:
+                type: string
+              script:
+                type: string
+            required:
+            - severity
+            - code
+            - script
+      required:
+      - index
+      - results
+      - findings
+      additionalProperties: false
+  Report:
+    schema:
+      type: object
+      properties:
+        schema_version:
+          const: 1
+        ok:
+          type: boolean
+        style:
+          const: physics_sympy_dependency_failure_policy
+        results:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            properties:
+              script:
+                type: string
+              returncode:
+                type: integer
+              stdout_json: {}
+              stderr:
+                type: string
+              raw_stdout:
+                type: string
+            required:
+            - script
+            - returncode
+            - stdout_json
+            - stderr
+            - raw_stdout
+            additionalProperties: false
+          minItems: 2
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                enum:
+                - high
+                - medium
+              code:
+                type: string
+              script:
+                type: string
+            required:
+            - severity
+            - code
+            - script
+      required:
+      - schema_version
+      - ok
+      - style
+      - results
+      - findings
+      additionalProperties: false
+  Context:
+    schema:
+      type: object
+      properties:
+        repository_root:
+          type: string
+          minLength: 1
+      required:
+      - repository_root
+      additionalProperties: false
+inputs:
+  context:
+    type: Context
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+operations:
+  initialize_results:
+    inputs: {}
+    outputs:
+      results:
+        type: Results
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_dependency_failure_initialize_results
+        operation: mathformer_dependency_failure_initialize_results
+  collect_next:
+    inputs:
+      results:
+        type: Results
+      context:
+        type: Context
+    outputs:
+      results:
+        type: Results
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_dependency_failure_collect_next
+        operation: mathformer_dependency_failure_collect_next
+  begin_validation:
+    inputs:
+      results:
+        type: Results
+    outputs:
+      state:
+        type: ValidationState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_dependency_failure_begin_validation
+        operation: mathformer_dependency_failure_begin_validation
+  inspect_current:
+    inputs:
+      state:
+        type: ValidationState
+    outputs:
+      result:
+        type: Result
+      missing:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_dependency_failure_inspect_current
+        operation: mathformer_dependency_failure_inspect_current
+  record_missing:
+    inputs:
+      state:
+        type: ValidationState
+      result:
+        type: Result
+    outputs:
+      findings:
+        type: Findings
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_dependency_failure_record_missing
+        operation: mathformer_dependency_failure_record_missing
+  check_nonempty:
+    inputs:
+      state:
+        type: ValidationState
+      result:
+        type: Result
+    outputs:
+      findings:
+        type: Findings
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_dependency_failure_check_nonempty
+        operation: mathformer_dependency_failure_check_nonempty
+  advance_validation:
+    inputs:
+      state:
+        type: ValidationState
+      findings:
+        type: Findings
+    outputs:
+      state:
+        type: ValidationState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_dependency_failure_advance_validation
+        operation: mathformer_dependency_failure_advance_validation
+  build_report:
+    inputs:
+      state:
+        type: ValidationState
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_dependency_failure_build_report
+        operation: mathformer_dependency_failure_build_report
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize_results
+    arguments: {}
+  - id: collect
+    kind: loop
+    state_type: Results
+    initial:
+      ref: steps.initialize.outputs.results
+    max_iterations: 2
+    on_exhausted: fail
+    description: Sequential source list comprehension over exactly two fixed scripts.
+      done is true on the second iteration, so reaching the bound returns normally.
+    body:
+      kind: call
+      operation: collect_next
+      arguments:
+        results:
+          ref: loop.state
+        context:
+          ref: inputs.context
+    next_state:
+      ref: body.outputs.results
+    until:
+      ref: body.outputs.done
+    outputs:
+      results:
+        type: Results
+        value:
+          ref: body.outputs.results
+  - id: prepare_validation
+    kind: call
+    operation: begin_validation
+    arguments:
+      results:
+        ref: steps.collect.outputs.results
+  - id: validate
+    kind: loop
+    state_type: ValidationState
+    initial:
+      ref: steps.prepare_validation.outputs.state
+    max_iterations: 2
+    on_exhausted: fail
+    description: Exactly two validation iterations on normal execution; no repair,
+      retry or early termination for findings. done is true at the bound; exhaustion
+      is unreachable for source-produced state.
+    body:
+      kind: sequence
+      steps:
+      - id: inspect
+        kind: call
+        operation: inspect_current
+        arguments:
+          state:
+            ref: loop.state
+      - id: choose_checks
+        kind: switch
+        cases:
+        - id: missing_json
+          when:
+            ref: steps.inspect.outputs.missing
+          body:
+            kind: call
+            operation: record_missing
+            arguments:
+              state:
+                ref: loop.state
+              result:
+                ref: steps.inspect.outputs.result
+        default:
+          kind: call
+          operation: check_nonempty
+          arguments:
+            state:
+              ref: loop.state
+            result:
+              ref: steps.inspect.outputs.result
+        outputs:
+          findings:
+            type: Findings
+            value:
+              ref: selected.outputs.findings
+      - id: advance
+        kind: call
+        operation: advance_validation
+        arguments:
+          state:
+            ref: loop.state
+          findings:
+            ref: steps.choose_checks.outputs.findings
+      outputs:
+        state:
+          type: ValidationState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: ValidationState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: build_report
+    arguments:
+      state:
+        ref: steps.validate.outputs.state
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finish.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - temporary_import_hook
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 120
+    max_operation_calls: 11
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Dependency failure policy report only; completion establishes no
+    scientific truth, runtime qualification or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/physics_sympy/run_dependency_failure_policy.py
+    selector: run_check; run_with_sympy_blocked; initialize_results; collect_next;
+      begin_validation; inspect_current; record_missing; check_nonempty; advance_validation;
+      build_report; main
+    digest: sha256:920bde81b546fe50ecca7d114b2c66d3a9cfe03a1251a057b98c2796cc87b683
+  - path: scripts/mathformer.py
+    selector: build_registry/action:physics-sympy:dependency-failure-policy; run_action;
+      run_leaf_action; prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/dependency_failure_tools.py
+    selector: register_dependency_failure_tools; source
+    digest: sha256:0ebaef059e323fc67a2983b2ddf87a0ed5e2ade2a1fa520cd3ec2f31672d1552
+  - path: scripts/mcp_server.py
+    selector: register_dependency_failure_tools(mcp)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory/physics-sympy:dependency-failure-policy
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/physics_sympy/run_phase1_dependency_grounding.py
+    selector: dependency_blocker; run_check
+    digest: sha256:b51d8c8727ed1657920043a5566337156c935441e7c9be6f03d09bcf67af27dc
+  - path: tests/physics_sympy/run_controlled_suite.py
+    selector: dependency_blocker; main
+    digest: sha256:bc884efb7831fe953cb988216a87e4ac8a10e38de265dc6de96694316b61506b
+  gaps:
+  - The graph models run_check, not the hub transport envelope. Hub admission, dry-run,
+    timeout, write audit and main printing/exit remain native boundary behavior.
+  - Nominal intermediate types describe normal source-produced state. Unexpected parsed-JSON
+    shape errors propagate through the native helper and terminate the runtime; they
+    are not converted to policy findings.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-sympy:dependency-failure-policy
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: physics-sympy:dependency-failure-policy
+      summary: Validate friendly structured dependency failures for missing SymPy.
+      family: physics_sympy
+      kind: validation
+      safety: read_only
+      command:
+      - .venv/bin/python
+      - tests/physics_sympy/run_dependency_failure_policy.py
+      - --json
+      depends_on: []
+      required_paths:
+      - tests/physics_sympy/run_dependency_failure_policy.py
+      - tests/physics_sympy/run_phase1_dependency_grounding.py
+      - tests/physics_sympy/run_controlled_suite.py
+      required_tools: []
+      optional_tools: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: 120
+      notes: ''
+  mathformer.native_boundary:
+    execution: Eight registered MCP tools invoke shared native helpers. run_check
+      uses the same helpers. Context repository_root supplies the native child working
+      directory; the fixed script order, Python executable, --json flag, inherited
+      environment and temporary import hook remain native.
+    selected_symbol: run_check
+    selected_scripts:
+    - tests/physics_sympy/run_phase1_dependency_grounding.py
+    - tests/physics_sympy/run_controlled_suite.py
+    context_fields:
+    - repository_root
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Preflight failure or dry-run prevents launch. Hub outer action
+      timeout is 120 seconds; inner subprocesses have no timeout. Write audit can
+      override hub ok to false. Unexpected exceptions propagate.
+    main: Calls run_check; prints JSON with --json, otherwise ok and finding count;
+      exits 0 if report.ok else 3.
+    limits: The hub outer timeout remains 120 seconds. Inner subprocesses have no
+      timeout. Lunar enforces a 120-second workflow ceiling and an eleven-call graph
+      budget. Both loops finish on iteration two; findings do not terminate traversal.
+    scientific_payloads: Report is run_check's native policy payload, not HubResult.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: Two serial collection iterations, then two serial validation iterations.
+      No convergence, retry or checkpoint loop.
+    goal_sample_routes:
+    - FormalPhysics 0000
+    - FormalPhysics 0004
+# REUSE-IgnoreEnd

@@ -1,0 +1,795 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lib_coherence_loop_report_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Runnable one-pass run_loop coherence reporting behind physics-lib:coherence-loop-report; probes and repairs remain advisory.",
+  "aliases": [
+    "physics-lib:coherence-loop-report"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Path": {
+      "schema": {
+        "type": "string"
+      },
+      "representation": "value"
+    },
+    "Repository": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Null retains the native repository defaults."
+      }
+    },
+    "Inventory": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "module_count",
+          "modules"
+        ],
+        "properties": {
+          "module_count": {
+            "type": "integer"
+          },
+          "modules": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "Graph": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "concept_count",
+          "concepts"
+        ],
+        "properties": {
+          "concept_count": {
+            "type": "integer"
+          },
+          "concepts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "Grounding": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "concepts",
+          "failed_candidate_count"
+        ],
+        "properties": {
+          "concepts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "monotonic_comparison": {
+            "type": "object"
+          },
+          "failed_candidate_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "Reports": {
+      "schema": {
+        "type": "array",
+        "minItems": 4,
+        "maxItems": 4,
+        "items": {
+          "type": "object"
+        }
+      }
+    },
+    "Plans": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "generative",
+          "repairs",
+          "gate"
+        ],
+        "properties": {
+          "generative": {
+            "type": "object"
+          },
+          "repairs": {
+            "type": "object"
+          },
+          "gate": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "Artifacts": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "inventory",
+          "concept_graph",
+          "grounding",
+          "redefinitions",
+          "integration",
+          "api",
+          "generative",
+          "repair",
+          "gate",
+          "markdown_report"
+        ],
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "Summary": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "style",
+          "ok",
+          "checks",
+          "artifacts",
+          "module_count",
+          "concept_count",
+          "top10_module_count",
+          "generative_probe_count",
+          "repair_action_count",
+          "gate_status"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "style": {
+            "const": "mathformerphysicslib_coherence_loop_report"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "array",
+            "minItems": 6,
+            "maxItems": 6,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "ok",
+                "detail"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "detail": {}
+              }
+            }
+          },
+          "artifacts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "module_count": {
+            "type": "integer"
+          },
+          "concept_count": {
+            "type": "integer"
+          },
+          "top10_module_count": {
+            "type": "integer"
+          },
+          "generative_probe_count": {
+            "type": "integer"
+          },
+          "repair_action_count": {
+            "type": "integer"
+          },
+          "gate_status": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "inputs": {
+    "output_dir": {
+      "type": "Path"
+    },
+    "repository_root": {
+      "type": "Repository"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Summary",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    },
+    "artifacts": {
+      "type": "Artifacts",
+      "value": {
+        "ref": "flow.outputs.artifacts"
+      }
+    }
+  },
+  "operations": {
+    "prepare_directory": {
+      "inputs": {
+        "output_dir": {
+          "type": "Path"
+        }
+      },
+      "outputs": {
+        "directory": {
+          "type": "Path"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coherence_loop_prepare_directory",
+          "operation": "mathformer_coherence_loop_prepare_directory"
+        }
+      }
+    },
+    "inventory": {
+      "inputs": {
+        "repository_root": {
+          "type": "Repository"
+        }
+      },
+      "outputs": {
+        "inventory": {
+          "type": "Inventory"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coherence_loop_inventory",
+          "operation": "mathformer_coherence_loop_inventory"
+        }
+      }
+    },
+    "canonicalize": {
+      "inputs": {
+        "inventory": {
+          "type": "Inventory"
+        }
+      },
+      "outputs": {
+        "graph": {
+          "type": "Graph"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coherence_loop_canonicalize",
+          "operation": "mathformer_coherence_loop_canonicalize"
+        }
+      }
+    },
+    "audit_grounding": {
+      "inputs": {
+        "graph": {
+          "type": "Graph"
+        }
+      },
+      "outputs": {
+        "grounding": {
+          "type": "Grounding"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coherence_loop_audit_grounding",
+          "operation": "mathformer_coherence_loop_audit_grounding"
+        }
+      }
+    },
+    "compare_previous": {
+      "inputs": {
+        "directory": {
+          "type": "Path"
+        },
+        "grounding": {
+          "type": "Grounding"
+        }
+      },
+      "outputs": {
+        "grounding": {
+          "type": "Grounding"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coherence_loop_compare_previous",
+          "operation": "mathformer_coherence_loop_compare_previous"
+        }
+      }
+    },
+    "run_critics": {
+      "inputs": {
+        "inventory": {
+          "type": "Inventory"
+        },
+        "graph": {
+          "type": "Graph"
+        },
+        "grounding": {
+          "type": "Grounding"
+        },
+        "repository_root": {
+          "type": "Repository"
+        }
+      },
+      "outputs": {
+        "reports": {
+          "type": "Reports"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coherence_loop_critics",
+          "operation": "mathformer_coherence_loop_critics"
+        }
+      }
+    },
+    "plan_and_gate": {
+      "inputs": {
+        "reports": {
+          "type": "Reports"
+        }
+      },
+      "outputs": {
+        "plans": {
+          "type": "Plans"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coherence_loop_plan_and_gate",
+          "operation": "mathformer_coherence_loop_plan_and_gate"
+        }
+      }
+    },
+    "write_reports": {
+      "inputs": {
+        "directory": {
+          "type": "Path"
+        },
+        "inventory": {
+          "type": "Inventory"
+        },
+        "graph": {
+          "type": "Graph"
+        },
+        "reports": {
+          "type": "Reports"
+        },
+        "plans": {
+          "type": "Plans"
+        },
+        "repository_root": {
+          "type": "Repository"
+        }
+      },
+      "outputs": {
+        "artifacts": {
+          "type": "Artifacts"
+        },
+        "root": {
+          "type": "Path"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coherence_loop_write_reports",
+          "operation": "mathformer_coherence_loop_write_reports"
+        }
+      }
+    },
+    "check_and_summarize": {
+      "inputs": {
+        "inventory": {
+          "type": "Inventory"
+        },
+        "graph": {
+          "type": "Graph"
+        },
+        "reports": {
+          "type": "Reports"
+        },
+        "plans": {
+          "type": "Plans"
+        },
+        "artifacts": {
+          "type": "Artifacts"
+        },
+        "repository_root": {
+          "type": "Path"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Summary"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coherence_loop_check_and_summarize",
+          "operation": "mathformer_coherence_loop_check_and_summarize"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "description": "Exactly one pass; uncaught exceptions abort. Findings never skip later stages.",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare_directory",
+        "arguments": {
+          "output_dir": {
+            "ref": "inputs.output_dir"
+          }
+        },
+        "description": "Create the destination before inventory traversal; return its string path."
+      },
+      {
+        "id": "inventory",
+        "kind": "call",
+        "operation": "inventory",
+        "arguments": {
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        },
+        "description": "Traverse available Lean modules and accumulate inventory; null uses build_inventory()."
+      },
+      {
+        "id": "graph",
+        "kind": "call",
+        "operation": "canonicalize",
+        "arguments": {
+          "inventory": {
+            "ref": "steps.inventory.outputs.inventory"
+          }
+        },
+        "description": "Canonicalize the inventory's concept occurrences into the graph."
+      },
+      {
+        "id": "grounding",
+        "kind": "call",
+        "operation": "audit_grounding",
+        "arguments": {
+          "graph": {
+            "ref": "steps.graph.outputs.graph"
+          }
+        },
+        "description": "Accumulate Mathlib grounding findings and failed candidate evidence."
+      },
+      {
+        "id": "comparison",
+        "kind": "call",
+        "operation": "compare_previous",
+        "arguments": {
+          "directory": {
+            "ref": "steps.prepare.outputs.directory"
+          },
+          "grounding": {
+            "ref": "steps.grounding.outputs.grounding"
+          }
+        },
+        "description": "Read mathlib_grounding.json before replacement and attach monotonic_comparison. Missing, malformed JSON, non-object, empty or no usable previous concept rows yields no_previous_report with ok=true. Otherwise compare sorted current IDs shared with previous rows, ranking unverified_local=0, local_blocker=1, mathlib_bridge=2, direct_mathlib=3, unknown=-1. Lower ranks regress, higher improve, equal ranks remain unchanged; added and removed IDs do not regress. Any regressions give status=regressed and ok=false, otherwise monotonic and true."
+      },
+      {
+        "id": "critics",
+        "kind": "call",
+        "operation": "run_critics",
+        "arguments": {
+          "inventory": {
+            "ref": "steps.inventory.outputs.inventory"
+          },
+          "graph": {
+            "ref": "steps.graph.outputs.graph"
+          },
+          "grounding": {
+            "ref": "steps.comparison.outputs.grounding"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        },
+        "description": "Run redefinition, integration, then API critics regardless of findings; return [grounding, redefinitions, integration, api]."
+      },
+      {
+        "id": "plans",
+        "kind": "call",
+        "operation": "plan_and_gate",
+        "arguments": {
+          "reports": {
+            "ref": "steps.critics.outputs.reports"
+          }
+        },
+        "description": "Build seven advisory probes, then repair actions, then the coherence gate. Ownership spread/competition plans consolidate_concept_owner; missing manifest, index or owner export plans repair_integration_surface; missing/thin operable API plans add_operable_bridge_api; other findings plan record_or_block_gap. Actions accumulate over reports/findings; any actions mean repair_required, otherwise no_repairs_required. High severity blocks, else medium warns, else accepts. Attach repair status and action count to gate. Execute no probes or repairs, and continue even if gate blocks or grounding regresses."
+      },
+      {
+        "id": "write",
+        "kind": "call",
+        "operation": "write_reports",
+        "arguments": {
+          "directory": {
+            "ref": "steps.prepare.outputs.directory"
+          },
+          "inventory": {
+            "ref": "steps.inventory.outputs.inventory"
+          },
+          "graph": {
+            "ref": "steps.graph.outputs.graph"
+          },
+          "reports": {
+            "ref": "steps.critics.outputs.reports"
+          },
+          "plans": {
+            "ref": "steps.plans.outputs.plans"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        },
+        "description": "Resolve root to REPO_ROOT when null, otherwise the supplied root. Write coherence_report.md first, then inventory.json, concept_graph.json, mathlib_grounding.json, redefinition_critic.json, integration_critic.json, api_operability_critic.json, generative_coherence_critic_plan.json, repair_plan.json, coherence_gate.json, in that order. Return their repository-relative paths and selected root; earlier writes survive failures."
+      },
+      {
+        "id": "checks",
+        "kind": "call",
+        "operation": "check_and_summarize",
+        "arguments": {
+          "inventory": {
+            "ref": "steps.inventory.outputs.inventory"
+          },
+          "graph": {
+            "ref": "steps.graph.outputs.graph"
+          },
+          "reports": {
+            "ref": "steps.critics.outputs.reports"
+          },
+          "plans": {
+            "ref": "steps.plans.outputs.plans"
+          },
+          "artifacts": {
+            "ref": "steps.write.outputs.artifacts"
+          },
+          "repository_root": {
+            "ref": "steps.write.outputs.root"
+          }
+        },
+        "description": "Evaluate all six checks: positive module_count; at least one formalphysics_ module; seven probes each with expected_report_schema and deterministic-only blocking policy true; nonnegative failed_candidate_count and every grounding concept has failed_mathlib_candidates; nonempty monotonic comparison status; Markdown exists and contains MathformerPhysicsLib Coherence Report. Return ok=all(check.ok), counts, artifact paths and gate_status. Normal return includes ok=false; main exits 0 iff ok, otherwise 1, independently of gate acceptance or monotonic_comparison.ok."
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Summary",
+        "value": {
+          "ref": "steps.checks.outputs.result"
+        }
+      },
+      "artifacts": {
+        "type": "Artifacts",
+        "value": {
+          "ref": "steps.write.outputs.artifacts"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs",
+          "output_dir"
+        ],
+        "write": [
+          "output_dir",
+          "artifacts/mathformerphysicslib/coherence/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow",
+        "produce_coherence_reports"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 9
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Reporting and advisory plans only; completion establishes neither scientific truth nor promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/physics_lean/run_mathformerphysicslib_coherence_loop.py",
+        "selector": "run_loop",
+        "digest": "sha256:4d823bac248a59aed30c95d0bfa0ca6d16a17c0e13ca6961c3356bb37cb093d6"
+      },
+      {
+        "path": "skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/coherence_common.py",
+        "selector": "build_inventory; canonicalize; audit_grounding; critics; generative_plan; repair_plan; coherence_gate",
+        "digest": "sha256:e1da9d47b82e23be26335e4476ba442aa58aedafe245034709d2868909deb125"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry; prepare_action; run_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/coherence_loop_tools.py",
+        "selector": "register_coherence_loop_tools",
+        "digest": "sha256:9d8e70876589044dd185d95cdd330f9562197a2ae887f466a38d4a05d044edcc"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_coherence_loop_tools(mcp, _analysis_write_policy, ...)",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory: physics-lib:coherence-loop-report authored override",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Helper payloads are structurally typed; helper traversals and branch internals remain native calls inside their owning operations.",
+      "This graph models run_loop, not hub admission, dry-run, subprocess transport, CLI printing/exit status or HubResult wrapping.",
+      "The 3600-second and nine-call limits are enforced by Lunar; the native hub action has no timeout or global call budget. No native repair iteration, retry, checkpoint or exhaustion outcome exists.",
+      "Lunar supplies execution receipts and digests; these are not claims that native optional logs provide them."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lib:coherence-loop-report",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "physics-lib:coherence-loop-report",
+        "family": "mathformerphysicslib",
+        "kind": "sequence",
+        "safety": "writes_artifacts",
+        "depends_on": [
+          "mathformerphysicslib:coherence-loop-report"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "scripts/mathformer.py alias -> canonical action -> main() -> run_loop(); the registered stage tools share run_loop implementation. Lunar supplies the DAG runtime.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report"
+      ],
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "failure_policy": "Uncaught exceptions abort; main maps all six report checks to exit status; failed checks are not acceptance.",
+      "scientific_payloads": "The exported result is the run_loop summary, not the outer HubResult.",
+      "output_scope": "Native artifact paths must be relative to the selected repository root; null retains native defaults. Output creation precedes inventory, and native partial writes survive exceptions."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [
+        "mathformerphysicslib:coherence-loop-report"
+      ],
+      "dependency_workflows": [
+        "hub_mathformerphysicslib_coherence_loop_report_workflow"
+      ],
+      "command_after_dependencies": false,
+      "keep_going_semantics": "Hub carries dependency index, children, ancestry and cumulative ok; stops on failure unless keep_going, with cumulative failure retained.",
+      "extra_args_for_sequence": "rejected by run_action",
+      "modeling": "The alias has one dependency; hub traversal remains outside the selected run_loop graph."
+    },
+    "mathformer.state": {
+      "carried": "inventory -> graph -> grounding -> reports -> plans -> artifacts -> summary",
+      "cross_run": "Previous mathlib_grounding.json is read before replacement; it is not a checkpoint.",
+      "iteration": "One pass; internal traversals consume available inputs. No repair iteration, convergence test, retry or exhaustion outcome."
+    }
+  }
+}

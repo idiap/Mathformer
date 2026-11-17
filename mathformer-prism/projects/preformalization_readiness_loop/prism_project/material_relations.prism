@@ -1,0 +1,96 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from preformalization_readiness_loop import (
+    BindingCheck,
+    CompletenessCheck,
+    DraftingBasis,
+    DraftingDisposition,
+    ExpandedTheory,
+    ExpansionBasis,
+    ExpansionNeeds,
+    ExpansionSupport,
+    LeanDraftingReadinessDisposition,
+    PaperEvidence,
+    PaperFormalizationSourceSelection,
+    PreformalizationReadinessDependencyResolveArtifact,
+    PreformalizationReadinessIntakePaperLayoutExtractArtifact,
+    PreformalizationReadinessIntakePaperTheoryLocalizeArtifact,
+    PreformalizationReadinessIntakeSourceUnitInventoryArtifact,
+    PreformalizationReadinessPreformalizationExpandArtifact,
+    PreformalizationReadinessPreformalizationExpansionDifficultyArtifact,
+    PreformalizationReadinessPreformalizationExpansionSupportArtifact,
+    PreformalizationReadinessPreformalizationExpansionWebSupportArtifact,
+    PreformalizationReadinessPreformalizationLineTranslationPacketArtifact,
+    PreformalizationReadinessPreformalizationPaperTheoryExpandArtifact,
+    PreformalizationReadinessPreformalizationReviewBindingsArtifact,
+    PreformalizationReadinessPreformalizationReviewCompletenessArtifact,
+    PreformalizationReadinessPreformalizationReviewSuiteArtifact,
+    ReadinessCase,
+    SourceAlignmentCase,
+    TheoryMap,
+)
+
+type FormalizesPreformalizationPaperTheoryExpandCertificate:
+    source: PreformalizationReadinessIntakeSourceUnitInventoryArtifact
+    target: Generated[PreformalizationReadinessPreformalizationPaperTheoryExpandArtifact]
+
+relation FormalizesPreformalizationPaperTheoryExpand(
+    source: PreformalizationReadinessIntakeSourceUnitInventoryArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationPaperTheoryExpandArtifact],
+) -> FormalizesPreformalizationPaperTheoryExpandCertificate
+
+type FormalizesPreformalizationExpansionSupportCertificate:
+    source: PreformalizationReadinessPreformalizationPaperTheoryExpandArtifact
+    target: Generated[PreformalizationReadinessPreformalizationExpansionSupportArtifact]
+
+relation FormalizesPreformalizationExpansionSupport(
+    source: PreformalizationReadinessPreformalizationPaperTheoryExpandArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationExpansionSupportArtifact],
+) -> FormalizesPreformalizationExpansionSupportCertificate
+
+type FormalizesPreformalizationExpansionWebSupportCertificate:
+    source: PreformalizationReadinessPreformalizationExpansionDifficultyArtifact
+    target: Generated[PreformalizationReadinessPreformalizationExpansionWebSupportArtifact]
+
+relation FormalizesPreformalizationExpansionWebSupport(
+    source: PreformalizationReadinessPreformalizationExpansionDifficultyArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationExpansionWebSupportArtifact],
+) -> FormalizesPreformalizationExpansionWebSupportCertificate
+
+type FormalizesPreformalizationExpandCertificate:
+    source: PreformalizationReadinessPreformalizationExpansionWebSupportArtifact
+    target: Generated[PreformalizationReadinessPreformalizationExpandArtifact]
+
+relation FormalizesPreformalizationExpand(
+    source: PreformalizationReadinessPreformalizationExpansionWebSupportArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationExpandArtifact],
+) -> FormalizesPreformalizationExpandCertificate
+
+type TestsPreformalizationReviewSuiteCertificate:
+    source: PreformalizationReadinessPreformalizationExpandArtifact
+    target: Generated[PreformalizationReadinessPreformalizationReviewSuiteArtifact]
+
+relation TestsPreformalizationReviewSuite(
+    source: PreformalizationReadinessPreformalizationExpandArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationReviewSuiteArtifact],
+) -> TestsPreformalizationReviewSuiteCertificate
+
+type TestsPreformalizationReviewCompletenessCertificate:
+    source: PreformalizationReadinessPreformalizationReviewSuiteArtifact
+    target: Generated[PreformalizationReadinessPreformalizationReviewCompletenessArtifact]
+
+relation TestsPreformalizationReviewCompleteness(
+    source: PreformalizationReadinessPreformalizationReviewSuiteArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationReviewCompletenessArtifact],
+) -> TestsPreformalizationReviewCompletenessCertificate
+
+type TestsPreformalizationReviewBindingsCertificate:
+    source: PreformalizationReadinessPreformalizationReviewCompletenessArtifact
+    target: Generated[PreformalizationReadinessPreformalizationReviewBindingsArtifact]
+
+relation TestsPreformalizationReviewBindings(
+    source: PreformalizationReadinessPreformalizationReviewCompletenessArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationReviewBindingsArtifact],
+) -> TestsPreformalizationReviewBindingsCertificate

@@ -1,0 +1,651 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+# File Documentation
+#
+# Motivation:
+#   Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+#
+# Intent:
+#   Tell coding agents what context to load, what invariants to preserve, and how to validate their work.
+#
+# Function:
+#   Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Audit Mathformer skill hook coverage and loop contracts."""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import re
+import sys
+from typing import Any, Dict, List, Optional, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SKILL_TEST_SCRIPTS = (
+    REPO_ROOT / "skills" / "control" / "skill-test-program-orchestrator" / "scripts"
+)
+REASONING_LOG_SCRIPTS = (
+    REPO_ROOT / "skills" / "control" / "reasoning-log-schema-guardian" / "scripts"
+)
+if str(SKILL_TEST_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SKILL_TEST_SCRIPTS))
+if str(REASONING_LOG_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(REASONING_LOG_SCRIPTS))
+
+from inventory_skills import inventory
+from reasoning_log import (
+    append_reasoning_log_entry,
+)
+
+SKILL_NAME = "skill-hook-coverage-maximizer"
+HOOK_ID = "control.skill_hook_coverage"
+DEFAULT_WRAPPER_EXEMPTIONS = {
+    "autoformalization-agentc",
+    "informal-proof-mathlib-concepts",
+    "mathlib-compatibility-auditor",
+}
+
+
+def rel(path: Path) -> str:
+    """Document the responsibility of ``rel``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``rel`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def append_event(
+    reasoning_log: Optional[Path], step: str, payload: Dict[str, Any]
+) -> None:
+    """Document the responsibility of ``append_event``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``append_event`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if reasoning_log is None:
+        return
+    append_reasoning_log_entry(
+        reasoning_log,
+        step=step,
+        payload={"skill": SKILL_NAME, "hook_id": HOOK_ID, **payload},
+    )
+
+
+def list_values_after_key(lines: Sequence[str], key: str) -> List[str]:
+    """Document the responsibility of ``list_values_after_key``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``list_values_after_key`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    values: List[str] = []
+    in_block = False
+    base_indent = 0
+    for raw in lines:
+        if not in_block:
+            if raw.strip() == f"{key}:":
+                in_block = True
+                base_indent = len(raw) - len(raw.lstrip())
+            continue
+        if raw.strip() and len(raw) - len(raw.lstrip()) <= base_indent:
+            break
+        stripped = raw.strip()
+        if stripped.startswith("- "):
+            values.append(stripped[2:].strip())
+    return values
+
+
+def parse_hooks(lines: Sequence[str]) -> Dict[str, Dict[str, Any]]:
+    """Document the responsibility of ``parse_hooks``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    hooks: Dict[str, Dict[str, Any]] = {}
+    current_id: Optional[str] = None
+    current_key: Optional[str] = None
+    in_hooks = False
+    for raw in lines:
+        stripped = raw.strip()
+        indent = len(raw) - len(raw.lstrip())
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped == "hooks:":
+            in_hooks = True
+            current_id = None
+            current_key = None
+            continue
+        if in_hooks and indent == 0 and re.match(r"^[A-Za-z_][A-Za-z0-9_]*:", stripped):
+            break
+        if not in_hooks:
+            continue
+        match = re.match(r"^-\s+id:\s*(\S+)\s*$", stripped)
+        if match:
+            current_id = str(match.group(1))
+            hooks[current_id] = {
+                "id": current_id,
+                "reasoning_log_steps": [],
+                "outputs": [],
+            }
+            current_key = None
+            continue
+        if current_id is None:
+            continue
+        if ":" in stripped and not stripped.startswith("- "):
+            key, value = stripped.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            current_key = key
+            if value:
+                hooks[current_id][key] = value
+            elif key not in hooks[current_id]:
+                hooks[current_id][key] = []
+            continue
+        if stripped.startswith("- ") and current_key:
+            hooks[current_id].setdefault(current_key, []).append(stripped[2:].strip())
+    return hooks
+
+
+def parse_loop_contracts(lines: Sequence[str]) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``parse_loop_contracts``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    loops: List[Dict[str, Any]] = []
+    in_block = False
+    current: Optional[Dict[str, Any]] = None
+    current_key: Optional[str] = None
+    for raw in lines:
+        stripped = raw.strip()
+        indent = len(raw) - len(raw.lstrip())
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped == "loop_contracts:":
+            in_block = True
+            current = None
+            current_key = None
+            continue
+        if in_block and indent == 0 and re.match(r"^[A-Za-z_][A-Za-z0-9_]*:", stripped):
+            break
+        if not in_block:
+            continue
+        match = re.match(r"^-\s+id:\s*(\S+)\s*$", stripped)
+        if match:
+            current = {"id": match.group(1)}
+            loops.append(current)
+            current_key = None
+            continue
+        if current is None:
+            continue
+        if ":" in stripped and not stripped.startswith("- "):
+            key, value = stripped.split(":", 1)
+            key = key.strip()
+            value = value.strip().strip('"')
+            current_key = key
+            if value:
+                current[key] = value
+            else:
+                current[key] = []
+            continue
+        if stripped.startswith("- ") and current_key:
+            current.setdefault(current_key, []).append(stripped[2:].strip())
+    return loops
+
+
+def severity_counts(findings: Sequence[Dict[str, Any]]) -> Dict[str, int]:
+    """Document the responsibility of ``severity_counts``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``severity_counts`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    counts = {"high": 0, "medium": 0, "low": 0}
+    for finding in findings:
+        severity = str(finding.get("severity", "low"))
+        counts[severity] = counts.get(severity, 0) + 1
+    return counts
+
+
+def is_wrapper_skill(skill: Dict[str, Any], exemptions: set[str]) -> bool:
+    """Document the responsibility of ``is_wrapper_skill``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``is_wrapper_skill`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    name = str(skill.get("name", ""))
+    description = str(skill.get("description", "")).lower()
+    return name in exemptions or "compatibility wrapper" in description
+
+
+def audit_skill_coverage(
+    *,
+    hooks_file: Path,
+    skills_dir: Path,
+    min_non_wrapper_coverage: float,
+    min_loop_count: int,
+) -> Dict[str, Any]:
+    """Document the responsibility of ``audit_skill_coverage``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``audit_skill_coverage`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    lines = hooks_file.read_text(encoding="utf-8").splitlines()
+    hook_map = parse_hooks(lines)
+    loops = parse_loop_contracts(lines)
+    runtime_scripts = list_values_after_key(lines, "shared_runtime_scripts")
+    skill_report = inventory(skills_dir)
+    findings: List[Dict[str, Any]] = []
+    exemptions = DEFAULT_WRAPPER_EXEMPTIONS
+
+    non_wrappers = []
+    covered_non_wrappers = []
+    wrappers = []
+    for skill in skill_report["skills"]:
+        name = str(skill["name"])
+        covered = (
+            bool(skill.get("hook_ids")) or int(skill.get("direct_route_count", 0)) > 0
+        )
+        if is_wrapper_skill(skill, exemptions):
+            wrappers.append(name)
+            if not covered:
+                findings.append(
+                    {
+                        "severity": "low",
+                        "code": "wrapper_without_hook_or_route",
+                        "message": "Compatibility wrapper has no hook or direct route; this is allowed but should remain intentional.",
+                        "skill": name,
+                    }
+                )
+            continue
+        non_wrappers.append(name)
+        if covered:
+            covered_non_wrappers.append(name)
+        else:
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "uncovered_skill",
+                    "message": "Non-wrapper skill has no hook and no direct route.",
+                    "skill": name,
+                }
+            )
+
+    coverage_ratio = (
+        len(covered_non_wrappers) / len(non_wrappers) if non_wrappers else 1.0
+    )
+    if coverage_ratio < min_non_wrapper_coverage:
+        findings.append(
+            {
+                "severity": "high",
+                "code": "coverage_ratio_below_policy",
+                "message": "Hook/direct-route coverage for non-wrapper skills is below policy.",
+                "coverage_ratio": round(coverage_ratio, 4),
+                "minimum": min_non_wrapper_coverage,
+            }
+        )
+
+    if len(loops) < min_loop_count:
+        findings.append(
+            {
+                "severity": "high",
+                "code": "loop_contract_count_below_policy",
+                "message": "Too few named loop contracts are declared in SKILL_HOOKS.yaml.",
+                "loop_count": len(loops),
+                "minimum": min_loop_count,
+            }
+        )
+
+    for loop in loops:
+        loop_id = str(loop.get("id", ""))
+        required_hooks = [str(item) for item in loop.get("required_hooks", [])]
+        recommended_hooks = [str(item) for item in loop.get("recommended_hooks", [])]
+        required_owner_skills = [
+            str(item) for item in loop.get("required_owner_skills", [])
+        ]
+        missing_required_hooks = [
+            hook for hook in required_hooks if hook not in hook_map
+        ]
+        if missing_required_hooks:
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "loop_missing_required_hooks",
+                    "message": "Loop contract references required hooks that are not declared.",
+                    "loop": loop_id,
+                    "missing_hooks": missing_required_hooks,
+                }
+            )
+        missing_recommended_hooks = [
+            hook for hook in recommended_hooks if hook not in hook_map
+        ]
+        if missing_recommended_hooks:
+            findings.append(
+                {
+                    "severity": "medium",
+                    "code": "loop_missing_recommended_hooks",
+                    "message": "Loop contract references recommended hooks that are not declared.",
+                    "loop": loop_id,
+                    "missing_hooks": missing_recommended_hooks,
+                }
+            )
+        owners = {
+            str(hook_map[hook].get("owner_skill"))
+            for hook in required_hooks
+            if hook in hook_map
+        }
+        missing_owners = [
+            owner for owner in required_owner_skills if owner not in owners
+        ]
+        if missing_owners:
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "loop_missing_required_owner_skills",
+                    "message": "Loop contract does not include all required owner skills among its required hooks.",
+                    "loop": loop_id,
+                    "missing_owner_skills": missing_owners,
+                }
+            )
+        for hook_id in required_hooks:
+            hook = hook_map.get(hook_id)
+            if not hook:
+                continue
+            steps = [str(step) for step in hook.get("reasoning_log_steps", [])]
+            if not steps:
+                findings.append(
+                    {
+                        "severity": "medium",
+                        "code": "loop_hook_without_reasoning_steps",
+                        "message": "Loop-required hook has no reasoning-log steps.",
+                        "loop": loop_id,
+                        "hook": hook_id,
+                    }
+                )
+                continue
+            if any(
+                token in hook_id
+                for token in ("loop", "suite", "review", "precheck", "support")
+            ):
+                has_start = any(
+                    step.endswith("_start") or step.endswith("_suite_start")
+                    for step in steps
+                )
+                has_complete = any(
+                    step.endswith("_complete")
+                    or step.endswith("_suite_complete")
+                    or step.endswith("_ready")
+                    for step in steps
+                )
+                if not (has_start and has_complete):
+                    findings.append(
+                        {
+                            "severity": "low",
+                            "code": "loop_hook_missing_start_complete_pair",
+                            "message": "Loop-like hook should expose both start and completion/ready reasoning steps.",
+                            "loop": loop_id,
+                            "hook": hook_id,
+                            "steps": steps,
+                        }
+                    )
+
+    required_control_scripts = {
+        "skills/control/workflow-contract-validator/scripts/validate_skill_hooks.py",
+        "skills/control/skill-hook-coverage-maximizer/scripts/audit_skill_hook_coverage.py",
+        "skills/control/skill-test-program-orchestrator/scripts/run_deterministic_skill_tests.py",
+    }
+    missing_runtime_scripts = sorted(required_control_scripts - set(runtime_scripts))
+    if missing_runtime_scripts:
+        findings.append(
+            {
+                "severity": "high",
+                "code": "missing_required_control_runtime",
+                "message": "Coverage-critical runtime scripts are missing from shared_runtime_scripts.",
+                "missing_scripts": missing_runtime_scripts,
+            }
+        )
+
+    blocking = [item for item in findings if item.get("severity") == "high"]
+    return {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "skill": SKILL_NAME,
+        "hook_id": HOOK_ID,
+        "ok": not blocking,
+        "summary": {
+            "skill_count": skill_report["skill_count"],
+            "hook_count": len(hook_map),
+            "direct_route_count": sum(
+                int(item.get("direct_route_count", 0))
+                for item in skill_report["skills"]
+            ),
+            "non_wrapper_skill_count": len(non_wrappers),
+            "covered_non_wrapper_skill_count": len(covered_non_wrappers),
+            "non_wrapper_coverage_ratio": round(coverage_ratio, 4),
+            "wrapper_exemption_count": len(wrappers),
+            "loop_contract_count": len(loops),
+            "shared_runtime_script_count": len(runtime_scripts),
+            "finding_count": len(findings),
+            "blocking_finding_count": len(blocking),
+            "severity_counts": severity_counts(findings),
+        },
+        "coverage_policy": {
+            "min_non_wrapper_coverage": min_non_wrapper_coverage,
+            "min_loop_count": min_loop_count,
+            "wrapper_exemptions": sorted(exemptions),
+        },
+        "loop_contracts": [
+            {
+                "id": loop.get("id"),
+                "required_hook_count": len(loop.get("required_hooks", [])),
+                "recommended_hook_count": len(loop.get("recommended_hooks", [])),
+            }
+            for loop in loops
+        ],
+        "findings": findings,
+    }
+
+
+def render_text(report: Dict[str, Any]) -> str:
+    """Document the responsibility of ``render_text``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    summary = report["summary"]
+    lines = [
+        f"ok: {report['ok']}",
+        f"skills: {summary['skill_count']}",
+        f"hooks: {summary['hook_count']}",
+        f"routes: {summary['direct_route_count']}",
+        f"non_wrapper_coverage: {summary['non_wrapper_coverage_ratio']}",
+        f"loop_contracts: {summary['loop_contract_count']}",
+        f"findings: {summary['finding_count']}",
+        f"blocking: {summary['blocking_finding_count']}",
+    ]
+    for finding in report["findings"][:40]:
+        lines.append(f"- {finding['severity']} {finding['code']}: {finding['message']}")
+    return "\n".join(lines)
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    """Document the responsibility of ``parse_args``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--hooks-file", type=Path, default=Path("skills/SKILL_HOOKS.yaml")
+    )
+    parser.add_argument("--skills-dir", type=Path, default=Path("skills"))
+    parser.add_argument("--min-non-wrapper-coverage", type=float, default=1.0)
+    parser.add_argument("--min-loop-count", type=int, default=6)
+    parser.add_argument("--expect-ok", action="store_true")
+    parser.add_argument("--reasoning-log-file", type=Path)
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    args = parse_args(argv)
+    hooks_file = (REPO_ROOT / args.hooks_file).resolve()
+    skills_dir = (REPO_ROOT / args.skills_dir).resolve()
+    reasoning_log = (
+        (REPO_ROOT / args.reasoning_log_file).resolve()
+        if args.reasoning_log_file
+        else None
+    )
+    append_event(
+        reasoning_log,
+        "skill_hook_coverage_audit_start",
+        {
+            "hooks_file": rel(hooks_file),
+            "skills_dir": rel(skills_dir),
+            "min_non_wrapper_coverage": args.min_non_wrapper_coverage,
+            "min_loop_count": args.min_loop_count,
+        },
+    )
+    report = audit_skill_coverage(
+        hooks_file=hooks_file,
+        skills_dir=skills_dir,
+        min_non_wrapper_coverage=args.min_non_wrapper_coverage,
+        min_loop_count=args.min_loop_count,
+    )
+    append_event(
+        reasoning_log,
+        "skill_hook_coverage_audit_complete",
+        {
+            "ok": report["ok"],
+            "summary": report["summary"],
+        },
+    )
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(render_text(report))
+    if args.expect_ok and not report["ok"]:
+        return 4
+    return 0 if report["ok"] else 3
+
+
+if __name__ == "__main__":
+    sys.exit(main())

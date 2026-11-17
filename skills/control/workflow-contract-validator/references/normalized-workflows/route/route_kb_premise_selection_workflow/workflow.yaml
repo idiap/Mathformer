@@ -1,0 +1,395 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_kb_premise_selection_workflow
+version: 1.0.0
+kind: workflow
+description: Execute the selected premise-selection route through its single controlled
+  kb:e2e action.
+aliases:
+- kb.premise.selection
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    representation: value
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    representation: value
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  SelectedMatch:
+    schema:
+      type: object
+      properties:
+        route:
+          type: object
+          properties:
+            route_id:
+              type: string
+              const: kb.premise.selection
+            action_ids:
+              type: array
+              const:
+              - kb:e2e
+              items:
+                type: string
+          required:
+          - route_id
+          - action_ids
+          additionalProperties: true
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+      required:
+      - route
+      - score
+      - matched_terms
+      additionalProperties: false
+  IntentState:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+            properties:
+              ok:
+                type: boolean
+            required:
+            - ok
+            additionalProperties: true
+      required:
+      - ok
+      - children
+      additionalProperties: false
+  ActionId:
+    schema:
+      type: string
+      const: kb:e2e
+  Boolean:
+    schema:
+      type: boolean
+  Registry:
+    schema:
+      type: object
+      additionalProperties:
+        type: object
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: SelectedMatch
+  registry:
+    type: Registry
+  repository_root:
+    type: RepositoryRoot
+    required: false
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: IntentState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_premise_selection_route_initialize
+        operation: mathformer_premise_selection_route_initialize
+  select:
+    inputs:
+      state:
+        type: IntentState
+      match:
+        type: SelectedMatch
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_premise_selection_route_select
+        operation: mathformer_premise_selection_route_select
+  execute:
+    inputs:
+      action_id:
+        type: ActionId
+      context:
+        type: RunContext
+      registry:
+        type: Registry
+      repository_root:
+        type: RepositoryRoot
+        required: false
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_premise_selection_route_execute
+        operation: mathformer_premise_selection_route_execute
+  advance:
+    inputs:
+      state:
+        type: IntentState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+    outputs:
+      state:
+        type: IntentState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_premise_selection_route_advance
+        operation: mathformer_premise_selection_route_advance
+  finish:
+    inputs:
+      state:
+        type: IntentState
+      match:
+        type: SelectedMatch
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_premise_selection_route_finish
+        operation: mathformer_premise_selection_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: One action in source order. advance always sets done after that action;
+      success and failed child payloads both exit normally, never by exhaustion. keep_going
+      cannot add work to this single-action route.
+    state_type: IntentState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: execute
+        kind: call
+        operation: execute
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          context:
+            ref: inputs.context
+          registry:
+            ref: inputs.registry
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.execute.outputs.child
+          context:
+            ref: inputs.context
+      outputs:
+        state:
+          type: IntentState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: IntentState
+        value:
+          ref: loop.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/kb/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Native route completion and recorded execution only; no scientific
+    truth or artifact approval is inferred.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes; initialize_intent_state; select_intent_action;
+      advance_intent_state; finish_intent_state; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/kb/run_premise_kb_e2e.py
+    selector: main; prepare; populate; query; update_report; assess; emit; run_cli
+    digest: sha256:3870ef60a253c9723e2cf5589d8f57f6102922f7b8a39acc45bf7eaa39795464
+  - path: scripts/mcp_server.py
+    selector: mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/premise_selection_route_tools.py
+    selector: register_premise_selection_route_tools; selected_match; checked_registry;
+      check_state
+    digest: sha256:c0c007daf07c5263a0ec35a8fc9e388bdfa0bf393ea4a2c88d62144a3b6f3836
+  - path: scripts/adoption_check_tools.py
+    selector: Context
+    digest: sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: premise_selection_route_descriptor; descriptors
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_premise_selection_route_workflow_tests.py
+    selector: PremiseSelectionTests
+    digest: sha256:36ddf2fec81f910262c5426f3c4d3a4dcc95c1b11a738052cffaf8f047fd9020
+  - path: tests/mcp/fixtures/premise_selection_route_original.py.txt
+    selector: frozen selected controller
+    digest: sha256:19f0939737cc5b28988a6e49459f68e5c0e2700dc35759f951fc6ce84df5cb69
+  - path: tests/mcp/fixtures/reasoning_route_compiler.py
+    selector: install (test-only external compiler fixture)
+    digest: sha256:b26fc9930e1e03a6be0fcfb04daaf94c7c30f452cb93bb642e91cbb603b1688a
+  gaps:
+  - Leaf internals remain inside the execute operation; individual KB commands and
+    scientific report payloads are not typed by this contract.
+  - The 3600-second limit and mandatory receipts are enforced by Lunar; the native
+    controller retains its unbounded subprocess timeout and no retries.
+  - External capability names inherited in policy are ceilings, not runtime grants.
+    This selected local action requires no provider or external compiler.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: kb.premise.selection
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: kb.premise.selection
+      title: Run or validate premise selection
+      action_ids:
+      - kb:e2e
+  mathformer.native_boundary:
+    execution: Each MCP operation reuses the shared native controller helper. execute
+      delegates to run_action, retaining the leaf and its source-owned observability.
+    registry_and_mount: Caller supplies a native registry metadata projection and
+      optional repository_root. Projections are verified against native declarations;
+      commands cannot be supplied by callers.
+    callers: CLI ask --run and MCP natural-language and normalized dispatchers.
+    selection: Already selected route; normalized dispatch uses score=0 and matched_terms=[],
+      without NL scoring.
+    failure_policy: Preserve native failed payloads; unexpected exceptions terminate
+      the segment.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+  mathformer.composition:
+    ordered_actions:
+    - kb:e2e
+    action_workflows:
+    - hub_kb_e2e_workflow
+    bound: Exact source action count 1; done is true on the first iteration, so on_exhausted
+      is unreachable.
+# REUSE-IgnoreEnd

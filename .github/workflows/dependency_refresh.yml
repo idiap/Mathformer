@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+name: Dependency refresh evidence
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+jobs:
+  refresh-and-regress:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: leanprover/lean-action@v1
+      - name: Resolve the reference profiles
+        run: uv lock --upgrade
+      - name: Install the locked reference environment
+        run: uv sync --all-extras --locked
+      - name: Validate dependency and physics release contracts
+        run: |
+          uv run python tests/environment/run_dependency_lock_contract.py --json
+          uv run python tests/physics_sympy/run_physics_ir_contract.py --json
+          uv run python tests/physics_sympy/run_unit_semantics_contract.py --json
+          uv run python tests/physics_lean/run_mathformerphysicslib_release_gate.py --json
+      - name: Capture dependency drift
+        if: always()
+        run: git diff -- uv.lock > dependency-refresh.patch
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-refresh-evidence
+          path: |
+            uv.lock
+            dependency-refresh.patch

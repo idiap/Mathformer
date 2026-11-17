@@ -1,0 +1,424 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_setup_lean_workflow
+version: 1.0.0
+kind: workflow
+description: Execute the selected setup.lean route through its one controlled setup:lean
+  action.
+aliases:
+- setup.lean
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+    representation: value
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+    representation: value
+  RouteState:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+      required:
+      - ok
+      - children
+      additionalProperties: false
+    representation: value
+  ActionId:
+    schema:
+      type: string
+      const: setup:lean
+  Boolean:
+    schema:
+      type: boolean
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+    representation: value
+  SelectedMatch:
+    schema:
+      type: object
+      description: JSON projection of IntentMatch; retain all native route metadata.
+      properties:
+        route:
+          type: object
+          properties:
+            route_id:
+              type: string
+              const: setup.lean
+            action_ids:
+              type: array
+              const:
+              - setup:lean
+          required:
+          - route_id
+          - action_ids
+        score:
+          type: number
+        matched_terms:
+          type: array
+          items:
+            type: string
+      required:
+      - route
+      - score
+      - matched_terms
+  Registry:
+    schema:
+      type: object
+      description: Native WorkflowAction mapping; selected registration must be unchanged.
+      properties:
+        setup:lean:
+          type: object
+      required:
+      - setup:lean
+      additionalProperties:
+        type: object
+  ActionCount:
+    schema:
+      type: integer
+      const: 1
+inputs:
+  context:
+    type: RunContext
+  repository_root:
+    type: RepositoryRoot
+  match:
+    type: SelectedMatch
+  registry:
+    type: Registry
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_setup_lean_route_initialize
+        operation: mathformer_setup_lean_route_initialize
+  select_action:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_setup_lean_route_select_action
+        operation: mathformer_setup_lean_route_select_action
+  run_action:
+    inputs:
+      action_id:
+        type: ActionId
+      context:
+        type: RunContext
+      repository_root:
+        type: RepositoryRoot
+      registry:
+        type: Registry
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_setup_lean_route_run_action
+        operation: mathformer_setup_lean_route_run_action
+  advance:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+      action_count:
+        type: ActionCount
+    outputs:
+      state:
+        type: RouteState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_setup_lean_route_advance
+        operation: mathformer_setup_lean_route_advance
+  finish:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_setup_lean_route_finish
+        operation: mathformer_setup_lean_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: The source iterates action_ids; setup.lean contains one item. advance
+      returns done=true after that item, including a failed child, so the bound returns
+      normally.
+    state_type: RouteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select_action
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: run
+        kind: call
+        operation: run_action
+        description: Return native failure payloads as child data so advance and finish
+          still execute; unexpected launch exceptions propagate.
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          context:
+            ref: inputs.context
+          repository_root:
+            ref: inputs.repository_root
+          registry:
+            ref: inputs.registry
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.run.outputs.child
+          context:
+            ref: inputs.context
+          action_count:
+            literal: 1
+      outputs:
+        state:
+          type: RouteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RouteState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - .lake/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked setup description only; completion establishes no scientific
+    result, runtime qualification or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes/setup.lean; build_registry/setup:lean; initialize_intent_state;
+      select_intent_action; advance_intent_state; finish_intent_state; run_action;
+      prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/install_env.py
+    selector: main; initialize; setup_lean; install_lean; resolve_lake; update_lean;
+      build_lean; run; complete
+    digest: sha256:2c8a00fbf461dddcb10899271ca41d47bf90c9a077b47add7db3c250aab1a5fd
+  - path: scripts/setup_lean_route_tools.py
+    selector: register_setup_lean_route_tools; selected_match; checked_registry; check_state
+    digest: sha256:766f0a98b5433f02cb2a4cb827f6b042ce20131728e9b3655a5129cfbf4c6241
+  - path: scripts/mcp_server.py
+    selector: register_setup_lean_route_tools; mathformer_ask; mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/adoption_check_tools.py
+    selector: Context
+    digest: sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac
+  - path: scripts/workflow_write_audit.py
+    selector: snapshot_repository; audit_snapshots
+    digest: sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: setup_lean_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_setup_lean_route_workflow_tests.py
+    selector: SetupLeanTests
+    digest: sha256:a14115ddfae660c0a3008fd799e73af8f1184e1e671366fadcacd69a1dc94d44
+  - path: tests/mcp/fixtures/setup_lean_route_boundary.py
+    selector: boundary; serve
+    digest: sha256:0203f55c8b9ab9da9aa86ccafb74695f78c6813257176c09c5641b24b218b8ad
+  - path: tests/mcp/fixtures/setup_lean_route_original.py.txt
+    selector: frozen selected source and state helpers
+    digest: sha256:826ea1fcd4ae1ac4b70f2fda914be7d483bc0f4fd6687f7e68e50701a0286eff
+  gaps:
+  - Preflight and installer internals remain inside the native run_action subprocess
+    rather than separate graph nodes; native output capture and write audit are preserved.
+  - Lunar enforces the 3600-second and five-operation ceilings. These are normalization
+    bounds; the native action timeout is None and installer subprocesses have no timeout.
+  - Lunar supplies graph receipts and provenance alongside source-owned diagnostics.
+    Network and external effects require deployment qualification; capability placeholder
+    names are not runtime grants.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: setup.lean
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: setup.lean
+      title: Set up the Lean profile
+      action_ids:
+      - setup:lean
+      operator_note: Requires mutation permission because it can write .lake/.
+  mathformer.native_boundary:
+    execution: Registered mathformer_setup_lean_route_* tools share native intent-state
+      helpers and run_action with scripts/mathformer.py:run_intent_match. CLI ask
+      --run and native mathformer_ask/mathformer_run_workflow continue to dispatch
+      the native route.
+    specialization: Selected match is setup.lean; registry is verified against build_registry
+      with setup:lean unchanged; action_count=1, extra_args=(), no dependencies. Null
+      repository_root uses the native repository default.
+    action_control: Admission precedes preflight. Required paths, extra-argument policy
+      and mutation authorization are checked; errors return ok=false without launching.
+      A permitted dry-run returns without launching.
+    installer: Otherwise resolve {python} to sys.executable and launch scripts/install_env.py
+      --skip-python --with-lean in the repository root. Validate Python >=3.10, parse
+      arguments, skip Python installation, enter enabled Lean branch.
+    lean_control: Resolve existing lake once; run [lake, update], then [lake, build]
+      with that same executable in ROOT_DIR. Missing lake or either checked command
+      failure stops the installer; completion is printed only after success. No installer
+      loop or retry.
+    action_result: Capture installer returncode/stdout/stderr; nonzero returncode
+      yields ok=false. Audit repository writes against .lake/ after launch; unexpected
+      writes force ok=false and status=undeclared_writes. Helpers own diagnostics
+      and timing.
+    failure_policy: Native ok=false is result data and reaches finish; exceptional
+      operation failure terminates the graph. keep_going cannot add work to a one-action
+      route.
+    bound_behavior: After one child, advance.done is true regardless of child success.
+      on_exhausted=fail is unreachable for this fixed native route; Lunar guards exhaustion
+      if the graph exit condition is changed. No native retry or deadline is added.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    context: All five RunContext flags, selected match including score and matched_terms,
+      exact native registry projection and nullable repository_root are explicit ports.
+      JSON cannot replace commands or native route metadata. Service write-root and
+      read-only policies apply at the run_action binding.
+    observability: Lunar supplies graph receipts and provenance; native stdout/stderr,
+      result data, ordered children and route scoring evidence remain source-owned.
+# REUSE-IgnoreEnd

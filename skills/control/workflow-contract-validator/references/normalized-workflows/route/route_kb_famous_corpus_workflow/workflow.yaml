@@ -1,0 +1,426 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_kb_famous_corpus_workflow
+version: 1.0.0
+kind: workflow
+description: Dispatch the selected famous-corpus route through the authoritative native
+  controller.
+aliases:
+- kb.famous.corpus
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  Match:
+    schema:
+      type: object
+      required:
+      - route
+      - score
+      - matched_terms
+      properties:
+        route:
+          type: object
+          required:
+          - route_id
+          - action_ids
+          properties:
+            route_id:
+              type: string
+              const: kb.famous.corpus
+            action_ids:
+              type: array
+              prefixItems:
+              - const: kb:famous-corpus
+              minItems: 1
+              maxItems: 1
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+  RouteState:
+    schema:
+      type: object
+      required:
+      - ok
+      - children
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+            required:
+            - ok
+            properties:
+              ok:
+                type: boolean
+  ActionId:
+    schema:
+      type: string
+      const: kb:famous-corpus
+  Done:
+    schema:
+      type: boolean
+  Registry:
+    schema:
+      type: object
+      properties:
+        kb:famous-corpus:
+          type: object
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: Match
+  registry:
+    type: Registry
+  repository_root:
+    type: RepositoryRoot
+    required: false
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_famous_corpus_route_initialize
+        operation: mathformer_famous_corpus_route_initialize
+  select:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: Match
+    outputs:
+      action:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_famous_corpus_route_select
+        operation: mathformer_famous_corpus_route_select
+  dispatch:
+    inputs:
+      action:
+        type: ActionId
+      context:
+        type: RunContext
+      registry:
+        type: Registry
+      repository_root:
+        type: RepositoryRoot
+        required: false
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_famous_corpus_route_dispatch
+        operation: mathformer_famous_corpus_route_dispatch
+  advance:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+    outputs:
+      state:
+        type: RouteState
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_famous_corpus_route_advance
+        operation: mathformer_famous_corpus_route_advance
+  finish:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: Match
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_famous_corpus_route_finish
+        operation: mathformer_famous_corpus_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: One native route iteration; done is true at the bound, including
+      failure.
+    state_type: RouteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: dispatch
+        kind: call
+        operation: dispatch
+        arguments:
+          action:
+            ref: steps.select.outputs.action
+          context:
+            ref: inputs.context
+          registry:
+            ref: inputs.registry
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.dispatch.outputs.child
+          context:
+            ref: inputs.context
+      outputs:
+        state:
+          type: RouteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Done
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RouteState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/kb/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+    - promote_theorem
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Generated candidates and regression evidence only; completion establishes
+    no theorem proof or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes; initialize_intent_state; select_intent_action;
+      advance_intent_state; finish_intent_state; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/kb/run_famous_theorem_corpus.py
+    selector: main; prepare; generate_read; index; probe; assess; emit; run_json
+    digest: sha256:e18c800e28616c1b5d52623faadf654dba373f2af7ec974ac80389602f36a66f
+  - path: skills/premise-kb/premise-kb-theorem-seed-generator/scripts/generate_famous_theorem_axiom_corpus.py
+    selector: main; build_entries; open_domain; append_entry; advance_domain; check_slice
+    digest: sha256:6668e72b9340e9963c9f4b8e452ef636d7ba189aca5ea06d57124ddaa5ba502e
+  - path: skills/premise-kb/premise-kb-indexer/scripts/index_premise_kb.py
+    selector: main; initialize; ingest_file; build_bloom; build_embeddings; search;
+      report
+    digest: sha256:92c948b8ce71704da1999309588b9ed763331aef1eb289bcd80463e2df091591
+  - path: scripts/mcp_server.py
+    selector: mathformer_run_workflow; _cap_unbounded_timeouts
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/famous_corpus_route_tools.py
+    selector: register_famous_corpus_route_tools; selected_match; checked_registry;
+      check_state
+    digest: sha256:2f9a2a7c9a9323b0eea41699341322e4ad1640f0a5189936d2959f368919c019
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: famous_corpus_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Dispatch retains the native regression, generator and indexer internals behind
+    run_action; this graph models the route controller, not every corpus traversal
+    step.
+  - The 3600-second ceiling is a Lunar workflow budget, not a native CLI timeout.
+    These block tools preserve the native unbounded leaf; existing whole-route MCP
+    dispatch separately applies its configurable cap (default 600 seconds).
+  - Lunar supplies runtime receipts and provenance. Native optional reports and captured
+    stdout remain source-owned; logical effect declarations are not OS filesystem
+    isolation.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: kb.famous.corpus
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: kb.famous.corpus
+      title: Generate the famous theorem and axiom corpus
+      action_ids:
+      - kb:famous-corpus
+      skill_routes:
+      - premise-kb-theorem-seed-generator
+      - premise-kb-indexer
+  mathformer.native_boundary:
+    execution: Five registered MCP tools call the shared scripts/mathformer.py controller
+      steps; dispatch calls run_action without extra args, dependencies or a new timeout.
+      Registry projections are checked against native declarations and repository_root
+      selects the source mount.
+    failure_policy: Failed child observations remain data for aggregate completion;
+      operation exceptions abort.
+    scientific_payloads: HubResult contains captured JSON stdout; it is not itself
+      the regression payload.
+    timeout: Block tools retain native CLI timeout_seconds=null. Whole-route mathformer_run_workflow
+      continues to use its existing configurable MCP cap. Lunar owns the descriptor
+      wall time budget.
+  mathformer.composition:
+    ordered_actions:
+    - kb:famous-corpus
+    action_workflows:
+    - hub_kb_famous_corpus_workflow
+    keep_going_semantics: Stop at action exhaustion or failure unless keep_going;
+      aggregate ok is sticky.
+    selection: Match is already selected; NL scoring and ambiguity resolution remain
+      native.
+    child_iteration: Generator carries domain_index, name_index, current names and
+      entries through the finite DOMAIN_CATALOG; each domain must have 20 names, then
+      the complete list is checked and sliced to default limit 500.
+    index_iteration: Indexer carries file cursor, insertion results and index/search
+      outputs; this invocation has one input file, Bloom/embedding/search enabled
+      and Vampire disabled.
+    termination: Catalog and file exhaustion return normally; there is no scientific
+      search, retry, feedback or theorem promotion loop.
+  mathformer.operation_notes:
+    initialize: Initialize the native ordered route accumulator.
+    select: Select the native action at len(state.children), restoring source-owned
+      route metadata and scoring evidence.
+    dispatch: 'scripts/mathformer.py:run_action -> run_leaf_action owns admission,
+      preflight, dry-run handling, subprocess launch/capture and write audit. Resolve
+      the source-owned registry and repository mount; this action has no dependencies
+      and no extra arguments. Admission rejection or preflight errors return failure
+      data. Dry-run returns without launching. Otherwise launch tests/kb/run_famous_theorem_corpus.py
+      --json. Its main orders prepare -> generate_read -> index -> probe -> assess
+      -> emit. prepare resets artifacts/kb/famous_corpus_test; generate_read runs
+      the generator then parses nonblank JSONL records. index ingests that one file,
+      builds Bloom filters, builds 256-dimensional embeddings, then searches Fundamental
+      theorem of algebra with k=5; Vampire ingestion is disabled. probe uses the same
+      KB and index hits for name/any exact membership, an absent name, and target-versus-unrelated
+      geometric distances. assess consumes paths, generated report/records, index
+      report and probes: check 500 entries, unique IDs, generated_candidate status,
+      informal hashes, insertion counts, index files, target retrieval and distance
+      evidence. emit prints the payload and returns 0 iff all assertions pass, otherwise
+      3. Generator/indexer nonzero exits raise immediately; parsing, I/O and KB exceptions
+      abort the child process. The hub captures nonzero child exits as ok=false; a
+      failed write audit also forces ok=false and status=undeclared_writes even after
+      returncode=0. Unexpected launch exceptions propagate.'
+    advance: Append the child once and stop at action exhaustion or native failure
+      policy; action_count is one.
+    finish: Complete the native route with source-owned metadata, sticky aggregate
+      ok and ordered child observations.
+# REUSE-IgnoreEnd

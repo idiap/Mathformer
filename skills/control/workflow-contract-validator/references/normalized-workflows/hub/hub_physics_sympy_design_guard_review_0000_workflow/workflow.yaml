@@ -1,0 +1,442 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_sympy_design_guard_review_0000_workflow
+version: 1.0.0
+kind: workflow
+description: Review one SymPy artifact for design-guard debts; return findings and
+  recommendations without executing repairs.
+aliases:
+- physics-sympy:design-guard-review-0000
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  ReviewRequest:
+    schema:
+      type: object
+      properties:
+        case_id:
+          const: formalphysics_0000
+          type: string
+        path:
+          type: string
+          minLength: 1
+        reasoning_log:
+          type:
+          - string
+          - 'null'
+      required:
+      - case_id
+      - path
+      - reasoning_log
+      additionalProperties: false
+  ReviewState:
+    schema:
+      type: object
+      properties:
+        findings:
+          type: array
+          items:
+            type: object
+        evidence:
+          type: object
+      required:
+      - findings
+      - evidence
+      additionalProperties: false
+  Flag:
+    schema:
+      type: boolean
+  ImportedArtifact:
+    schema:
+      type:
+      - object
+      - 'null'
+      description: Single-use opaque handle to this MCP server process’s imported
+        Python module and source text; inspection consumes the original instance.
+        Null represents the native failed-import result; module_loaded exports the
+        native module-is-not-None guard.
+      properties:
+        handle:
+          type: string
+          minLength: 1
+      required:
+      - handle
+      additionalProperties: false
+  ReviewReport:
+    schema:
+      type: object
+      properties:
+        style:
+          const: physics_sympy_design_guard_review
+        backend:
+          const: sympy
+        case_id:
+          type: string
+        status:
+          enum:
+          - pass
+          - fail
+        high_severity_finding_count:
+          type: integer
+          minimum: 0
+        repair_surfaces:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        localized_actions:
+          type: array
+          items:
+            type: object
+        semantic_preservation_contract:
+          type: object
+        evidence:
+          type: object
+        findings:
+          type: array
+          items:
+            type: object
+        next_action:
+          type: string
+      required:
+      - style
+      - backend
+      - case_id
+      - status
+      - high_severity_finding_count
+      - repair_surfaces
+      - localized_actions
+      - semantic_preservation_contract
+      - evidence
+      - findings
+      - next_action
+      additionalProperties: false
+inputs:
+  request:
+    type: ReviewRequest
+outputs:
+  report:
+    type: ReviewReport
+    value:
+      ref: flow.outputs.report
+operations:
+  initialize:
+    inputs:
+      request:
+        type: ReviewRequest
+    outputs:
+      state:
+        type: ReviewState
+      artifact_present:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_design_guard_initialize
+        operation: mathformer_design_guard_initialize
+  missing_artifact:
+    inputs:
+      request:
+        type: ReviewRequest
+      state:
+        type: ReviewState
+    outputs:
+      state:
+        type: ReviewState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_design_guard_missing_artifact
+        operation: mathformer_design_guard_missing_artifact
+  read_and_import:
+    inputs:
+      request:
+        type: ReviewRequest
+      state:
+        type: ReviewState
+    outputs:
+      state:
+        type: ReviewState
+      artifact:
+        type: ImportedArtifact
+      module_loaded:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_design_guard_read_and_import
+        operation: mathformer_design_guard_read_and_import
+  failed_import:
+    inputs:
+      state:
+        type: ReviewState
+    outputs:
+      state:
+        type: ReviewState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_design_guard_failed_import
+        operation: mathformer_design_guard_failed_import
+  inspect_module:
+    inputs:
+      state:
+        type: ReviewState
+      artifact:
+        type: ImportedArtifact
+    outputs:
+      state:
+        type: ReviewState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_design_guard_inspect_module
+        operation: mathformer_design_guard_inspect_module
+  finish_review:
+    inputs:
+      request:
+        type: ReviewRequest
+      state:
+        type: ReviewState
+    outputs:
+      report:
+        type: ReviewReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_design_guard_finish_review
+        operation: mathformer_design_guard_finish_review
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments:
+      request:
+        ref: inputs.request
+  - id: artifact_review
+    kind: switch
+    cases:
+    - id: missing
+      when:
+        not:
+          ref: steps.initialize.outputs.artifact_present
+      body:
+        kind: call
+        operation: missing_artifact
+        arguments:
+          request:
+            ref: inputs.request
+          state:
+            ref: steps.initialize.outputs.state
+    default:
+      kind: sequence
+      steps:
+      - id: load
+        kind: call
+        operation: read_and_import
+        arguments:
+          request:
+            ref: inputs.request
+          state:
+            ref: steps.initialize.outputs.state
+      - id: import_review
+        kind: switch
+        cases:
+        - id: loaded
+          when:
+            ref: steps.load.outputs.module_loaded
+          body:
+            kind: call
+            operation: inspect_module
+            arguments:
+              state:
+                ref: steps.load.outputs.state
+              artifact:
+                ref: steps.load.outputs.artifact
+        default:
+          kind: call
+          operation: failed_import
+          arguments:
+            state:
+              ref: steps.load.outputs.state
+        outputs:
+          state:
+            type: ReviewState
+            value:
+              ref: selected.outputs.state
+      outputs:
+        state:
+          type: ReviewState
+          value:
+            ref: steps.import_review.outputs.state
+    outputs:
+      state:
+        type: ReviewState
+        value:
+          ref: selected.outputs.state
+  - id: finish
+    kind: call
+    operation: finish_review
+    arguments:
+      request:
+        ref: inputs.request
+      state:
+        ref: steps.artifact_review.outputs.state
+  outputs:
+    report:
+      type: ReviewReport
+      value:
+        ref: steps.finish.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - native_import_and_callback_effects_require_qualification
+    network:
+    - native_import_and_callback_effects_require_qualification
+    external_write:
+    - native_import_and_callback_effects_require_qualification
+  authority:
+    allowed:
+    - inspect_artifact
+    - produce_review_report
+    forbidden:
+    - execute_recommendations
+    - promote_artifacts
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 300
+    max_operation_calls: 4
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-bound review report only; returned status, transport completion
+    and scientific acceptance are distinct.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/physics-sympy/physics-sympy-review-refinement-router/scripts/plan_physics_sympy_review_refinement.py
+    selector: build_design_guard_review; initialize_design_guard_review; missing_design_guard_artifact;
+      read_design_guard_artifact; failed_design_guard_import; inspect_design_guard_module;
+      finish_design_guard_review
+    digest: sha256:4a323d615204b9c2cc6326c2f047a2e88b070644c23d7a31bd5fe7fe55ce52d2
+  - path: scripts/mathformer.py
+    selector: build_registry/action:physics-sympy:design-guard-review-0000; prepare_leaf_boundary;
+      launch_leaf_boundary; complete_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/design_guard_review_tools.py
+    selector: register_design_guard_review_tools; source; design_guard_review_lifespan
+    digest: sha256:7b17561fc958f56e8b2b432c8cb464eda99df80f27ee263c646c2b26eda18886
+  - path: scripts/mcp_server.py
+    selector: register_design_guard_review_tools; FastMCP lifespan
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: 'inventory: physics-sympy:design-guard-review-0000 authored descriptor'
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_design_guard_review_workflow_tests.py
+    selector: DesignGuardTests
+    digest: sha256:179d7b9e376e70f1fcc278a695f7ff8e410470b2b4eac152a562abd9fa426572
+  - path: tests/mcp/fixtures/design_guard_review_original.py.txt
+    selector: frozen original build_design_guard_review
+    digest: sha256:68c4ce3a235f856d1ef7844efb66a7cfb00913c82fb6eff17de047e74f1a3004
+  gaps:
+  - 'Collection traversals remain inside owning operations: three fixed commentary
+    markers, artifact-provided assumptions/bridges/steps, and report aggregation.
+    No collection-size cap, convergence, retry or exhaustion behavior is added.'
+  - Inspection predicates, helper internals and callbacks are source-owned. Imported
+    modules are single-use server-process handles, not portable or resumable artifacts.
+    Imports and callbacks execute arbitrary Python; the service rejects these steps
+    under its read-only policy. Descriptor capabilities do not sandbox or qualify
+    those effects.
+  - The 300-second ceiling reflects the registered hub subprocess timeout; direct
+    function calls have no native time bound. Four calls is this graph’s structural
+    maximum, not a native call budget. Lunar enforces the descriptor operation budget;
+    there is no source collection-exhaustion signal.
+  - Lunar supplies mandatory runtime receipts and provenance. Optional CLI logging,
+    hub preflight, dry-run, subprocess timeout, and CLI output transport remain native
+    boundary responsibilities outside this reviewer graph.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-sympy:design-guard-review-0000
+    owner_skill: skills/physics-sympy/physics-sympy-review-refinement-router/SKILL.md
+    contract:
+      id: physics-sympy:design-guard-review-0000
+      family: physics_sympy
+      kind: validation
+      safety: read_only
+      depends_on: []
+      allows_extra_args: true
+      timeout_seconds: 300
+      writes: []
+  mathformer.native_boundary:
+    execution: main --mode design_guard_review calls this reviewer; the registered
+      dependency-free leaf uses --case formalphysics_0000 --json. Other callers may
+      invoke the function directly.
+    prelaunch: Hub preflight errors stop launch; dry-run returns without launch. Subprocess
+      timeout returns hub ok=false.
+    path_discrepancy: Reviewer default MathformerPhysicsLib/SymPy/formalphysics_0000/MathformerPhysics.py
+      is absent; hub preflight checks libraries/MathformerPhysicsLib/SymPy/formalphysics_0000/MathformerPhysics.py.
+      Without --sympy-file, a launched registered invocation reaches artifact_missing.
+    completion: CLI serializes the report to stdout or --output, optionally appends
+      a reasoning-log event, and returns 0 even when report.status is fail. Hub returncode
+      success is transport completion, not review acceptance; uncaught exceptions
+      prevent normal completion.
+    effects_status: Importing the artifact executes its Python code; validation callbacks
+      also require effect qualification. Capability labels are not grants.
+    output_semantics: This contract exports the reviewer report, not HubResult. Recommendations
+      and next_action are never dispatched.
+    iteration: Sequential internal traversals carry accumulated findings/evidence.
+      No repair/retry loop, checkpoint, collection-size bound, or native exhaustion
+      signal exists.
+    module_transport: read_and_import retains the native module and text under an
+      opaque single-use handle. inspect_module consumes it with matching review state,
+      without reimport. Exceptions consume the handle; abandoned handles are reclaimed
+      at server shutdown. Handles cannot survive process restart or support resume.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: Selected reviewer internals use shared native helper implementations
+      and registered MCP tools; hub admission, timeout, CLI output and optional logging
+      remain native boundary responsibilities.
+# REUSE-IgnoreEnd

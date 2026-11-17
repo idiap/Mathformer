@@ -1,0 +1,621 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_mcp_service_config_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Parse, validate, optionally scan, and print the redacted independent MCP service configuration.",
+  "aliases": [
+    "mcp:service-config"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Argv": {
+      "representation": "value",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Options": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "config",
+          "require_existing",
+          "scan_tracked",
+          "json"
+        ],
+        "properties": {
+          "config": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "require_existing": {
+            "type": "boolean"
+          },
+          "scan_tracked": {
+            "type": "boolean"
+          },
+          "json": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Config": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "data",
+          "source_path",
+          "source_kind",
+          "errors",
+          "warnings"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            }
+          },
+          "source_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_kind": {
+            "type": "string",
+            "enum": [
+              "defaults",
+              "example",
+              "local"
+            ]
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Findings": {
+      "representation": "value",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "path",
+            "line",
+            "kind"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "line": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "kind": {
+              "const": "secret_like_value"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "Report": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "ok",
+          "source_path",
+          "source_kind",
+          "errors",
+          "warnings",
+          "config",
+          "provider_env_keys",
+          "runtime_settings",
+          "secret_scan_findings"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "source_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_kind": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "config": {
+            "type": "object"
+          },
+          "provider_env_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "runtime_settings": {
+            "type": "object"
+          },
+          "secret_scan_findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          1
+        ]
+      }
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Argv"
+    },
+    "repo_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    },
+    "stdout": {
+      "type": "Text",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "parse": {
+      "inputs": {
+        "argv": {
+          "type": "Argv"
+        }
+      },
+      "outputs": {
+        "options": {
+          "type": "Options"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_service_config_parse",
+          "operation": "mathformer_service_config_parse"
+        }
+      }
+    },
+    "load": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "repo_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "config": {
+          "type": "Config"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_service_config_load",
+          "operation": "mathformer_service_config_load"
+        }
+      }
+    },
+    "scan": {
+      "inputs": {
+        "repo_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "findings": {
+          "type": "Findings"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_service_config_scan",
+          "operation": "mathformer_service_config_scan"
+        }
+      }
+    },
+    "no_scan": {
+      "inputs": {},
+      "outputs": {
+        "findings": {
+          "type": "Findings"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_service_config_no_scan",
+          "operation": "mathformer_service_config_no_scan"
+        }
+      }
+    },
+    "report": {
+      "inputs": {
+        "config": {
+          "type": "Config"
+        },
+        "findings": {
+          "type": "Findings"
+        },
+        "repo_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_service_config_report",
+          "operation": "mathformer_service_config_report"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "report": {
+          "type": "Report"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_service_config_emit",
+          "operation": "mathformer_service_config_emit"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "parse",
+        "kind": "call",
+        "operation": "parse",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          }
+        }
+      },
+      {
+        "id": "load",
+        "kind": "call",
+        "operation": "load",
+        "arguments": {
+          "options": {
+            "ref": "steps.parse.outputs.options"
+          },
+          "repo_root": {
+            "ref": "inputs.repo_root"
+          }
+        }
+      },
+      {
+        "id": "scan_choice",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "enabled",
+            "when": {
+              "ref": "steps.parse.outputs.options.scan_tracked"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "scan",
+              "arguments": {
+                "repo_root": {
+                  "ref": "inputs.repo_root"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "no_scan",
+          "arguments": {}
+        },
+        "outputs": {
+          "findings": {
+            "type": "Findings",
+            "value": {
+              "ref": "selected.outputs.findings"
+            }
+          }
+        }
+      },
+      {
+        "id": "report",
+        "kind": "call",
+        "operation": "report",
+        "arguments": {
+          "config": {
+            "ref": "steps.load.outputs.config"
+          },
+          "findings": {
+            "ref": "steps.scan_choice.outputs.findings"
+          },
+          "repo_root": {
+            "ref": "inputs.repo_root"
+          }
+        }
+      },
+      {
+        "id": "emit",
+        "kind": "call",
+        "operation": "emit",
+        "arguments": {
+          "options": {
+            "ref": "steps.parse.outputs.options"
+          },
+          "report": {
+            "ref": "steps.report.outputs.report"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.report.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.emit.outputs.exit_code"
+        }
+      },
+      "stdout": {
+        "type": "Text",
+        "value": {
+          "ref": "steps.emit.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "selected_configuration"
+        ],
+        "write": []
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "validate_service_configuration",
+        "scan_service_files",
+        "print_redacted_report"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked service validation only; no runtime qualification or scientific endorsement."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mcp_service_config.py",
+        "selector": "main",
+        "digest": "sha256:f3fd43cb362c774ca6d29e3de3895a109ae8fed7062589ac9b37f555ac2e10a2"
+      },
+      {
+        "path": "scripts/load_mcp_service_config.py",
+        "selector": "__main__",
+        "digest": "sha256:4dac3d5030919c183da789d6d0342af5777b3825efa00c8786dab5eba500e117"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:mcp:service-config; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/service_config_tools.py",
+        "selector": "register_service_config_tools",
+        "digest": "sha256:3d87bedfb9a0b6d68bdd639f44dcc8b97d5fe5d2bbfa4bccc82046e18bbb71e6"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_service_config_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory/action:mcp:service-config",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "The graph covers main, not the enclosing hub admission/preflight, dry-run, subprocess and repository audit envelope.",
+      "Native main has no timeout; the unchanged 3600-second contract ceiling and five-call budget are enforced by Lunar.",
+      "Argparse terminal exits stop downstream calls as MCP errors, with native help/usage on stderr and the SystemExit code in the error. No normal report is exported.",
+      "MCP reserves stdout for framing: emit captures the exact native text in stdout output and mirrors it to stderr. Native CLI stdout is unchanged.",
+      "Uncaught native I/O or runtime conversion exceptions stop downstream calls without a normal report. Lunar adds receipts and provenance."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "mcp:service-config",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "mcp:service-config",
+        "family": "mcp",
+        "kind": "validation",
+        "safety": "read_only",
+        "command": [
+          "{python}",
+          "scripts/load_mcp_service_config.py",
+          "--config",
+          "config/mathformer_mcp.example.toml",
+          "--scan-tracked",
+          "--json"
+        ],
+        "depends_on": [],
+        "writes": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Native hub admits/preflights, returns early on preflight failure or dry-run, otherwise launches one subprocess then audits repository changes; audit failure makes the hub result unsuccessful.",
+      "inputs": "argv models main callers; the registered hub action supplies the fixed command above and accepts no extra arguments.",
+      "outputs": "Exports are main's report, printed text and integer return value, not a HubResult envelope.",
+      "effects_status": "Selected main is read-only; optional enclosing hub reports may write artifacts/workflow_hub/.",
+      "context": "repo_root supplies the repository filesystem context to load/validate, tracked scanning and report runtime paths. CLI callers retain the repository default; argv is unchanged."
+    }
+  }
+}

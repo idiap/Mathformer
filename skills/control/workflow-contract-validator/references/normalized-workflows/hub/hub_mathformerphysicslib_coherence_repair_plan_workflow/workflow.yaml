@@ -1,0 +1,447 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_mathformerphysicslib_coherence_repair_plan_workflow
+version: 1.0.0
+kind: workflow
+description: Describe main's report collection, repair planning, optional write, and
+  JSON emission.
+aliases:
+- mathformerphysicslib:coherence-repair-plan
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type: array
+      items:
+        type: string
+  Arguments:
+    schema:
+      type: object
+      required:
+      - reports
+      - output
+      - self_test
+      - json
+      - has_reports
+      - has_output
+      properties:
+        reports:
+          type: array
+          items:
+            type: string
+        output:
+          type:
+          - string
+          - 'null'
+        self_test:
+          type: boolean
+        json:
+          type: boolean
+        has_reports:
+          type: boolean
+        has_output:
+          type: boolean
+  Reports:
+    schema:
+      type: array
+      items:
+        type: object
+  Plan:
+    schema:
+      type: object
+      required:
+      - style
+      - schema_version
+      - action_count
+      - actions
+      - status
+      properties:
+        style:
+          const: mathformerphysicslib_coherence_repair_plan
+        schema_version:
+          const: 1
+        action_count:
+          type: integer
+          minimum: 0
+        actions:
+          type: array
+          items:
+            type: object
+        status:
+          enum:
+          - repair_required
+          - no_repairs_required
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+  RepositoryRoot:
+    schema:
+      type: string
+inputs:
+  argv:
+    type: Argv
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  payload:
+    type: Plan
+    value:
+      ref: flow.outputs.payload
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  parse_arguments:
+    inputs:
+      argv:
+        type: Argv
+    outputs:
+      args:
+        type: Arguments
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_parse_arguments
+        operation: mathformer_coherence_repair_parse_arguments
+  load_reports:
+    inputs:
+      args:
+        type: Arguments
+    outputs:
+      reports:
+        type: Reports
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_load_reports
+        operation: mathformer_coherence_repair_load_reports
+  default_reports:
+    inputs:
+      args:
+        type: Arguments
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      reports:
+        type: Reports
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_default_reports
+        operation: mathformer_coherence_repair_default_reports
+  plan:
+    inputs:
+      reports:
+        type: Reports
+    outputs:
+      payload:
+        type: Plan
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_plan
+        operation: mathformer_coherence_repair_plan
+  write_output:
+    inputs:
+      args:
+        type: Arguments
+      payload:
+        type: Plan
+    outputs: {}
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_write_output
+        operation: mathformer_coherence_repair_write_output
+  emit:
+    inputs:
+      payload:
+        type: Plan
+    outputs:
+      payload:
+        type: Plan
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_emit
+        operation: mathformer_coherence_repair_emit
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse_arguments
+    arguments:
+      argv:
+        ref: inputs.argv
+  - id: collect
+    kind: switch
+    cases:
+    - id: supplied_reports
+      when:
+        ref: steps.parse.outputs.args.has_reports
+      body:
+        kind: sequence
+        steps:
+        - id: load
+          kind: call
+          operation: load_reports
+          arguments:
+            args:
+              ref: steps.parse.outputs.args
+        outputs:
+          reports:
+            type: Reports
+            value:
+              ref: steps.load.outputs.reports
+    default:
+      kind: sequence
+      steps:
+      - id: defaults
+        kind: call
+        operation: default_reports
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+          repository_root:
+            ref: inputs.repository_root
+      outputs:
+        reports:
+          type: Reports
+          value:
+            ref: steps.defaults.outputs.reports
+    outputs:
+      reports:
+        type: Reports
+        value:
+          ref: selected.outputs.reports
+  - id: plan
+    kind: call
+    operation: plan
+    arguments:
+      reports:
+        ref: steps.collect.outputs.reports
+  - id: finish
+    kind: switch
+    cases:
+    - id: with_output
+      when:
+        ref: steps.parse.outputs.args.has_output
+      body:
+        kind: sequence
+        steps:
+        - id: write
+          kind: call
+          operation: write_output
+          arguments:
+            args:
+              ref: steps.parse.outputs.args
+            payload:
+              ref: steps.plan.outputs.payload
+        - id: print_written
+          kind: call
+          operation: emit
+          arguments:
+            payload:
+              ref: steps.plan.outputs.payload
+        outputs:
+          payload:
+            type: Plan
+            value:
+              ref: steps.print_written.outputs.payload
+          exit_code:
+            type: ExitCode
+            value:
+              ref: steps.print_written.outputs.exit_code
+    default:
+      kind: sequence
+      steps:
+      - id: print_only
+        kind: call
+        operation: emit
+        arguments:
+          payload:
+            ref: steps.plan.outputs.payload
+      outputs:
+        payload:
+          type: Plan
+          value:
+            ref: steps.print_only.outputs.payload
+        exit_code:
+          type: ExitCode
+          value:
+            ref: steps.print_only.outputs.exit_code
+    outputs:
+      payload:
+        type: Plan
+        value:
+          ref: selected.outputs.payload
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+  outputs:
+    payload:
+      type: Plan
+      value:
+        ref: steps.finish.outputs.payload
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.finish.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - requested_output
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - describe_repair_plan
+    - write_requested_plan
+    forbidden:
+    - apply_repairs
+    - promote_scientific_claims
+    - bypass_native_controls
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Planning completion establishes neither repair application nor scientific
+    validity.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/mathformerphysicslib/mathformerphysicslib-coherence-repair-planner/scripts/plan_coherence_repairs.py
+    selector: main
+    digest: sha256:3acd9cc0324cc99a0ee733d39fb619adeb2a121788efffc6c6d502fc3b0c3bed
+  - path: skills/mathformerphysicslib/mathformerphysicslib-coherence-repair-planner/scripts/plan_coherence_repairs.py
+    selector: default_reports
+    digest: sha256:3acd9cc0324cc99a0ee733d39fb619adeb2a121788efffc6c6d502fc3b0c3bed
+  - path: skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/coherence_common.py
+    selector: repair_plan; self_test_payload
+    digest: sha256:e1da9d47b82e23be26335e4476ba442aa58aedafe245034709d2868909deb125
+  - path: scripts/mathformer.py
+    selector: build_registry/action:mathformerphysicslib:coherence-repair-plan; run_action;
+      run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: authored coherence-repair contract projection
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: scripts/coherence_repair_tools.py
+    selector: register_coherence_repair_tools
+    digest: sha256:4a11412a5910ad220bf7cf6a6b85389b8b3084a2c41c2601b958c5d96810c931
+  - path: scripts/mcp_server.py
+    selector: register_coherence_repair_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: service tool inventory
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  gaps:
+  - Native hub preflight, subprocess dispatch and undeclared-write auditing remain
+    outside this main-level contract.
+  - Helper internals execute inside their owning native operation; no full Python
+    equivalence is claimed.
+  - Native hub has no subprocess timeout; Lunar enforces the contract execution budget.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: mathformerphysicslib:coherence-repair-plan
+    owner_skill: skills/mathformerphysicslib/mathformerphysicslib-coherence-repair-planner/SKILL.md
+    contract:
+      id: mathformerphysicslib:coherence-repair-plan
+      family: mathformerphysicslib
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - skills/mathformerphysicslib/mathformerphysicslib-coherence-repair-planner/scripts/plan_coherence_repairs.py
+      - --self-test
+      - --json
+      depends_on: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    scope: Executable main CLI branches; repository_root supplies native filesystem
+      context. Registered hub invocation continues to fix argv to --self-test --json.
+    callers:
+    - coherence-suite
+    - physics-lib:coherence-repair-plan
+    dispatch: Preflight errors or dry-run stop before launch; otherwise run_leaf_action
+      launches one subprocess and audits undeclared writes.
+    transport: Payload and exit_code describe main; the hub wraps them in its native
+      result envelope.
+  mathformer.helper_semantics:
+    default_reports: Self-test returns a result bundle, not inventory; canonicalization
+      sees no concept_occurrence_index and builds an empty graph. Integration sees
+      absent inventory flags. Embedded fixture repair_plan is not returned.
+    collection: Repeated report paths are loaded once in order; supplied reports bypass
+      default generation.
+    carried_state: repair_plan initializes actions=[] and appends one action per finding,
+      traversing reports and each report.get("findings", []) in order.
+    mapping: Ownership kinds map to consolidate_concept_owner; missing integration
+      kinds to repair_integration_surface; API kinds to add_operable_bridge_api; others
+      to record_or_block_gap.
+    action_fields: Each action copies severity, concept_id and source_kind and includes
+      a textual monotonicity_gate; the gate is not executed.
+    bounds: Helper traversals are bounded by input collection sizes, without a fixed
+      cap; collection exhaustion returns normally, including empty collections.
+    completion: action_count=len(actions); status is repair_required iff actions is
+      nonempty, otherwise no_repairs_required.
+    failure: Argparse errors, uncaught loading/writing errors or self-test assertions
+      abort; findings alone do not change the zero return code. JSON printing is unconditional
+      even without --json.
+    control: No repair application, retry, convergence loop, early success stop or
+      checkpoint support.
+  mathformer.runtime:
+    observability: Native JSON emission is preserved on the MCP diagnostic stderr
+      channel. Lunar provides execution receipts and digests.
+    context: repository_root is passed to inventory, self-test, integration and API
+      helpers; report and output paths retain native CLI resolution.
+# REUSE-IgnoreEnd

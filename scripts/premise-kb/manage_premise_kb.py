@@ -1,0 +1,1 @@
+../manage_premise_kb.py

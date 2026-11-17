@@ -1,0 +1,918 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Capture the research-paper production workflow as auditable agent skills and helper scripts.
+#
+# Intent:
+#   Separate scientific writing, evidence mapping, figure generation, and theory-evolution modeling roles.
+#
+# Function:
+#   Runs simulation scenarios and reports through stages shared by CLI and MCP.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Run and plot several backends/lean/Mathformer/RFDE theory-evolution simulation regimes."""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import csv
+import html
+import json
+import sys
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from simulate_theory_evolution import (  # noqa: E402
+    build_step_summary,
+    render_svg,
+    simulate_one,
+    summarize,
+    write_csv,
+    write_report,
+)
+
+SCENARIOS = {
+    "baseline": {
+        "label": "Baseline prior",
+        "description": "The default chapter-scale Mathformer trajectory prior.",
+        "color": "#2563EB",
+    },
+    "accelerated_grounding": {
+        "label": "Accelerated grounding",
+        "description": "Mathlib grounding is found earlier and repairs are cheaper.",
+        "color": "#047857",
+    },
+    "grounding_bottleneck": {
+        "label": "Grounding bottleneck",
+        "description": "Mathlib reuse is slower, reducing semantic and proof gains.",
+        "color": "#B45309",
+    },
+    "drift_repair_pressure": {
+        "label": "Drift and repair pressure",
+        "description": "Drafting creates more semantic drift and repair is longer.",
+        "color": "#DC2626",
+    },
+    "noisy_plateau": {
+        "label": "Noisy plateau",
+        "description": "Low gain and high regression create a stalled trajectory.",
+        "color": "#7C3AED",
+    },
+}
+
+METRIC_LABELS = {
+    "lean_executability": "Lean executability",
+    "anchor_coverage": "Anchor coverage",
+    "anchor_validity": "Anchor validity",
+    "semantic_shape": "Semantic shape",
+    "reverse_informal_consistency": "Reverse informal consistency",
+    "mathlib_grounding": "Mathlib grounding",
+    "nonvacuity": "Non-vacuity",
+    "dependency_closure": "Dependency closure",
+    "proof_coherence": "Proof coherence",
+    "realness": "Realness",
+    "workflow_evidence": "Workflow evidence",
+}
+
+SMALL_MULTIPLES = [
+    ("protected_average", "Protected average"),
+    ("lean_executability", "Lean executability"),
+    ("mathlib_grounding", "Mathlib grounding"),
+    ("reasoning_integrity", "Reasoning integrity"),
+]
+
+
+def clamp(value: float) -> float:
+    """Document the responsibility of ``clamp``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``clamp`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return max(0.0, min(1.0, value))
+
+
+def phase_by_id(model: dict, phase_id: str) -> dict:
+    """Document the responsibility of ``phase_by_id``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``phase_by_id`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    for phase in model["phases"]:
+        if phase["id"] == phase_id:
+            return phase
+    raise KeyError(phase_id)
+
+
+def raise_targets(
+    model: dict, phase_ids: list[str], metric_delta: dict[str, float]
+) -> None:
+    """Document the responsibility of ``raise_targets``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``raise_targets`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    for phase_id in phase_ids:
+        target = phase_by_id(model, phase_id)["target"]
+        for metric, delta in metric_delta.items():
+            target[metric] = clamp(target.get(metric, 0.0) + delta)
+
+
+def scale_phase(
+    model: dict,
+    phase_ids: list[str],
+    *,
+    gain: float = 1.0,
+    cost: float = 1.0,
+    regression: float = 1.0,
+) -> None:
+    """Document the responsibility of ``scale_phase``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``scale_phase`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    for phase_id in phase_ids:
+        phase = phase_by_id(model, phase_id)
+        phase["gain_rate"] = max(0.0, phase["gain_rate"] * gain)
+        phase["cost_per_step"] = max(0.0, phase["cost_per_step"] * cost)
+        phase["regression_probability"] = clamp(
+            phase.get("regression_probability", 0.0) * regression
+        )
+
+
+def scale_all_phases(
+    model: dict, *, gain: float = 1.0, cost: float = 1.0, regression: float = 1.0
+) -> None:
+    """Document the responsibility of ``scale_all_phases``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``scale_all_phases`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    for phase in model["phases"]:
+        phase["gain_rate"] = max(0.0, phase["gain_rate"] * gain)
+        phase["cost_per_step"] = max(0.0, phase["cost_per_step"] * cost)
+        phase["regression_probability"] = clamp(
+            phase.get("regression_probability", 0.0) * regression
+        )
+
+
+def set_noise(
+    model: dict,
+    *,
+    gain_sigma: float | None = None,
+    regression_scale: float | None = None,
+    cost_sigma: float | None = None,
+) -> None:
+    """Document the responsibility of ``set_noise``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``set_noise`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    noise = model.setdefault("noise", {})
+    if gain_sigma is not None:
+        noise["gain_sigma"] = gain_sigma
+    if regression_scale is not None:
+        noise["regression_scale"] = regression_scale
+    if cost_sigma is not None:
+        noise["cost_sigma"] = cost_sigma
+
+
+def apply_scenario(base_model: dict, scenario_id: str) -> dict:
+    """Document the responsibility of ``apply_scenario``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``apply_scenario`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    model = copy.deepcopy(base_model)
+    scenario = SCENARIOS[scenario_id]
+    model["model_id"] = (
+        f"{base_model.get('model_id', 'mathformer-theory')}-{scenario_id}"
+    )
+    model["scenario"] = {
+        "id": scenario_id,
+        "label": scenario["label"],
+        "description": scenario["description"],
+    }
+
+    if scenario_id == "baseline":
+        return model
+
+    if scenario_id == "accelerated_grounding":
+        scale_phase(
+            model,
+            ["mathlib_grounding", "repair", "consistency"],
+            gain=1.22,
+            cost=0.88,
+            regression=0.55,
+        )
+        raise_targets(
+            model,
+            ["mathlib_grounding", "consistency", "evaluation_reflection"],
+            {
+                "mathlib_grounding": 0.04,
+                "semantic_shape": 0.03,
+                "dependency_closure": 0.03,
+                "proof_coherence": 0.03,
+                "reverse_informal_consistency": 0.03,
+            },
+        )
+        for coupling in model.get("couplings", []):
+            if coupling["source"] == "mathlib_grounding":
+                coupling["weight"] *= 1.35
+        set_noise(model, gain_sigma=0.06, regression_scale=0.025)
+        return model
+
+    if scenario_id == "grounding_bottleneck":
+        scale_phase(model, ["mathlib_grounding"], gain=0.55, cost=1.45, regression=1.45)
+        scale_phase(
+            model,
+            ["drafting", "execution_critique", "repair"],
+            gain=0.88,
+            cost=1.15,
+            regression=1.25,
+        )
+        raise_targets(
+            model,
+            ["mathlib_grounding", "consistency", "evaluation_reflection"],
+            {
+                "mathlib_grounding": -0.22,
+                "semantic_shape": -0.10,
+                "dependency_closure": -0.10,
+                "proof_coherence": -0.08,
+                "reverse_informal_consistency": -0.06,
+            },
+        )
+        for coupling in model.get("couplings", []):
+            if coupling["source"] == "mathlib_grounding":
+                coupling["weight"] *= 0.45
+        set_noise(model, regression_scale=0.055, cost_sigma=0.20)
+        return model
+
+    if scenario_id == "drift_repair_pressure":
+        scale_phase(
+            model,
+            ["drafting", "execution_critique"],
+            gain=0.95,
+            cost=1.20,
+            regression=2.10,
+        )
+        scale_phase(model, ["repair"], gain=1.05, cost=1.35, regression=1.45)
+        phase_by_id(model, "repair")["duration_steps"] += 4
+        raise_targets(
+            model,
+            ["drafting", "execution_critique"],
+            {
+                "lean_executability": 0.05,
+                "anchor_coverage": -0.08,
+                "semantic_shape": -0.12,
+                "reverse_informal_consistency": -0.12,
+                "nonvacuity": -0.07,
+            },
+        )
+        set_noise(model, gain_sigma=0.12, regression_scale=0.07, cost_sigma=0.22)
+        return model
+
+    if scenario_id == "noisy_plateau":
+        scale_all_phases(model, gain=0.68, cost=1.35, regression=2.4)
+        for phase in model["phases"]:
+            for metric, value in list(phase["target"].items()):
+                phase["target"][metric] = clamp(value - 0.06)
+        set_noise(model, gain_sigma=0.18, regression_scale=0.08, cost_sigma=0.28)
+        return model
+
+    raise KeyError(scenario_id)
+
+
+def run_scenario(
+    model: dict, scenario_id: str, runs: int, seed: int, output_dir: Path
+) -> dict:
+    """Document the responsibility of ``run_scenario``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    scenario_dir = output_dir / scenario_id
+    scenario_dir.mkdir(parents=True, exist_ok=True)
+    model_path = scenario_dir / "model.json"
+    model_path.write_text(json.dumps(model, indent=2, sort_keys=True) + "\n")
+
+    sim_runs = [simulate_one(model, i, seed) for i in range(runs)]
+    summary = summarize(model, sim_runs)
+    rows = build_step_summary(model, sim_runs)
+    simulation = {
+        "schema_version": 1,
+        "model_id": model.get("model_id"),
+        "scenario": model["scenario"],
+        "seed": seed,
+        "run_count": runs,
+        "summary": summary,
+        "runs": sim_runs,
+    }
+
+    (scenario_dir / "simulated_trajectories.json").write_text(
+        json.dumps(simulation, indent=2, sort_keys=True) + "\n"
+    )
+    (scenario_dir / "plausible_parameters.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n"
+    )
+    write_csv(model, rows, scenario_dir / "trajectory_summary.csv")
+    render_svg(model, rows, scenario_dir / "trajectory_shape.svg")
+    write_report(summary, scenario_dir / "plausible_parameters_report.md")
+
+    return {
+        "scenario_id": scenario_id,
+        "scenario": model["scenario"],
+        "model_path": str(model_path),
+        "output_dir": str(scenario_dir),
+        "summary": summary,
+        "rows": rows,
+    }
+
+
+def row_metric(row: dict, metric_id: str, model: dict) -> float:
+    """Document the responsibility of ``row_metric``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``row_metric`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if metric_id == "protected_average":
+        values = [row[f"{metric}_median"] for metric in model["protected_metrics"]]
+        return sum(values) / len(values)
+    if metric_id == "reasoning_integrity":
+        members = [
+            "semantic_shape",
+            "reverse_informal_consistency",
+            "proof_coherence",
+            "nonvacuity",
+        ]
+        values = [row[f"{metric}_median"] for metric in members]
+        return sum(values) / len(values)
+    return row[f"{metric_id}_median"]
+
+
+def render_comparison_svg(
+    model: dict, scenario_results: list[dict], output: Path
+) -> None:
+    """Document the responsibility of ``render_comparison_svg``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    width, height = 1280, 880
+    margin_left, margin_top = 72, 126
+    panel_w, panel_h = 520, 270
+    gap_x, gap_y = 92, 92
+    max_step = max(result["rows"][-1]["step"] for result in scenario_results)
+
+    def panel_origin(index: int) -> tuple[int, int]:
+        """Document the responsibility of ``render_comparison_svg.panel_origin``.
+
+        Motivation:
+            Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+        Intent:
+            Render structured information into a human-readable or machine-consumable representation.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        col = index % 2
+        row = index // 2
+        return margin_left + col * (panel_w + gap_x), margin_top + row * (
+            panel_h + gap_y
+        )
+
+    def x(origin_x: float, step: float) -> float:
+        """Document the responsibility of ``render_comparison_svg.x``.
+
+        Motivation:
+            Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+        Intent:
+            Render structured information into a human-readable or machine-consumable representation.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        return origin_x + (step / max(1, max_step)) * panel_w
+
+    def y(origin_y: float, value: float) -> float:
+        """Document the responsibility of ``render_comparison_svg.y``.
+
+        Motivation:
+            Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+        Intent:
+            Render structured information into a human-readable or machine-consumable representation.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        return origin_y + (1.0 - value) * panel_h
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect x="0" y="0" width="100%" height="100%" fill="#ffffff"/>',
+        '<text x="40" y="38" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="#0f172a">RFDE simulation regime comparison</text>',
+        '<text x="40" y="62" font-family="Arial, sans-serif" font-size="13" fill="#475569">Median simulated trajectories; regimes are priors, not measured performance.</text>',
+    ]
+
+    for idx, (metric_id, label) in enumerate(SMALL_MULTIPLES):
+        ox, oy = panel_origin(idx)
+        parts.append(
+            f'<rect x="{ox}" y="{oy}" width="{panel_w}" height="{panel_h}" fill="#F8FAFC" stroke="#CBD5E1" rx="8"/>'
+        )
+        parts.append(
+            f'<text x="{ox}" y="{oy-14}" font-family="Arial, sans-serif" font-size="15" font-weight="800" fill="#0f172a">{html.escape(label)}</text>'
+        )
+        for val in [0.0, 0.25, 0.5, 0.75, 1.0]:
+            yy = y(oy, val)
+            parts.append(
+                f'<line x1="{ox}" y1="{yy}" x2="{ox+panel_w}" y2="{yy}" stroke="#E2E8F0"/>'
+            )
+            parts.append(
+                f'<text x="{ox-10}" y="{yy+4}" text-anchor="end" font-family="Arial" font-size="10" fill="#64748B">{val:.2f}</text>'
+            )
+        for result in scenario_results:
+            scenario_id = result["scenario_id"]
+            color = SCENARIOS[scenario_id]["color"]
+            pts = " ".join(
+                f"{x(ox, row['step']):.1f},{y(oy, row_metric(row, metric_id, model)):.1f}"
+                for row in result["rows"]
+            )
+            parts.append(
+                f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="2.4"/>'
+            )
+        parts.append(
+            f'<text x="{ox+panel_w/2}" y="{oy+panel_h+30}" text-anchor="middle" font-family="Arial" font-size="11" fill="#475569">simulation step</text>'
+        )
+
+    legend_x, legend_y = 42, 86
+    for i, result in enumerate(scenario_results):
+        scenario_id = result["scenario_id"]
+        color = SCENARIOS[scenario_id]["color"]
+        x0 = legend_x + i * 238
+        y0 = legend_y
+        parts.append(
+            f'<line x1="{x0}" y1="{y0}" x2="{x0+30}" y2="{y0}" stroke="{color}" stroke-width="3"/>'
+        )
+        parts.append(
+            f'<text x="{x0+40}" y="{y0+4}" font-family="Arial" font-size="12" font-weight="700" fill="#334155">{html.escape(SCENARIOS[scenario_id]["label"])}</text>'
+        )
+
+    parts.append("</svg>")
+    output.write_text("\n".join(parts) + "\n")
+
+
+def render_status_svg(scenario_results: list[dict], output: Path) -> None:
+    """Document the responsibility of ``render_status_svg``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    width, height = 1050, 520
+    margin_left, margin_right, margin_top, margin_bottom = 110, 42, 72, 90
+    plot_w = width - margin_left - margin_right
+    plot_h = height - margin_top - margin_bottom
+    statuses = [("complete", "#047857"), ("draft", "#B45309"), ("blocked", "#DC2626")]
+    bar_group_w = plot_w / len(scenario_results)
+    bar_w = min(46, bar_group_w / 4.2)
+
+    def y(value: float) -> float:
+        """Document the responsibility of ``render_status_svg.y``.
+
+        Motivation:
+            Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+        Intent:
+            Render structured information into a human-readable or machine-consumable representation.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        return margin_top + (1.0 - value) * plot_h
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect x="0" y="0" width="100%" height="100%" fill="#ffffff"/>',
+        '<text x="40" y="38" font-family="Arial, sans-serif" font-size="23" font-weight="800" fill="#0f172a">Terminal status probabilities by simulation regime</text>',
+        '<text x="40" y="60" font-family="Arial, sans-serif" font-size="13" fill="#475569">Acceptance thresholds are fixed; only dynamics differ by scenario.</text>',
+    ]
+    for val in [0.0, 0.25, 0.5, 0.75, 1.0]:
+        yy = y(val)
+        parts.append(
+            f'<line x1="{margin_left}" y1="{yy}" x2="{width-margin_right}" y2="{yy}" stroke="#E2E8F0"/>'
+        )
+        parts.append(
+            f'<text x="{margin_left-12}" y="{yy+4}" text-anchor="end" font-family="Arial" font-size="11" fill="#64748B">{val:.2f}</text>'
+        )
+    for group_idx, result in enumerate(scenario_results):
+        group_x = margin_left + group_idx * bar_group_w + bar_group_w / 2
+        probabilities = result["summary"]["status_probabilities"]
+        for status_idx, (status, color) in enumerate(statuses):
+            value = probabilities.get(status, 0.0)
+            x0 = group_x + (status_idx - 1) * (bar_w + 8) - bar_w / 2
+            y0 = y(value)
+            parts.append(
+                f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{bar_w}" height="{height-margin_bottom-y0:.1f}" rx="4" fill="{color}"/>'
+            )
+            parts.append(
+                f'<text x="{x0+bar_w/2:.1f}" y="{y0-6:.1f}" text-anchor="middle" font-family="Arial" font-size="10" fill="{color}">{value:.2f}</text>'
+            )
+        label = SCENARIOS[result["scenario_id"]]["label"]
+        parts.append(
+            f'<text x="{group_x}" y="{height-margin_bottom+30}" text-anchor="middle" font-family="Arial" font-size="11" font-weight="700" fill="#334155">{html.escape(label)}</text>'
+        )
+    legend_x = width - 260
+    for i, (status, color) in enumerate(statuses):
+        yy = 90 + i * 26
+        parts.append(
+            f'<rect x="{legend_x}" y="{yy-12}" width="18" height="18" rx="3" fill="{color}"/>'
+        )
+        parts.append(
+            f'<text x="{legend_x+28}" y="{yy+2}" font-family="Arial" font-size="12" fill="#334155">{html.escape(status)}</text>'
+        )
+    parts.append(
+        f'<text x="22" y="{height/2}" transform="rotate(-90 22,{height/2})" text-anchor="middle" font-family="Arial" font-size="12" fill="#334155">probability</text>'
+    )
+    parts.append("</svg>")
+    output.write_text("\n".join(parts) + "\n")
+
+
+def write_suite_csv(scenario_results: list[dict], output: Path) -> None:
+    """Document the responsibility of ``write_suite_csv``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    fieldnames = [
+        "scenario",
+        "label",
+        "complete_probability",
+        "draft_probability",
+        "blocked_probability",
+        "mean_cost",
+        "median_cost",
+        "terminal_protected_median",
+        "terminal_reasoning_integrity_median",
+    ]
+    with output.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        for result in scenario_results:
+            terminal = result["summary"]["terminal_metrics"]
+            protected_values = [
+                terminal[metric]["median"]
+                for metric in result["model"]["protected_metrics"]
+            ]
+            reasoning_members = [
+                "semantic_shape",
+                "reverse_informal_consistency",
+                "proof_coherence",
+                "nonvacuity",
+            ]
+            reasoning_values = [
+                terminal[metric]["median"] for metric in reasoning_members
+            ]
+            probs = result["summary"]["status_probabilities"]
+            writer.writerow(
+                {
+                    "scenario": result["scenario_id"],
+                    "label": result["scenario"]["label"],
+                    "complete_probability": probs.get("complete", 0.0),
+                    "draft_probability": probs.get("draft", 0.0),
+                    "blocked_probability": probs.get("blocked", 0.0),
+                    "mean_cost": result["summary"]["cost"]["mean"],
+                    "median_cost": result["summary"]["cost"]["median"],
+                    "terminal_protected_median": sum(protected_values)
+                    / len(protected_values),
+                    "terminal_reasoning_integrity_median": sum(reasoning_values)
+                    / len(reasoning_values),
+                }
+            )
+
+
+def write_suite_report(scenario_results: list[dict], output: Path) -> None:
+    """Document the responsibility of ``write_suite_report``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    lines = [
+        "# Theory-Evolution Simulation Suite",
+        "",
+        "These plots compare simulation regimes used as plausible priors, stress tests, and visualization scaffolds. They are not measured Mathformer performance.",
+        "",
+        "## Scenarios",
+        "",
+    ]
+    for result in scenario_results:
+        scenario = result["scenario"]
+        probs = result["summary"]["status_probabilities"]
+        cost = result["summary"]["cost"]
+        terminal = result["summary"]["terminal_metrics"]
+        protected_values = [
+            terminal[metric]["median"]
+            for metric in result["model"]["protected_metrics"]
+        ]
+        reasoning_values = [
+            terminal[metric]["median"]
+            for metric in [
+                "semantic_shape",
+                "reverse_informal_consistency",
+                "proof_coherence",
+                "nonvacuity",
+            ]
+        ]
+        lines.extend(
+            [
+                f"### {scenario['label']}",
+                "",
+                scenario["description"],
+                "",
+                f"- complete/draft/blocked: {probs.get('complete', 0.0):.3f} / {probs.get('draft', 0.0):.3f} / {probs.get('blocked', 0.0):.3f}",
+                f"- mean cost: {cost['mean']:.3f}",
+                f"- terminal protected median: {sum(protected_values) / len(protected_values):.3f}",
+                f"- terminal reasoning-integrity median: {sum(reasoning_values) / len(reasoning_values):.3f}",
+                f"- trajectory plot: `{result['scenario_id']}/trajectory_shape.svg`",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Comparison Plots",
+            "",
+            "- `scenario_metric_comparison.svg`: small multiples for protected average, Lean executability, mathlib grounding, and reasoning integrity.",
+            "- `scenario_status_probabilities.svg`: terminal status probabilities by scenario.",
+            "",
+        ]
+    )
+    output.write_text("\n".join(lines))
+
+
+def suite_parser() -> argparse.ArgumentParser:
+    """Keep CLI argument defaults and validation in one place."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--runs", type=int, default=128)
+    parser.add_argument("--seed", type=int, default=17)
+    parser.add_argument(
+        "--scenarios", nargs="+", choices=sorted(SCENARIOS), default=list(SCENARIOS)
+    )
+    parser.add_argument("--json", action="store_true")
+    return parser
+
+
+def initialize_suite(options: dict) -> dict:
+    """Load the native model before creating the suite output directory."""
+    args = argparse.Namespace(**options)
+    base_model = json.loads(Path(args.model).read_text())
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    return {
+        "options": dict(options),
+        "base_model": base_model,
+        "scenario_index": 0,
+        "scenario_results": [],
+    }
+
+
+def prepare_suite_scenario(state: dict) -> dict:
+    """Deep-copy and transform the next model with its enumerate-derived seed."""
+    args = argparse.Namespace(**state["options"])
+    idx = state["scenario_index"]
+    scenario_id = args.scenarios[idx]
+    model = apply_scenario(state["base_model"], scenario_id)
+    return {
+        "model": model,
+        "scenario_id": scenario_id,
+        "runs": args.runs,
+        "seed": args.seed + idx * 8191,
+        "output_dir": args.output_dir,
+    }
+
+
+def execute_suite_scenario(task: dict) -> dict:
+    """Retain the native full trajectory range and ordered artifact writes."""
+    return run_scenario(
+        task["model"],
+        task["scenario_id"],
+        task["runs"],
+        task["seed"],
+        Path(task["output_dir"]),
+    )
+
+
+def accumulate_suite_scenario(state: dict, task: dict, result: dict) -> dict:
+    """Attach the scenario model and advance the ordered suite cursor."""
+    result["model"] = task["model"]
+    state["scenario_results"].append(result)
+    state["scenario_index"] += 1
+    return {
+        "state": state,
+        "done": state["scenario_index"] >= len(state["options"]["scenarios"]),
+    }
+
+
+def finalize_suite(state: dict) -> dict:
+    """Write all suite artifacts and emit the original terminal output."""
+    args = argparse.Namespace(**state["options"])
+    base_model = state["base_model"]
+    scenario_results = state["scenario_results"]
+    output_dir = Path(args.output_dir)
+    render_comparison_svg(
+        base_model, scenario_results, output_dir / "scenario_metric_comparison.svg"
+    )
+    render_status_svg(
+        scenario_results, output_dir / "scenario_status_probabilities.svg"
+    )
+    write_suite_csv(scenario_results, output_dir / "scenario_summary.csv")
+    write_suite_report(scenario_results, output_dir / "simulation_suite_report.md")
+
+    suite = {
+        "schema_version": 1,
+        "base_model": args.model,
+        "run_count_per_scenario": args.runs,
+        "seed": args.seed,
+        "scenarios": [
+            {
+                "id": result["scenario_id"],
+                "label": result["scenario"]["label"],
+                "description": result["scenario"]["description"],
+                "status_probabilities": result["summary"]["status_probabilities"],
+                "cost": result["summary"]["cost"],
+                "output_dir": result["output_dir"],
+            }
+            for result in scenario_results
+        ],
+        "outputs": {
+            "metric_comparison": str(output_dir / "scenario_metric_comparison.svg"),
+            "status_probabilities": str(
+                output_dir / "scenario_status_probabilities.svg"
+            ),
+            "summary_csv": str(output_dir / "scenario_summary.csv"),
+            "report": str(output_dir / "simulation_suite_report.md"),
+        },
+    }
+    (output_dir / "simulation_suite_manifest.json").write_text(
+        json.dumps(suite, indent=2, sort_keys=True) + "\n"
+    )
+
+    if args.json:
+        print(json.dumps({"ok": True, **suite}, indent=2, sort_keys=True))
+    else:
+        print(f"Wrote simulation suite to {output_dir}")
+    return {"manifest": suite, "exit_code": 0}
+
+
+def main() -> int:
+    """Run the CLI through the same stages exposed by the MCP binding."""
+    args = suite_parser().parse_args()
+    state = initialize_suite(vars(args))
+    for _ in args.scenarios:
+        task = prepare_suite_scenario(state)
+        result = execute_suite_scenario(task)
+        state = accumulate_suite_scenario(state, task, result)["state"]
+    return finalize_suite(state)["exit_code"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

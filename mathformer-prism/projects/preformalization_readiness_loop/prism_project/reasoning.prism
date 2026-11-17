@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from preformalization_readiness_loop import (
+    DraftingDisposition,
+    ExpansionBasis,
+    PaperFormalizationSourceSelection,
+    ReadinessCase,
+    SourceAlignmentCase,
+)
+import occurrences as steps
+import relations as links
+
+# Recover a paper's main theory, expand the dependencies needed to formalize it,
+# review that expansion, and decide whether each result should be reused,
+# drafted, revised, or blocked before any Lean generation begins.
+reasoning PreparePaperTheoryForLean(
+    source: PaperFormalizationSourceSelection,
+) -> Generated[DraftingDisposition]:
+    sequence:
+        # Extract layout-aware sections, theorem neighborhoods, equations,
+        # citations, and source anchors from the selected paper.
+        [paper_evidence: steps.ExtractPaperLayout(source)]
+        # Localize main results and inventory their definitions, assumptions,
+        # proofs, intermediate lemmas, and dependency order.
+        [theory_map: steps.LocalizePaperTheory(paper_evidence.value)] by links.DecomposeTheory
+        # Identify omitted proof steps, external results, missing premises, and
+        # the difficult segments that require additional support.
+        [expansion_needs: steps.PlanTheoryExpansion(theory_map.value)] by links.ExposePrerequisites
+        # Retrieve source-backed support for hard or cited dependencies while
+        # retaining every unresolved uncertainty.
+        [expansion_support: steps.ResearchProofDependencies(expansion_needs.value)] by links.GroundSupport
+        # Expand prerequisites and intermediate results into a source-preserving
+        # theory packet suitable for formal drafting.
+        [expanded_theory: steps.ExpandPaperTheory(ExpansionBasis(
+            theory_map = theory_map.value,
+            expansion_needs = expansion_needs.value,
+            expansion_support = expansion_support.value,
+        ))] by links.ConstructExpansion
+        parallel:
+            # Check that assumptions, prerequisites, side conditions, and the
+            # intended conclusion are all present.
+            [completeness_check: steps.ReviewExpansionCompleteness(expanded_theory.value)] by links.TestCompleteness
+            # Check identifier binding, domains, quantifiers, and notation drift.
+            [binding_check: steps.ReviewExpansionBindings(expanded_theory.value)] by links.TestBindings
+        # Build stable literal source anchors and Lean-facing declaration
+        # obligations only after the mathematical expansion has been reviewed.
+        [drafting_basis: steps.BuildLeanDraftPacket(SourceAlignmentCase(
+            theory_map = theory_map.value,
+            expanded_theory = expanded_theory.value,
+            completeness_check = completeness_check.value,
+            binding_check = binding_check.value,
+        ))] by links.AlignSource
+        # Run the review suite and duplicate-result search, then choose reuse,
+        # proceed to drafting, revise the expansion, or block on explicit gaps.
+        [drafting_status: steps.DecideReuseOrDraft(ReadinessCase(
+            expanded_theory = expanded_theory.value,
+            completeness_check = completeness_check.value,
+            binding_check = binding_check.value,
+            drafting_basis = drafting_basis.value,
+        ))] by links.CalibrateReadiness
+    return drafting_status

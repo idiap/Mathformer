@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Canonical epistemic projection; not an execution trace.
+erfl 0.3
+reasoning source_grounded_autoformalization {
+  goal "produce a source-faithful grounded and checked formal candidate" -> final_status
+  steps
+    o:O[source::Context->observations::Evidence] -decompose> ...
+    s:S[observations::Evidence->structure::Model] -model> ...
+    m:M[structure::Model->context::Model] -constrain> ...
+    (
+      a:A[context::Model->obligations::Obligation]
+      & q:Q[context::Model->candidates::Bundle]
+    ) -ground> ...
+    g:G[
+      candidates::Bundle,
+      obligations::Obligation,
+      context::Model
+      -> grounding::Evidence
+    ] -construct> ...
+    f:F[
+      context::Model,
+      obligations::Obligation,
+      grounding::Evidence
+      -> artifact::Bundle
+    ] -test> ...
+    p:P[artifact::Bundle->execution::Evidence] -assess> ...
+    r:R[
+      artifact::Bundle,
+      execution::Evidence
+      -> assessment::Assessment
+    ] -calibrate> ...
+    e:E[
+      artifact::Bundle,
+      assessment::Assessment
+      -> final_status::Decision
+    ]
+  on e.accepted => accept
+  on e.repair_required => stop
+  on e.blocked => stop
+}

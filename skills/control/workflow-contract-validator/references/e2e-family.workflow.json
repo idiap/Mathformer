@@ -1,0 +1,657 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_test_family_e2e_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Traverse the canonical e2e test selection in matrix order and return its report.",
+  "aliases": [
+    "test:family:e2e"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Args": {
+      "schema": {
+        "type": "object",
+        "description": "Registered e2e CLI defaults; admissible only with the pinned matrix below.",
+        "required": [
+          "module_family",
+          "changed_files_only",
+          "emit_dependency_map_only",
+          "profile",
+          "fail_on_warning",
+          "validate_matrix",
+          "run_id"
+        ],
+        "properties": {
+          "module_family": {
+            "const": [
+              "e2e"
+            ]
+          },
+          "changed_files_only": {
+            "const": false
+          },
+          "emit_dependency_map_only": {
+            "const": false
+          },
+          "profile": {
+            "const": "workstation"
+          },
+          "fail_on_warning": {
+            "const": false
+          },
+          "validate_matrix": {
+            "const": false
+          },
+          "run_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "matrix",
+          "selected",
+          "families",
+          "index",
+          "results"
+        ],
+        "properties": {
+          "matrix": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "selected": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object"
+            }
+          },
+          "families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "results": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "ok",
+          "profile",
+          "families",
+          "changed_files_only",
+          "changed_files",
+          "summary",
+          "results",
+          "schema_errors",
+          "matrix_errors",
+          "capability_ledger",
+          "dependency_map"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "changed_files_only": {
+            "type": "boolean"
+          },
+          "changed_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "object"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "schema_errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "matrix_errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "capability_ledger": {
+            "type": "object"
+          },
+          "dependency_map": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "handle"
+        ],
+        "properties": {
+          "handle": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "args": {
+      "type": "Args"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    }
+  },
+  "operations": {
+    "prepare": {
+      "inputs": {
+        "args": {
+          "type": "Args"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_e2e_family_prepare",
+          "operation": "mathformer_e2e_family_prepare"
+        }
+      }
+    },
+    "cursor_done": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_e2e_family_cursor_done",
+          "operation": "mathformer_e2e_family_cursor_done"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "args": {
+          "type": "Args"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_e2e_family_advance",
+          "operation": "mathformer_e2e_family_advance"
+        }
+      }
+    },
+    "finalize": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "args": {
+          "type": "Args"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_e2e_family_finalize",
+          "operation": "mathformer_e2e_family_finalize"
+        }
+      }
+    },
+    "retain_empty": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_e2e_family_retain_empty",
+          "operation": "mathformer_e2e_family_retain_empty"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare",
+        "arguments": {
+          "args": {
+            "ref": "inputs.args"
+          }
+        }
+      },
+      {
+        "id": "initial_guard",
+        "kind": "call",
+        "operation": "cursor_done",
+        "arguments": {
+          "state": {
+            "ref": "steps.prepare.outputs.state"
+          },
+          "context": {
+            "ref": "steps.prepare.outputs.context"
+          }
+        }
+      },
+      {
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.prepare.outputs.state"
+        },
+        "max_iterations": 4,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "empty",
+              "when": {
+                "ref": "steps.initial_guard.outputs.done"
+              },
+              "body": {
+                "kind": "call",
+                "operation": "retain_empty",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  },
+                  "context": {
+                    "ref": "steps.prepare.outputs.context"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "sequence",
+            "steps": [
+              {
+                "id": "advance",
+                "kind": "call",
+                "operation": "advance",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  },
+                  "args": {
+                    "ref": "inputs.args"
+                  },
+                  "context": {
+                    "ref": "steps.prepare.outputs.context"
+                  }
+                }
+              },
+              {
+                "id": "guard",
+                "kind": "call",
+                "operation": "cursor_done",
+                "arguments": {
+                  "state": {
+                    "ref": "steps.advance.outputs.state"
+                  },
+                  "context": {
+                    "ref": "steps.prepare.outputs.context"
+                  }
+                }
+              }
+            ],
+            "outputs": {
+              "state": {
+                "type": "State",
+                "value": {
+                  "ref": "steps.advance.outputs.state"
+                }
+              },
+              "done": {
+                "type": "Done",
+                "value": {
+                  "ref": "steps.guard.outputs.done"
+                }
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        },
+        "id": "traverse"
+      },
+      {
+        "id": "finalize",
+        "kind": "call",
+        "operation": "finalize",
+        "arguments": {
+          "state": {
+            "ref": "steps.traverse.outputs.state"
+          },
+          "args": {
+            "ref": "inputs.args"
+          },
+          "context": {
+            "ref": "steps.prepare.outputs.context"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.finalize.outputs.report"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 11
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Native test classification and report only; completion does not establish scientific truth."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/test_program/run_comprehensive_tests.py",
+        "selector": "run",
+        "digest": "sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a"
+      },
+      {
+        "path": "tests/test_program/run_comprehensive_tests.py",
+        "selector": "prepare_checks; advance_check; run_check; finalize_checks; main; publish_report",
+        "digest": "sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "e2e rows in canonical order",
+        "digest": "sha256:17b2fc38f51c7711873b68dc5f630cfc0eb06351160ad6401ea67a6044ace322"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:test:family:e2e; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/e2e_family_workflow_tools.py",
+        "digest": "sha256:dc89aeeb8c09bb8cb603ca9fa3a6f9518954d9f3794aba1c98fda59a4fa28c84"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/comprehensive_strict_tools.py",
+        "digest": "sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "service tool inventory",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      }
+    ],
+    "gaps": [
+      "Args restricts this projection to registered e2e defaults and the pinned matrix; dependency-map-only, changed-file selection and nondefault strict/coverage modes are outside this specialization.",
+      "Four is the admitted projection bound, not a native cap. Prepare rejects larger selections; final iteration completion returns normally. Requalify when the canonical e2e selection changes.",
+      "Report/check payload internals are compact structural types; native schemas and gates remain authoritative.",
+      "Native effects require qualification; required v1 receipts/digests do not upgrade optional native logs.",
+      "Contract call/time limits are generated budgets, not native bounds. The native 900-second hub timeout can interrupt traversal before four 360-second checks finish."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "test:family:e2e",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "test:family:e2e",
+        "summary": "Run the comprehensive test matrix for the e2e module family.",
+        "family": "e2e",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "tests/test_program/run_comprehensive_tests.py",
+          "--module-family",
+          "e2e",
+          "--json"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "tests/test_program/run_comprehensive_tests.py",
+          "tests/test_matrix.json"
+        ],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [
+          "artifacts/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": 900
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "MCP tools call shared native run steps with server-owned args and cursor histories. Hub preflight, dry-run, outer 900-second timeout and hub write audit remain controller-owned. This graph specializes run(args), not the enclosing hub or main publication.",
+      "run_check": "Missing optional dependencies skip or fail under fail-on-warning/strict; current e2e rows have none. Expected exit controls pass/fail; undeclared writes fail. Timeouts return failed results; ordinary failures continue. Unexpected exceptions propagate; no retries.",
+      "publication": "run returns Report; enclosing main calls publish_report to write JSON, optional JSONL/JUnit, then JSON or console output; exit 0 iff report.ok, otherwise 3.",
+      "current_selection": [
+        "all_backends",
+        "source_to_docs",
+        "textbook_chapter",
+        "paper_theory"
+      ],
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true
+    }
+  }
+}

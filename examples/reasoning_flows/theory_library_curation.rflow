@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Canonical epistemic projection; not an execution trace.
+erfl 0.3
+@KB kb0 connect(file("MathformerKB"))
+reasoning theory_library_curation {
+  goal "produce a policy-bound curation disposition" -> curation_status
+  steps
+    q:Q[curation_request::Context->candidates::Bundle] -ground> ...
+    g:G[candidates::Bundle->grounding::Evidence] -assess> ...
+    r:R[
+      candidates::Bundle,
+      grounding::Evidence
+      -> assessment::Assessment
+    ] -revise> ...
+    x:X[
+      candidates::Bundle,
+      assessment::Assessment
+      -> repair::Plan
+    ] -construct> ...
+    f:F[
+      candidates::Bundle,
+      repair::Plan
+      -> curated_candidate::Bundle
+    ] -calibrate> ...
+    e:E[
+      curated_candidate::Bundle,
+      assessment::Assessment
+      -> curation_status::Decision
+    ]
+  e -persist-> kb0
+  on e.accepted => accept
+  on e.repair_required => stop
+  on e.rejected => stop
+}

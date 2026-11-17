@@ -1,0 +1,488 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mathformer:portable-adoption:metadata:1",
+  "title": "Mathformer additive portable-adoption metadata v1",
+  "$comment": "SPDX-License-Identifier: MIT; Copyright 2026 Idiap Research Institute. Strict pilot metadata contract; existing implementations retain behavioral authority.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "canonical_roots": {
+      "const": [
+        "skills/*/*/SKILL.md",
+        "proj_skills/*/SKILL.md"
+      ]
+    },
+    "taxonomy_sources": {
+      "type": "object",
+      "properties": {
+        "skill_types": {
+          "const": "skills/SKILL_TYPES.yaml"
+        },
+        "reasoning_types": {
+          "const": "skills/REASONING_TYPES.yaml"
+        },
+        "output_types": {
+          "const": "skills/OUTPUT_TYPES.yaml"
+        }
+      },
+      "required": [
+        "skill_types",
+        "reasoning_types",
+        "output_types"
+      ],
+      "additionalProperties": false
+    },
+    "surfaces": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/surface"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "canonical_roots",
+    "taxonomy_sources",
+    "surfaces"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "surface": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "skill",
+            "workflow"
+          ]
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "project_support",
+            "project_workflow"
+          ]
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/operation"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "owner",
+        "scope",
+        "operations"
+      ],
+      "additionalProperties": false
+    },
+    "operation": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "typing": {
+          "$ref": "#/$defs/typing"
+        },
+        "inputs": {
+          "$ref": "#/$defs/inputs"
+        },
+        "outputs": {
+          "$ref": "#/$defs/outputs"
+        },
+        "availability": {
+          "type": "object",
+          "properties": {
+            "requires": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 0,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "requires"
+          ],
+          "additionalProperties": false
+        },
+        "evidence_limits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "reader",
+            "reasoner",
+            "writer"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "aliases",
+        "binding",
+        "typing",
+        "inputs",
+        "outputs",
+        "availability",
+        "evidence_limits",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "binding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "hub_action"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "symbol": {
+              "type": "string",
+              "minLength": 1
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "symbol",
+            "action_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "python_function"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "symbol": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "symbol"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "prism_entrypoint"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "symbol": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "symbol"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "typing": {
+      "type": "object",
+      "properties": {
+        "execution_posture": {
+          "type": "string",
+          "enum": [
+            "deterministic",
+            "generative",
+            "hybrid",
+            "human_mediated"
+          ]
+        },
+        "specification_styles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "procedural",
+              "declarative",
+              "constraint_based",
+              "query_based",
+              "transformational",
+              "evaluative",
+              "compositional"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "composition_role": {
+          "type": "string",
+          "enum": [
+            "atomic_operator",
+            "sequential_orchestrator",
+            "branching_router",
+            "iterative_controller",
+            "evidence_aggregator",
+            "adapter_wrapper",
+            "meta_controller"
+          ]
+        },
+        "effect_profiles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "read_only",
+              "writes_ephemeral_artifacts",
+              "writes_durable_artifacts",
+              "mutates_tracked_repository_files",
+              "mutates_environment",
+              "external_side_effects"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "authority_profile": {
+          "type": "string",
+          "enum": [
+            "proposal_producer",
+            "observation_or_evidence_producer",
+            "assessment_producer",
+            "decision_authority",
+            "revision_authority",
+            "memory_or_explanation_producer"
+          ]
+        },
+        "output_type": {
+          "type": "string",
+          "enum": [
+            "source_observation_packet",
+            "structural_model",
+            "semantic_context_model",
+            "retrieval_candidate_set",
+            "grounding_evidence_link",
+            "hypothesis_obligation_set",
+            "plan_directive",
+            "candidate_artifact",
+            "derivation_certificate",
+            "execution_evidence_record",
+            "counterexample_witness",
+            "scoped_assessment",
+            "aggregate_synthesis",
+            "decision_record",
+            "diagnosis_repair_specification",
+            "revision_record",
+            "explanation",
+            "index_registry",
+            "curated_knowledge_entry",
+            "provenance_trace",
+            "blocker_record"
+          ]
+        },
+        "reasoning_method": {
+          "type": "string",
+          "enum": [
+            "source_observation",
+            "structural_decomposition",
+            "semantic_modeling",
+            "retrieval",
+            "grounding_alignment",
+            "abductive_completion",
+            "constructive_formalization",
+            "deduction_transformation",
+            "probing_falsification",
+            "critical_verification",
+            "diagnostic_revision",
+            "comparative_reflection",
+            "epistemic_governance",
+            "inductive_generalization",
+            "analogical_transfer",
+            "contrastive_counterfactual"
+          ]
+        },
+        "invocation_mechanism": {
+          "type": "string",
+          "enum": [
+            "hub_action",
+            "python_function",
+            "prism_entrypoint"
+          ]
+        },
+        "generation_boundary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output_authority": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sources": {
+          "type": "object",
+          "properties": {
+            "execution_axes": {
+              "const": "skills/SKILL_TYPES.yaml"
+            },
+            "output_type": {
+              "const": "skills/OUTPUT_TYPES.yaml"
+            },
+            "reasoning_method": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "execution_axes",
+            "output_type",
+            "reasoning_method"
+          ],
+          "additionalProperties": false
+        },
+        "mapping_basis": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "execution_posture",
+        "specification_styles",
+        "composition_role",
+        "effect_profiles",
+        "authority_profile",
+        "output_type",
+        "reasoning_method",
+        "invocation_mechanism",
+        "generation_boundary",
+        "output_authority",
+        "sources",
+        "mapping_basis"
+      ],
+      "additionalProperties": false
+    },
+    "inputs": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "python_arguments",
+            "cli_arguments",
+            "prism_arguments"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "outputs": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "List[IntentMatch]",
+            "json_stdout_and_exit_code",
+            "json_stdout",
+            "html_file_and_exit_code",
+            "dict",
+            "Path",
+            "Result[Generated[ArtifactDisposition], ModelFailure]",
+            "Computed[LeanArtifactAcceptanceDecision]"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1
+        },
+        "writes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "type",
+        "description",
+        "authority",
+        "writes"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

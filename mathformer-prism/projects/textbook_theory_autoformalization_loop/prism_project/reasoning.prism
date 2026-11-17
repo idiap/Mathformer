@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from textbook_theory_autoformalization_loop import (
+    BatchSummaryBasis,
+    ChapterQueue,
+    LatexTextbookArchiveSelection,
+    LeanCheckBasis,
+    LeanUnitSet,
+    OrganizedTheory,
+    TextbookDisposition,
+    TheoryCorpus,
+    UnitGateReport,
+    UnitJobSet,
+)
+import occurrences as steps
+import relations as links
+
+# Extract and organize a LaTeX textbook, prepare chapter-scoped unit jobs,
+# produce grounded Lean units, check every result, and summarize the batch.
+reasoning AutoformalizeTextbook(
+    request: LatexTextbookArchiveSelection,
+) -> Generated[TextbookDisposition]:
+    sequence:
+        # Extract theorem-like units, proofs, and exact source provenance.
+        [corpus: steps.ExtractTheoryCorpus(request)]
+        # Organize source-preserved units into coherent chapter or section bundles.
+        [theory: steps.OrganizeTextbookTheory(corpus.value)] by links.OrganizeTheory
+        # Build the ordered chapter queue while retaining proofs and source identity.
+        [chapters: steps.BuildChapterQueue(theory.value)] by links.PartitionChapters
+        # Create per-unit draft, reuse, proof, and support-only jobs with source
+        # packets and result-existence decisions attached before drafting.
+        [jobs: steps.PrepareUnitJobs(chapters.value)] by links.PrepareJobs
+        # Run the object-level autoformalization jobs and maximize mathlib grounding.
+        [lean_units: steps.AutoformalizeUnits(jobs.value)] by links.ConstructLeanUnits
+        # Run Lean, compilation, source-drift, and artifact-realness gates.
+        [gate_report: steps.CheckLeanUnits(LeanCheckBasis(
+            jobs = jobs.value,
+            lean_units = lean_units.value,
+        ))] by links.AssessUnitGates
+        # Run unified consistency and aggregate concrete per-unit outcomes without
+        # hiding blocked, reused, proof-obligation, or support-only jobs.
+        [disposition: steps.SummarizeTextbookBatch(BatchSummaryBasis(
+            chapters = chapters.value,
+            jobs = jobs.value,
+            lean_units = lean_units.value,
+            gate_report = gate_report.value,
+        ))] by links.AggregateBatch
+    return disposition

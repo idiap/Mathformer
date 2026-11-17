@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import converted_reasoning
+from reasoning import AssessPhysicsLibraryCoherence
+from mathformerphysicslib_coherence_grounding_loop import MathformerPhysicsLibrarySnapshot, PhysicsLibraryGateReport
+
+def run_reasoning(
+    workflow_source: MathformerPhysicsLibrarySnapshot,
+    model_access: ModelGenerate,
+    disclosure: ContextDisclose,
+) -> Result[Generated[PhysicsLibraryGateReport], ModelFailure] ! {AI.Generate, Context.Disclose}:
+    flow = converted_reasoning(workflow_source)
+    return solve AssessPhysicsLibraryCoherence(workflow_source) using flow

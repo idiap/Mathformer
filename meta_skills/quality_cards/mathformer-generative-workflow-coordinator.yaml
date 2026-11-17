@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+{
+  "schema_version": "mathformer.meta_skills.skill_quality_card.v0.1",
+  "card_id": "mathformer-generative-workflow-coordinator",
+  "subject": "mathformer-generative-workflow-coordinator",
+  "subject_type": "skill",
+  "skill_path": "skills/control/mathformer-generative-workflow-coordinator/SKILL.md",
+  "deterministic_boundary": [
+    "Every candidate intent is resolved by mathformer-workflow-router.",
+    "Every executable action is selected and run through scripts/mathformer.py."
+  ],
+  "generative_boundary": [
+    "Codex interprets user outcomes, decomposes compound goals, orders workflows, and adapts after validated state changes.",
+    "Codex may not invent action ids, infer mutation authority, or promote generated output without the selected workflow gate."
+  ],
+  "epistemic_risks": [
+    "A broad request is decomposed into unnecessary workflows.",
+    "A stale generated plan is executed after repository state changes.",
+    "Advisory generated output is mistaken for validated workflow evidence."
+  ],
+  "necessary_conditions": [
+    "The skill is implicitly discoverable by Codex.",
+    "The coordinator owns a workflow hook and named direct-request routes.",
+    "Resolved action ids and safety metadata come from the deterministic router."
+  ],
+  "sufficiency_claim": "Sufficient for generative workflow coordination only when every executable intent resolves to a known controlled action and mutation authority is explicit.",
+  "representation_contract": [
+    "Coordination reports name selected workflows, order, route evidence, safety, validations, artifacts, and blockers.",
+    "Generated coordination plans remain prospective until their actions complete."
+  ],
+  "validation_oracles": [
+    "python skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py --self-test --json",
+    "python skills/control/workflow-contract-validator/scripts/validate_skill_hooks.py --strict --json",
+    "python skills/control/skill-hook-coverage-maximizer/scripts/audit_skill_hook_coverage.py --expect-ok --json"
+  ],
+  "failure_modes": [
+    "Fabricated workflow or action id.",
+    "Uncontrolled direct script execution.",
+    "Mutation without explicit authorization.",
+    "Generated proposal reported as checked evidence."
+  ],
+  "promotion_gate": {
+    "state": "promoted",
+    "required_evidence": [
+      "skill schema validation",
+      "hook and route coverage",
+      "router self-test",
+      "registered generative content probe"
+    ],
+    "blocking_conditions": [
+      "missing deterministic route",
+      "uncontrolled action",
+      "authorization boundary failure"
+    ]
+  }
+}

@@ -1,0 +1,373 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Run regression tests for Lean physics derivation-completeness checks."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import subprocess
+import sys
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ARTIFACT_ROOT = (
+    REPO_ROOT / "artifacts" / "physics_lean" / "derivation_completeness_regression"
+)
+FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "physics_lean_adversarial"
+CHECKER = "skills/physics-lean/physics-lean-derivation-completeness-checker/scripts/check_derivation_completeness.py"
+
+
+def rel(path: Path) -> str:
+    return path.relative_to(REPO_ROOT).as_posix()
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def run_json(args: list[str]) -> dict[str, Any]:
+    proc = subprocess.run(
+        [sys.executable, *args],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"command failed: {' '.join(args)}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+        )
+    return json.loads(proc.stdout)
+
+
+def run_checker(name: str, *extra: str) -> dict[str, Any]:
+    return run_json(
+        [CHECKER, "--lean-file", rel(FIXTURE_ROOT / f"{name}.lean"), *extra, "--json"]
+    )
+
+
+def run_formalphysics_case(
+    case_id: str, *, recursive_frontier_count: int | None = None
+) -> dict[str, Any]:
+    args = [
+        CHECKER,
+        "--lean-file",
+        f"libraries/MathformerPhysicsLib/Lean/{case_id}/MathformerPhysics.lean",
+        "--source-record",
+        f"artifacts/physics_lean/dirac_recursive_batch/{case_id}/source_record.json",
+    ]
+    if recursive_frontier_count is None:
+        args.extend(
+            [
+                "--recursive-plan",
+                "artifacts/physics_lean/dirac_recursive_batch/recursive_grounding_plan.json",
+            ]
+        )
+    else:
+        args.extend(["--recursive-frontier-count", str(recursive_frontier_count)])
+    args.append("--json")
+    return run_json(args)
+
+
+def codes(report: dict[str, Any]) -> set[str]:
+    return {
+        str(item.get("code"))
+        for artifact in report.get("artifacts", [])
+        for item in artifact.get("findings", [])
+        if item.get("code")
+    }
+
+
+def first_artifact(report: dict[str, Any]) -> dict[str, Any]:
+    return (report.get("artifacts") or [{}])[0]
+
+
+def obligation_ids(report: dict[str, Any], *, blocked_only: bool = False) -> set[str]:
+    artifact = first_artifact(report)
+    obligations = (
+        artifact.get("blocked_obligations")
+        if blocked_only
+        else artifact.get("obligations")
+    )
+    return {str(item.get("id")) for item in obligations or []}
+
+
+def obligation_status(report: dict[str, Any], obligation_id: str) -> str:
+    for item in first_artifact(report).get("obligations", []):
+        if item.get("id") == obligation_id:
+            return str(item.get("status"))
+    return ""
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+
+    self_test = run_json([CHECKER, "--self-test", "--json"])
+    direct = run_checker("direct_target_hypothesis")
+    wrapped = run_checker("witness_target_restatement")
+    legitimate = run_checker("source_law_witness_not_target")
+    frontier_blocked = run_checker(
+        "source_law_witness_not_target", "--recursive-frontier-count", "1"
+    )
+    formalphysics = run_formalphysics_case(
+        "formalphysics_0014", recursive_frontier_count=0
+    )
+    formalphysics_0015 = run_formalphysics_case(
+        "formalphysics_0015", recursive_frontier_count=0
+    )
+    formalphysics_0021 = run_formalphysics_case(
+        "formalphysics_0021", recursive_frontier_count=0
+    )
+    formalphysics_0052 = run_formalphysics_case(
+        "formalphysics_0052", recursive_frontier_count=0
+    )
+    formalphysics_0074 = run_formalphysics_case(
+        "formalphysics_0074", recursive_frontier_count=0
+    )
+
+    checks = [
+        {
+            "id": "self_test_passes",
+            "ok": self_test.get("ok") is True,
+            "detail": self_test,
+        },
+        {
+            "id": "direct_target_hypothesis_blocks",
+            "ok": direct.get("status") == "blocked_target_restating_assumption"
+            and "direct_target_repeated_as_hypothesis" in codes(direct),
+            "detail": {"status": direct.get("status"), "codes": sorted(codes(direct))},
+        },
+        {
+            "id": "wrapped_target_witness_blocks",
+            "ok": wrapped.get("status") == "blocked_target_restating_assumption"
+            and "target_restatement_wrapped_in_witness" in codes(wrapped),
+            "detail": {
+                "status": wrapped.get("status"),
+                "codes": sorted(codes(wrapped)),
+            },
+        },
+        {
+            "id": "legitimate_source_law_witness_passes",
+            "ok": legitimate.get("status") == "complete_autoformalization",
+            "detail": {
+                "status": legitimate.get("status"),
+                "codes": sorted(codes(legitimate)),
+            },
+        },
+        {
+            "id": "open_frontier_blocks_complete_status",
+            "ok": frontier_blocked.get("status") == "derivation_partial"
+            and frontier_blocked.get("ok") is False,
+            "detail": {"status": frontier_blocked.get("status")},
+        },
+        {
+            "id": "compiled_surface_flag_preserved_when_blocked",
+            "ok": "compiled_surface"
+            in first_artifact(frontier_blocked).get("status_flags", [])
+            and frontier_blocked.get("status") == "derivation_partial",
+            "detail": {
+                "status": frontier_blocked.get("status"),
+                "flags": first_artifact(frontier_blocked).get("status_flags", []),
+            },
+        },
+        {
+            "id": "formalphysics_0014_obligations_and_probes",
+            "ok": formalphysics.get("status") == "complete_autoformalization"
+            and first_artifact(formalphysics).get("blocked_obligation_count", 0) == 0
+            and first_artifact(formalphysics).get("recursive_frontier_count", -1) == 0
+            and obligation_status(formalphysics, "commutator_to_dirac_bridge")
+            == "proved_from_commutator_expectation"
+            and len(first_artifact(formalphysics).get("generative_repair_probes", []))
+            >= 4
+            and len(first_artifact(formalphysics).get("repair_frontier_nodes", []))
+            == 0,
+            "detail": {
+                "status": formalphysics.get("status"),
+                "blocked_obligation_count": first_artifact(formalphysics).get(
+                    "blocked_obligation_count"
+                ),
+                "recursive_frontier_count": first_artifact(formalphysics).get(
+                    "recursive_frontier_count"
+                ),
+                "commutator_status": obligation_status(
+                    formalphysics, "commutator_to_dirac_bridge"
+                ),
+                "probe_count": len(
+                    first_artifact(formalphysics).get("generative_repair_probes", [])
+                ),
+                "repair_frontier_count": len(
+                    first_artifact(formalphysics).get("repair_frontier_nodes", [])
+                ),
+            },
+        },
+        {
+            "id": "formalphysics_0015_vacuum_rabi_complete",
+            "ok": formalphysics_0015.get("status") == "complete_autoformalization"
+            and first_artifact(formalphysics_0015).get("blocked_obligation_count", 0)
+            == 0
+            and first_artifact(formalphysics_0015).get("recursive_frontier_count", -1)
+            == 0
+            and obligation_status(
+                formalphysics_0015, "transition_amplitude_from_state_expansion"
+            )
+            == "proved"
+            and obligation_status(formalphysics_0015, "born_probability_from_amplitude")
+            == "proved"
+            and obligation_status(formalphysics_0015, "complex_norm_square_minus_i_sin")
+            == "proved",
+            "detail": {
+                "status": formalphysics_0015.get("status"),
+                "blocked_obligation_count": first_artifact(formalphysics_0015).get(
+                    "blocked_obligation_count"
+                ),
+                "recursive_frontier_count": first_artifact(formalphysics_0015).get(
+                    "recursive_frontier_count"
+                ),
+                "transition_status": obligation_status(
+                    formalphysics_0015, "transition_amplitude_from_state_expansion"
+                ),
+                "born_status": obligation_status(
+                    formalphysics_0015, "born_probability_from_amplitude"
+                ),
+                "norm_status": obligation_status(
+                    formalphysics_0015, "complex_norm_square_minus_i_sin"
+                ),
+            },
+        },
+        {
+            "id": "formalphysics_0021_parameter_hamiltonian_complete",
+            "ok": formalphysics_0021.get("status") == "complete_autoformalization"
+            and first_artifact(formalphysics_0021).get("blocked_obligation_count", 0)
+            == 0
+            and first_artifact(formalphysics_0021).get("recursive_frontier_count", -1)
+            == 0
+            and obligation_status(
+                formalphysics_0021, "eigenvalue_to_expectation_curve_bridge"
+            )
+            == "proved"
+            and obligation_status(
+                formalphysics_0021, "derivative_uniqueness_transfer_bridge"
+            )
+            == "proved"
+            and obligation_status(
+                formalphysics_0021, "expectation_derivative_calculation"
+            )
+            == "proved",
+            "detail": {
+                "status": formalphysics_0021.get("status"),
+                "blocked_obligation_count": first_artifact(formalphysics_0021).get(
+                    "blocked_obligation_count"
+                ),
+                "recursive_frontier_count": first_artifact(formalphysics_0021).get(
+                    "recursive_frontier_count"
+                ),
+                "eigen_bridge_status": obligation_status(
+                    formalphysics_0021, "eigenvalue_to_expectation_curve_bridge"
+                ),
+                "derivative_transfer_status": obligation_status(
+                    formalphysics_0021, "derivative_uniqueness_transfer_bridge"
+                ),
+                "expectation_derivative_status": obligation_status(
+                    formalphysics_0021, "expectation_derivative_calculation"
+                ),
+            },
+        },
+        {
+            "id": "formalphysics_0052_position_expectation_complete",
+            "ok": formalphysics_0052.get("status") == "complete_autoformalization"
+            and first_artifact(formalphysics_0052).get("blocked_obligation_count", 0)
+            == 0
+            and first_artifact(formalphysics_0052).get("recursive_frontier_count", -1)
+            == 0
+            and obligation_status(formalphysics_0052, "born_density_integrand_bridge")
+            == "proved"
+            and obligation_status(
+                formalphysics_0052, "resolution_identity_measure_kernel"
+            )
+            == "proved"
+            and obligation_status(formalphysics_0052, "born_integral_bridge")
+            == "proved"
+            and obligation_status(
+                formalphysics_0052, "measure_integral_mathlib_surface"
+            )
+            == "mathlib_reused",
+            "detail": {
+                "status": formalphysics_0052.get("status"),
+                "blocked_obligation_count": first_artifact(formalphysics_0052).get(
+                    "blocked_obligation_count"
+                ),
+                "recursive_frontier_count": first_artifact(formalphysics_0052).get(
+                    "recursive_frontier_count"
+                ),
+                "density_status": obligation_status(
+                    formalphysics_0052, "born_density_integrand_bridge"
+                ),
+                "resolution_status": obligation_status(
+                    formalphysics_0052, "resolution_identity_measure_kernel"
+                ),
+                "integral_status": obligation_status(
+                    formalphysics_0052, "born_integral_bridge"
+                ),
+                "measure_status": obligation_status(
+                    formalphysics_0052, "measure_integral_mathlib_surface"
+                ),
+            },
+        },
+        {
+            "id": "formalphysics_0074_chained_bridge_complete",
+            "ok": formalphysics_0074.get("status") == "complete_autoformalization"
+            and first_artifact(formalphysics_0074).get("blocked_obligation_count", 0)
+            == 0
+            and first_artifact(formalphysics_0074).get("recursive_frontier_count", -1)
+            == 0
+            and obligation_status(
+                formalphysics_0074, "complex_imaginary_quotient_bridge"
+            )
+            == "proved"
+            and obligation_status(formalphysics_0074, "square_identity_bridge")
+            == "proved",
+            "detail": {
+                "status": formalphysics_0074.get("status"),
+                "blocked_obligation_count": first_artifact(formalphysics_0074).get(
+                    "blocked_obligation_count"
+                ),
+                "recursive_frontier_count": first_artifact(formalphysics_0074).get(
+                    "recursive_frontier_count"
+                ),
+                "imaginary_bridge_status": obligation_status(
+                    formalphysics_0074, "complex_imaginary_quotient_bridge"
+                ),
+                "square_status": obligation_status(
+                    formalphysics_0074, "square_identity_bridge"
+                ),
+                "finding_codes": sorted(codes(formalphysics_0074)),
+            },
+        },
+    ]
+    report = {
+        "schema_version": 1,
+        "style": "physics_lean_derivation_completeness_regression",
+        "ok": all(check["ok"] for check in checks),
+        "checks": checks,
+    }
+    write_json(ARTIFACT_ROOT / "report.json", report)
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    else:
+        print("PASS" if report["ok"] else "FAIL", "derivation completeness regression")
+    return 0 if report["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from draft_execute_refine_loop import (
+    LeanFormalReviewCase,
+    LeanFormalizationDraftBrief,
+    LeanLibraryReviewCase,
+    LeanRefinementDisposition,
+    LeanReviewCase,
+    LeanRevisionCase,
+    RefinementCase,
+)
+import occurrences as steps
+import relations as links
+
+# Draft a source-anchored Lean artifact, execute it, combine independent
+# critiques, apply a localized repair, and record whether another cycle is due.
+reasoning RefineLeanDraft(
+    workflow_source: LeanFormalizationDraftBrief,
+) -> Generated[LeanRefinementDisposition]:
+    sequence:
+        # Select or replay the seed and construct the first source-anchored Lean draft.
+        [draft: steps.ProposeLeanDraft(workflow_source)]
+        # Execute that exact draft and record compiler and source-anchor evidence.
+        [execution_evidence: steps.ExecuteLeanDraft(draft.value)] by links.TestLeanDraft
+        parallel:
+            # Assess mathematical meaning, preservation, logical soundness, and reference-free drift.
+            [semantic_assessment: steps.AssessLeanSemantics(LeanReviewCase(
+                draft = draft.value,
+                execution_evidence = execution_evidence.value,
+            ))] by links.AssessSemantics
+            # Assess syntax and consolidate the formal critique findings.
+            [formal_assessment: steps.AssessLeanSyntax(LeanFormalReviewCase(
+                draft = draft.value,
+                execution_evidence = execution_evidence.value,
+            ))] by links.AssessFormalSurface
+            # Assess use of applicable mathlib abstractions and imports.
+            [library_assessment: steps.AssessMathlibAlignment(LeanLibraryReviewCase(
+                draft = draft.value,
+                execution_evidence = execution_evidence.value,
+            ))] by links.AssessLibraryFit
+        # Apply formal and semantic repairs, then denoise the revised candidate.
+        [revised_draft: steps.ReviseLeanDraft(LeanRevisionCase(
+            draft = draft.value,
+            semantic_assessment = semantic_assessment.value,
+            formal_assessment = formal_assessment.value,
+            library_assessment = library_assessment.value,
+        ))] by links.ReviseFromCritiques
+        # Classify the transition and state whether the revised draft is ready or must run again.
+        [refinement_status: steps.CalibrateRefinementStatus(RefinementCase(
+            revised_draft = revised_draft.value,
+            semantic_assessment = semantic_assessment.value,
+            formal_assessment = formal_assessment.value,
+            library_assessment = library_assessment.value,
+        ))] by links.CalibrateRefinement
+    return refinement_status

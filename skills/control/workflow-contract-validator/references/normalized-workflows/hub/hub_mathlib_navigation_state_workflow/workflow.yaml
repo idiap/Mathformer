@@ -1,0 +1,404 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_mathlib_navigation_state_workflow
+version: 1.0.0
+kind: workflow
+description: Main dispatch and ordered navigation self-test; finite scans remain inside
+  source helpers.
+aliases:
+- mathlib:navigation-state
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Args:
+    schema:
+      type: object
+      required:
+      - self_test
+      - monotonic_check
+      - text
+      - index
+      - json
+      properties:
+        self_test:
+          type: boolean
+        monotonic_check:
+          type: boolean
+        text:
+          type: string
+        index:
+          type: string
+          minLength: 1
+        json:
+          type: boolean
+      additionalProperties: false
+  Text:
+    schema:
+      type: string
+  Flag:
+    schema:
+      type: boolean
+  Payload:
+    schema:
+      type: object
+      required:
+      - ok
+      properties:
+        ok:
+          type: boolean
+      additionalProperties: true
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 1
+  Context:
+    schema:
+      type: object
+      required:
+      - default_index
+      - output_directory
+      - mathlib_root
+      - profile_path
+      properties:
+        default_index:
+          type: string
+          minLength: 1
+        output_directory:
+          type: string
+          minLength: 1
+        mathlib_root:
+          type: string
+          minLength: 1
+        profile_path:
+          type: string
+          minLength: 1
+      additionalProperties: false
+inputs:
+  args:
+    type: Args
+  context:
+    type: Context
+outputs:
+  payload:
+    type: Payload
+    value:
+      ref: steps.dispatch.outputs.payload
+  exit_code:
+    type: ExitCode
+    value:
+      ref: steps.emit.outputs.exit_code
+  stdout:
+    type: Text
+    value:
+      ref: steps.emit.outputs.stdout
+operations:
+  require_text:
+    inputs:
+      text:
+        type: Text
+    outputs:
+      text:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_navigation_require_text
+        operation: mathformer_navigation_require_text
+  plan_navigation:
+    inputs:
+      text:
+        type: Text
+      index:
+        type: Text
+      context:
+        type: Context
+    outputs:
+      payload:
+        type: Payload
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_navigation_plan
+        operation: mathformer_navigation_plan
+  monotonic_check:
+    inputs:
+      context:
+        type: Context
+    outputs:
+      payload:
+        type: Payload
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_navigation_monotonic
+        operation: mathformer_navigation_monotonic
+  finish_self_test:
+    inputs:
+      normal:
+        type: Payload
+      gap:
+        type: Payload
+      monotonic:
+        type: Payload
+      context:
+        type: Context
+    outputs:
+      payload:
+        type: Payload
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_navigation_finish_self_test
+        operation: mathformer_navigation_finish_self_test
+  emit:
+    inputs:
+      payload:
+        type: Payload
+      json:
+        type: Flag
+    outputs:
+      exit_code:
+        type: ExitCode
+      stdout:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_navigation_emit
+        operation: mathformer_navigation_emit
+flow:
+  kind: sequence
+  steps:
+  - id: dispatch
+    kind: switch
+    cases:
+    - id: self_test
+      when:
+        ref: inputs.args.self_test
+      body:
+        kind: sequence
+        steps:
+        - id: normal_fixture
+          kind: call
+          operation: plan_navigation
+          arguments:
+            text:
+              literal: A compact set has the finite intersection property and a convex
+                subset is measurable.
+            index:
+              ref: inputs.context.default_index
+            context:
+              ref: inputs.context
+        - id: gap_fixture
+          kind: call
+          operation: plan_navigation
+          arguments:
+            text:
+              literal: A quasinormal pseudostructure has a spectral cocompactness
+                invariant.
+            index:
+              ref: inputs.context.default_index
+            context:
+              ref: inputs.context
+        - id: baselines
+          kind: call
+          operation: monotonic_check
+          arguments:
+            context:
+              ref: inputs.context
+        - id: aggregate
+          kind: call
+          operation: finish_self_test
+          arguments:
+            normal:
+              ref: steps.normal_fixture.outputs.payload
+            gap:
+              ref: steps.gap_fixture.outputs.payload
+            monotonic:
+              ref: steps.baselines.outputs.payload
+            context:
+              ref: inputs.context
+        outputs:
+          payload:
+            type: Payload
+            value:
+              ref: steps.aggregate.outputs.payload
+    - id: monotonic
+      when:
+        ref: inputs.args.monotonic_check
+      body:
+        kind: call
+        operation: monotonic_check
+        arguments:
+          context:
+            ref: inputs.context
+    default:
+      kind: sequence
+      steps:
+      - id: text_guard
+        kind: call
+        operation: require_text
+        arguments:
+          text:
+            ref: inputs.args.text
+      - id: navigation
+        kind: call
+        operation: plan_navigation
+        arguments:
+          text:
+            ref: steps.text_guard.outputs.text
+          index:
+            ref: inputs.args.index
+          context:
+            ref: inputs.context
+      outputs:
+        payload:
+          type: Payload
+          value:
+            ref: steps.navigation.outputs.payload
+    outputs:
+      payload:
+        type: Payload
+        value:
+          ref: selected.outputs.payload
+  - id: emit
+    kind: call
+    operation: emit
+    arguments:
+      payload:
+        ref: steps.dispatch.outputs.payload
+      json:
+        ref: inputs.args.json
+  outputs:
+    payload:
+      type: Payload
+      value:
+        ref: steps.dispatch.outputs.payload
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.emit.outputs.exit_code
+    stdout:
+      type: Text
+      value:
+        ref: steps.emit.outputs.stdout
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/mathlib_index/index.json
+      - requested_index_path
+      - artifacts/mathlib_index/navigation_state.json
+      - artifacts/mathlib_index/gap_ledger.json
+      - artifacts/mathlib_index/monotonic_refinement_report.json
+      - artifacts/mathlib_index/navigation_state_self_test.json
+      - requested_report_directory
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - plan_navigation
+    - record_gaps
+    - evaluate_fixtures
+    forbidden:
+    - promote_unverified_candidate
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Navigation candidates and fixture checks do not establish Lean verification
+    or proof.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/mathlib/mathlib-navigation-state-planner/scripts/plan_mathlib_navigation_state.py
+    digest: sha256:79864698c0a0fd751bde6e381d7a4f22817f43b8e7f4f9fda706f0287b812539
+    selector: main
+  - path: scripts/mathlib_navigation_tools.py
+    digest: sha256:712a991b12b6f61e2c6d253e7cb86f4075f5bed9496ca317467afa2cc8d63530
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer.py
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: tests/mcp/run_mathlib_navigation_workflow_tests.py
+    digest: sha256:6d09c1fe8e9d01313bd06b352dd8e050b90c002c3eb4f42866541ef0ab3886ff
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Finite helper scans remain inside their source-owned operations; Payload exposes
+    the common ok envelope.
+  - Descriptor wall-time and call limits are runtime bounds, not native navigation
+    budgets.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: mathlib:navigation-state
+    owner_skill: skills/mathlib/mathlib-navigation-state-planner/SKILL.md
+    command:
+    - '{python}'
+    - skills/mathlib/mathlib-navigation-state-planner/scripts/plan_mathlib_navigation_state.py
+    - --self-test
+    - --json
+    depends_on: []
+    timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Hub run_action then run_leaf_action; registered command selects self_test
+      and JSON.
+    inputs: Args represents parse_args results. Context makes native file dependencies
+      explicit; default_index applies only to fixture and baseline calls.
+    path_resolution: Explicit context supplies default fixture index, report directory,
+      Mathlib root and ontology profile. CLI without context retains native defaults.
+      Args.index still controls only the normal text branch.
+    failures: Native exceptions terminate immediately; payload.ok=false is printed
+      and returned as exit 1.
+  mathformer.navigation:
+    budgets: 'Metadata only: breadth=max(0,8-module_count), depth=4, checks=max(0,5-checked_count),
+      fallback_searches=2.'
+    stopping: candidate_ready and gap_or_needs_broader_index are labels; finite scans
+      alone terminate planning.
+    repeated_calls: Five plans in self_test overwrite navigation/gap files; last baseline
+      owns their final contents.
+    verification: No Lean invocation, iterative refinement, retry, or checkpoint support.
+# REUSE-IgnoreEnd

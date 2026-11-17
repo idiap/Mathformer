@@ -1,0 +1,39 @@
+{
+  "library": "MathformerLib.SympyPhysics",
+  "organization": "solver_type",
+  "root": "libraries/MathformerLib/SympyPhysics/Solvers",
+  "entries": [
+    {
+      "id": "korteweg_de_vries_one_soliton",
+      "title": "Korteweg-De Vries one-soliton",
+      "source_url": "https://en.wikipedia.org/wiki/Korteweg%E2%80%93De_Vries_equation",
+      "style": "sympy_physics_derivation_trace",
+      "status": "complete",
+      "analytic_solver": {
+        "solver_type": "AnalyticSoliton",
+        "module": "MathformerLib.SympyPhysics.Solvers.AnalyticSoliton.KdVOneSoliton",
+        "path": "libraries/MathformerLib/SympyPhysics/Solvers/AnalyticSoliton/KdVOneSoliton.py",
+        "validation": [
+          "symbolic_pde_residual_zero",
+          "traveling_wave_ode_residual_zero",
+          "numeric_symbolic_residual_samples"
+        ]
+      },
+      "simulation_validator": {
+        "solver_type": "PseudoSpectralPDE",
+        "module": "MathformerLib.SympyPhysics.Solvers.PseudoSpectralPDE.KdVOneSolitonSimulation",
+        "path": "libraries/MathformerLib/SympyPhysics/Solvers/PseudoSpectralPDE/KdVOneSolitonSimulation.py",
+        "validation": [
+          "fourier_pseudospectral_derivatives",
+          "rk4_time_stepping",
+          "analytic_solution_final_time_comparison"
+        ]
+      },
+      "test": "tests/physics_sympy/run_mathformerlib_kdv.py",
+      "docs": [
+        "docs/libraries/mathformerlib/sympy/physics/Solvers/AnalyticSoliton/KdVOneSoliton.md",
+        "docs/libraries/mathformerlib/sympy/physics/Solvers/PseudoSpectralPDE/KdVOneSolitonSimulation.md"
+      ]
+    }
+  ]
+}

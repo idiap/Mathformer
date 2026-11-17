@@ -1,0 +1,344 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+"""Annotate informal terms with probable Mathlib concept candidates."""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import sys
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+ONTOLOGY_SCRIPTS = (
+    REPO_ROOT / "skills" / "mathlib" / "mathlib-concept-ontology-manager" / "scripts"
+)
+if str(ONTOLOGY_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(ONTOLOGY_SCRIPTS))
+
+from ontology import (
+    DEFAULT_PROFILE,
+    all_surface_terms,
+    clue_hits,
+    concept_profiles,
+    load_profile,
+    normalize_surface,
+    text_windows,
+)  # noqa: E402
+
+OUTPUT_PATH = REPO_ROOT / "artifacts" / "mathlib_index" / "term_annotations.json"
+SELF_TEST_OUTPUT = (
+    REPO_ROOT / "artifacts" / "mathlib_index" / "term_annotation_self_test.json"
+)
+
+
+ROLE_CLUES = {
+    "hypothesis": ["assume", "if", "given", "suppose", "has", "is"],
+    "conclusion": ["then", "therefore", "show", "prove", "conclude"],
+    "lemma": ["lemma", "theorem", "criterion", "property"],
+    "object": ["set", "space", "function", "operator", "family", "sequence"],
+    "side_condition": ["nonzero", "finite", "positive", "bounded"],
+    "predicate": ["is", "are", "measurable", "compact", "convex"],
+}
+
+
+def infer_role(context: str, concept: dict[str, Any]) -> str:
+    context_l = normalize_surface(context)
+    for role, clues in ROLE_CLUES.items():
+        if any(clue in context_l for clue in clues):
+            if role in concept.get("proof_roles", []) or role in {
+                "hypothesis",
+                "conclusion",
+            }:
+                return role
+    roles = concept.get("proof_roles") or ["object"]
+    return str(roles[0])
+
+
+def concept_score(
+    context: str, concept: dict[str, Any], *, phrase_match: bool
+) -> tuple[int, list[str], list[str]]:
+    required = clue_hits(context, concept.get("required_context_clues", []))
+    negative = clue_hits(context, concept.get("negative_context_clues", []))
+    score = (5 if phrase_match else 2) + (3 * len(required)) - (4 * len(negative))
+    if not required and concept.get("required_context_clues"):
+        score -= 2
+    return score, required, negative
+
+
+def annotate_text(text: str, *, profile_path: Path = DEFAULT_PROFILE) -> dict[str, Any]:
+    profile = load_profile(profile_path)
+    concepts = concept_profiles(profile)
+    terms = all_surface_terms(profile)
+    annotations: list[dict[str, Any]] = []
+    seen_spans: set[tuple[int, int, str]] = set()
+
+    for term in terms:
+        for window in text_windows(text, term):
+            span_key = (window["start"], window["end"], normalize_surface(term))
+            if span_key in seen_spans:
+                continue
+            seen_spans.add(span_key)
+            matching = []
+            for concept in concepts:
+                surfaces = [
+                    normalize_surface(item)
+                    for item in concept.get("surface_terms", [])
+                    if isinstance(item, str)
+                ]
+                if normalize_surface(term) not in surfaces and normalize_surface(
+                    term
+                ) not in normalize_surface(concept.get("concept_id", "")):
+                    continue
+                score, required, negative = concept_score(
+                    window["context"],
+                    concept,
+                    phrase_match=" " in normalize_surface(term),
+                )
+                matching.append(
+                    {
+                        "concept_id": concept["concept_id"],
+                        "domain_tags": concept.get("domain_tags", []),
+                        "lean_objects": concept.get("lean_objects", []),
+                        "preferred_modules": concept.get("preferred_modules", []),
+                        "preferred_declarations": concept.get(
+                            "preferred_declarations", []
+                        ),
+                        "proof_role": infer_role(window["context"], concept),
+                        "lean_shape_guess": concept.get("lean_shape_guess", ""),
+                        "score": score,
+                        "required_context_hits": required,
+                        "negative_context_hits": negative,
+                    }
+                )
+            if not matching:
+                continue
+            ranked = sorted(
+                matching, key=lambda row: (-row["score"], row["concept_id"])
+            )
+            top_score = ranked[0]["score"]
+            tied = [row for row in ranked if row["score"] == top_score]
+            verification_state = "unverified"
+            if top_score <= 0:
+                verification_state = "gap"
+            elif len(tied) > 1:
+                verification_state = "ambiguous"
+            confidence = (
+                "high"
+                if top_score >= 6 and len(tied) == 1
+                else ("medium" if top_score >= 3 else "low")
+            )
+            annotations.append(
+                {
+                    "surface_term": term,
+                    "source_span": {"start": window["start"], "end": window["end"]},
+                    "context": window["context"],
+                    "normalized_candidates": ranked,
+                    "selected_concept_id": (
+                        None
+                        if verification_state in {"ambiguous", "gap"}
+                        else ranked[0]["concept_id"]
+                    ),
+                    "probable_domain": ranked[0].get("domain_tags", []),
+                    "proof_role": ranked[0].get("proof_role", "object"),
+                    "lean_shape_guess": ranked[0].get("lean_shape_guess", ""),
+                    "confidence": confidence,
+                    "evidence": {
+                        "matched_surface": term,
+                        "required_context_hits": ranked[0].get(
+                            "required_context_hits", []
+                        ),
+                        "negative_context_hits": ranked[0].get(
+                            "negative_context_hits", []
+                        ),
+                    },
+                    "verification_state": verification_state,
+                }
+            )
+
+    annotations = sorted(
+        annotations,
+        key=lambda row: (row["source_span"]["start"], -len(row["surface_term"])),
+    )
+    gaps = [
+        {
+            "gap_id": f"gap.{idx}.{normalize_surface(row['surface_term']).replace(' ', '_')}",
+            "surface_term": row["surface_term"],
+            "source_span": row["source_span"],
+            "attempted_domains": sorted(
+                {
+                    tag
+                    for candidate in row["normalized_candidates"]
+                    for tag in candidate.get("domain_tags", [])
+                }
+            ),
+            "failed_candidates": [
+                candidate["concept_id"] for candidate in row["normalized_candidates"]
+            ],
+            "next_action": "add_context_clues_or_review_ontology",
+        }
+        for idx, row in enumerate(annotations)
+        if row["verification_state"] in {"gap", "ambiguous"}
+    ]
+    return {
+        "schema_version": "mathformer.mathlib_term_annotations.v0.1",
+        "generated_at_utc": datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "ok": True,
+        "profile": str(profile_path),
+        "annotation_count": len(annotations),
+        "annotations": annotations,
+        "gap_ledger": gaps,
+    }
+
+
+SELF_TEST_CASES = [
+    {
+        "id": "compact_set_not_operator",
+        "text": "Let K be a compact set. Every open cover has a finite subcover.",
+        "expect_concept": "topology.compact_set",
+        "forbid_first": "analysis.compact_operator",
+    },
+    {
+        "id": "finite_intersection_phrase",
+        "text": "A family of closed sets has the finite intersection property when every finite subfamily has nonempty intersection.",
+        "expect_any": [
+            "set.finite_intersection_family",
+            "topology.finite_intersection_property",
+        ],
+    },
+    {
+        "id": "convex_set",
+        "text": "A convex set in a real vector space contains every segment between its points.",
+        "expect_concept": "analysis.convex_set",
+    },
+    {
+        "id": "measurable_function",
+        "text": "The measurable function f maps between measurable spaces.",
+        "expect_concept": "measure.measurable_function",
+    },
+    {
+        "id": "tendsto_sequence",
+        "text": "The sequence tends to a limit along atTop.",
+        "expect_any": ["topology.filter_tendsto", "topology.sequence_convergence"],
+    },
+]
+
+
+def initialize_fixture_state() -> dict[str, Any]:
+    return {"index": 0, "results": []}
+
+
+def select_fixture(state: dict[str, Any]) -> dict[str, Any]:
+    return dict(SELF_TEST_CASES[state["index"]])
+
+
+def check_fixture(case: dict[str, Any], report: dict[str, Any]) -> dict[str, Any]:
+    concepts = [
+        row.get("selected_concept_id")
+        or (
+            row["normalized_candidates"][0]["concept_id"]
+            if row["normalized_candidates"]
+            else None
+        )
+        for row in report["annotations"]
+    ]
+    ok = True
+    if "expect_concept" in case:
+        ok = case["expect_concept"] in concepts
+    if "expect_any" in case:
+        ok = any(item in concepts for item in case["expect_any"])
+    if "forbid_first" in case:
+        first_candidates = [
+            row["normalized_candidates"][0]["concept_id"]
+            for row in report["annotations"]
+            if row["normalized_candidates"]
+        ]
+        ok = ok and case["forbid_first"] not in first_candidates[:1]
+    return {
+        "id": case["id"],
+        "ok": ok,
+        "concepts": concepts,
+        "annotation_count": report["annotation_count"],
+    }
+
+
+def check_append(
+    state: dict[str, Any], case: dict[str, Any], report: dict[str, Any]
+) -> tuple[dict[str, Any], bool]:
+    row = check_fixture(case, report)
+    next_state = {"index": state["index"] + 1, "results": [*state["results"], row]}
+    return next_state, next_state["index"] == len(SELF_TEST_CASES)
+
+
+def write_self_test(results: list[dict[str, Any]], output: Path) -> dict[str, Any]:
+    payload = {
+        "schema_version": 1,
+        "style": "mathlib_term_annotation_self_test",
+        "ok": all(row["ok"] for row in results),
+        "results": results,
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    return payload
+
+
+def self_test() -> dict[str, Any]:
+    state = initialize_fixture_state()
+    for case in SELF_TEST_CASES:
+        report = annotate_text(case["text"])
+        state, _ = check_append(state, case, report)
+    return write_self_test(state["results"], SELF_TEST_OUTPUT)
+
+
+def emit_json(payload: dict[str, Any]) -> int:
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0 if payload.get("ok") else 1
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--text", default="")
+    parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
+    parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    if args.self_test:
+        payload = self_test()
+    else:
+        if not args.text:
+            raise SystemExit("provide --text or --self-test")
+        payload = annotate_text(args.text, profile_path=args.profile)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(
+            json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+        )
+    if args.json:
+        return emit_json(payload)
+    else:
+        print(
+            "PASS mathlib term annotations"
+            if payload.get("ok")
+            else "FAIL mathlib term annotations"
+        )
+    return 0 if payload.get("ok") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

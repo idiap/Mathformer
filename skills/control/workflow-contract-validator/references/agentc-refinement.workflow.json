@@ -1,0 +1,732 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "loop_draft_execute_refine_loop_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Draft or reuse code, critique, and refine through the native bounded iterator.",
+  "aliases": [
+    "draft_execute_refine_loop"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Request": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "informal_statement": {
+            "type": "string"
+          },
+          "informal_formal_pairs": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "file_prefix": {
+            "type": "string",
+            "default": "sample"
+          },
+          "dependency_context": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "alignment_hints": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "core_statement_annotations": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "initial_formalization": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "initial_formalization_raw": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "aspect_description": {
+            "type": "string"
+          },
+          "max_iterations": {
+            "type": "integer",
+            "const": 4
+          }
+        },
+        "required": [
+          "informal_statement",
+          "aspect_description",
+          "max_iterations"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "History": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "round_index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "code": {
+              "type": "string"
+            },
+            "hard_feedback": {
+              "type": "string"
+            },
+            "soft_feedback": {
+              "type": "string"
+            },
+            "agent_name": {
+              "type": "string"
+            },
+            "trigger_reason": {
+              "type": "string"
+            },
+            "step_timings_ms": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            },
+            "refinement_analysis": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "round_index",
+            "code",
+            "hard_feedback",
+            "soft_feedback",
+            "agent_name",
+            "trigger_reason",
+            "step_timings_ms",
+            "refinement_analysis"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 1
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "round_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "code": {
+            "type": "string"
+          },
+          "correctness": {
+            "type": "string"
+          },
+          "error_details": {
+            "type": "string"
+          },
+          "semantic_judgement": {
+            "type": "string"
+          },
+          "prior_hard_feedback": {
+            "type": "string"
+          },
+          "prior_soft_feedback": {
+            "type": "string"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "round_index": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "code": {
+                  "type": "string"
+                },
+                "hard_feedback": {
+                  "type": "string"
+                },
+                "soft_feedback": {
+                  "type": "string"
+                },
+                "agent_name": {
+                  "type": "string"
+                },
+                "trigger_reason": {
+                  "type": "string"
+                },
+                "step_timings_ms": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                },
+                "refinement_analysis": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "round_index",
+                "code",
+                "hard_feedback",
+                "soft_feedback",
+                "agent_name",
+                "trigger_reason",
+                "step_timings_ms",
+                "refinement_analysis"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "round_index",
+          "code",
+          "correctness",
+          "error_details",
+          "semantic_judgement",
+          "prior_hard_feedback",
+          "prior_soft_feedback",
+          "history"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Route": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "formal_repair",
+          "early_stop",
+          "semantic_repair",
+          "exhausted"
+        ]
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "request": {
+      "type": "Request"
+    },
+    "resume_state": {
+      "type": "State",
+      "required": false
+    }
+  },
+  "outputs": {
+    "final_state": {
+      "type": "State",
+      "value": {
+        "ref": "flow.outputs.state"
+      }
+    },
+    "final_code": {
+      "type": "Text",
+      "value": {
+        "ref": "flow.outputs.state.code"
+      }
+    },
+    "history": {
+      "type": "History",
+      "value": {
+        "ref": "flow.outputs.state.history"
+      }
+    }
+  },
+  "operations": {
+    "prepare_state": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "resume_state": {
+          "type": "State",
+          "required": false
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "can_enter": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_agentc_workflow_prepare_state",
+          "operation": "mathformer_agentc_workflow_prepare_state"
+        }
+      }
+    },
+    "compute_guard": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "route": {
+          "type": "Route"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_agentc_workflow_compute_guard",
+          "operation": "mathformer_agentc_workflow_compute_guard"
+        }
+      }
+    },
+    "formal_repair_round": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "stop": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_agentc_workflow_formal_repair_round",
+          "operation": "mathformer_agentc_workflow_formal_repair_round"
+        }
+      }
+    },
+    "semantic_repair_round": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "stop": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_agentc_workflow_semantic_repair_round",
+          "operation": "mathformer_agentc_workflow_semantic_repair_round"
+        }
+      }
+    },
+    "record_early_stop": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "stop": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_agentc_workflow_record_early_stop",
+          "operation": "mathformer_agentc_workflow_record_early_stop"
+        }
+      }
+    },
+    "return_current": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "request": {
+          "type": "Request"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "stop": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "mixed",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_agentc_workflow_return_current",
+          "operation": "mathformer_agentc_workflow_return_current"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare_state",
+        "arguments": {
+          "request": {
+            "ref": "inputs.request"
+          },
+          "resume_state": {
+            "ref": "inputs.resume_state"
+          }
+        }
+      },
+      {
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.prepare.outputs.state"
+        },
+        "max_iterations": 4,
+        "on_exhausted": "fail",
+        "description": "Native rounds through four; the exhausted route completes a resumed empty range without appending history. Last repairs explicitly stop and return the latest candidate normally.",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "guard",
+              "kind": "call",
+              "operation": "compute_guard",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                }
+              }
+            },
+            {
+              "id": "repair_or_stop",
+              "kind": "switch",
+              "cases": [
+                {
+                  "id": "formal",
+                  "when": {
+                    "eq": [
+                      {
+                        "ref": "steps.guard.outputs.route"
+                      },
+                      {
+                        "literal": "formal_repair"
+                      }
+                    ]
+                  },
+                  "body": {
+                    "kind": "call",
+                    "operation": "formal_repair_round",
+                    "arguments": {
+                      "request": {
+                        "ref": "inputs.request"
+                      },
+                      "state": {
+                        "ref": "loop.state"
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "accepted",
+                  "when": {
+                    "eq": [
+                      {
+                        "ref": "steps.guard.outputs.route"
+                      },
+                      {
+                        "literal": "early_stop"
+                      }
+                    ]
+                  },
+                  "body": {
+                    "kind": "call",
+                    "operation": "record_early_stop",
+                    "arguments": {
+                      "request": {
+                        "ref": "inputs.request"
+                      },
+                      "state": {
+                        "ref": "loop.state"
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "exhausted_resume",
+                  "when": {
+                    "eq": [
+                      {
+                        "ref": "steps.guard.outputs.route"
+                      },
+                      {
+                        "literal": "exhausted"
+                      }
+                    ]
+                  },
+                  "body": {
+                    "kind": "call",
+                    "operation": "return_current",
+                    "arguments": {
+                      "request": {
+                        "ref": "inputs.request"
+                      },
+                      "state": {
+                        "ref": "loop.state"
+                      }
+                    }
+                  }
+                }
+              ],
+              "default": {
+                "kind": "call",
+                "operation": "semantic_repair_round",
+                "arguments": {
+                  "request": {
+                    "ref": "inputs.request"
+                  },
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              },
+              "outputs": {
+                "state": {
+                  "type": "State",
+                  "value": {
+                    "ref": "selected.outputs.state"
+                  }
+                },
+                "stop": {
+                  "type": "Flag",
+                  "value": {
+                    "ref": "selected.outputs.stop"
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.repair_or_stop.outputs.state"
+              }
+            },
+            "stop": {
+              "type": "Flag",
+              "value": {
+                "ref": "steps.repair_or_stop.outputs.stop"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.stop"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        },
+        "id": "finish"
+      }
+    ],
+    "outputs": {
+      "state": {
+        "type": "State",
+        "value": {
+          "ref": "steps.finish.outputs.state"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "lean_inputs"
+        ],
+        "write": [
+          "run_artifacts",
+          "lean_diagnostics"
+        ]
+      },
+      "network": [
+        "configured_model_providers"
+      ],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "draft_lean_candidate",
+        "compile_check_candidate",
+        "critique_candidate",
+        "refine_candidate",
+        "record_refinement_history"
+      ],
+      "forbidden": [
+        "approve_scientific_truth",
+        "promote_generated_theorem",
+        "bypass_native_controls"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 18
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Latest candidate and critique history; cap completion can retain compilation failure."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/autoformalization/autoformalization-agentc/scripts/agentc.py",
+        "digest": "sha256:f905407d76dcf8caaecf50716c9d6f8b0d342c65cda61dafe63254236312767f",
+        "selector": "IterativeSelfRefinementAgentC.iter_refinement_steps"
+      },
+      {
+        "path": "scripts/agentc_workflow_tools.py",
+        "digest": "sha256:64b0c2f05fef91d88d0339175d0758f8aac696a84a8dfcfe22d8d17e95537314"
+      },
+      {
+        "path": "scripts/agentc_refinement_workflow_tools.py",
+        "digest": "sha256:89abf71256bc0c6de692b0d4fc03abcd3ccbd01bce4214b4b8acb6704c7fb0c9"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Only the default four-round cap is represented; request.max_iterations must equal four.",
+      "History, transition analysis, trace events, diagnostics and timings remain owned by the native iterator. Production trace events are written beside each step’s native diagnostics.",
+      "Manual resume_state models native _resume_state; policy declares no durable checkpoint support.",
+      "Native success is checked at the next round entry; last-round success has no extra EarlyStop.",
+      "Exhaustion returns latest history normally even on compilation failure; exceptions propagate without retries.",
+      "run consumes yields and returns history; run_and_save saving and systematic caller gating/outer cycles are outside scope."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "loop",
+      "native_id": "draft_execute_refine_loop",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md"
+    }
+  }
+}

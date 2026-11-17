@@ -1,0 +1,504 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_docs_workflow_graph_layout_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Resolve CLI paths, read a graph, build its layout plan, and write and report it.",
+  "aliases": [
+    "docs:workflow-graph-layout"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Argv": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Paths": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "graph",
+          "output",
+          "json",
+          "halted",
+          "stdout"
+        ],
+        "properties": {
+          "graph": {
+            "type": "string"
+          },
+          "output": {
+            "type": "string"
+          },
+          "json": {
+            "type": "boolean"
+          },
+          "halted": {
+            "type": "boolean"
+          },
+          "stdout": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Graph": {
+      "schema": {
+        "type": "string",
+        "description": "Ordered native Graph JSON text; preserves dictionary insertion order across runtime envelopes."
+      }
+    },
+    "Plan": {
+      "schema": {
+        "type": "string",
+        "description": "Ordered native Plan JSON text; preserves dictionary insertion order across runtime envelopes."
+      }
+    },
+    "Completion": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "output",
+          "views",
+          "exit_code",
+          "stdout"
+        ],
+        "properties": {
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exit_code": {
+            "const": 0,
+            "type": "integer"
+          },
+          "stdout": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "repository_root"
+        ],
+        "properties": {
+          "repository_root": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Argv"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Completion",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "resolve": {
+      "inputs": {
+        "argv": {
+          "type": "Argv"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "paths": {
+          "type": "Paths"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_graph_layout_resolve",
+          "operation": "mathformer_graph_layout_resolve"
+        }
+      }
+    },
+    "read": {
+      "inputs": {
+        "paths": {
+          "type": "Paths"
+        }
+      },
+      "outputs": {
+        "model": {
+          "type": "Graph"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_graph_layout_read",
+          "operation": "mathformer_graph_layout_read"
+        }
+      }
+    },
+    "build": {
+      "inputs": {
+        "model": {
+          "type": "Graph"
+        }
+      },
+      "outputs": {
+        "plan": {
+          "type": "Plan"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_graph_layout_build",
+          "operation": "mathformer_graph_layout_build"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "paths": {
+          "type": "Paths"
+        },
+        "plan": {
+          "type": "Plan"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Completion"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_graph_layout_emit",
+          "operation": "mathformer_graph_layout_emit"
+        }
+      }
+    },
+    "halt": {
+      "inputs": {
+        "paths": {
+          "type": "Paths"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Completion"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_graph_layout_halt",
+          "operation": "mathformer_graph_layout_halt"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "resolve",
+        "kind": "call",
+        "operation": "resolve",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "when": {
+              "ref": "steps.resolve.outputs.paths.halted"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "halt",
+                  "kind": "call",
+                  "operation": "halt",
+                  "arguments": {
+                    "paths": {
+                      "ref": "steps.resolve.outputs.paths"
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "result": {
+                  "type": "Completion",
+                  "value": {
+                    "ref": "steps.halt.outputs.result"
+                  }
+                }
+              }
+            },
+            "id": "help"
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "read",
+              "kind": "call",
+              "operation": "read",
+              "arguments": {
+                "paths": {
+                  "ref": "steps.resolve.outputs.paths"
+                }
+              }
+            },
+            {
+              "id": "build",
+              "kind": "call",
+              "operation": "build",
+              "arguments": {
+                "model": {
+                  "ref": "steps.read.outputs.model"
+                }
+              }
+            },
+            {
+              "id": "emit",
+              "kind": "call",
+              "operation": "emit",
+              "arguments": {
+                "paths": {
+                  "ref": "steps.resolve.outputs.paths"
+                },
+                "plan": {
+                  "ref": "steps.build.outputs.plan"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "result": {
+              "type": "Completion",
+              "value": {
+                "ref": "steps.emit.outputs.result"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "Completion",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Completion",
+        "value": {
+          "ref": "steps.dispatch.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_graphs/",
+          "artifacts/workflow_hub/",
+          "cli_selected_output"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 4
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked layout description only; no runtime qualification or scientific claim."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/plan_workflow_graph_layout.py",
+        "selector": "main; build_plan; edge_pressure; sequence_positions; node_id_by_step; skill_node_ids; workflow_node_ids; recommendations",
+        "digest": "sha256:1f45793b9634704a3ac655740eaf0cf39936e2b99e7edf6695667e62a5fc875f"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:docs:workflow-graph-layout; preflight; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/workflow_graph_layout_tools.py",
+        "selector": "graph layout callable registration and authored contract adoption",
+        "digest": "sha256:5a5ab84028bf065c84b90af37f05e66f45bc3215c571b39e99e5b2e750747c19"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "graph layout callable registration and authored contract adoption",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "graph layout callable registration and authored contract adoption",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Native helper key/value assumptions remain source-owned; JSON text ports retain insertion order.",
+      "Native traversals are finite input-bounded scans without an iteration or time limit. Lunar enforces the retained operation-call and wall budgets.",
+      "Hub admission, dry-run and subprocess write auditing remain native hub behavior. These explicit CLI-stage tools use service authorization and write-root policy rather than invoking the hub."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "docs:workflow-graph-layout",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "docs:workflow-graph-layout",
+        "family": "docs",
+        "kind": "generation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "scripts/plan_workflow_graph_layout.py",
+          "--json"
+        ],
+        "depends_on": [],
+        "writes": [
+          "artifacts/workflow_graphs/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Four shared native CLI stages exposed as MCP tools; help terminates after resolve and halt. Hub dispatch retains its separate native admission boundary.",
+      "admission": "Invalid admission/preflight rejects; dry-run returns without subprocess execution.",
+      "failure_policy": "Subprocess failure or undeclared writes make the hub result unsuccessful.",
+      "output_scope": "CLI accepts output paths; hub audits writes against its declared artifact directory.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report"
+      ],
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "command_after_dependencies": false,
+      "modeling": "Main has four ordered blocks; helper traversals and reporting remain in their owning operations."
+    }
+  }
+}

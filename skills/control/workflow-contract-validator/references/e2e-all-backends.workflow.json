@@ -1,0 +1,433 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_e2e_all_backends_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Model main's single delegated backend-suite run and wrapper reporting.",
+  "aliases": [
+    "e2e:all-backends"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "JsonFlag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RunPlan": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "command",
+          "cwd",
+          "report_file",
+          "json_output"
+        ],
+        "properties": {
+          "command": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "report_file": {
+            "type": "string"
+          },
+          "json_output": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "ChildResult": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "returncode",
+          "stdout",
+          "stderr",
+          "started",
+          "duration_seconds"
+        ],
+        "properties": {
+          "returncode": {
+            "type": "integer"
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "started": {
+            "type": "number"
+          },
+          "duration_seconds": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "WrapperReport": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "ok",
+          "command",
+          "duration_seconds",
+          "stdout",
+          "stderr",
+          "report_file"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "command": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "duration_seconds": {
+            "type": "number"
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "report_file": {
+            "const": "artifacts/test_program/e2e_all_backends.json"
+          }
+        }
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer"
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "allow_mutating"
+        ],
+        "properties": {
+          "allow_mutating": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "json_output": {
+      "type": "JsonFlag"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "WrapperReport",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "prepare_command": {
+      "inputs": {
+        "json_output": {
+          "type": "JsonFlag"
+        }
+      },
+      "outputs": {
+        "plan": {
+          "type": "RunPlan"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_e2e_all_backends_prepare",
+          "operation": "mathformer_e2e_all_backends_prepare"
+        }
+      }
+    },
+    "run_suite": {
+      "inputs": {
+        "plan": {
+          "type": "RunPlan"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "ChildResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_e2e_all_backends_execute",
+          "operation": "mathformer_e2e_all_backends_execute"
+        }
+      }
+    },
+    "write_wrapper_and_return": {
+      "inputs": {
+        "plan": {
+          "type": "RunPlan"
+        },
+        "child": {
+          "type": "ChildResult"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "WrapperReport"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_e2e_all_backends_finalize",
+          "operation": "mathformer_e2e_all_backends_finalize"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare_command",
+        "arguments": {
+          "json_output": {
+            "ref": "inputs.json_output"
+          }
+        }
+      },
+      {
+        "id": "execute",
+        "kind": "call",
+        "operation": "run_suite",
+        "arguments": {
+          "plan": {
+            "ref": "steps.prepare.outputs.plan"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "finalize",
+        "kind": "call",
+        "operation": "write_wrapper_and_return",
+        "arguments": {
+          "plan": {
+            "ref": "steps.prepare.outputs.plan"
+          },
+          "child": {
+            "ref": "steps.execute.outputs.child"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "WrapperReport",
+        "value": {
+          "ref": "steps.finalize.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.finalize.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/test_program/",
+          "selected_matrix_write_sets",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 900,
+      "max_operation_calls": 3
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked description only; suite completion does not establish scientific truth."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/e2e/run_all_backends.py",
+        "selector": "main; prepare_command; run_suite; write_wrapper_and_return",
+        "digest": "sha256:ba058db364afa91d062bbd30dd046601ea180961358ee0eacc36dfad6adbe785"
+      },
+      {
+        "path": "tests/test_program/run_comprehensive_tests.py",
+        "selector": "main; run; run_check; parse_args",
+        "digest": "sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "module_family selection and per-check command, timeout, expected_exit, write_set",
+        "digest": "sha256:ae09947df58cdd5fbe5f8b75c570f74b47e90412298e6729830842d4e582e145"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:e2e:all-backends; preflight; run_leaf_action; run_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/e2e_all_backends_tools.py",
+        "selector": "register_e2e_all_backends_tools",
+        "digest": "sha256:7ea42c445f2fc58fee72f137056fb97dc3156606267ade82ecb8bca5d1bf603c"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_e2e_all_backends_tools(mcp)",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "hub_workflows authored e2e:all-backends contract",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Delegated matrix iteration and helpers remain inside the opaque native run_suite call; graph coverage is partial.",
+      "Full selected-check effects and network/external capabilities require native qualification.",
+      "Hub preflight, dry-run, 900-second timeout and post-execution write audit remain caller controls outside main. The declared hub write root differs from native reports.",
+      "MCP steps require explicit mutation authorization; fixed-plan validation prevents substituting arbitrary commands. Lunar supplies workflow receipts and digests; native child artifacts retain their source-owned formats."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "e2e:all-backends",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "e2e:all-backends",
+        "family": "e2e",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "tests/e2e/run_all_backends.py",
+          "--json"
+        ],
+        "depends_on": [],
+        "writes": [
+          "artifacts/e2e/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": 900
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Hub action dispatches main directly as a dependency-free leaf.",
+      "guards": "Preflight errors or dry-run prevent subprocess launch.",
+      "audit": "Hub post-execution write audit can override success.",
+      "write_root_mismatch": "Hub declares artifacts/e2e/; implementation reports under artifacts/test_program/.",
+      "budget": "900 seconds is the hub child timeout; main has no subprocess timeout. The former 3600 is not native.",
+      "failure_policy": "Nonzero child exits still produce wrapper reports; exported exit_code preserves native failure.",
+      "outputs": "Detailed report and dependency snapshot are child-owned; report_file is not evidence that they exist."
+    }
+  }
+}

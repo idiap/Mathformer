@@ -1,0 +1,435 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_meta_skills_skill_projections_workflow
+version: 1.0.0
+kind: workflow
+description: Build skill projection cards, check their paths, and write cards followed
+  by a report.
+aliases:
+- meta-skills:skill-projections
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  SourceSnapshot:
+    representation: directory
+    schema:
+      type: object
+      description: Exact sorted registry paths relative to repository_root and distinct
+        projected skill IDs; adapters reject mismatches and domains over 10000. No
+        truncation.
+      required:
+      - registry_paths
+      - projected_skill_ids
+      properties:
+        registry_paths:
+          type: array
+          maxItems: 10000
+          items:
+            type: string
+        projected_skill_ids:
+          type: array
+          maxItems: 10000
+          uniqueItems: true
+          items:
+            type: string
+  Destinations:
+    schema:
+      type: object
+      properties:
+        output_path:
+          type: string
+          default: meta_skills/taxonomy/skill_projection_cards.json
+        report_path:
+          type: string
+          default: artifacts/meta_skills/skill_projection_report.json
+      additionalProperties: false
+  BuildState:
+    schema:
+      type: object
+      required:
+      - coordinates
+      - skill_paths
+      - cards
+      - findings
+      - registries
+      - pending_cards
+      - destinations
+      - repository_root
+      - card_order
+      - projected_skill_ids
+      properties:
+        coordinates:
+          type: object
+          description: Task ID to taxonomy row; later duplicate IDs overwrite earlier
+            rows.
+        skill_paths:
+          type: object
+          description: Skill directory name to discovered relative SKILL.md path.
+        cards:
+          type: object
+          maxProperties: 10000
+          description: Insertion-ordered skill ID to accumulated card.
+        findings:
+          type: array
+          items:
+            type: object
+        registries:
+          type: array
+          maxItems: 10000
+          items:
+            type: string
+        pending_cards:
+          type: array
+          maxItems: 10000
+          items:
+            type: string
+        destinations:
+          type: object
+        repository_root:
+          type: string
+        card_order:
+          type: array
+          maxItems: 10000
+          items:
+            type: string
+        projected_skill_ids:
+          type: array
+          maxItems: 10000
+          uniqueItems: true
+          items:
+            type: string
+  Done:
+    schema:
+      type: boolean
+  WrittenCards:
+    schema:
+      type: object
+      required:
+      - state
+      - output
+      - card_count
+      properties:
+        state:
+          type: object
+        output:
+          type: string
+        card_count:
+          type: integer
+          minimum: 0
+  Report:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - style
+      - ok
+      - card_count
+      - output
+      - findings
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: mathformer_meta_skill_projection_report
+        ok:
+          type: boolean
+        card_count:
+          type: integer
+          minimum: 0
+        output:
+          type: string
+        findings:
+          type: array
+          items:
+            type: object
+  RepositoryRoot:
+    schema:
+      type: string
+inputs:
+  source:
+    type: SourceSnapshot
+  destinations:
+    type: Destinations
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+operations:
+  initialize:
+    inputs:
+      source:
+        type: SourceSnapshot
+      destinations:
+        type: Destinations
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      state:
+        type: BuildState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_projections_initialize
+        operation: mathformer_skill_projections_initialize
+  registry_iteration:
+    inputs:
+      state:
+        type: BuildState
+    outputs:
+      state:
+        type: BuildState
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_projections_registry_iteration
+        operation: mathformer_skill_projections_registry_iteration
+  prepare_card_pass:
+    inputs:
+      state:
+        type: BuildState
+    outputs:
+      state:
+        type: BuildState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_projections_prepare_card_pass
+        operation: mathformer_skill_projections_prepare_card_pass
+  card_iteration:
+    inputs:
+      state:
+        type: BuildState
+    outputs:
+      state:
+        type: BuildState
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_projections_card_iteration
+        operation: mathformer_skill_projections_card_iteration
+  write_cards:
+    inputs:
+      state:
+        type: BuildState
+    outputs:
+      written:
+        type: WrittenCards
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_projections_write_cards
+        operation: mathformer_skill_projections_write_cards
+  write_report:
+    inputs:
+      written:
+        type: WrittenCards
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skill_projections_write_report
+        operation: mathformer_skill_projections_write_report
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments:
+      source:
+        ref: inputs.source
+      destinations:
+        ref: inputs.destinations
+      repository_root:
+        ref: inputs.repository_root
+  - id: registries
+    kind: loop
+    state_type: BuildState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 10000
+    on_exhausted: fail
+    body:
+      kind: call
+      operation: registry_iteration
+      arguments:
+        state:
+          ref: loop.state
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: BuildState
+        value:
+          ref: body.outputs.state
+  - id: prepare
+    kind: call
+    operation: prepare_card_pass
+    arguments:
+      state:
+        ref: steps.registries.outputs.state
+  - id: cards
+    kind: loop
+    state_type: BuildState
+    initial:
+      ref: steps.prepare.outputs.state
+    max_iterations: 10000
+    on_exhausted: fail
+    body:
+      kind: call
+      operation: card_iteration
+      arguments:
+        state:
+          ref: loop.state
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: BuildState
+        value:
+          ref: body.outputs.state
+  - id: write_cards
+    kind: call
+    operation: write_cards
+    arguments:
+      state:
+        ref: steps.cards.outputs.state
+  - id: write_report
+    kind: call
+    operation: write_report
+    arguments:
+      written:
+        ref: steps.write_cards.outputs.written
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.write_report.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      write:
+      - meta_skills/taxonomy/skill_projection_cards.json
+      - artifacts/meta_skills/skill_projection_report.json
+      - configured_destinations
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - build_skill_projection_artifacts
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 20004
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked projection description only; no runtime qualification
+    or scientific endorsement.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: meta_skills/scripts/build_skill_projections.py
+    digest: sha256:eaa4d1897430020626ad44179c67ca13854a67b638ca43391872ba9f6192bf83
+    selector: build
+  - path: scripts/skill_projection_tools.py
+    digest: sha256:56b84ce60312c6e40148c72981bba5303c9a8c399a6508cd0207b14102a73808
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: scripts/mathformer.py
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Repository-root context selects the native input tree. Manifest checks restrict
+    this specialization to 10000 registries and distinct cards; mismatches fail before
+    writes. Empty loops invoke a no-work adapter once. Card insertion order is carried
+    explicitly through serialized state.
+  - 'Nested composed-skill, taxonomy-field and coordinate-item loops remain inside
+    registry_iteration; their bounds are actual input lengths. Field normalization
+    remains inside card_iteration. No retries, convergence, or early success exist.
+
+    '
+  - 'Unhandled JSON, missing-key and filesystem exceptions terminate dependent execution.
+    Writes are sequential and nontransactional: a report-write failure can leave cards
+    written. A returned report with ok=false is still returned after both writes,
+    not a node exception.
+
+    '
+  - 'Hub preflight, dry-run, subprocess dispatch and write auditing are outside selected
+    build(). main() prints JSON or PASS/FAIL and exits 0/1 from report.ok. The test
+    suite overrides cards output and imposes 180 seconds; the dependency-free hub
+    leaf has no timeout.
+
+    '
+  - '3600 seconds and 20004 block calls are normalization metadata, not native limits.
+    The previous one-call ceiling described the opaque hub invocation; expanded block
+    accounting needs four fixed calls plus two bounded passes. Receipts are not native
+    logs.
+
+    '
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: meta-skills:skill-projections
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+  mathformer.native_boundary:
+    execution: Registered MCP step tools and build() share native implementations;
+      original CLI and hub dispatch remain available.
+    effects_status: partial_native_declarations
+    failure_policy: Preserve returned report.ok; main converts it to exit status without
+      suppressing writes.
+# REUSE-IgnoreEnd

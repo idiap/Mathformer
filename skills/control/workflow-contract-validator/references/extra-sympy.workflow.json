@@ -1,0 +1,717 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_formalphysics_extra_sympy_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Extended FormalPhysics SymPy generation through the registered hub command.",
+  "aliases": [
+    "formalphysics:extra-sympy"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Boundary": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "payload",
+          "snapshot"
+        ],
+        "properties": {
+          "payload": {
+            "type": "object"
+          },
+          "snapshot": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "Options": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "json",
+          "promote_lib"
+        ],
+        "properties": {
+          "json": {
+            "const": true
+          },
+          "promote_lib": {
+            "const": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "index",
+          "summaries",
+          "termination",
+          "stdout",
+          "stderr",
+          "summaries_json"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "summaries": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "object"
+            }
+          },
+          "termination": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "summaries_json": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Attempt": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "returned",
+          "summary",
+          "termination",
+          "stdout",
+          "stderr",
+          "summary_json"
+        ],
+        "properties": {
+          "returned": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "termination": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "summary_json": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "ProcessResult": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "returncode",
+          "stdout",
+          "stderr"
+        ],
+        "properties": {
+          "returncode": {
+            "type": "integer"
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "options": {
+      "type": "Options"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "prepare": {
+      "inputs": {
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "boundary": {
+          "type": "Boundary"
+        },
+        "execute": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_sympy_prepare",
+          "operation": "mathformer_extra_sympy_prepare"
+        }
+      }
+    },
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_sympy_initialize",
+          "operation": "mathformer_extra_sympy_initialize"
+        }
+      }
+    },
+    "visit": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "options": {
+          "type": "Options"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "attempt": {
+          "type": "Attempt"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_sympy_visit",
+          "operation": "mathformer_extra_sympy_visit"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "attempt": {
+          "type": "Attempt"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_sympy_advance",
+          "operation": "mathformer_extra_sympy_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "options": {
+          "type": "Options"
+        }
+      },
+      "outputs": {
+        "process": {
+          "type": "ProcessResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_sympy_finish",
+          "operation": "mathformer_extra_sympy_finish"
+        }
+      }
+    },
+    "audit": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        },
+        "process": {
+          "type": "ProcessResult"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_sympy_audit",
+          "operation": "mathformer_extra_sympy_audit"
+        }
+      }
+    },
+    "return_boundary": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_sympy_return_boundary",
+          "operation": "mathformer_extra_sympy_return_boundary"
+        }
+      }
+    },
+    "skip": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_sympy_skip",
+          "operation": "mathformer_extra_sympy_skip"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "cases",
+        "kind": "loop",
+        "description": "Eight fixed cases, no retry or repair. The eighth returned case sets done=true and exits normally; exhaustion is unreachable for this list. Child termination sets done=true earlier and skips remaining cases.",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 8,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "execute",
+              "when": {
+                "ref": "steps.prepare.outputs.execute"
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "visit",
+                    "kind": "call",
+                    "operation": "visit",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      },
+                      "options": {
+                        "ref": "inputs.options"
+                      },
+                      "context": {
+                        "ref": "inputs.context"
+                      }
+                    }
+                  },
+                  {
+                    "id": "advance",
+                    "kind": "call",
+                    "operation": "advance",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      },
+                      "attempt": {
+                        "ref": "steps.visit.outputs.attempt"
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "state": {
+                    "type": "State",
+                    "value": {
+                      "ref": "steps.advance.outputs.state"
+                    }
+                  },
+                  "done": {
+                    "type": "Flag",
+                    "value": {
+                      "ref": "steps.advance.outputs.done"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "skip",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "execute",
+            "when": {
+              "ref": "steps.prepare.outputs.execute"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "finish",
+                  "kind": "call",
+                  "operation": "finish",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.cases.outputs.state"
+                    },
+                    "options": {
+                      "ref": "inputs.options"
+                    }
+                  }
+                },
+                {
+                  "id": "audit",
+                  "kind": "call",
+                  "operation": "audit",
+                  "arguments": {
+                    "boundary": {
+                      "ref": "steps.prepare.outputs.boundary"
+                    },
+                    "process": {
+                      "ref": "steps.finish.outputs.process"
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "result": {
+                  "type": "HubResult",
+                  "value": {
+                    "ref": "steps.audit.outputs.result"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "return_boundary",
+          "arguments": {
+            "boundary": {
+              "ref": "steps.prepare.outputs.boundary"
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "HubResult",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.dispatch.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/",
+          "backends/sympy/MathformerSympyPhysics/",
+          "libraries/MathformerPhysicsLib/SymPy/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 20
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Native workflow completion establishes no scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/generate_formalphysics_extra_sympy.py",
+        "selector": "main",
+        "digest": "sha256:74b36398f6482ce6bff2686700575961454c9509c8cbf2c3c3f6bdf562f1bc59"
+      },
+      {
+        "path": "scripts/generate_formalphysics_original_two_sympy.py",
+        "selector": "write_case; run_tool; summary_for_case",
+        "digest": "sha256:472e64b1c7af4fb1b698bcb7bb140ee49a5d6e3fd7b3a7a27aaaec2b03fd302a"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry formalphysics:extra-sympy; run_action; prepare_leaf_boundary; run_leaf_action; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/formalphysics_extra_sympy_tools.py",
+        "selector": "register_extra_sympy_tools",
+        "digest": "sha256:1986f0c0f27a4b241ea3d68a3853f9912bf9071abec749e0df73b729b5d8e486"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_extra_sympy_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory formalphysics:extra-sympy",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Each case retains the native helper as an opaque operation; scientific payloads and external effects are not independently qualified.",
+      "The descriptor wall-time budget is enforced by Lunar, not by native hub or helper subprocess timeouts.",
+      "Native artifact writes remain subject to the unchanged hub write declarations; undeclared writes fail the final hub result.",
+      "Exception diagnostics retain their Python traceback with the staged observation frame instead of a child-process top-level frame."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "formalphysics:extra-sympy",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md"
+    },
+    "mathformer.native_boundary": {
+      "execution": "Native preflight and write audit around shared source case traversal, exposed by registered staged MCP tools.",
+      "command": [
+        "{python}",
+        "scripts/generate_formalphysics_extra_sympy.py",
+        "--json"
+      ],
+      "depends_on": [],
+      "allows_extra_args": false,
+      "timeout_seconds": null,
+      "specialization": "Required options are exactly json=true and promote_lib=false; other CLI branches are outside this hub route.",
+      "ordered_cases": [
+        "formalphysics_0066",
+        "formalphysics_0191",
+        "formalphysics_0172",
+        "formalphysics_0119",
+        "formalphysics_0026",
+        "formalphysics_0176",
+        "formalphysics_0054",
+        "formalphysics_0059"
+      ],
+      "carried_state": "Ordered summaries and index; stdout/stderr and termination carry the child-process observation across staged ports.",
+      "failure_policy": "Exceptions abort remaining cases; hub still audits child writes. Non-complete summaries continue and yield exit 3.",
+      "compiler_layout": "The loop is root-scoped for Lunar exhaustion handling. On rejected preflight or dry-run, initialization and one pure no-op loop turn only pack data; no case or finish/audit is called."
+    }
+  }
+}

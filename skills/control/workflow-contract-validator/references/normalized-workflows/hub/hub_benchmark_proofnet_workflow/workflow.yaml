@@ -1,0 +1,344 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_benchmark_proofnet_workflow
+version: 1.0.0
+kind: workflow
+description: ProofNet main parses a required command, then calls its selected handler
+  once. This projection describes native arguments and return codes, not a HubResult.
+aliases:
+- benchmark:proofnet
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  ExtraArguments:
+    representation: value
+    schema:
+      type: array
+      items:
+        type: string
+  ParsedArguments:
+    representation: value
+    schema:
+      type: object
+      required:
+      - command
+      - output
+      additionalProperties: false
+      properties:
+        command:
+          type: string
+          enum:
+          - download
+          - stats
+          - sample
+          - export-inputs
+        output:
+          type: string
+        cache_dir:
+          type:
+          - string
+          - 'null'
+        force:
+          type: boolean
+        no_optional:
+          type: boolean
+        split:
+          type: string
+          enum:
+          - validation
+          - test
+        n:
+          type: integer
+        output_file:
+          type: string
+        formal_language:
+          type: string
+        include_proof:
+          type: boolean
+  ExitCode:
+    representation: value
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 2
+  NativeOutput:
+    representation: value
+    schema:
+      type: string
+inputs:
+  extra_args:
+    type: ExtraArguments
+outputs:
+  result:
+    type: ExitCode
+    value:
+      ref: flow.outputs.result
+  stdout:
+    type: NativeOutput
+    value:
+      ref: flow.outputs.stdout
+operations:
+  parse:
+    inputs:
+      extra_args:
+        type: ExtraArguments
+    outputs:
+      args:
+        type: ParsedArguments
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_benchmark_parse
+        operation: mathformer_proofnet_benchmark_parse
+  download:
+    inputs:
+      args:
+        type: ParsedArguments
+    outputs:
+      result:
+        type: ExitCode
+      stdout:
+        type: NativeOutput
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_benchmark_download
+        operation: mathformer_proofnet_benchmark_download
+  stats:
+    inputs:
+      args:
+        type: ParsedArguments
+    outputs:
+      result:
+        type: ExitCode
+      stdout:
+        type: NativeOutput
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_benchmark_stats
+        operation: mathformer_proofnet_benchmark_stats
+  sample:
+    inputs:
+      args:
+        type: ParsedArguments
+    outputs:
+      result:
+        type: ExitCode
+      stdout:
+        type: NativeOutput
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_benchmark_sample
+        operation: mathformer_proofnet_benchmark_sample
+  export_inputs:
+    inputs:
+      args:
+        type: ParsedArguments
+    outputs:
+      result:
+        type: ExitCode
+      stdout:
+        type: NativeOutput
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_benchmark_export_inputs
+        operation: mathformer_proofnet_benchmark_export_inputs
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse
+    arguments:
+      extra_args:
+        ref: inputs.extra_args
+  - id: dispatch
+    kind: switch
+    description: Invoke args.func(args) once; enum makes default export-inputs.
+    cases:
+    - id: download
+      when:
+        eq:
+        - ref: steps.parse.outputs.args.command
+        - literal: download
+      body:
+        kind: call
+        operation: download
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+    - id: stats
+      when:
+        eq:
+        - ref: steps.parse.outputs.args.command
+        - literal: stats
+      body:
+        kind: call
+        operation: stats
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+    - id: sample
+      when:
+        eq:
+        - ref: steps.parse.outputs.args.command
+        - literal: sample
+      body:
+        kind: call
+        operation: sample
+        arguments:
+          args:
+            ref: steps.parse.outputs.args
+    default:
+      kind: call
+      operation: export_inputs
+      arguments:
+        args:
+          ref: steps.parse.outputs.args
+    outputs:
+      result:
+        type: ExitCode
+        value:
+          ref: selected.outputs.result
+      stdout:
+        type: NativeOutput
+        value:
+          ref: selected.outputs.stdout
+  outputs:
+    result:
+      type: ExitCode
+      value:
+        ref: steps.dispatch.outputs.result
+    stdout:
+      type: NativeOutput
+      value:
+        ref: steps.dispatch.outputs.stdout
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - data/
+      - artifacts/benchmarks/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 2
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source description only; completion establishes no proof or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: interface_only
+  sources:
+  - path: benchmarks/proofnet/proofnet.py
+    selector: main; parse_args; dispatch_args
+    digest: sha256:303ef560e99521acac2b8f436435b2c4def425d5257b232f61e4ae6c6b134dc7
+  - path: scripts/mathformer.py
+    selector: build_registry; run_action; run_leaf_action; prepare_leaf_boundary;
+      finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/proofnet_tools.py
+    selector: register_proofnet_tools; invoke; parse
+    digest: sha256:a2b20e8ab39d9afcb7bfcd8a6563135dd1260bcd939b23f01da1d0c6f567ee69
+  - path: scripts/mcp_server.py
+    selector: register_proofnet_tools; _proofnet_write_policy
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Helper loops remain inside native handlers, terminating at dataset EOF, finite
+    file list or Python slice bounds without artificial iteration caps or retry.
+  - ParsedArguments serializes paths and omits func; tools restore Paths and the matching
+    native callback.
+  - Argparse SystemExit fails the parse tool without dispatch or terminating the MCP
+    server.
+  - This graph exposes main native arguments and exit codes; hub preflight, subprocess
+    timeout and write audit remain properties of the separate hub boundary.
+  - Native stdout is returned and mirrored to server stderr for MCP framing; Lunar
+    owns execution receipts and provenance.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: benchmark:proofnet
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: benchmark:proofnet
+      family: benchmark
+      kind: utility
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - benchmarks/proofnet/proofnet.py
+      depends_on: []
+      allows_extra_args: true
+      timeout_seconds: 1200
+  mathformer.native_boundary:
+    execution: scripts/mathformer.py::run_action -> run_leaf_action; benchmark.workflow
+      selects benchmark:proofnet.
+    launch: Preflight failure or dry_run prevents launch; otherwise forward extra_args
+      and run once.
+    failure_policy: Timeout or nonzero exit fails HubResult; subsequent undeclared-write
+      audit can also fail it.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    scientific_payloads: ExitCode is main's return; stdout and files remain native
+      side effects.
+    limits: 3600 seconds and two modeled calls are normalization metadata; native
+      subprocess timeout is 1200 seconds.
+# REUSE-IgnoreEnd

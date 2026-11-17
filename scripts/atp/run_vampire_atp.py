@@ -1,0 +1,1 @@
+../run_vampire_atp.py

@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from lean_consistency_testing_loop import (
+    CompiledLeanArtifactSet,
+    ConsistencyReviewSet,
+    FormalValidity,
+    LeanConsistencyCase,
+    LeanConsistencyDisposition,
+    LeanFidelityCase,
+    LeanLibraryCase,
+    LeanMeaning,
+    LeanValidityCase,
+    LibraryCoherence,
+    ReferenceFreeAssessment,
+    SourceFidelity,
+)
+
+# Reverse-informalize the declarations and retain their line-level explanations.
+type RecoverLeanMeaning = (source: CompiledLeanArtifactSet) -> Generated[LeanMeaning]
+
+# Assess compilation, declaration shape, non-vacuity, and artifact realness.
+type AssessLeanValidity = (source: LeanValidityCase) -> Generated[FormalValidity]
+
+# Assess internal meaning and agreement with source anchors.
+type AssessSourceFidelity = (source: LeanFidelityCase) -> Generated[SourceFidelity]
+
+# Assess cross-file concepts and applicability of mathlib grounding.
+type AssessLibraryCoherence = (source: LeanLibraryCase) -> Generated[LibraryCoherence]
+
+# Compare independent findings and expose agreement, disagreement, and drift.
+type CompareConsistencyEvidence = (source: ConsistencyReviewSet) -> Generated[ReferenceFreeAssessment]
+
+# Produce the unified consistency status and retain every blocking finding.
+type CalibrateLeanConsistency = (source: LeanConsistencyCase) -> Generated[LeanConsistencyDisposition]

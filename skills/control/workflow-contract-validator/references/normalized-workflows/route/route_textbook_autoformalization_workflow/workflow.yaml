@@ -1,0 +1,434 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_textbook_autoformalization_workflow
+version: 1.0.0
+kind: workflow
+description: Execute the selected textbook validation route through the native hub.
+aliases:
+- textbook.autoformalization
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Context:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  Match:
+    schema:
+      type: object
+      required:
+      - route
+      - score
+      - matched_terms
+      properties:
+        route:
+          type: object
+          required:
+          - route_id
+          - action_ids
+          properties:
+            route_id:
+              type: string
+              const: textbook.autoformalization
+            action_ids:
+              type: array
+              const:
+              - test:family:textbook
+              items:
+                type: string
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+      description: JSON projection of the selected IntentMatch; native route metadata
+        is retained.
+  Registry:
+    schema:
+      type: object
+      additionalProperties:
+        type: object
+      description: Assertions of native WorkflowAction metadata; bindings materialize
+        only matching native declarations.
+  Mount:
+    schema:
+      type:
+      - string
+      - 'null'
+      description: Repository root; null uses the native default.
+  Action:
+    schema:
+      type: string
+      const: test:family:textbook
+  Count:
+    schema:
+      type: integer
+      const: 1
+  Boolean:
+    schema:
+      type: boolean
+  Child:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  State:
+    schema:
+      type: object
+      required:
+      - ok
+      - children
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          items:
+            type: object
+          maxItems: 1
+      additionalProperties: false
+  Result:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - ok
+      - status
+      - route
+      - children
+      properties:
+        schema_version:
+          type: integer
+          const: 1
+        ok:
+          type: boolean
+        status:
+          type: string
+          enum:
+          - intent_run_completed
+          - intent_run_failed
+        route:
+          type: object
+        children:
+          type: array
+          items:
+            type: object
+          minItems: 1
+          maxItems: 1
+      additionalProperties: false
+inputs:
+  context:
+    type: Context
+  match:
+    type: Match
+  registry:
+    type: Registry
+  repository_root:
+    type: Mount
+outputs:
+  result:
+    type: Result
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_textbook_route_initialize
+        operation: mathformer_textbook_route_initialize
+  select:
+    inputs:
+      state:
+        type: State
+      match:
+        type: Match
+    outputs:
+      action:
+        type: Action
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_textbook_route_select
+        operation: mathformer_textbook_route_select
+  execute:
+    inputs:
+      action:
+        type: Action
+      registry:
+        type: Registry
+      context:
+        type: Context
+      repository_root:
+        type: Mount
+    outputs:
+      child:
+        type: Child
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_textbook_route_execute
+        operation: mathformer_textbook_route_execute
+  advance:
+    inputs:
+      state:
+        type: State
+      child:
+        type: Child
+      context:
+        type: Context
+      action_count:
+        type: Count
+    outputs:
+      state:
+        type: State
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_textbook_route_advance
+        operation: mathformer_textbook_route_advance
+  finish:
+    inputs:
+      state:
+        type: State
+      match:
+        type: Match
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: Result
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_textbook_route_finish
+        operation: mathformer_textbook_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: Exact one-action route; done is true after its sole child, including
+      failure.
+    state_type: State
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: execute
+        kind: call
+        operation: execute
+        arguments:
+          action:
+            ref: steps.select.outputs.action
+          registry:
+            ref: inputs.registry
+          context:
+            ref: inputs.context
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.execute.outputs.child
+          context:
+            ref: inputs.context
+          action_count:
+            literal: 1
+      outputs:
+        state:
+          type: State
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: State
+        value:
+          ref: loop.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: Result
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Validation self-tests only; completion establishes no production
+    textbook artifact or scientific truth.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes; initialize_intent_state; select_intent_action;
+      advance_intent_state; finish_intent_state; run_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: run; prepare_checks; checks_pending; advance_check; finalize_checks
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: tests/test_matrix.json
+    digest: sha256:d4c98046613f686a2affceb6290419448ce02acdb50f2a3c6c4997555dc9858c
+  - path: scripts/mcp_server.py
+    selector: mathformer_ask; mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/textbook_route_tools.py
+    selector: register_textbook_route_tools; selected_match; checked_registry; check_state
+    digest: sha256:354e5259119f2d94b56cac7a2be0ccb19625cb803e5e0b340108fd1f52164d20
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: textbook_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: skills/latex-textbook/latex-archive-theory-extractor/scripts/extract_latex_theory.py
+    selector: run_self_test; main
+    digest: sha256:660df06a935e7fac08b9fdca016719368a4dd78c93a9d184b3c57d1aed539984
+  - path: skills/latex-textbook/textbook-theory-tex-organizer/scripts/organize_theory_tex.py
+    selector: run_self_test; main
+    digest: sha256:a753845b74d969f54cda8d355f026eaa9a68970da09ab600f81655128a48410d
+  - path: skills/latex-textbook/textbook-autoformalization-batch-orchestrator/scripts/build_textbook_autoformalization_batch.py
+    selector: run_self_test; main
+    digest: sha256:5a3e3f604311930a791707422151c8bb8a5a1e170f23f813d45b1d7ea3f5e31c
+  - path: skills/latex-textbook/textbook-autoformalization-batch-orchestrator/scripts/run_textbook_autoformalization_batch.py
+    selector: run_self_test; main
+    digest: sha256:93c11b180060bf221c75a93f64bb5e85754ea659c949b805ac8da15daafa4f63
+  gaps:
+  - run_action and downstream checks remain opaque native operations; payload schemas
+    describe transport, not scientific artifacts.
+  - Required v1 receipts, digests and provenance are supplied by Lunar execution;
+    optional native logs remain source-owned.
+  - The 3600-second ceiling and five block calls are Lunar limits, not a native route-wide
+    budget.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: textbook.autoformalization
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: textbook.autoformalization
+      title: Run textbook autoformalization controls
+      action_ids:
+      - test:family:textbook
+      operator_note: Runs the textbook family in the comprehensive test matrix.
+  mathformer.native_boundary:
+    execution: Registered MCP ports share the native route state helpers and run_action.
+      Route and registry projections assert native declarations and cannot install
+      commands.
+    callers: CLI main dispatches the top ask --run match; MCP mathformer_ask and mathformer_run_workflow
+      dispatch the route.
+    mcp_admission: Normalized identity resolves to the native route; route extra_args
+      are rejected; service write roots are checked before execution.
+    mounting: Pass an explicit repository_root to run_action; null preserves the CLI
+      default.
+    failure_policy: Returned child ok=false is data for advance and finish; unexpected
+      exceptions terminate without a packed route result.
+    leaf: tests/test_program/run_comprehensive_tests.py --module-family textbook --json.
+      Preflight errors return without launch; dry-run returns argv without execution.
+      Execution captures output with a 900-second timeout and audits repository writes.
+      Timeout, nonzero exit or undeclared writes set child ok=false.
+  mathformer.composition:
+    selection: Already selected fixed route; NL scoring and caller admission remain
+      outside this graph.
+    stopping: Action exhaustion or first failed child unless keep_going; one action
+      means keep_going adds no work.
+    bound: Exact source cardinality, constrained by Match; native done is true at
+      iteration one, so exhaustion failure is unreachable.
+    downstream: Native runner fixes matrix, ordered textbook selection and families,
+      then carries index and results while checks_pending. It attempts every selected
+      check despite ordinary failures, validates results, builds capability summary,
+      writes reports, and exits 0 or 3. Unexpected exceptions propagate.
+    current_checks: Four self-tests cover archive extraction, TeX organization, batch
+      building and batch running, with respective timeouts 120/120/120/180 seconds
+      and no optional dependency. These are validation self-tests, not a production
+      pipeline.
+# REUSE-IgnoreEnd

@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+# File Documentation
+#
+# Motivation:
+#   Automate repository maintenance tasks that would be error-prone if performed by hand.
+#
+# Intent:
+#   Expose command-line entry points for setup, generation, indexing, auditing, and proof execution.
+#
+# Function:
+#   Implements operational glue used by tests, skills, docs, and developer workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Generate high-grounded SymPy artifacts for the remaining top-10 FormalPhysics samples."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import sys
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from generate_formalphysics_original_two_sympy import (
+    CASES as TOP10_CASES,
+    json_safe,
+    write_case,
+)
+from backends.sympy.MathformerPhysicsSympy import (
+    pipeline,
+)
+
+EXTRA_CASE_IDS = (
+    "formalphysics_0066",
+    "formalphysics_0191",
+    "formalphysics_0172",
+    "formalphysics_0119",
+    "formalphysics_0026",
+    "formalphysics_0176",
+    "formalphysics_0054",
+    "formalphysics_0059",
+)
+
+CASES: dict[str, dict[str, str]] = {
+    case_id: TOP10_CASES[case_id] for case_id in EXTRA_CASE_IDS
+}
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--promote-lib",
+        action="store_true",
+        help="also copy generated SymPy artifacts into libraries/MathformerPhysicsLib/SymPy",
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="print full JSON instead of generated paths"
+    )
+    args = parser.parse_args()
+
+    summaries = [
+        write_case(case_id, case_spec, args.promote_lib)
+        for case_id, case_spec in CASES.items()
+    ]
+    result = {
+        "backend": "sympy",
+        "style": pipeline.STYLE,
+        "case_count": len(summaries),
+        "ok": all(summary["status"] == "complete" for summary in summaries),
+        "summaries": summaries,
+    }
+    if args.json:
+        print(json_safe(result))
+    else:
+        for summary in summaries:
+            print(summary["artifact"])
+            print(summary["reports"]["summary"])
+            print(summary["reports"]["consistency"])
+    return 0 if result["ok"] else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

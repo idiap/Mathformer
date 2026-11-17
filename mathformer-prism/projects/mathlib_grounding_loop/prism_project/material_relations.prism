@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathlib_grounding_loop import (
+    ApiPlanCase,
+    ConceptModel,
+    GroundingCase,
+    GroundingDisposition,
+    GroundingVerificationBasis,
+    ImportCase,
+    ImportCheck,
+    LeanApiPlan,
+    LeanFormalizationConceptDemand,
+    MathlibCandidateSet,
+    MathlibCoverageCase,
+    MathlibCoverageCheck,
+    MathlibGroundingDisposition,
+    MathlibGroundingEvidence,
+    MathlibGroundingMathlibApiPlanArtifact,
+    MathlibGroundingMathlibCompatibilityLoopArtifact,
+    MathlibGroundingMathlibCoverageArtifact,
+    MathlibGroundingMathlibDiscoveryArtifact,
+    MathlibGroundingMathlibGroundingMaximizeArtifact,
+    MathlibGroundingMathlibHierarchyDeclarationNeighborhoodArtifact,
+    MathlibGroundingMathlibHierarchyModuleTreeArtifact,
+    MathlibGroundingMathlibHierarchyNavigateArtifact,
+    MathlibGroundingMathlibImportPlanArtifact,
+    MathlibGroundingMathlibIndexBuildArtifact,
+    MathlibGroundingMathlibNavigationStateArtifact,
+    MathlibGroundingMathlibOntologyValidateArtifact,
+    MathlibGroundingMathlibResultExistenceSearchArtifact,
+    MathlibGroundingMathlibTermAnnotateArtifact,
+    MathlibGroundingMathlibVerifyArtifact,
+    MathlibGroundingMathlibWebEvidenceArtifact,
+    MathlibGroundingMathlibWebGroundingLoopArtifact,
+    MathlibGroundingMathlibWebStrategyArtifact,
+    MathlibSearchBasis,
+    MathlibSnapshot,
+)
+
+type SynthesizesMathlibCompatibilityLoopCertificate:
+    source: MathlibGroundingMathlibVerifyArtifact
+    target: Generated[MathlibGroundingMathlibCompatibilityLoopArtifact]
+
+relation SynthesizesMathlibCompatibilityLoop(
+    source: MathlibGroundingMathlibVerifyArtifact,
+    target: Generated[MathlibGroundingMathlibCompatibilityLoopArtifact],
+) -> SynthesizesMathlibCompatibilityLoopCertificate
+
+type GroundsMathlibWebGroundingLoopCertificate:
+    source: MathlibGroundingMathlibWebEvidenceArtifact
+    target: Generated[MathlibGroundingMathlibWebGroundingLoopArtifact]
+
+relation GroundsMathlibWebGroundingLoop(
+    source: MathlibGroundingMathlibWebEvidenceArtifact,
+    target: Generated[MathlibGroundingMathlibWebGroundingLoopArtifact],
+) -> GroundsMathlibWebGroundingLoopCertificate
+
+type RecommendsMathlibApiPlanCertificate:
+    source: MathlibGroundingMathlibGroundingMaximizeArtifact
+    target: Generated[MathlibGroundingMathlibApiPlanArtifact]
+
+relation RecommendsMathlibApiPlan(
+    source: MathlibGroundingMathlibGroundingMaximizeArtifact,
+    target: Generated[MathlibGroundingMathlibApiPlanArtifact],
+) -> RecommendsMathlibApiPlanCertificate

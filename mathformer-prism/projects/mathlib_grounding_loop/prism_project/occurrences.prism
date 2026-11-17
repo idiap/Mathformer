@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathlib_grounding_loop import (
+    ApiPlanCase,
+    ConceptModel,
+    GroundingCase,
+    GroundingDisposition,
+    GroundingVerificationBasis,
+    ImportCase,
+    ImportCheck,
+    LeanApiPlan,
+    LeanFormalizationConceptDemand,
+    MathlibCandidateSet,
+    MathlibCoverageCase,
+    MathlibCoverageCheck,
+    MathlibGroundingEvidence,
+    MathlibSearchBasis,
+    MathlibSnapshot,
+)
+
+# Resolve requested concepts, ambiguity, proof roles, and navigation bounds.
+type ModelConceptDemand = (source: LeanFormalizationConceptDemand) -> Generated[ConceptModel]
+
+# Observe a version-stamped declaration and import snapshot.
+type InspectMathlibSnapshot = (source: LeanFormalizationConceptDemand) -> Generated[MathlibSnapshot]
+
+# Search local indexes, hierarchy neighborhoods, and official-source fallbacks for candidate declarations.
+type RetrieveMathlibCandidates = (source: MathlibSearchBasis) -> Generated[MathlibCandidateSet]
+
+# Verify snapshot-bound declaration applicability and retain the supporting evidence.
+type VerifyMathlibGrounding = (source: GroundingVerificationBasis) -> Generated[MathlibGroundingEvidence]
+
+# Assess whether every demanded concept has verified coverage or an explicit gap.
+type AssessConceptCoverage = (source: MathlibCoverageCase) -> Generated[MathlibCoverageCheck]
+
+# Select declarations and narrow imports while keeping unresolved gaps visible.
+type PlanLeanAPIs = (source: ApiPlanCase) -> Generated[LeanApiPlan]
+
+# Check selected APIs in the intended import and namespace context.
+type AssessImportContext = (source: ImportCase) -> Generated[ImportCheck]
+
+# Return the verified API plan together with coverage, compatibility, and explicit gaps.
+type CalibrateGroundingStatus = (source: GroundingCase) -> Generated[GroundingDisposition]

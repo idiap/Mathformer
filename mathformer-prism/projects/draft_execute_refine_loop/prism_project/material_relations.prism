@@ -1,0 +1,126 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from draft_execute_refine_loop import (
+    DraftExecuteRefineAnnotateLineCommentGuardArtifact,
+    DraftExecuteRefineCheckCompileArtifact,
+    DraftExecuteRefineCritiqueLogicalSoundnessArtifact,
+    DraftExecuteRefineCritiqueMathlibAlignmentArtifact,
+    DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact,
+    DraftExecuteRefineCritiqueSemanticArtifact,
+    DraftExecuteRefineCritiqueSemanticPreservationArtifact,
+    DraftExecuteRefineCritiqueSuiteArtifact,
+    DraftExecuteRefineCritiqueSyntaxArtifact,
+    DraftExecuteRefineDraftInitialArtifact,
+    DraftExecuteRefineDraftSeedArtifact,
+    DraftExecuteRefineExecuteInitialArtifact,
+    DraftExecuteRefineOutputDenoiseArtifact,
+    DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact,
+    DraftExecuteRefineRefineFormalArtifact,
+    DraftExecuteRefineRefineSemanticArtifact,
+    LeanDraft,
+    LeanExecutionEvidence,
+    LeanFormalAssessment,
+    LeanFormalReviewCase,
+    LeanFormalizationDraftBrief,
+    LeanLibraryAssessment,
+    LeanLibraryReviewCase,
+    LeanRefinementDisposition,
+    LeanRefinementOutcome,
+    LeanReviewCase,
+    LeanRevisionCase,
+    LeanSemanticAssessment,
+    RefinementCase,
+    RevisedLeanDraft,
+)
+
+type FormalizesDraftInitialCertificate:
+    source: LeanFormalizationDraftBrief
+    target: Generated[DraftExecuteRefineDraftInitialArtifact]
+
+relation FormalizesDraftInitial(
+    source: LeanFormalizationDraftBrief,
+    target: Generated[DraftExecuteRefineDraftInitialArtifact],
+) -> FormalizesDraftInitialCertificate
+
+type TestsCritiqueSemanticCertificate:
+    source: DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact
+    target: Generated[DraftExecuteRefineCritiqueSemanticArtifact]
+
+relation TestsCritiqueSemantic(
+    source: DraftExecuteRefinePostformalizationSourceAnchorDriftGuardArtifact,
+    target: Generated[DraftExecuteRefineCritiqueSemanticArtifact],
+) -> TestsCritiqueSemanticCertificate
+
+type TestsCritiqueSyntaxCertificate:
+    source: DraftExecuteRefineCritiqueSemanticArtifact
+    target: Generated[DraftExecuteRefineCritiqueSyntaxArtifact]
+
+relation TestsCritiqueSyntax(
+    source: DraftExecuteRefineCritiqueSemanticArtifact,
+    target: Generated[DraftExecuteRefineCritiqueSyntaxArtifact],
+) -> TestsCritiqueSyntaxCertificate
+
+type TestsCritiqueSemanticPreservationCertificate:
+    source: DraftExecuteRefineCritiqueSyntaxArtifact
+    target: Generated[DraftExecuteRefineCritiqueSemanticPreservationArtifact]
+
+relation TestsCritiqueSemanticPreservation(
+    source: DraftExecuteRefineCritiqueSyntaxArtifact,
+    target: Generated[DraftExecuteRefineCritiqueSemanticPreservationArtifact],
+) -> TestsCritiqueSemanticPreservationCertificate
+
+type TestsCritiqueLogicalSoundnessCertificate:
+    source: DraftExecuteRefineCritiqueSemanticPreservationArtifact
+    target: Generated[DraftExecuteRefineCritiqueLogicalSoundnessArtifact]
+
+relation TestsCritiqueLogicalSoundness(
+    source: DraftExecuteRefineCritiqueSemanticPreservationArtifact,
+    target: Generated[DraftExecuteRefineCritiqueLogicalSoundnessArtifact],
+) -> TestsCritiqueLogicalSoundnessCertificate
+
+type TestsCritiqueMathlibAlignmentCertificate:
+    source: DraftExecuteRefineCritiqueLogicalSoundnessArtifact
+    target: Generated[DraftExecuteRefineCritiqueMathlibAlignmentArtifact]
+
+relation TestsCritiqueMathlibAlignment(
+    source: DraftExecuteRefineCritiqueLogicalSoundnessArtifact,
+    target: Generated[DraftExecuteRefineCritiqueMathlibAlignmentArtifact],
+) -> TestsCritiqueMathlibAlignmentCertificate
+
+type TestsCritiqueSuiteCertificate:
+    source: DraftExecuteRefineCritiqueMathlibAlignmentArtifact
+    target: Generated[DraftExecuteRefineCritiqueSuiteArtifact]
+
+relation TestsCritiqueSuite(
+    source: DraftExecuteRefineCritiqueMathlibAlignmentArtifact,
+    target: Generated[DraftExecuteRefineCritiqueSuiteArtifact],
+) -> TestsCritiqueSuiteCertificate
+
+type FormalizesRefineFormalCertificate:
+    source: DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact
+    target: Generated[DraftExecuteRefineRefineFormalArtifact]
+
+relation FormalizesRefineFormal(
+    source: DraftExecuteRefineCritiqueReferenceFreeMonitorArtifact,
+    target: Generated[DraftExecuteRefineRefineFormalArtifact],
+) -> FormalizesRefineFormalCertificate
+
+type FormalizesRefineSemanticCertificate:
+    source: DraftExecuteRefineRefineFormalArtifact
+    target: Generated[DraftExecuteRefineRefineSemanticArtifact]
+
+relation FormalizesRefineSemantic(
+    source: DraftExecuteRefineRefineFormalArtifact,
+    target: Generated[DraftExecuteRefineRefineSemanticArtifact],
+) -> FormalizesRefineSemanticCertificate
+
+type FormalizesOutputDenoiseCertificate:
+    source: DraftExecuteRefineRefineSemanticArtifact
+    target: Generated[DraftExecuteRefineOutputDenoiseArtifact]
+
+relation FormalizesOutputDenoise(
+    source: DraftExecuteRefineRefineSemanticArtifact,
+    target: Generated[DraftExecuteRefineOutputDenoiseArtifact],
+) -> FormalizesOutputDenoiseCertificate

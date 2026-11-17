@@ -1,0 +1,360 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Optional immutable invocation receipts using the existing reasoning-log schema.
+
+Only public JSON results and explicitly approved metadata belong in receipts.
+The recorder never retries an operation and its failures cannot replace outcomes.
+Digests detect inconsistency, not malicious replacement of every receipt file.
+"""
+
+from __future__ import annotations
+
+from contextvars import ContextVar
+import hashlib
+import html
+import json
+from pathlib import Path
+from typing import Any, Callable, Mapping, TypeVar
+from uuid import uuid4
+import warnings
+
+from reasoning_log import append_skill_start, append_skill_complete, append_skill_error
+
+T = TypeVar("T")
+_CURRENT: ContextVar[str | None] = ContextVar("adoption_invocation", default=None)
+METADATA_KEYS = frozenset(
+    {
+        "skill_id",
+        "operation_id",
+        "action_id",
+        "schema_version",
+        "metadata_version",
+        "source_digest",
+        "result_authority",
+        "invocation_mechanism",
+        "generation_boundary",
+        "execution_mode",
+        "attempt",
+        "fixture",
+        "contract_digest",
+        "skill_label",
+        "capability",
+        "reasoning_mapping",
+        "mapping_sources",
+    }
+)
+
+
+def canonical_bytes(value: Any) -> bytes:
+    """Encode strict JSON deterministically, rejecting coercion and nonfinite numbers."""
+
+    def check(item: Any) -> None:
+        if item is None or type(item) in (str, bool, int, float):
+            return
+        if type(item) is list:
+            for child in item:
+                check(child)
+            return
+        if type(item) is dict and all(type(key) is str for key in item):
+            for child in item.values():
+                check(child)
+            return
+        raise ValueError("Receipt values must be strict JSON")
+
+    check(value)
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def canonical_digest(value: Any) -> str:
+    """Hash the canonical UTF-8 JSON snapshot."""
+    return hashlib.sha256(canonical_bytes(value)).hexdigest()
+
+
+def _diagnostic() -> None:
+    """Expose recorder failure without disclosing payloads or affecting execution."""
+    try:
+        warnings.warn(
+            "Optional adoption provenance recording failed",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    except Exception:
+        pass
+
+
+def _write(path: Path, value: Any) -> None:
+    """Create a receipt once; never overwrite prior invocation evidence."""
+    data = canonical_bytes(value)
+    with path.open("xb") as stream:
+        stream.write(data + b"\n")
+
+
+def invoke_recorded(
+    operation: Callable[[], T],
+    metadata: Mapping[str, Any],
+    output_dir: str | Path | None,
+    *,
+    parent_invocation_id: str | None = None,
+) -> T:
+    """Run once, preserving the exact return object or original BaseException.
+
+    ``None`` disables recording. Each enabled invocation gets a new directory.
+    Nested synchronous calls inherit the parent through context-local state.
+    Retry policy remains with the caller; each call is a separate attempt.
+    """
+    if output_dir is None:
+        return operation()
+    invocation_id = uuid4().hex
+    parent = parent_invocation_id or _CURRENT.get()
+    token = _CURRENT.set(invocation_id)
+    directory = None
+    snapshot: dict[str, Any] = {}
+    try:
+        try:
+            copied = dict(metadata)
+            if set(copied) - METADATA_KEYS:
+                raise ValueError("Unknown metadata field")
+            snapshot = json.loads(canonical_bytes(copied))
+            directory = Path(output_dir) / invocation_id
+            directory.mkdir(parents=True, exist_ok=False)
+            append_skill_start(
+                directory / "reasoning.jsonl",
+                skill=str(snapshot.get("skill_id", "portable-adoption")),
+                skill_call_id=invocation_id,
+                parent_call_id=parent,
+                inputs={"metadata_digest": canonical_digest(snapshot)},
+            )
+        except Exception:
+            directory = None
+            _diagnostic()
+        try:
+            result = operation()
+        except BaseException as exc:
+            if directory is not None:
+                _finish(
+                    directory,
+                    snapshot,
+                    invocation_id,
+                    parent,
+                    "failed" if isinstance(exc, Exception) else "cancelled",
+                    {"exception_type": type(exc).__name__},
+                )
+            raise
+        if directory is not None:
+            _finish(directory, snapshot, invocation_id, parent, "complete", result)
+        return result
+    finally:
+        _CURRENT.reset(token)
+
+
+def _finish(
+    directory: Path,
+    metadata: dict,
+    invocation_id: str,
+    parent: str | None,
+    status: str,
+    result: Any,
+) -> None:
+    """Snapshot outcomes before rendering; fail independently of the operation."""
+    try:
+        # Round-trip before any write severs references to mutable caller objects.
+        outcome = json.loads(canonical_bytes(result))
+        terminal = {
+            "schema_version": 1,
+            "invocation_id": invocation_id,
+            "parent_invocation_id": parent,
+            "status": status,
+            "result": outcome,
+        }
+        terminal_digest = canonical_digest(terminal)
+        _write(directory / "result.json", terminal)
+        common: dict[str, Any] = dict(
+            skill=str(metadata.get("skill_id", "portable-adoption")),
+            skill_call_id=invocation_id,
+            parent_call_id=parent,
+            evidence={
+                "result_digest": terminal_digest,
+                "metadata_digest": canonical_digest(metadata),
+            },
+            artifacts={"result": "result.json"},
+        )
+        if status == "complete":
+            append_skill_complete(directory / "reasoning.jsonl", **common)
+        else:
+            append_skill_error(directory / "reasoning.jsonl", error=status, **common)
+        log_digest = hashlib.sha256(
+            (directory / "reasoning.jsonl").read_bytes()
+        ).hexdigest()
+        _write(
+            directory / "provenance.json",
+            {
+                "schema_version": 1,
+                "invocation_id": invocation_id,
+                "parent_invocation_id": parent,
+                "status": status,
+                "metadata": metadata,
+                "metadata_digest": canonical_digest(metadata),
+                "result_digest": terminal_digest,
+                "reasoning_digest": log_digest,
+            },
+        )
+    except Exception:
+        _diagnostic()
+
+
+def _parse_json(text: str) -> Any:
+    """Reject duplicate JSON keys and nonfinite values in offline evidence."""
+
+    def pairs(items: list) -> dict:
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError("Duplicate JSON key")
+            result[key] = value
+        return result
+
+    value = json.loads(text, object_pairs_hook=pairs)
+    canonical_bytes(value)
+    return value
+
+
+def _read_json(path: Path) -> Any:
+    """Read strict JSON evidence without modifying it."""
+    return _parse_json(path.read_text(encoding="utf-8"))
+
+
+def validate_invocation(directory: str | Path) -> dict:
+    """Check terminal digests and every cross-view invocation join without executing."""
+    directory = Path(directory)
+    try:
+        provenance = _read_json(directory / "provenance.json")
+        terminal = _read_json(directory / "result.json")
+        raw_log = (directory / "reasoning.jsonl").read_bytes()
+        events = [
+            _parse_json(line.decode("utf-8"))
+            for line in raw_log.splitlines()
+            if line.strip()
+        ]
+        metadata = provenance["metadata"]
+        invocation_id = provenance["invocation_id"]
+        parent = provenance["parent_invocation_id"]
+        if (
+            provenance["schema_version"] != 1
+            or terminal["schema_version"] != 1
+            or not isinstance(invocation_id, str)
+            or len(invocation_id) != 32
+            or any(ch not in "0123456789abcdef" for ch in invocation_id)
+            or (parent is not None and not isinstance(parent, str))
+            or parent == invocation_id
+            or set(metadata) - METADATA_KEYS
+            or provenance["metadata_digest"] != canonical_digest(metadata)
+            or provenance["result_digest"] != canonical_digest(terminal)
+            or provenance["reasoning_digest"] != hashlib.sha256(raw_log).hexdigest()
+            or terminal["invocation_id"] != invocation_id
+            or terminal["parent_invocation_id"] != parent
+            or terminal["status"] != provenance["status"]
+            or terminal["status"] not in ("complete", "failed", "cancelled")
+            or len(events) != 2
+        ):
+            raise ValueError("Receipt identity or digest mismatch")
+        expected_terminal = (
+            "skill_application_complete"
+            if terminal["status"] == "complete"
+            else "skill_application_error"
+        )
+        for index, (event, step) in enumerate(
+            zip(events, ("skill_application_start", expected_terminal)), 1
+        ):
+            payload = event["payload"]
+            application = payload["skill_application"]
+            if (
+                event["step"] != step
+                or event["event_index"] != index
+                or payload["skill_call_id"] != invocation_id
+                or payload["parent_call_id"] != parent
+                or application["skill_call_id"] != invocation_id
+                or application["parent_call_id"] != parent
+                or application["skill"]
+                != str(metadata.get("skill_id", "portable-adoption"))
+                or payload["skill"] != application["skill"]
+                or application["status"]
+                != (
+                    "running"
+                    if index == 1
+                    else ("complete" if terminal["status"] == "complete" else "error")
+                )
+            ):
+                raise ValueError("Reasoning log invocation join mismatch")
+        start = events[0]["payload"]["skill_application"]
+        evidence = events[1]["payload"]["skill_application"]["evidence"]
+        if (
+            start["inputs"]["metadata_digest"] != provenance["metadata_digest"]
+            or evidence["metadata_digest"] != provenance["metadata_digest"]
+            or evidence["result_digest"] != provenance["result_digest"]
+        ):
+            raise ValueError("Reasoning log digest join mismatch")
+        return provenance
+    except (OSError, KeyError, TypeError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Incomplete or malformed invocation receipt") from exc
+
+
+def render_summary(directory: str | Path) -> str:
+    """Render validated evidence only; do not execute tools or generate explanations."""
+    record = validate_invocation(directory)
+    rows = [
+        ("Invocation", record["invocation_id"]),
+        ("Status", record["status"]),
+        ("Result SHA-256", record["result_digest"]),
+    ]
+    rows.extend(
+        (key, json.dumps(value, ensure_ascii=False, sort_keys=True))
+        for key, value in sorted(record["metadata"].items())
+    )
+    return (
+        '<!doctype html><html><meta charset="utf-8"><title>Invocation receipt</title><body><dl>'
+        + "".join(
+            "<dt>" + html.escape(key) + "</dt><dd>" + html.escape(str(value)) + "</dd>"
+            for key, value in rows
+        )
+        + "</dl></body></html>\n"
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Validate or render existing receipts through a read-only CLI."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=("validate", "render"))
+    parser.add_argument("invocation_dir", type=Path)
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "render":
+            print(render_summary(args.invocation_dir), end="")
+        else:
+            print(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "provenance": validate_invocation(args.invocation_dir),
+                    },
+                    sort_keys=True,
+                )
+            )
+    except ValueError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, sort_keys=True))
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

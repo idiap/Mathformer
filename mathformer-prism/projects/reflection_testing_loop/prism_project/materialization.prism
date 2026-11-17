@@ -1,0 +1,190 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from reflection_testing_loop import (
+    ImprovementCase,
+    MathformerProcessImprovementDisposition,
+    MathformerWorkflowTrajectoryEvidence,
+    ProcessDisposition,
+    ReflectionTestingControlWorkflowContractArtifact,
+    ReflectionTestingCritiqueReferenceFreeMonitorArtifact,
+    ReflectionTestingEvaluationRfdeReportArtifact,
+    ReflectionTestingReflectionProcessRefinementArtifact,
+    ReflectionTestingTestSkillProgramArtifact,
+    RevisionBasis,
+    RevisionEvidence,
+    RevisionTestCase,
+    TrajectoryAssessment,
+    WorkflowRevision,
+)
+from material_relations import FormalizesReflectionProcessRefinementCertificate
+from reasoning import RefineMathformerWorkflow
+from relations import CalibrateImprovementCertificate
+from relations import ReviseFromTrajectoryCertificate
+from relations import TestRevisionCertificate
+from generated.reflection_process_refinement_skill import autoformalization_reflective_refinement_loop_skill as reflection_process_refinement_skill_binding
+from generated.reasoning_trajectory_assessment_1_skill import reference_free_critic_monitor_skill as trajectory_assessment_reasoning_skill_1
+from generated.reasoning_trajectory_assessment_2_skill import reference_free_descriptive_evaluator_skill as trajectory_assessment_reasoning_skill_2
+from generated.reasoning_workflow_revision_1_skill import autoformalization_reflective_refinement_loop_skill as workflow_revision_reasoning_skill_1
+from generated.reasoning_revision_evidence_1_skill import skill_test_program_orchestrator_skill as revision_evidence_reasoning_skill_1
+from generated.reasoning_improvement_status_1_skill import workflow_contract_validator_skill as improvement_status_reasoning_skill_1
+from generated.reasoning_improvement_status_2_skill import skill_hook_coverage_maximizer_skill as improvement_status_reasoning_skill_2
+
+def workflow_revision_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ReviseFromTrajectoryCertificate[SourceValue, TargetValue]:
+    return ReviseFromTrajectoryCertificate(source = source, target = target)
+
+def revision_evidence_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestRevisionCertificate[SourceValue, TargetValue]:
+    return TestRevisionCertificate(source = source, target = target)
+
+def improvement_status_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> CalibrateImprovementCertificate[SourceValue, TargetValue]:
+    return CalibrateImprovementCertificate(source = source, target = target)
+
+# Generative interpretation AssessWorkflowTrajectory uses skill context selected from material steps: critique_reference_free_monitor, evaluation_rfde_report.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: reference-free-critic-monitor, reference-free-descriptive-evaluator.
+agent trajectory_assessment_reasoning_agent(
+    task: MathformerWorkflowTrajectoryEvidence,
+) -> Result[Generated[TrajectoryAssessment], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[MathformerWorkflowTrajectoryEvidence] = [trajectory_assessment_reasoning_skill_1, trajectory_assessment_reasoning_skill_2]
+
+# Generative interpretation ProposeMonotoneRevision uses skill context selected from material steps: reflection_process_refinement.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: autoformalization-reflective-refinement-loop.
+agent workflow_revision_reasoning_agent(
+    task: RevisionBasis,
+) -> Result[Generated[WorkflowRevision], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[RevisionBasis] = [workflow_revision_reasoning_skill_1]
+
+# Generative interpretation TestRevisionAgainstBaseline uses skill context selected from material steps: test_skill_program.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: skill-test-program-orchestrator.
+agent revision_evidence_reasoning_agent(
+    task: RevisionTestCase,
+) -> Result[Generated[RevisionEvidence], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[RevisionTestCase] = [revision_evidence_reasoning_skill_1]
+
+# Generative interpretation DecideRevisionAdoption uses skill context selected from material steps: control_workflow_contract, control_skill_hook_coverage.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: workflow-contract-validator, skill-hook-coverage-maximizer.
+agent improvement_status_reasoning_agent(
+    task: ImprovementCase,
+) -> Result[Generated[ProcessDisposition], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ImprovementCase] = [improvement_status_reasoning_skill_1, improvement_status_reasoning_skill_2]
+
+converted_reasoning = RefineMathformerWorkflow(
+    trajectory_assessment = trajectory_assessment_reasoning_agent,
+    workflow_revision = workflow_revision_reasoning_agent,
+    workflow_revision_by = workflow_revision_reasoning_relation_builder,
+    revision_evidence = revision_evidence_reasoning_agent,
+    revision_evidence_by = revision_evidence_reasoning_relation_builder,
+    improvement_status = improvement_status_reasoning_agent,
+    improvement_status_by = improvement_status_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `reference-free-critic-monitor`; this does not execute the linked native resource.
+def critique_reference_free_monitor_material_binding(source: MathformerWorkflowTrajectoryEvidence) -> Computed[ReflectionTestingCritiqueReferenceFreeMonitorArtifact]:
+    artifact = ReflectionTestingCritiqueReferenceFreeMonitorArtifact(
+        subject = "typed material binding for critique_reference_free_monitor",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: critique_reference_free_monitor")
+
+# Material binding descriptor for `reference-free-descriptive-evaluator`; this does not execute the linked native resource.
+def evaluation_rfde_report_material_binding(source: ReflectionTestingCritiqueReferenceFreeMonitorArtifact) -> Computed[ReflectionTestingEvaluationRfdeReportArtifact]:
+    artifact = ReflectionTestingEvaluationRfdeReportArtifact(
+        subject = "typed material binding for evaluation_rfde_report",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation evaluation_rfde_report",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: evaluation_rfde_report")
+
+# Epistemic occurrence owned by `autoformalization-reflective-refinement-loop`; output assurance remains Generated.
+agent reflection_process_refinement_agent(
+    task: ReflectionTestingEvaluationRfdeReportArtifact,
+) -> Result[Generated[ReflectionTestingReflectionProcessRefinementArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ReflectionTestingEvaluationRfdeReportArtifact] = [reflection_process_refinement_skill_binding]
+
+def reflection_process_refinement_relation_builder(
+    source: ReflectionTestingEvaluationRfdeReportArtifact,
+    target: Generated[ReflectionTestingReflectionProcessRefinementArtifact],
+) -> FormalizesReflectionProcessRefinementCertificate:
+    return FormalizesReflectionProcessRefinementCertificate(source = source, target = target)
+
+# Material binding descriptor for `skill-test-program-orchestrator`; this does not execute the linked native resource.
+def test_skill_program_material_binding(source: ReflectionTestingReflectionProcessRefinementArtifact) -> Computed[ReflectionTestingTestSkillProgramArtifact]:
+    artifact = ReflectionTestingTestSkillProgramArtifact(
+        subject = "typed material binding for test_skill_program",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation test_skill_program",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: test_skill_program")
+
+# Material binding descriptor for `workflow-contract-validator`; this does not execute the linked native resource.
+def control_workflow_contract_material_binding(source: ReflectionTestingTestSkillProgramArtifact) -> Computed[ReflectionTestingControlWorkflowContractArtifact]:
+    artifact = ReflectionTestingControlWorkflowContractArtifact(
+        subject = "typed material binding for control_workflow_contract",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation control_workflow_contract",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: control_workflow_contract")
+
+# Material binding descriptor for `skill-hook-coverage-maximizer`; this does not execute the linked native resource.
+def control_skill_hook_coverage_material_binding(source: ReflectionTestingControlWorkflowContractArtifact) -> Computed[MathformerProcessImprovementDisposition]:
+    artifact = MathformerProcessImprovementDisposition(
+        subject = "typed material binding for control_skill_hook_coverage",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation control_skill_hook_coverage",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: control_skill_hook_coverage")
+
+# monotonic process improvement with deterministic and content-skill regression checks.
+workflow ReflectionTestingLoop(
+    workflow_source: MathformerWorkflowTrajectoryEvidence,
+) -> Computed[MathformerProcessImprovementDisposition]
+    fails ModelFailure
+    ! {AI.Generate, Context.Disclose}:
+    sequence:
+        [critique_reference_free_monitor: critique_reference_free_monitor_material_binding(workflow_source)]
+        [evaluation_rfde_report: evaluation_rfde_report_material_binding(critique_reference_free_monitor.value)]
+        [reflection_process_refinement: reflection_process_refinement_agent(evaluation_rfde_report.value)]
+        [test_skill_program: test_skill_program_material_binding(reflection_process_refinement.value)]
+        [control_workflow_contract: control_workflow_contract_material_binding(test_skill_program.value)]
+        [control_skill_hook_coverage: control_skill_hook_coverage_material_binding(control_workflow_contract.value)]
+    return control_skill_hook_coverage

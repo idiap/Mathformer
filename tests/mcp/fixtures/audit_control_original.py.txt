@@ -1,0 +1,280 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Frozen source audit functions for behavioral comparison; never production imports.
+from __future__ import annotations
+from pathlib import Path
+import importlib.util
+import re
+REPO_ROOT = Path.cwd()
+
+def rel(path: Path) -> str:
+    """Return a repository-relative path when possible.
+
+    Motivation:
+        Make hub output stable across machines and readable in reports.
+
+    Intent:
+        Prefer short repo-relative strings while still accepting absolute paths
+        from subprocess metadata.
+
+    Inputs:
+        `path` may be inside or outside the repository.
+
+    Outputs:
+        A normalized display string.
+    """
+
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+def extract_python_paths_from_commands(commands: Iterable[Sequence[str]]) -> Set[str]:
+    """Extract repository Python script paths from command arrays.
+
+    Motivation:
+        The hub audit needs a common representation of scripts controlled by
+        actions, tests, and skill hooks.
+
+    Intent:
+        Identify argv entries that are repo-relative `.py` files.
+
+    Inputs:
+        An iterable of argv sequences.
+
+    Outputs:
+        A set of normalized repository-relative Python paths.
+    """
+
+    paths: Set[str] = set()
+    for command in commands:
+        for part in command:
+            if part.endswith(".py") and not part.startswith("-"):
+                candidate = (REPO_ROOT / part).resolve()
+                if candidate.exists():
+                    paths.add(rel(candidate))
+    return paths
+
+def load_test_matrix_commands() -> Set[str]:
+    """Load Python script paths from the comprehensive test matrix.
+
+    Motivation:
+        Avoid duplicating every skill smoke test in the hub while still knowing
+        those workflows are controlled by the matrix.
+
+    Intent:
+        Import `run_comprehensive_tests.py` and read its built-in command list
+        without executing the commands.
+
+    Inputs:
+        None.
+
+    Outputs:
+        A set of repo-relative Python script paths referenced by matrix checks.
+    """
+
+    matrix_path = REPO_ROOT / "tests" / "test_program" / "run_comprehensive_tests.py"
+    if not matrix_path.exists():
+        return set()
+    spec = importlib.util.spec_from_file_location(
+        "mathformer_test_program", matrix_path
+    )
+    if spec is None or spec.loader is None:
+        return set()
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if not hasattr(module, "load_matrix"):
+        return set()
+    matrix = module.load_matrix()
+    return extract_python_paths_from_commands(
+        item.get("command", []) for item in matrix
+    )
+
+def load_skill_hook_scripts() -> Set[str]:
+    """Read skill-owned scripts from `skills/SKILL_HOOKS.yaml`.
+
+    Motivation:
+        The skill-hook contract is the control layer for specialized agent
+        workflows, so the hub audit should trust scripts listed there.
+
+    Intent:
+        Use a dependency-free line parser for repo-relative Python paths.
+
+    Inputs:
+        None.
+
+    Outputs:
+        A set of repo-relative skill script paths.
+    """
+
+    hook_path = REPO_ROOT / "skills" / "SKILL_HOOKS.yaml"
+    if not hook_path.exists():
+        return set()
+    text = hook_path.read_text(encoding="utf-8")
+    return set(
+        re.findall(
+            r"skills/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/scripts/[A-Za-z0-9_./-]+\.py", text
+        )
+    )
+
+def discover_python_entrypoints() -> Set[str]:
+    """Discover repository Python entrypoints governed by workflow controls.
+
+    Motivation:
+        Find new scripts that might bypass the hub or skill-hook contract.
+
+    Intent:
+        Inspect top-level scripts, test runners, and skill scripts while
+        excluding package internals that are imported rather than invoked.
+
+    Inputs:
+        None.
+
+    Outputs:
+        A set of repo-relative Python files that should be controlled.
+    """
+
+    paths: Set[str] = set()
+    for pattern in (
+        "scripts/*.py",
+        "tests/**/*.py",
+        "skills/*/*/scripts/*.py",
+        "benchmarks/**/*.py",
+        "paper_skills/*/scripts/*.py",
+        "examples/*.py",
+    ):
+        for path in REPO_ROOT.glob(pattern):
+            if path.name == "__init__.py":
+                continue
+            if "fixtures" in path.parts:
+                continue
+            paths.add(rel(path))
+    return paths
+
+def audit_control(registry: Mapping[str, WorkflowAction]) -> Dict[str, Any]:
+    """Audit whether Python entrypoints are controlled by declared workflows.
+
+    Motivation:
+        Keep the repository from drifting back toward undocumented script
+        execution as new capabilities are added.
+
+    Intent:
+        Consider an entrypoint controlled if it is directly registered in the
+        hub, included in the comprehensive test matrix, or governed by the
+        skill-hook runtime contract.
+
+    Inputs:
+        The current hub registry.
+
+    Outputs:
+        A JSON-compatible audit report with uncontrolled paths and summary
+        counts.
+    """
+
+    registry_paths = extract_python_paths_from_commands(
+        item.command for item in registry.values()
+    )
+    matrix_paths = load_test_matrix_commands()
+    hook_paths = load_skill_hook_scripts()
+    controlled_paths = registry_paths | matrix_paths | hook_paths
+
+    internal_helpers = {
+        "scripts/e2e_all_backends_tools.py",
+        "scripts/proofnet_tools.py",
+        "scripts/proofnet_evaluate_tools.py",
+        "scripts/formal_science_tools.py",
+        "scripts/formalphysics_extra_isabelle_tools.py",
+        "scripts/formalphysics_original_two_isabelle_tools.py",
+        "scripts/formalphysics_original_two_lean_tools.py",
+        "scripts/formalphysics_original_two_sympy_tools.py",
+        "scripts/formalphysics_top10_sympy_tools.py",
+        "scripts/formalphysics_extra_sympy_tools.py",
+        "scripts/formalphysics_extra_lean_tools.py",
+        "scripts/formalphysics_refresh_tools.py",
+        "scripts/premise_triple_tools.py",
+        "scripts/premise_group_tools.py",
+        "scripts/vampire_group_example_tools.py",
+        "scripts/vampire_strict_order_tools.py",
+        "scripts/vampire_policy_tools.py",
+        "scripts/atp_demo_tools.py",
+        "scripts/mathformer.py",
+        "scripts/mcp_service_config.py",
+        "scripts/mcp_agent_assets.py",
+        "scripts/agentc_workflow_tools.py",
+        "scripts/agentc_analysis_tools.py",
+        "scripts/catalog_check_tools.py",
+        "scripts/normalize_workflows_tools.py",
+        "scripts/thematic_layout_tools.py",
+        "scripts/workflow_graph_layout_tools.py",
+        "scripts/workflow_graph_render_tools.py",
+        "scripts/dependency_lock_tools.py",
+        "scripts/integration_audit_tools.py",
+        "scripts/reasoning_catalog_tools.py",
+        "scripts/reasoning_catalog_render_tools.py",
+        "scripts/library_docs_tools.py",
+        "scripts/reasoning_index_tools.py",
+        "scripts/reasoning_summary_tools.py",
+        "scripts/skill_coverage_tools.py",
+        "scripts/router_coverage_tools.py",
+        "scripts/reasoning_smoke_tools.py",
+        "scripts/reasoning_log_build_tools.py",
+        "scripts/reasoning_flow_tools.py",
+        "scripts/reasoning_consumer_tools.py",
+        "scripts/reasoning_quality_tools.py",
+        "scripts/reasoning_html_tools.py",
+        "scripts/skill_hooks_tools.py",
+        "scripts/adoption_test_contracts_tools.py",
+        "scripts/normalized_workflow_test_tools.py",
+        "scripts/adoption_provenance_test_tools.py",
+        "scripts/adoption_check_tools.py",
+        "scripts/control_all_tools.py",
+        "scripts/readiness_tools.py",
+        "scripts/adoption_describe_tools.py",
+        "scripts/adoption_invoke_tools.py",
+        "scripts/adoption_receipt_render_tools.py",
+        "scripts/adoption_receipt_validate_tools.py",
+        "scripts/adoption_validate_tools.py",
+        "scripts/workflow_write_audit.py",
+        "scripts/workflow_catalog.py",
+        "skills/autoformalization/autoformalization-agentc/scripts/agentc.py",
+        "skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/coherence_common.py",
+        "skills/mathlib/mathlib-concept-ontology-manager/scripts/ontology.py",
+        "skills/mathlib/mathlib-index-builder/scripts/mathlib_index_common.py",
+        "skills/control/reasoning-log-schema-guardian/scripts/reasoning_log.py",
+    }
+    discovered = discover_python_entrypoints()
+    uncontrolled = sorted(
+        path
+        for path in discovered
+        if path not in controlled_paths and path not in internal_helpers
+    )
+
+    direct_but_missing = sorted(
+        path for path in registry_paths if not (REPO_ROOT / path).exists()
+    )
+    dependency_errors = []
+    for item in registry.values():
+        for child in item.depends_on:
+            if child not in registry:
+                dependency_errors.append(
+                    {"action_id": item.action_id, "missing_dependency": child}
+                )
+
+    return {
+        "schema_version": 1,
+        "ok": not uncontrolled and not direct_but_missing and not dependency_errors,
+        "entrypoint_count": len(discovered),
+        "controlled_count": len(discovered) - len(uncontrolled),
+        "uncontrolled_entrypoints": uncontrolled,
+        "registry_script_count": len(registry_paths),
+        "matrix_script_count": len(matrix_paths),
+        "skill_hook_script_count": len(hook_paths),
+        "direct_registered_missing_paths": direct_but_missing,
+        "dependency_errors": dependency_errors,
+        "control_sources": {
+            "hub_registry": sorted(registry_paths),
+            "comprehensive_test_matrix": sorted(matrix_paths),
+            "skill_hooks": sorted(hook_paths),
+            "internal_helpers": sorted(internal_helpers),
+        },
+    }

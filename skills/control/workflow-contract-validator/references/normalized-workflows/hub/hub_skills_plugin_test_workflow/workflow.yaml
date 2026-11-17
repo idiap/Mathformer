@@ -1,0 +1,327 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_skills_plugin_test_workflow
+version: 1.0.0
+kind: workflow
+description: Default unittest execution of AgentPluginTests, accumulating failures
+  before exit.
+aliases:
+- skills:plugin-test
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  TestState:
+    representation: value
+    schema:
+      type: object
+      properties:
+        tests:
+          type: array
+          items:
+            type: string
+          minItems: 11
+          maxItems: 11
+        index:
+          type: integer
+          minimum: 0
+          maximum: 11
+        outcomes:
+          type: array
+          items:
+            type: object
+            properties:
+              test:
+                type: string
+              status:
+                enum:
+                - success
+                - failure
+                - error
+                - skipped
+              detail:
+                type: string
+            required:
+            - test
+            - status
+            - detail
+            additionalProperties: false
+        should_stop:
+          type: boolean
+        session:
+          type: string
+          minLength: 1
+      required:
+      - tests
+      - index
+      - outcomes
+      - should_stop
+      - session
+      additionalProperties: false
+  Done:
+    representation: value
+    schema:
+      type: boolean
+  SuiteResult:
+    representation: value
+    schema:
+      type: object
+      properties:
+        successful:
+          type: boolean
+        exit_code:
+          type: integer
+          enum:
+          - 0
+          - 1
+        tests_run:
+          type: integer
+          minimum: 0
+          maximum: 11
+        state:
+          type: object
+          description: Final unittest state including ordered outcomes.
+        runner_output:
+          type: string
+      required:
+      - successful
+      - exit_code
+      - tests_run
+      - state
+      - runner_output
+      additionalProperties: false
+  RepositoryRoot:
+    representation: value
+    schema:
+      type: string
+      minLength: 1
+inputs:
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  result:
+    type: SuiteResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize_suite:
+    inputs:
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      state:
+        type: TestState
+    execution:
+      mode: deterministic
+      binding:
+        kind: tool
+        adapter: mcp.tool
+        target: mathformer_plugin_test_initialize
+        operation: mathformer_plugin_test_initialize
+  run_next_test:
+    inputs:
+      state:
+        type: TestState
+    outputs:
+      state:
+        type: TestState
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        kind: tool
+        adapter: mcp.tool
+        target: mathformer_plugin_test_next
+        operation: mathformer_plugin_test_next
+  finish_suite:
+    inputs:
+      state:
+        type: TestState
+    outputs:
+      result:
+        type: SuiteResult
+    execution:
+      mode: deterministic
+      binding:
+        kind: tool
+        adapter: mcp.tool
+        target: mathformer_plugin_test_finish
+        operation: mathformer_plugin_test_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize_suite
+    arguments:
+      repository_root:
+        ref: inputs.repository_root
+  - id: tests
+    kind: loop
+    description: Advance the same live unittest runner once per test, in default loader
+      order; ordinary failures and errors accumulate. Stop on runner completion. Eleven
+      iterations are sufficient for the selected source; exhaustion fails.
+    state_type: TestState
+    initial:
+      ref: steps.initialize.outputs.state
+    body:
+      kind: call
+      operation: run_next_test
+      arguments:
+        state:
+          ref: loop.state
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 11
+    on_exhausted: fail
+    outputs:
+      state:
+        type: TestState
+        value:
+          ref: loop.state
+  - id: finish
+    kind: call
+    operation: finish_suite
+    arguments:
+      state:
+        ref: steps.tests.outputs.state
+  outputs:
+    result:
+      type: SuiteResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - git_history
+      - temporary_fixtures
+      write:
+      - temporary_fixtures
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - validate_agent_plugin_distribution
+    - mutate_temporary_fixtures
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 13
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Plugin regression results only; no scientific validity or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/agent_clients/test_agent_plugins.py
+    selector: 'AgentPluginTests (entrypoint: unittest.main())'
+    digest: sha256:c1be95c03d1c0ea09ce164cf7a98e2400a841757cfe87cb0552dc2b5107bde5f
+  - path: scripts/sync_agent_plugins.py
+    selector: synchronize; expected_files; find_stale; compare_projection; removal
+      helpers
+    digest: sha256:a03705054813e88f8ef2617dcd743b9e40e31a2ef2594fe858811b0d2c68b06c
+  - path: scripts/mathformer.py
+    selector: build_registry skills:plugin-test; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/plugin_test_tools.py
+    selector: Session; load_source; register_plugin_test_tools
+    digest: sha256:3d61ccd73ece01d5f8747a58b5f18a4784865a033242fdc8b348c4645584b21a
+  - path: scripts/mcp_server.py
+    selector: register_plugin_test_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: mcp_tools
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory skills:plugin-test
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_plugin_test_workflow_tests.py
+    selector: PluginTestWorkflowTests; real MCP and Lunar fixtures
+    digest: sha256:a77b4522dd9c08d5176619a8df0211ccf23090ca4f6072e1bbdc0e0adfae6bd4
+  - path: tests/mcp/fixtures/plugin_test_original.py.txt
+    selector: frozen selected source for entrypoint equivalence
+    digest: sha256:c1be95c03d1c0ea09ce164cf7a98e2400a841757cfe87cb0552dc2b5107bde5f
+  gaps:
+  - This projection specializes the dependency-free default suite, without unittest
+    CLI selection, failfast or custom runner options. The source defines eleven tests.
+  - Hub preflight, dry-run, subprocess capture and repository-write audit remain controller-owned
+    context outside the selected suite graph.
+  - Lunar enforces the 3600-second ceiling and operation-call limit. The native hub
+    action has no subprocess timeout. Live unittest sessions cannot resume; an idle
+    transport gate expires after 3600 seconds.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: skills:plugin-test
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: skills:plugin-test
+      family: skills
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - tests/agent_clients/test_agent_plugins.py
+      depends_on: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Registered mathformer_plugin_test_initialize/next/finish MCP tools
+      retain a live TextTestRunner and its original AgentPluginTests suite. The hub
+      remains an independent outer controller.
+    failure_policy: Native failed preflight, process exit or write audit remains unsuccessful.
+    callers:
+    - skills.plugin-check
+    - tests/test_matrix.json
+  mathformer.test_semantics:
+    coverage: Discovery parity; drift, regeneration and rename/removal; duplicate
+      rejection; independent cached discovery; workflow catalogs, digests and schemas;
+      contributor attribution; portable aliases; missing-catalog rejection; unmanaged-file
+      preservation.
+    synchronization: Within each owning test, synchronize first builds expected files,
+      discovers stale entries and collects differences. check=true returns differences
+      without writing. check=false writes expected changed files in order, then removes
+      stale generated entries, returning the pre-write differences. Metadata, duplicates
+      and unmanaged removal errors propagate unless asserted as expected by the test.
+    internal_iteration: Helper loops range over discovered skills, workflows, generated
+      files, Git history and tracked files, or fixed client lists. Expected names/files,
+      drift, author-file sets and missing attribution are local test state. No convergence,
+      retry or search.
+    isolation: Mutation tests use temporary fixture trees or cached copies and clean
+      them up.
+    transport: repository_root supplies only repository context, never executable
+      source. A session token and exact state receipt retain live unittest objects
+      across calls. TextTestRunner owns fixtures, result callbacks and summary; each
+      next call releases one test and waits for the following boundary or final completion.
+      runner_output preserves its transcript.
+# REUSE-IgnoreEnd

@@ -1,0 +1,654 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_formalize_physics_sympy_goal_sample_0004_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Ordered native FormalPhysics SymPy 0004 route; nine one-pass actions, without route-level repair or retry.",
+  "aliases": [
+    "formalize.physics.sympy.goal_sample_0004"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext",
+      "representation": "value"
+    },
+    "SelectedMatch": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "description": "IntentMatch projection; remaining fixed route metadata comes from build_intent_routes.",
+        "properties": {
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "route": {
+            "type": "object",
+            "properties": {
+              "route_id": {
+                "type": "string",
+                "const": "formalize.physics.sympy.goal_sample_0004"
+              },
+              "action_ids": {
+                "type": "array",
+                "const": [
+                  "physics-sympy:source-only-recursive-0004",
+                  "physics-sympy:goal-sample-plan-0004",
+                  "physics-sympy:design-guard-review-0004",
+                  "physics-sympy:repair-expansion-map-0004",
+                  "physics-sympy:recursive-repair-control-0004",
+                  "physics-sympy:grounded-sample-thoroughness-0004",
+                  "physics-sympy:cross-backend-semantic-packet-0004",
+                  "physics-sympy:adversarial-design-guard",
+                  "physics-sympy:dependency-failure-policy"
+                ]
+              }
+            },
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "score",
+          "matched_terms",
+          "route"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "ActionCount": {
+      "schema": {
+        "type": "integer",
+        "const": 9
+      }
+    },
+    "ChildResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult",
+      "representation": "value"
+    },
+    "RouteState": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 9,
+            "description": "Ordered full child envelopes retained without rewriting their contents.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ]
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RouteResult": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "intent_run_completed",
+              "intent_run_failed"
+            ]
+          },
+          "route": {
+            "type": "object",
+            "description": "Native intent_match_to_dict output, including score and matched terms."
+          },
+          "children": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 9,
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "schema_version",
+          "ok",
+          "status",
+          "route",
+          "children"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object"
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "SelectedMatch"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "RouteResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_0004_route_initialize",
+          "operation": "mathformer_sympy_goal_0004_route_initialize"
+        }
+      }
+    },
+    "select": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_0004_route_select",
+          "operation": "mathformer_sympy_goal_0004_route_select"
+        }
+      }
+    },
+    "run": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "ChildResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_0004_route_run",
+          "operation": "mathformer_sympy_goal_0004_route_run"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "ChildResult"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "action_count": {
+          "type": "ActionCount"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "done": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_0004_route_advance",
+          "operation": "mathformer_sympy_goal_0004_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "RouteResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_sympy_goal_0004_route_finish",
+          "operation": "mathformer_sympy_goal_0004_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "Visit each fixed route action at most once; advance exits normally on the ninth child or an earlier stopping failure.",
+        "state_type": "RouteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 9,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            },
+            {
+              "id": "run",
+              "kind": "call",
+              "operation": "run",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.run.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "action_count": {
+                  "literal": 9
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "RouteState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Boolean",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "RouteState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "RouteResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/physics_sympy/recursive_goal_runs/formalphysics_0004/",
+          "artifacts/workflow_hub/",
+          "libraries/MathformerPhysicsLib/SymPy/formalphysics_0004/MathformerPhysics.py"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 29
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked control description; completion establishes neither scientific truth nor promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/scripts/run_recursive_goal_case.py",
+        "selector": "build_run; stage_commands; execute_run_stage; assess_run; main",
+        "digest": "sha256:57f4ae1dfcedd73df3c94b809b6d80da968831c94b6f1dd0787fdeaa896e44b9"
+      },
+      {
+        "path": "skills/physics-sympy/physics-sympy-recursive-repair-loop-controller/scripts/control_physics_sympy_recursive_repair.py",
+        "selector": "load_state; compute_guards; choose_branch; finish_plan",
+        "digest": "sha256:83cffe4ea8e2e6dbb33ec63bd18d0576414af8544a32657243a38eb70957149c"
+      },
+      {
+        "path": "scripts/physics_sympy_goal_0004_route_tools.py",
+        "selector": "register_physics_sympy_goal_0004_route_tools; checked_registry; selected_match; check_state",
+        "digest": "sha256:fcbecaa470e7ad2498601aae59911fee323d7b643d59cf356f0f151666067da6"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_physics_sympy_goal_0004_route_tools; mathformer_ask; mathformer_run_workflow",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/adoption_check_tools.py",
+        "selector": "Context",
+        "digest": "sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac"
+      },
+      {
+        "path": "scripts/workflow_write_audit.py",
+        "selector": "snapshot_repository; audit_snapshots",
+        "digest": "sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "physics_sympy_goal_0004_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/scripts/plan_goal_sample_sympy_autoformalization.py",
+        "selector": "main; native source step implementation",
+        "digest": "sha256:38455a8768c85c3d9f85dd11f00c4eb5a5e6aaec394171fb16d0cc1e49feb604"
+      },
+      {
+        "path": "skills/physics-sympy/physics-sympy-review-refinement-router/scripts/plan_physics_sympy_review_refinement.py",
+        "selector": "main; native source step implementation",
+        "digest": "sha256:4a323d615204b9c2cc6326c2f047a2e88b070644c23d7a31bd5fe7fe55ce52d2"
+      },
+      {
+        "path": "skills/physics-sympy/physics-sympy-repair-expansion-cartographer/scripts/map_physics_sympy_repair_expansion.py",
+        "selector": "main; native source step implementation",
+        "digest": "sha256:41e47a6f15b19da49f1f1949c711e6d2e95992ebf4c9d619ad9eeedcaf3c0405"
+      },
+      {
+        "path": "tests/physics_sympy/run_grounded_sample_thoroughness.py",
+        "selector": "main; native source step implementation",
+        "digest": "sha256:0d1fa4540d356d1ce66b64116a1f9707436c6008750aac0f1a6579db2e67cd47"
+      },
+      {
+        "path": "tests/physics_sympy/run_cross_backend_semantic_packet.py",
+        "selector": "main; native source step implementation",
+        "digest": "sha256:ee1f335e884f514984585f7b5126cf44aa268a8128e8aa22055f2e785b5d6559"
+      },
+      {
+        "path": "tests/physics_sympy/run_adversarial_design_guard_suite.py",
+        "selector": "main; native source step implementation",
+        "digest": "sha256:e8789b2ba5ba4d32310d7b2675121a26acea3095ee7c5f526134da47143b194d"
+      },
+      {
+        "path": "tests/physics_sympy/run_dependency_failure_policy.py",
+        "selector": "main; native source step implementation",
+        "digest": "sha256:920bde81b546fe50ecca7d114b2c66d3a9cfe03a1251a057b98c2796cc87b683"
+      },
+      {
+        "path": "backends/sympy/MathformerPhysicsSympy/pipeline.py",
+        "selector": "all_case_ids; write_artifact; case_spec",
+        "digest": "sha256:42c1773f2d2121ec80a7a44b407caf7956ca3004c5a89da0c81da017ce72e056"
+      }
+    ],
+    "gaps": [
+      "Action internals and scientific payloads remain native; this graph models the nine-action route, with the five-stage runner opaque at the run boundary.",
+      "Effects retain native capability qualification labels. Service write policy and configured path roots narrow invocation; native admission, preflight and write auditing still apply.",
+      "The 3600-second descriptor budget has no native route deadline. Lunar supplies required receipts, digests and provenance; optional native CLI reports and MCP caller logging remain caller-owned."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "formalize.physics.sympy.goal_sample_0004",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "formalize.physics.sympy.goal_sample_0004",
+        "title": "Run the recursive goal workflow for FormalPhysics SymPy 0004",
+        "operator_note": "Fixed source-only sample; initial action requests --regenerate-initial-artifact."
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered mathformer_sympy_goal_0004_route_* MCP tools reuse native route helpers and run_action; default extra_args=() and seen=None. Unexpected exceptions propagate.",
+      "native_environment": "Explicit registry projection resolves only unchanged native capabilities; nullable repository_root selects hub.REPO_ROOT. SelectedMatch preserves the fixed route plus caller score and matched terms.",
+      "bounds": "SelectedMatch constrains all nine action_ids; done is true at child nine, so on_exhausted is unreachable under source operations.",
+      "timeout": "Initial action timeout is 900 seconds; there is no global timer in run_intent_match.",
+      "initial_runner": "run_action owns build_run's single traversal of goal_plan, design_guard_review, repair_expansion_map, recursive_repair_control and grounded_sample_thoroughness. It carries next_stage, workflow_stage_reports, command_metadata and blockers; recorded blockers do not stop traversal. Final status is complete_sympy_physics_derivation only if thoroughness reports that status and blockers are absent; otherwise blocked when blockers exist, else derivation_partial. main returns 3 only for blocked, else 0; route ok follows the native child result, not scientific report classification."
+    }
+  }
+}

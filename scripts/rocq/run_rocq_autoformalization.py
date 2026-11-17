@@ -1,0 +1,1 @@
+../run_rocq_autoformalization.py

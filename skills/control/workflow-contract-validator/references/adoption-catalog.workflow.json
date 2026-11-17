@@ -1,0 +1,699 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_adoption_catalog_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Generate the portable adoption catalog through its dependency-free hub leaf.",
+  "aliases": [
+    "adoption:catalog"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "Arguments": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Boundary": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "execute": {
+            "type": "boolean"
+          },
+          "session": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "execute",
+          "session"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Metadata": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "value": {
+            "type": "object"
+          },
+          "runnable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session",
+          "value",
+          "runnable"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "RenderState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1024
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "runnable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session",
+          "data",
+          "position",
+          "lines",
+          "runnable"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "extra_args": {
+      "type": "Arguments"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot",
+      "required": false
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "prepare": {
+      "inputs": {
+        "context": {
+          "type": "RunContext"
+        },
+        "extra_args": {
+          "type": "Arguments"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot",
+          "required": false
+        }
+      },
+      "outputs": {
+        "boundary": {
+          "type": "Boundary"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_catalog_prepare",
+          "operation": "mathformer_adoption_catalog_prepare"
+        }
+      }
+    },
+    "return_prepared": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_catalog_return",
+          "operation": "mathformer_adoption_catalog_return"
+        }
+      }
+    },
+    "load": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        }
+      },
+      "outputs": {
+        "data": {
+          "type": "Metadata"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_catalog_load",
+          "operation": "mathformer_adoption_catalog_load"
+        }
+      }
+    },
+    "begin_catalog": {
+      "inputs": {
+        "data": {
+          "type": "Metadata"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RenderState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_catalog_begin",
+          "operation": "mathformer_adoption_catalog_begin"
+        }
+      }
+    },
+    "idle_catalog": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RenderState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_catalog_idle",
+          "operation": "mathformer_adoption_catalog_idle"
+        }
+      }
+    },
+    "append_surface": {
+      "inputs": {
+        "state": {
+          "type": "RenderState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RenderState"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_catalog_append",
+          "operation": "mathformer_adoption_catalog_append"
+        }
+      }
+    },
+    "retain_state": {
+      "inputs": {
+        "state": {
+          "type": "RenderState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RenderState"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_catalog_retain",
+          "operation": "mathformer_adoption_catalog_retain"
+        }
+      }
+    },
+    "finish_text": {
+      "inputs": {
+        "state": {
+          "type": "RenderState"
+        }
+      },
+      "outputs": {
+        "text": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_catalog_text",
+          "operation": "mathformer_adoption_catalog_text"
+        }
+      }
+    },
+    "publish_and_audit": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        },
+        "text": {
+          "type": "Text"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adoption_catalog_publish",
+          "operation": "mathformer_adoption_catalog_publish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "kind": "call",
+        "operation": "prepare",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          },
+          "extra_args": {
+            "ref": "inputs.extra_args"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        },
+        "id": "prepare"
+      },
+      {
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "execute",
+            "when": {
+              "ref": "steps.prepare.outputs.boundary.execute"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "kind": "call",
+                  "operation": "load",
+                  "arguments": {
+                    "boundary": {
+                      "ref": "steps.prepare.outputs.boundary"
+                    }
+                  },
+                  "id": "load"
+                },
+                {
+                  "kind": "call",
+                  "operation": "begin_catalog",
+                  "arguments": {
+                    "data": {
+                      "ref": "steps.load.outputs.data"
+                    }
+                  },
+                  "id": "begin"
+                }
+              ],
+              "outputs": {
+                "state": {
+                  "type": "RenderState",
+                  "value": {
+                    "ref": "steps.begin.outputs.state"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "idle_catalog",
+          "arguments": {
+            "boundary": {
+              "ref": "steps.prepare.outputs.boundary"
+            }
+          }
+        },
+        "outputs": {
+          "state": {
+            "type": "RenderState",
+            "value": {
+              "ref": "selected.outputs.state"
+            }
+          }
+        },
+        "id": "initialize"
+      },
+      {
+        "id": "render",
+        "kind": "loop",
+        "state_type": "RenderState",
+        "description": "One surface per iteration. Inactive or failed source work takes a single no-work iteration. Native inner operation traversal remains collection-bounded.",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "execute",
+              "when": {
+                "ref": "loop.state.runnable"
+              },
+              "body": {
+                "kind": "call",
+                "operation": "append_surface",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "retain_state",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "RenderState",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 1024,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "RenderState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "execute",
+            "when": {
+              "ref": "steps.prepare.outputs.boundary.execute"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "kind": "call",
+                  "operation": "finish_text",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.render.outputs.state"
+                    }
+                  },
+                  "id": "text"
+                },
+                {
+                  "kind": "call",
+                  "operation": "publish_and_audit",
+                  "arguments": {
+                    "boundary": {
+                      "ref": "steps.prepare.outputs.boundary"
+                    },
+                    "text": {
+                      "ref": "steps.text.outputs.text"
+                    }
+                  },
+                  "id": "publish"
+                }
+              ],
+              "outputs": {
+                "result": {
+                  "type": "HubResult",
+                  "value": {
+                    "ref": "steps.publish.outputs.result"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "return_prepared",
+          "arguments": {
+            "boundary": {
+              "ref": "steps.prepare.outputs.boundary"
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "HubResult",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        },
+        "id": "complete"
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.complete.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "docs/migrations/portable-repository-adoption/catalog.md",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "validate_authored_metadata",
+        "render_discovery_catalog",
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "invoke_catalogued_operations",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 1030
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked catalog description only; rendering is neither an operation invocation nor a live availability, scientific validity or promotion attestation."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/portable_adoption.py",
+        "selector": "main catalog branch; catalog_begin; catalog_append_surface; catalog_finish; catalog_publish; catalog_protocol",
+        "digest": "sha256:71cc63a093533d56dc9a14c03557dbe914f75cfbc5baeee7b32fdf66ca58a025"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/adoption:catalog; prepare_leaf_boundary; complete_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/adoption_catalog_tools.py",
+        "selector": "CatalogTools and register_adoption_catalog_tools",
+        "digest": "sha256:6c25600e02fa6fc79bfde65dbbe8588ecb08c6cc1d4533ed85f6525f072cb1e0"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_adoption_catalog_tools and service write guard",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory adoption:catalog authored contract preservation",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "The rendering input domain is specialized to 1..1024 surfaces. Native CLI catalog_text remains uncapped. Validation helpers and inner operation traversals are native collection-bounded internals.",
+      "Lunar supplies required runtime receipts, artifact digests, provenance events and the descriptor budgets. Native optional hub reports do not independently establish those guarantees."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "adoption:catalog",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "adoption:catalog",
+        "family": "control",
+        "kind": "render",
+        "safety": "writes_repo",
+        "command": [
+          "{python}",
+          "skills/control/workflow-contract-validator/scripts/portable_adoption.py",
+          "catalog"
+        ],
+        "depends_on": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null,
+        "writes": [
+          "docs/migrations/portable-repository-adoption/catalog.md"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Native preflight and snapshot first. A single fixed portable_adoption.py catalog_protocol child runs shared load/render/publish functions; operation requests pause that process without replay. Only explicit repository_root remaps metadata/catalog and audit paths. Schema and semantic validation still resolve canonical source against the project. Transport state and ordering are checked against server-owned continuations.",
+      "fixed_cli_branch": "command=catalog, check=false. CLI parsing precedes the protected region. The shared --check branch compares text exactly and raises ValueError if missing/stale; adoption:catalog-check selects it. Extra arguments cannot select it for adoption:catalog.",
+      "exception_boundary": "The staged child catches exactly ValueError, KeyError, TypeError and FileNotFoundError, emits the native error JSON once, and stops dependent native work. Transport-only no-work steps carry failure to one final nonzero-exit write audit. Unexpected source exceptions exit the process, retain traceback stderr and reach the same hub nonzero-exit audit. Launch errors propagate.",
+      "failure_policy": "Preserve preflight/nonzero-exit/undeclared-write failure. A native error payload is not acceptance; no automatic retry or checkpoint exists.",
+      "write_order": "Source catalog_publish writes before source emit_completion; process completion precedes the native after-snapshot. Failures do not roll back files. Preflight rejection and dry-run create no process and no snapshots after preparation.",
+      "scientific_payloads": "HubResult is the transport envelope; native stdout contains the catalog JSON result.",
+      "limits": "Lunar enforces the unchanged 3600-second/1030-call descriptor budgets and 1024-iteration render bound. The native CLI has no added timeout or surface cap. Budget cancellation abandons the worker; process cleanup occurs when its MCP session closes."
+    }
+  }
+}

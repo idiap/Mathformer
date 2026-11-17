@@ -1,0 +1,571 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_meta_skills_help_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected meta.skills.help route through its native controlled action.",
+  "aliases": [
+    "meta.skills.help"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Match": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "properties": {
+              "route_id": {
+                "type": "string",
+                "const": "meta.skills.help"
+              },
+              "action_ids": {
+                "type": "array",
+                "const": [
+                  "meta-skills:validate"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "RouteState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "meta-skills:validate"
+      }
+    },
+    "ActionCount": {
+      "schema": {
+        "type": "integer",
+        "const": 1
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object"
+        }
+      }
+    },
+    "RepositoryMount": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "repository_root": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "Match"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "mount": {
+      "type": "RepositoryMount"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_meta_help_route_initialize",
+          "operation": "mathformer_meta_help_route_initialize"
+        }
+      }
+    },
+    "select_action": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "Match"
+        }
+      },
+      "outputs": {
+        "action": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_meta_help_route_select_action",
+          "operation": "mathformer_meta_help_route_select_action"
+        }
+      }
+    },
+    "invoke_action": {
+      "inputs": {
+        "action": {
+          "type": "ActionId"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "mount": {
+          "type": "RepositoryMount"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_meta_help_route_run_action",
+          "operation": "mathformer_meta_help_route_run_action"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "action_count": {
+          "type": "ActionCount"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "done": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_meta_help_route_advance",
+          "operation": "mathformer_meta_help_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "Match"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_meta_help_route_finish",
+          "operation": "mathformer_meta_help_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "route_actions",
+        "kind": "loop",
+        "description": "Exactly one registered action. advance reports done on iteration one, including failure; normal completion at the literal bound is preserved.",
+        "state_type": "RouteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select_action",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "invoke",
+              "kind": "call",
+              "operation": "invoke_action",
+              "arguments": {
+                "action": {
+                  "ref": "steps.select.outputs.action"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "mount": {
+                  "ref": "inputs.mount"
+                }
+              }
+            },
+            {
+              "id": "append",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.invoke.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "action_count": {
+                  "literal": 1
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "RouteState",
+              "value": {
+                "ref": "steps.append.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Boolean",
+              "value": {
+                "ref": "steps.append.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "RouteState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.route_actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/meta_skills/",
+          "artifacts/mcp/meta_skill_service_self_test.json",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked specification; completion establishes no scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/meta_skills/run_meta_skill_suite.py",
+        "selector": "COMMANDS; run_suite; run_command; aggregate_write_return",
+        "digest": "sha256:06c35f2abb57248a44871776621cfe6612c81e24ad802517780d88a29a8e9fab"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_ask; mathformer_run_workflow; _cap_unbounded_timeouts",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/meta_help_route_tools.py",
+        "selector": "register_meta_help_route_tools; selected_match; checked_registry; check_state",
+        "digest": "sha256:53aeed51e31263075162ff10ee1b9f6c3eb421818ea960299d850b63334b49c8"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "meta_help_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_meta_help_route_workflow_tests.py",
+        "selector": "MetaHelpTests",
+        "digest": "sha256:81e1564928987280cafbae4b50fcabf986ec6b1083db162a748116eae5545720"
+      },
+      {
+        "path": "tests/mcp/fixtures/meta_help_route_tree.py",
+        "selector": "populate; serve",
+        "digest": "sha256:c3af4a12fdd55448c8ec1c4cc202af6719aaa646ae23fd86ddb78fa0e5af5c30"
+      },
+      {
+        "path": "tests/mcp/fixtures/meta_help_route_original.py.txt",
+        "selector": "frozen run_intent_match and route state helpers",
+        "digest": "sha256:8458d3bf914916af801ab869dda98629b0e1f7f6a193e381fbc9d37134da6f7e"
+      }
+    ],
+    "gaps": [
+      "Action internals, including the ten-command delegated suite, remain source-backed opaque behavior; the native route loop is expanded.",
+      "The 3600-second ceiling is a descriptor limit, not a native route budget; CLI has no enclosing action timeout and the separate native MCP dispatch defaults to a configurable 600 seconds.",
+      "Capability placeholders in the retained effects policy grant no runtime permission. Service write authorization and native preflight/write audits remain mandatory."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "meta.skills.help",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "meta.skills.help",
+        "title": "Show and validate meta-skill workflows",
+        "action_ids": [
+          "meta-skills:validate"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Native CLI/MCP dispatch continues to resolve the native route. These registered MCP ports expose the same shared route steps for Lunar compilation and execution.",
+      "failure_policy": "Preserve native failed child payloads through accumulation and final result.",
+      "qualification_capability_names_are_not_runtime_grants": true
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "meta-skills:validate"
+      ],
+      "action_workflows": [
+        "hub_meta_skills_validate_workflow"
+      ],
+      "keep_going_semantics": "Sticky aggregate failure; one action means keep_going adds no work.",
+      "selection": "Already selected route; NL scoring and ambiguity resolution remain native."
+    },
+    "mathformer.delegated_suite": {
+      "owner_operation": "invoke_action",
+      "source": "tests/meta_skills/run_meta_skill_suite.py::run_suite",
+      "order": "Ten fixed COMMANDS sequentially, selected by len(accumulated results).",
+      "state": "Results initialize empty; append each check once; ordinary check failure does not stop iteration.",
+      "bound": "Exactly ten commands on normal completion; no retries or convergence loop.",
+      "exceptions": "Each command has a 180-second timeout; uncaught timeout or launch errors abort before aggregation.",
+      "check_ok": "returncode == 0 and parsed payload.ok is not false; JSON decoding fallback stays in run_command.",
+      "completion": "Write artifacts/meta_skills/meta_skill_suite.json; aggregate all check ok values and exit 0/1.",
+      "parent_boundary": "Suite exceptions yield process failure captured by the hub, followed by write auditing."
+    },
+    "mathformer.runtime_ports": {
+      "registry": "Checked metadata projection selects native registry entries; caller commands are never executed. An absent entry preserves native unknown_action and metadata lookup failure.",
+      "mount": "An empty object retains the native repository default. repository_root explicitly carries the caller mount through native preflight, process cwd and write audits; the service validates configured write roots.",
+      "match": "Restore the registered native route and preserve caller score and matched_terms; reject altered route declarations.",
+      "failure": "Failed child payloads remain data, so advance and finish execute. Unexpected exceptions are transport failures with no retry.",
+      "native_timeout": "The step interface retains CLI timeout None. Lunar separately enforces wall_time_seconds."
+    }
+  }
+}

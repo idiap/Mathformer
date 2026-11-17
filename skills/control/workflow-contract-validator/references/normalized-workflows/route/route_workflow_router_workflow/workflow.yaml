@@ -1,0 +1,426 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_workflow_router_workflow
+version: 1.0.0
+kind: workflow
+description: Execute the selected workflow.router route through the native controlled
+  action boundary.
+aliases:
+- workflow.router
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+    representation: value
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+    representation: value
+  SelectedMatch:
+    representation: value
+    schema:
+      type: object
+      properties:
+        route:
+          type: object
+          properties:
+            route_id:
+              type: string
+              const: workflow.router
+            action_ids:
+              type: array
+              const:
+              - control:workflow-router-coverage
+              items:
+                type: string
+            title:
+              type: string
+            description:
+              type: string
+            skill_routes:
+              type: array
+              items:
+                type: string
+            examples:
+              type: array
+              items:
+                type: string
+            operator_note:
+              type: string
+          required:
+          - route_id
+          - action_ids
+          - title
+          - description
+          - skill_routes
+          - examples
+          - operator_note
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+      required:
+      - route
+      - score
+      - matched_terms
+  Registry:
+    representation: value
+    schema:
+      type: object
+      description: Opaque JSON projection of the native WorkflowAction mapping; admission
+        remains native.
+      additionalProperties:
+        type: object
+  RouteState:
+    representation: value
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+      required:
+      - ok
+      - children
+      additionalProperties: false
+  ActionId:
+    schema:
+      type: string
+      const: control:workflow-router-coverage
+  Boolean:
+    schema:
+      type: boolean
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+      description: Explicit native repository mount; null or omitted retains the default.
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: SelectedMatch
+  registry:
+    type: Registry
+  repository_root:
+    type: RepositoryRoot
+    required: false
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_workflow_router_initialize
+        operation: mathformer_workflow_router_initialize
+  select:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_workflow_router_select
+        operation: mathformer_workflow_router_select
+  execute:
+    inputs:
+      action_id:
+        type: ActionId
+      registry:
+        type: Registry
+      context:
+        type: RunContext
+      repository_root:
+        type: RepositoryRoot
+        required: false
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_workflow_router_execute
+        operation: mathformer_workflow_router_execute
+  advance:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+      match:
+        type: SelectedMatch
+    outputs:
+      state:
+        type: RouteState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_workflow_router_advance
+        operation: mathformer_workflow_router_advance
+  finish:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_workflow_router_finish
+        operation: mathformer_workflow_router_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: Source action loop specialized to the exact one-action selected route.
+      Completion is true after the first append even for a failed child; the bound
+      therefore returns normally with failure data, without exhaustion.
+    state_type: RouteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: execute
+        kind: call
+        operation: execute
+        description: Leaf argv is route_mathformer_workflow.py --audit-coverage --json.
+          Admission/preflight rejection returns failure data; dry-run skips launch.
+          Otherwise main calls build_coverage_report, which carries route/action indices,
+          covered and per-route families, rows, unknown references and empty routes
+          through finite nested collection loops. Registered references resolve to
+          their family; test:family:* uses its suffix; other references accumulate
+          as blockers. Empty routes are recorded and traversal continues. Final missing
+          families, unknown references or empty routes yield ok=false and CLI exit
+          1; otherwise exit 0. Captured stdout/stderr/returncode and write audit remain
+          in the child envelope; undeclared writes force failure. There is no retry
+          or native timeout; unexpected launch errors propagate.
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          registry:
+            ref: inputs.registry
+          context:
+            ref: inputs.context
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.execute.outputs.child
+          context:
+            ref: inputs.context
+          match:
+            ref: inputs.match
+      outputs:
+        state:
+          type: RouteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RouteState
+        value:
+          ref: loop.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write: []
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Coverage audit and native execution status only; no scientific truth
+    or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: initialize_intent_state; select_intent_action; advance_intent_state;
+      finish_intent_state; run_action; build_intent_routes
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py
+    selector: main; build_coverage_report; resolve_action_family; initialize_coverage;
+      begin_coverage_route; visit_coverage_action; finish_coverage_route; finalize_coverage
+    digest: sha256:d01e8b3964a4efc3dd4fc27ca3d5b33dbee69ea8fb48d50c0c6f86911da5730b
+  - path: scripts/workflow_router_route_tools.py
+    selector: register_workflow_router_route_tools; selected_match; checked_registry;
+      check_state
+    digest: sha256:8b67fad9ef36eeb364c1f266bb9138d41aa84000031412899a7c4ad55c4d7b3d
+  - path: scripts/mcp_server.py
+    selector: register_workflow_router_route_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/adoption_check_tools.py
+    selector: Context
+    digest: sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac
+  - path: scripts/workflow_write_audit.py
+    selector: snapshot_repository; audit_snapshots
+    digest: sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: workflow_router_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Admission, preflight, subprocess capture, coverage traversal and write auditing
+    remain inside execute; coverage is partial at this native operation boundary.
+  - Native timeout_seconds remains None. Lunar enforces the enclosing 3600-second
+    and five-operation limits; standalone tools retain native behavior.
+  - Required v1 receipts, digests, provenance and events are supplied by Lunar; optional
+    source logging remains caller-owned.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: workflow.router
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: workflow.router
+      title: Audit the natural-language workflow router
+      action_ids:
+      - control:workflow-router-coverage
+      skill_routes:
+      - mathformer-workflow-router
+      operator_note: Read-only coverage audit over the hub registry and IntentRoute
+        table.
+  mathformer.native_boundary:
+    execution: MCP tools call the shared run_intent_match steps; run_action retains
+      the native leaf boundary. Lunar executes the typed outer graph.
+    failure_policy: Return native failed child data and intent_run_failed; never convert
+      failure to acceptance.
+    scientific_payloads: HubResult is a transport envelope; coverage JSON is captured
+      as stdout.
+    coverage_bounds: Native finite collections are exhausted normally; optional coverage-domain
+      caps are unused by this CLI path.
+    report_ownership: run_intent_match returns its payload; caller-owned optional
+      reports and logs remain outside this graph.
+    repository_root: Optional nullable native mount is used consistently by preflight,
+      subprocess cwd and write audit.
+    observability: Source stdout, stderr, returncode, route metadata and ordered children
+      are unchanged. Lunar records v1 receipts and provenance.
+  mathformer.composition:
+    ordered_actions:
+    - control:workflow-router-coverage
+    action_workflows:
+    - hub_control_workflow_router_coverage_workflow
+    keep_going_semantics: Stop on failed child unless keep_going; aggregate ok is
+      sticky.
+    selection: Already selected workflow.router route; intent scoring and ambiguity
+      resolution remain native.
+# REUSE-IgnoreEnd

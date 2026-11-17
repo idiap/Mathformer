@@ -1,0 +1,689 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_mathlib_index_build_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Source-level build(args) control flow; the hub invokes default build arguments with --json.",
+  "aliases": [
+    "mathlib:index-build"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Path": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "Bool": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Args": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "mathlib_root",
+          "output",
+          "reranker_cache",
+          "max_files",
+          "validate_existing"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "mathlib_root": {
+            "type": "string"
+          },
+          "output": {
+            "type": "string"
+          },
+          "reranker_cache": {
+            "type": "string"
+          },
+          "max_files": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "validate_existing": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "Index": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "modules",
+          "declarations",
+          "declaration_graph",
+          "version_stamp",
+          "metadata_hash",
+          "optional_rerankers"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": "mathformer.mathlib_index.v0.1"
+          },
+          "modules": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "declarations": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "declaration_graph": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 12
+            }
+          },
+          "version_stamp": {
+            "type": "object"
+          },
+          "metadata_hash": {
+            "type": "string"
+          },
+          "optional_rerankers": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "Cache": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "source_index_hash",
+          "embedding_kind",
+          "enabled_by_default",
+          "entry_count",
+          "entries"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": "mathformer.mathlib_optional_reranker_cache.v0.1"
+          },
+          "source_index_hash": {
+            "type": "string"
+          },
+          "embedding_kind": {
+            "const": "deterministic_token_hash"
+          },
+          "enabled_by_default": {
+            "const": false
+          },
+          "entry_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "Result": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "mathlib_root": {
+            "type": "string"
+          },
+          "style": {
+            "enum": [
+              "mathlib_index_build",
+              "mathlib_index_validation"
+            ]
+          },
+          "output": {
+            "type": "string"
+          },
+          "reranker_cache": {
+            "type": "string"
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "module_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "declaration_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reranker_entry_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "version_stamp": {
+            "type": "object"
+          },
+          "metadata_hash": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "inputs": {
+    "args": {
+      "type": "Args"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Result",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "path_exists": {
+      "inputs": {
+        "path": {
+          "type": "Path"
+        }
+      },
+      "outputs": {
+        "exists": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mathlib_index_build_path_exists",
+          "operation": "mathformer_mathlib_index_build_path_exists"
+        }
+      }
+    },
+    "missing_root": {
+      "inputs": {
+        "args": {
+          "type": "Args"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mathlib_index_build_missing_root",
+          "operation": "mathformer_mathlib_index_build_missing_root"
+        }
+      }
+    },
+    "missing_index": {
+      "inputs": {
+        "args": {
+          "type": "Args"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mathlib_index_build_missing_index",
+          "operation": "mathformer_mathlib_index_build_missing_index"
+        }
+      }
+    },
+    "load_validate": {
+      "inputs": {
+        "args": {
+          "type": "Args"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mathlib_index_build_load_validate",
+          "operation": "mathformer_mathlib_index_build_load_validate"
+        }
+      }
+    },
+    "parse": {
+      "inputs": {
+        "args": {
+          "type": "Args"
+        }
+      },
+      "outputs": {
+        "index": {
+          "type": "Index"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mathlib_index_build_parse",
+          "operation": "mathformer_mathlib_index_build_parse"
+        }
+      }
+    },
+    "rerank": {
+      "inputs": {
+        "index": {
+          "type": "Index"
+        }
+      },
+      "outputs": {
+        "cache": {
+          "type": "Cache"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mathlib_index_build_rerank",
+          "operation": "mathformer_mathlib_index_build_rerank"
+        }
+      }
+    },
+    "write_return": {
+      "inputs": {
+        "args": {
+          "type": "Args"
+        },
+        "index": {
+          "type": "Index"
+        },
+        "cache": {
+          "type": "Cache"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_mathlib_index_build_write_return",
+          "operation": "mathformer_mathlib_index_build_write_return"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "root_exists",
+        "kind": "call",
+        "operation": "path_exists",
+        "arguments": {
+          "path": {
+            "ref": "inputs.args.mathlib_root"
+          }
+        }
+      },
+      {
+        "id": "root_branch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "absent_root",
+            "when": {
+              "not": {
+                "ref": "steps.root_exists.outputs.exists"
+              }
+            },
+            "body": {
+              "kind": "call",
+              "operation": "missing_root",
+              "arguments": {
+                "args": {
+                  "ref": "inputs.args"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "validation",
+              "when": {
+                "ref": "inputs.args.validate_existing"
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "index_exists",
+                    "kind": "call",
+                    "operation": "path_exists",
+                    "arguments": {
+                      "path": {
+                        "ref": "inputs.args.output"
+                      }
+                    }
+                  },
+                  {
+                    "id": "existing_branch",
+                    "kind": "switch",
+                    "cases": [
+                      {
+                        "id": "absent_index",
+                        "when": {
+                          "not": {
+                            "ref": "steps.index_exists.outputs.exists"
+                          }
+                        },
+                        "body": {
+                          "kind": "call",
+                          "operation": "missing_index",
+                          "arguments": {
+                            "args": {
+                              "ref": "inputs.args"
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "default": {
+                      "kind": "call",
+                      "operation": "load_validate",
+                      "arguments": {
+                        "args": {
+                          "ref": "inputs.args"
+                        }
+                      }
+                    },
+                    "outputs": {
+                      "result": {
+                        "type": "Result",
+                        "value": {
+                          "ref": "selected.outputs.result"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "result": {
+                    "type": "Result",
+                    "value": {
+                      "ref": "steps.existing_branch.outputs.result"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "sequence",
+            "steps": [
+              {
+                "id": "parse_index",
+                "kind": "call",
+                "operation": "parse",
+                "description": "Sort recursive *.lean paths; apply Python [:max_files] only when non-null. Scan files then lines, carrying modules, declarations and import_edges. Imports stop at first regex-matched declaration; declaration scans finish at EOF. Retain source locations, docs, tokens, shapes and unverified Lean status. Then accumulate reverse imports, descendant counts and declaration adjacency. Inspect first 16 module and namespace peers; selected token-peer scans break after an insertion reaches related-set size 12; retain sorted neighbors[:12]. All scans finish normally on finite-input exhaustion, including empty input. Version probes and timestamp/count/hash packing remain inside this operation.",
+                "arguments": {
+                  "args": {
+                    "ref": "inputs.args"
+                  }
+                }
+              },
+              {
+                "id": "cache",
+                "kind": "call",
+                "operation": "rerank",
+                "arguments": {
+                  "index": {
+                    "ref": "steps.parse_index.outputs.index"
+                  }
+                }
+              },
+              {
+                "id": "persist",
+                "kind": "call",
+                "operation": "write_return",
+                "arguments": {
+                  "args": {
+                    "ref": "inputs.args"
+                  },
+                  "index": {
+                    "ref": "steps.parse_index.outputs.index"
+                  },
+                  "cache": {
+                    "ref": "steps.cache.outputs.cache"
+                  }
+                }
+              }
+            ],
+            "outputs": {
+              "result": {
+                "type": "Result",
+                "value": {
+                  "ref": "steps.persist.outputs.result"
+                }
+              }
+            }
+          },
+          "outputs": {
+            "result": {
+              "type": "Result",
+              "value": {
+                "ref": "selected.outputs.result"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "Result",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Result",
+        "value": {
+          "ref": "steps.root_branch.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/mathlib_index/index.json",
+          "artifacts/mathlib_index/reranker_cache.json",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "build_unverified_index",
+        "validate_version_stamp"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion",
+        "promote_unverified_declarations"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 300,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Index metadata and stamp comparison only; declarations remain unverified."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/mathlib/mathlib-index-builder/scripts/build_mathlib_index.py",
+        "selector": "build",
+        "digest": "sha256:da1399e423cb665c85383b189b0e8fd9b8462ef1c80c54ec7ebcd3c961df14aa"
+      },
+      {
+        "path": "skills/mathlib/mathlib-index-builder/scripts/mathlib_index_common.py",
+        "selector": "parse_mathlib; build_declaration_graph; build_optional_reranker_cache; current_stamp_matches; run_version",
+        "digest": "sha256:44738cf5a4672123d90bb15aec6afce18b35f0d560f3d81e3c01cc5feb02eae7"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/mathlib:index-build; run_action; run_leaf_action; prepare_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathlib_index_build_tools.py",
+        "selector": "register_mathlib_index_build_tools; native_args",
+        "digest": "sha256:da4af5e4ceaaf526530d31b16ce8550963993894c7b1f39102f73b6e1502a857"
+      },
+      {
+        "path": "scripts/mathlib_index_validation_tools.py",
+        "selector": "source",
+        "digest": "sha256:fb0ca4726f2e8650f2ec8ba2a0179554c0e5d2449d053eb8bbb5b68b6a51954c"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_mathlib_index_build_tools; _analysis_write_policy; _path_allowed",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory: authored mathlib:index-build contract",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Hub admission, subprocess capture and write audit remain an external controller boundary, not this build(args) graph.",
+      "Payload schemas summarize metadata; finite helper scans and graph construction retain native implementation granularity.",
+      "Lunar supplies required receipts, events and artifact digests; native main retains its JSON and exit-code observability."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "mathlib:index-build",
+      "owner_skill": "skills/mathlib/mathlib-index-builder/SKILL.md",
+      "contract": {
+        "id": "mathlib:index-build",
+        "family": "mathlib",
+        "kind": "generation",
+        "safety": "writes_artifacts",
+        "timeout_seconds": 300
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "scripts/mathformer.py run_action dispatches run_leaf_action; no dependencies or extra arguments.",
+      "admission": "Required paths checked first; preflight failure or dry-run returns without executing build.",
+      "hub_args": {
+        "mathlib_root": ".lake/packages/mathlib/Mathlib",
+        "output": "artifacts/mathlib_index/index.json",
+        "reranker_cache": "artifacts/mathlib_index/reranker_cache.json",
+        "max_files": null,
+        "validate_existing": false
+      },
+      "specialization": "Args also describes direct build callers; hub fixes the above defaults. The separate indexing-control-suite cap of 220 does not apply here.",
+      "audit": "Registry declares only index.json; implementation also writes reranker_cache.json. Post-execution audit may reject undeclared writes; this descriptor does not grant native permission.",
+      "timeouts": "Hub subprocess 300 seconds; each version probe 20 seconds. The former generated 3600-second limit was not native.",
+      "failure": "Returned ok=false is a normal build payload; main exits 1, or 0 for ok=true. Unhandled errors abort; version probes catch OSError/TimeoutExpired as unavailable stamps. No retries or convergence.",
+      "scope": "Native defaults shown above define effect paths; custom paths require host effect qualification. No file cap or checkpoint is introduced."
+    },
+    "mathformer.runtime_binding": {
+      "implementation": "Registered deterministic MCP tools delegate to shared native functions, including load_validate and write_return used by build. No provider or generative operation.",
+      "write_admission": "Service read-only policy and both configured allowed write roots are checked before persistence; filesystem errors retain native partial-write behavior.",
+      "transport": "Required Args ports map directly to argparse values; three path strings become pathlib.Path, max_files retains Python slicing including zero and negative values."
+    }
+  }
+}

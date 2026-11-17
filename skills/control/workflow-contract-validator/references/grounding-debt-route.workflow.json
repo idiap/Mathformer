@@ -1,0 +1,611 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_validate_physics_lean_formal_science_grounding_debt_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Run the source-owned compact FormalPhysics grounding-debt gate, retaining all five checks before reporting acceptance.",
+  "aliases": [
+    "validate.physics.lean.formal_science_grounding_debt"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "CaseId": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "0191",
+          "0059"
+        ]
+      }
+    },
+    "MonitorReport": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "grounding_debt_report": {
+            "type": "object",
+            "properties": {
+              "findings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Checks": {
+      "schema": {
+        "type": "array",
+        "minItems": 5,
+        "maxItems": 5,
+        "items": {
+          "type": "object",
+          "required": [
+            "id",
+            "ok",
+            "detail"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "ok": {
+              "type": "boolean"
+            },
+            "detail": {
+              "type": "object"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "GateReport": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "style",
+          "ok",
+          "checks"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "style": {
+            "type": "string",
+            "const": "formal_science_grounding_debt_gate"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "array",
+            "minItems": 5,
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "ok",
+                "detail"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "detail": {
+                  "type": "object"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "enum": [
+          0,
+          1
+        ]
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "repository_root": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repository_root",
+          "allow_mutating"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "json_output": {
+      "type": "Boolean"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "GateReport",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    },
+    "stdout": {
+      "type": "Text",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "monitor_synthetic": {
+      "inputs": {
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "MonitorReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_grounding_debt_monitor_synthetic",
+          "operation": "mathformer_grounding_debt_monitor_synthetic"
+        }
+      }
+    },
+    "monitor_named_case": {
+      "inputs": {
+        "case_id": {
+          "type": "CaseId"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "MonitorReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_grounding_debt_monitor_case",
+          "operation": "mathformer_grounding_debt_monitor_case"
+        }
+      }
+    },
+    "construct_checks": {
+      "inputs": {
+        "bad": {
+          "type": "MonitorReport"
+        },
+        "case_0191": {
+          "type": "MonitorReport"
+        },
+        "case_0059": {
+          "type": "MonitorReport"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "checks": {
+          "type": "Checks"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_grounding_debt_construct_checks",
+          "operation": "mathformer_grounding_debt_construct_checks"
+        }
+      }
+    },
+    "aggregate": {
+      "inputs": {
+        "checks": {
+          "type": "Checks"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "GateReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_grounding_debt_aggregate",
+          "operation": "mathformer_grounding_debt_aggregate"
+        }
+      }
+    },
+    "write_report": {
+      "inputs": {
+        "report": {
+          "type": "GateReport"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "GateReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_grounding_debt_write_report",
+          "operation": "mathformer_grounding_debt_write_report"
+        }
+      }
+    },
+    "emit_return": {
+      "inputs": {
+        "report": {
+          "type": "GateReport"
+        },
+        "json_output": {
+          "type": "Boolean"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_grounding_debt_emit_return",
+          "operation": "mathformer_grounding_debt_emit_return"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "description": "Each monitor completes before the next; findings are data, while subprocess, parse and file exceptions terminate immediately.",
+    "steps": [
+      {
+        "id": "synthetic",
+        "kind": "call",
+        "operation": "monitor_synthetic",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "case_0191",
+        "kind": "call",
+        "operation": "monitor_named_case",
+        "arguments": {
+          "case_id": {
+            "literal": "0191"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "case_0059",
+        "kind": "call",
+        "operation": "monitor_named_case",
+        "arguments": {
+          "case_id": {
+            "literal": "0059"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "checks",
+        "kind": "call",
+        "operation": "construct_checks",
+        "arguments": {
+          "bad": {
+            "ref": "steps.synthetic.outputs.report"
+          },
+          "case_0191": {
+            "ref": "steps.case_0191.outputs.report"
+          },
+          "case_0059": {
+            "ref": "steps.case_0059.outputs.report"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "aggregate",
+        "kind": "call",
+        "operation": "aggregate",
+        "arguments": {
+          "checks": {
+            "ref": "steps.checks.outputs.checks"
+          }
+        }
+      },
+      {
+        "id": "publish",
+        "kind": "call",
+        "operation": "write_report",
+        "arguments": {
+          "report": {
+            "ref": "steps.aggregate.outputs.report"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "emit",
+        "kind": "call",
+        "operation": "emit_return",
+        "arguments": {
+          "report": {
+            "ref": "steps.publish.outputs.report"
+          },
+          "json_output": {
+            "ref": "inputs.json_output"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "GateReport",
+        "value": {
+          "ref": "steps.publish.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.emit.outputs.exit_code"
+        }
+      },
+      "stdout": {
+        "type": "Text",
+        "value": {
+          "ref": "steps.emit.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/physics_lean/formal_science_grounding_debt/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 7
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked gate description; acceptance of these five checks establishes no proof, scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/physics_lean/run_formal_science_grounding_debt_gate.py",
+        "selector": "main",
+        "digest": "sha256:c75c1b6deb20142bea2896a810a68d51d696293559c7caff3da64dca85cee529"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; run_intent_match; run_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "skills/physics-lean/physics-lean-drift-pathology-monitor/scripts/monitor_physics_lean_drift_pathologies.py",
+        "selector": "main; formal_science_grounding_debt_report",
+        "digest": "sha256:e3df2692328944adcf5795e9a94081f2025f5c4907550390428d0d48a1915b46"
+      },
+      {
+        "path": "scripts/grounding_debt_tools.py",
+        "selector": "register_grounding_debt_tools; source",
+        "digest": "sha256:c57f786476ab6e235bc34c93cc9e1be9d80d2edffb1de10e2962532c42c336c3"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_grounding_debt_tools; _analysis_write_policy; _path_allowed",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "grounding_debt_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_grounding_debt_workflow_tests.py",
+        "selector": "GroundingDebtTests; --route",
+        "digest": "sha256:3aa1f0bd567586cf69c7a924221bc4c3c101c5a1d977f48ecf03695a870e180d"
+      }
+    ],
+    "gaps": [
+      "Controller preflight, dry-run, outer route envelopes and write audits remain native; this graph models the selected main after admission.",
+      "Lunar enforces the retained 3600-second ceiling and seven-call accounting; native gate and monitor subprocesses specify no timeout.",
+      "Lunar supplies mandatory receipts and digests; native report writing alone does not supply v1 receipts."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "validate.physics.lean.formal_science_grounding_debt",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "validate.physics.lean.formal_science_grounding_debt",
+        "title": "Gate FormalPhysics Lean grounding before algebraic proof",
+        "action_ids": [
+          "physics-lean:formal-science-grounding-debt"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "build_intent_routes resolves the route; run_intent_match calls run_action, which launches the gate script with --json.",
+      "json_output": "Route supplies true; direct main invocation maps --json to true and omission to false.",
+      "failure_policy": "Monitor nonzero exits raise RuntimeError; malformed JSON and file errors propagate immediately. Findings alone never abort subsequent monitors or checks.",
+      "completion": "Write every check before emission, including failures; report.ok=false returns exit code 1 after writing and printing.",
+      "report_path": "artifacts/physics_lean/formal_science_grounding_debt/report.json",
+      "monitor_bounds": "Each of three monitors runs once; finite-line scanning and finding accumulation remain inside the monitor operation.",
+      "state": "Three monitor reports feed five checks, which feed the aggregate report; no repair, retry, refinement or convergence loop.",
+      "context": "Bound context.repository_root selects an existing absolute repository mount for fixed case files, native monitor subprocess cwd, and the fixed report path. The CLI defaults to its source repository. Service write policy, write roots, and context.allow_mutating authorize publication.",
+      "observability": "emit_return invokes the native printer, returns its exact stdout bytes, and mirrors them to the MCP diagnostic stream to preserve stdio protocol framing."
+    },
+    "mathformer.checks": {
+      "trivial_support_debt_blocks": "Synthetic debt codes must include prop_true_support_definition, local_law_shim_true and source_law_typed_true; retain sorted observed codes.",
+      "formalphysics_0191_no_true_law_debt": "Neither source_law_typed_true nor local_law_shim_true may occur; retain sorted observed codes.",
+      "formalphysics_0059_no_true_law_debt": "Neither source_law_typed_true nor local_law_shim_true may occur; retain sorted observed codes.",
+      "formalphysics_0191_uses_hilbert_foundation_support": "All fragments must occur in CASE_0191; detail retains its repository-relative filename.",
+      "hilbert_fragments": [
+        "import MathformerPhysicsLib.Lean.Foundations",
+        "InnerProductSpace ℂ H",
+        "HilbertBoundedOperator",
+        "TimeDependentSchrodingerProductDifferentiationFrontier"
+      ],
+      "formalphysics_0059_exposes_variational_derivative_integral_packet": "All fragments must occur in CASE_0059; detail retains its repository-relative filename.",
+      "variational_fragments": [
+        "VariationChainIntegralFrontier",
+        "differentiate_under_integral",
+        "chain_rule_integral_substitution",
+        "fixed_endpoints"
+      ],
+      "acceptance": "Only all five check.ok values control aggregate acceptance; other monitor findings need not be absent."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "physics-lean:formal-science-grounding-debt"
+      ],
+      "action_workflows": [
+        "hub_physics_lean_formal_science_grounding_debt_workflow"
+      ],
+      "keep_going_semantics": "Outer route appends ordered child results and keeps aggregate ok sticky; stop on failure unless keep_going. One action makes either path terminate after that child.",
+      "selection": "Already selected route; NL scoring and ambiguity resolution remain native."
+    }
+  }
+}

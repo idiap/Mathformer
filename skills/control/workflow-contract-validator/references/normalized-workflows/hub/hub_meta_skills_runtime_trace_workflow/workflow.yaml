@@ -1,0 +1,441 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_meta_skills_runtime_trace_workflow
+version: 1.0.0
+kind: workflow
+description: Record an observational coherence trace, then validate runtime traces
+  through the native hub controller.
+aliases:
+- meta-skills:runtime-trace
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  Strings:
+    schema:
+      type: array
+      items:
+        type: string
+  Boolean:
+    schema:
+      type: boolean
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  Admission:
+    schema:
+      type: object
+      required:
+      - accepted
+      - status
+      - ancestry
+      properties:
+        accepted:
+          type: boolean
+        status:
+          enum:
+          - accepted
+          - unknown_action
+          - dependency_cycle
+          - extra_args_for_sequence
+        ancestry:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+  DependencyState:
+    schema:
+      type: object
+      required:
+      - index
+      - children
+      - dependencies_ok
+      - ancestry
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          maximum: 2
+        children:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            required:
+            - ok
+            properties:
+              ok:
+                type: boolean
+        dependencies_ok:
+          type: boolean
+        ancestry:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+inputs:
+  context:
+    type: RunContext
+  extra_args:
+    type: Strings
+  seen:
+    type: Strings
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  admit:
+    inputs:
+      extra_args:
+        type: Strings
+      seen:
+        type: Strings
+    outputs:
+      admission:
+        type: Admission
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_hub_runtime_trace_admit
+        operation: mathformer_hub_runtime_trace_admit
+  reject:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_hub_runtime_trace_reject
+        operation: mathformer_hub_runtime_trace_reject
+  initialize:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      state:
+        type: DependencyState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_hub_runtime_trace_initialize
+        operation: mathformer_hub_runtime_trace_initialize
+  visit:
+    inputs:
+      state:
+        type: DependencyState
+      context:
+        type: RunContext
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_hub_runtime_trace_visit
+        operation: mathformer_hub_runtime_trace_visit
+  advance:
+    inputs:
+      state:
+        type: DependencyState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+    outputs:
+      state:
+        type: DependencyState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_hub_runtime_trace_advance
+        operation: mathformer_hub_runtime_trace_advance
+  finish:
+    inputs:
+      state:
+        type: DependencyState
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_hub_runtime_trace_finish
+        operation: mathformer_hub_runtime_trace_finish
+flow:
+  kind: sequence
+  steps:
+  - id: admission
+    kind: call
+    operation: admit
+    arguments:
+      extra_args:
+        ref: inputs.extra_args
+      seen:
+        ref: inputs.seen
+  - id: dispatch
+    kind: switch
+    cases:
+    - id: accepted
+      when:
+        ref: steps.admission.outputs.admission.accepted
+      body:
+        kind: sequence
+        steps:
+        - id: initialize
+          kind: call
+          operation: initialize
+          arguments:
+            admission:
+              ref: steps.admission.outputs.admission
+        - id: visit
+          kind: call
+          operation: visit
+          description: Index 0 records; index 1 validates. Failed HubResult remains
+            data for aggregation and keep_going.
+          arguments:
+            state:
+              ref: steps.initialize.outputs.state
+            context:
+              ref: inputs.context
+        - id: advance
+          kind: call
+          operation: advance
+          arguments:
+            state:
+              ref: steps.initialize.outputs.state
+            child:
+              ref: steps.visit.outputs.child
+            context:
+              ref: inputs.context
+        - id: stop_or_continue
+          kind: switch
+          description: The native registry has exactly two children. Unroll the fixed
+            bound so native early stop and final aggregate remain explicit without
+            a branch-local loop exhaustion exit.
+          cases:
+          - id: done
+            when:
+              ref: steps.advance.outputs.done
+            body:
+              id: finish
+              kind: call
+              operation: finish
+              arguments:
+                state:
+                  ref: steps.advance.outputs.state
+          default:
+            kind: sequence
+            steps:
+            - id: visit
+              kind: call
+              operation: visit
+              description: Index 0 records; index 1 validates. Failed HubResult remains
+                data for aggregation and keep_going.
+              arguments:
+                state:
+                  ref: steps.advance.outputs.state
+                context:
+                  ref: inputs.context
+            - id: advance_second
+              kind: call
+              operation: advance
+              arguments:
+                state:
+                  ref: steps.advance.outputs.state
+                child:
+                  ref: steps.visit.outputs.child
+                context:
+                  ref: inputs.context
+            - id: finish
+              kind: call
+              operation: finish
+              arguments:
+                state:
+                  ref: steps.advance_second.outputs.state
+            outputs:
+              result:
+                type: HubResult
+                value:
+                  ref: steps.finish.outputs.result
+          outputs:
+            result:
+              type: HubResult
+              value:
+                ref: selected.outputs.result
+        outputs:
+          result:
+            type: HubResult
+            value:
+              ref: steps.stop_or_continue.outputs.result
+    default:
+      id: rejected
+      kind: call
+      operation: reject
+      arguments:
+        admission:
+          ref: steps.admission.outputs.admission
+    outputs:
+      result:
+        type: HubResult
+        value:
+          ref: selected.outputs.result
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.dispatch.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/meta_skills/runtime/
+      - artifacts/meta_skills/runtime_trace_validation.json
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 9
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Observational trace and validation envelopes only; completion establishes
+    no coherence science result or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_registry; admit_action; reject_action; initialize_dependencies;
+      visit_dependency; advance_dependencies; finish_dependencies; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: meta_skills/scripts/record_skill_application.py
+    selector: main; coherence_events; write_trace
+    digest: sha256:b96a5783d519f327fc8106b1347d446ac5adc73a0c7353aeb3ac51f8d9434047
+  - path: meta_skills/scripts/validate_runtime_traces.py
+    selector: main; run; validate_file
+    digest: sha256:19abff4dfbc2b1fbdaf8a9f79af713c3c8efead087d4b94ab8c63e0f477af733
+  - path: scripts/mcp_server.py
+    selector: mathformer_run_action; mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/hub_runtime_trace_tools.py
+    selector: register_hub_runtime_trace_tools
+    digest: sha256:d62c1e674fe175b49c0989654c2eeabf288e3315d6d51354a184c4263766a566
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Leaf subprocess internals remain owned by visit; file/content iteration is native
+    and has no added fixed cap.
+  - 3600 seconds and nine block calls are normalization budgets enforced by the host,
+    not native global budgets; native leaf timeouts remain unset.
+  - Mandatory receipts/digests are host runtime requirements; native filesystem audits
+    and observational trace artifacts remain source-owned.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: meta-skills:runtime-trace
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: meta-skills:runtime-trace
+      summary: Record and validate the MathformerPhysicsLib coherence runtime skill-application
+        trace.
+      family: meta_skills
+      kind: validation
+      safety: writes_artifacts
+      command: []
+      depends_on:
+      - meta-skills:runtime-trace-record
+      - meta-skills:runtime-trace-validate
+      writes:
+      - artifacts/meta_skills/runtime/
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: The six MCP tools call shared scripts/mathformer.py controller functions;
+      visit recursively calls run_action with build_registry and native uncapped leaf
+      timeouts. CLI and native MCP dispatch remain available.
+    input_defaults: Native extra_args=() and seen=None; this explicit projection accepts
+      [] for each. Registry and action identity are source-owned.
+    leaf_behavior: Preflight errors return without launching; otherwise dry_run returns
+      without launching. Successful preflight launches one subprocess, then audits
+      filesystem changes; undeclared writes force ok=false. Unexpected launch errors
+      propagate; uncaught script errors cause subprocess failure.
+    effects_status: native_filesystem_audit_and_service_write_root_guard
+    qualification_capability_names_are_not_runtime_grants: true
+  mathformer.composition:
+    ordered_dependencies:
+    - meta-skills:runtime-trace-record
+    - meta-skills:runtime-trace-validate
+    command_after_dependencies: false
+    keep_going_semantics: Stop after first failed child unless keep_going; continuing
+      never restores cumulative success.
+    recording: meta_skills/scripts/record_skill_application.py:main constructs exactly
+      seven predefined observational coherence events and writes JSONL plus Markdown;
+      it does not run the coherence science workflow.
+    validation: meta_skills/scripts/validate_runtime_traces.py:main/run scans sorted
+      runtime *.jsonl files, carrying cursor, per-file results, all findings. Each
+      nonblank record is checked for JSON validity, required fields, allowed step,
+      evidence, and artifact existence. Findings accumulate through every file; success
+      requires at least one trace and no error findings.
+    bounds: Two dependency visits; seven generated events. Validation loops are bounded
+      by discovered files, their lines and record contents; no retries or native global
+      time budget.
+    normalized_bound: The two-child native loop is finitely unrolled. First advance.done
+      selects early finish or the final visit. Index, history, ancestry and cumulative
+      success retain native state; no third visit is reachable.
+# REUSE-IgnoreEnd

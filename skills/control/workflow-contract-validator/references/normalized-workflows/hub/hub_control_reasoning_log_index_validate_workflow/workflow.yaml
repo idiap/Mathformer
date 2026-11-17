@@ -1,0 +1,292 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_control_reasoning_log_index_validate_workflow
+version: 1.0.0
+kind: workflow
+description: Bounded native reasoning-index validation with shared loading, ordered
+  entry checks and finalization.
+aliases:
+- control:reasoning-log-index-validate
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Index:
+    schema:
+      type: string
+      description: Native index path; the loader retains missing and invalid JSON
+        reports and admits at most 1000 list entries. Relative paths use the service
+        working directory, as in validate_index.
+  Boolean:
+    schema:
+      type: boolean
+  ScanState:
+    schema:
+      type: object
+      required:
+      - index
+      - entries
+      - offset
+      - findings
+      - terminal_report
+      properties:
+        index:
+          type: string
+        entries:
+          type: array
+          items: {}
+          maxItems: 1000
+        offset:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        findings:
+          type: array
+          items:
+            type: object
+        terminal_report:
+          type:
+          - object
+          - 'null'
+      additionalProperties: false
+  Report:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - style
+      - ok
+      - index
+      - findings
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: reasoning_log_index_validation
+        ok:
+          type: boolean
+        index:
+          type: string
+        entry_count:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        findings:
+          type: array
+          items:
+            type: object
+            required:
+            - severity
+            - code
+            properties:
+              severity:
+                const: high
+              code:
+                type: string
+              message:
+                type: string
+              entry_offset:
+                type: integer
+                minimum: 0
+              missing:
+                type: array
+                items:
+                  type: string
+              log_file:
+                type: string
+              field:
+                enum:
+                - validation_status
+                - quality_status
+      additionalProperties: false
+inputs:
+  index:
+    type: Index
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+operations:
+  load_initialize:
+    inputs:
+      index:
+        type: Index
+    outputs:
+      state:
+        type: ScanState
+      scan:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_index_load
+        operation: mathformer_reasoning_index_load
+  validate_entry_advance:
+    inputs:
+      state:
+        type: ScanState
+    outputs:
+      state:
+        type: ScanState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_index_advance
+        operation: mathformer_reasoning_index_advance
+  finalize:
+    inputs:
+      state:
+        type: ScanState
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_index_finalize
+        operation: mathformer_reasoning_index_finalize
+flow:
+  kind: sequence
+  steps:
+  - id: load
+    kind: call
+    operation: load_initialize
+    arguments:
+      index:
+        ref: inputs.index
+  - id: scan
+    kind: loop
+    state_type: ScanState
+    initial:
+      ref: steps.load.outputs.state
+    max_iterations: 1000
+    on_exhausted: fail
+    body:
+      kind: call
+      operation: validate_entry_advance
+      arguments:
+        state:
+          ref: loop.state
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: ScanState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finalize
+    arguments:
+      state:
+        ref: steps.scan.outputs.state
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finish.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      - referenced_log_paths
+      write: []
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - read_index
+    - inspect_log_paths
+    - produce_validation_report
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 1002
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked validation specification; no runtime qualification
+    or scientific promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/control/reasoning-log-schema-guardian/scripts/validate_reasoning_log_index.py
+    digest: sha256:ef70bbd877c4c33c218f5d2acaaced6a98c5935593c7e1f2aa4ef34796a1bd13
+    selector: validate_index; load_initialize; validate_entry_advance; finalize
+  - path: scripts/mathformer.py
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/reasoning_index_tools.py
+    digest: sha256:61dc5577f914c9ee72caea46348578361318460630c489b31a289b7efff75d45
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Native entries are unbounded. The MCP loader rejects more than 1000 list entries
+    as outside this specialization, without inventing a native finding. The native
+    entrypoint remains unbounded. At 1000 entries the final iteration stops normally;
+    admitted inputs cannot exhaust the loop.
+  - The native action has no time or retry bound. Lunar enforces the authored policy
+    during workflow execution. Native uncaught exceptions remain failures.
+  - This explicit block interface implements validate_index, not hub preflight, dry-run
+    or write auditing. Native main printing and exit codes remain owned by the CLI;
+    report ok=false remains returned data.
+  - Lunar cannot compile branch-local loop exhaustion. The scan loop is at sequence
+    scope; advance returns unchanged state and done=true on the empty or terminal
+    load path, without invoking a native entry check. This administrative call preserves
+    the native report and read order.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: control:reasoning-log-index-validate
+    owner_skill: skills/control/reasoning-log-schema-guardian/SKILL.md
+  mathformer.native_boundary:
+    default_index: artifacts/reasoning/index.json
+    invocation: run_action -> run_leaf_action -> validate_reasoning_log_index.py --json
+      -> main -> validate_index
+    depends_on: []
+    allows_extra_args: false
+    timeout_seconds: null
+    consumer: Final dependency of control:reasoning-log-consumer-readiness.
+    controls: Preflight failures and dry runs skip execution; actual execution audits
+      undeclared writes.
+    main: Prints JSON or brief result; exits 0 for ok=true, 3 for reported failure.
+# REUSE-IgnoreEnd

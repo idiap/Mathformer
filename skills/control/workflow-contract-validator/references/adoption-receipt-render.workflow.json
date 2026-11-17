@@ -1,0 +1,367 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_adoption_receipt_render_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Validate an existing invocation receipt and render its escaped HTML summary.",
+  "aliases": [
+    "adoption:receipt-render"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "ReceiptDirectory": {
+      "schema": {
+        "type": "string"
+      },
+      "representation": "value"
+    },
+    "ValidatedRecord": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "required": [
+          "invocation_id",
+          "status",
+          "result_digest",
+          "metadata"
+        ],
+        "properties": {
+          "invocation_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "result_digest": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "Rows": {
+      "representation": "value",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "Html": {
+      "schema": {
+        "type": "string"
+      },
+      "representation": "value",
+      "media_type": "text/html"
+    }
+  },
+  "inputs": {
+    "directory": {
+      "type": "ReceiptDirectory"
+    }
+  },
+  "outputs": {
+    "html": {
+      "type": "Html",
+      "value": {
+        "ref": "flow.outputs.html"
+      }
+    }
+  },
+  "operations": {
+    "validate_receipt": {
+      "inputs": {
+        "directory": {
+          "type": "ReceiptDirectory"
+        }
+      },
+      "outputs": {
+        "record": {
+          "type": "ValidatedRecord"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_receipt_validate",
+          "operation": "mathformer_receipt_validate"
+        }
+      }
+    },
+    "base_rows": {
+      "inputs": {
+        "record": {
+          "type": "ValidatedRecord"
+        }
+      },
+      "outputs": {
+        "rows": {
+          "type": "Rows"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_receipt_base_rows",
+          "operation": "mathformer_receipt_base_rows"
+        }
+      }
+    },
+    "append_metadata": {
+      "inputs": {
+        "record": {
+          "type": "ValidatedRecord"
+        },
+        "rows": {
+          "type": "Rows"
+        }
+      },
+      "outputs": {
+        "rows": {
+          "type": "Rows"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_receipt_append_metadata",
+          "operation": "mathformer_receipt_append_metadata"
+        }
+      }
+    },
+    "assemble_html": {
+      "inputs": {
+        "rows": {
+          "type": "Rows"
+        }
+      },
+      "outputs": {
+        "html": {
+          "type": "Html"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_receipt_assemble_html",
+          "operation": "mathformer_receipt_assemble_html"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "on_failure": "fail",
+    "steps": [
+      {
+        "id": "validate",
+        "kind": "call",
+        "operation": "validate_receipt",
+        "arguments": {
+          "directory": {
+            "ref": "inputs.directory"
+          }
+        }
+      },
+      {
+        "id": "initialize_rows",
+        "kind": "call",
+        "operation": "base_rows",
+        "arguments": {
+          "record": {
+            "ref": "steps.validate.outputs.record"
+          }
+        }
+      },
+      {
+        "id": "metadata_rows",
+        "kind": "call",
+        "operation": "append_metadata",
+        "arguments": {
+          "record": {
+            "ref": "steps.validate.outputs.record"
+          },
+          "rows": {
+            "ref": "steps.initialize_rows.outputs.rows"
+          }
+        }
+      },
+      {
+        "id": "render",
+        "kind": "call",
+        "operation": "assemble_html",
+        "arguments": {
+          "rows": {
+            "ref": "steps.metadata_rows.outputs.rows"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "html": {
+        "type": "Html",
+        "value": {
+          "ref": "steps.render.outputs.html"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "receipt_directory"
+        ],
+        "write": []
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "validate_existing_receipt",
+        "render_existing_receipt"
+      ],
+      "forbidden": [
+        "replay_recorded_operation",
+        "generate_explanations",
+        "bypass_native_controls"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 4
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Validated receipt consistency and escaped rendering only; no replay or scientific endorsement."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/control/reasoning-log-schema-guardian/scripts/adoption_provenance.py",
+        "selector": "render_summary; summary_base_rows; summary_append_metadata; summary_html; validate_invocation; _parse_json; canonical_bytes; main",
+        "digest": "sha256:a9a24e31ba4fad57a41f4c03417f4488a4f000c28f908aa32752f872a12ba6be"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:adoption:receipt-render; run_action; run_leaf_action; preflight",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/adoption_receipt_render_tools.py",
+        "selector": "register_adoption_receipt_render_tools; source",
+        "digest": "sha256:bc2b2c5bf1ed4c4e640c2acdbf8e10716536679495c19410d3ff7bcdfb955f95"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_adoption_receipt_render_tools(mcp)",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "service_coverage_report",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory/authored adoption:receipt-render",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "CLI and hub envelopes are documented boundary behavior, not graph operations or outputs.",
+      "Native rendering creates no observability events and has no timeout; Lunar owns required runtime receipts, events and the 3600-second budget."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "adoption:receipt-render",
+      "owner_skill": "skills/control/reasoning-log-schema-guardian/SKILL.md",
+      "contract": {
+        "id": "adoption:receipt-render",
+        "summary": "Render an existing invocation receipt without execution.",
+        "family": "control",
+        "kind": "render",
+        "safety": "read_only",
+        "timeout_seconds": null,
+        "allows_extra_args": true,
+        "depends_on": [],
+        "writes": []
+      }
+    },
+    "mathformer.validation": {
+      "source": "adoption_provenance.py:validate_invocation",
+      "status_branch": "complete requires skill_application_complete; failed and cancelled require skill_application_error. No branch replays the recorded operation.",
+      "checks": "Both versions equal 1; invocation is 32 lowercase hex characters; parent is null or string and differs from invocation. Metadata keys are allowed. Canonical metadata/result SHA-256 and raw-log SHA-256 must agree. Terminal identities/status match provenance. Exactly two events are required. Event order/index, both payload/application identities, skill and status join; start inputs and terminal evidence must join metadata/result digests.",
+      "carried_state": "Duplicate-key parsing accumulates one object dictionary; parsing accumulates the event list. JSON traversal follows input size/depth. Event join validation runs exactly twice after the count check. These helper internals stay inside validate_receipt; exceptions stop before any rows are constructed."
+    },
+    "mathformer.rendering": {
+      "carried_state": "Ordered rows, initialized once and extended by sorted metadata.",
+      "bounds": "Metadata iteration follows its supplied allowed keys; final rendering visits three base rows plus all metadata rows. No retry, refinement, convergence, persistent state, fixed input-size cap or exhaustion result exists.",
+      "implementation": "Shared native summary_base_rows, summary_append_metadata and summary_html helpers, also called by render_summary; MCP serializes row tuples as JSON arrays."
+    },
+    "mathformer.native_boundary": {
+      "execution": "Hub registers the Python script with render; dependency-free run_action dispatches through run_leaf_action and forwards extra arguments. Preflight errors and dry-run return before subprocess launch.",
+      "stopping": "validate_invocation converts OSError, KeyError, TypeError, UnicodeError and JSONDecodeError to ValueError; explicit check failures also raise ValueError. main catches ValueError, prints sorted error JSON with ok=false and exits 1. Success prints HTML and exits 0. Argparse handles argument errors; other uncaught exceptions terminate through Python without a success output.",
+      "scope": "Graph inputs/output describe render_summary(directory), not HubResult.",
+      "budget": "No native timeout is configured. The retained 3600 seconds is contract-only; four operation calls describe this projection, not a source runtime counter.",
+      "observability": "Required v1 events/receipts are host obligations; rendering reads existing evidence and does not create reasoning events, receipts or checkpoints."
+    }
+  }
+}

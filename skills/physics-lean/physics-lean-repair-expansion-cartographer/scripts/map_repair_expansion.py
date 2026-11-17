@@ -1,0 +1,585 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Make recursive Lean physics pathology repair exhaustive and inspectable.
+#
+# Intent:
+#   Convert monitor, object, workbench, repair, and generative packets into a
+#   stable expansion map before another repair iteration is allowed.
+#
+# Function:
+#   Emits node coverage, outstanding obligations, next-frontier actions, rerun
+#   gates, and an iteration signature.
+#
+# Maintenance Notes:
+#   Keep terminal statuses synchronized with the recursive repair controller.
+
+"""Map recursive Lean physics pathology repair expansion."""
+
+from __future__ import annotations
+
+import argparse
+from copy import deepcopy
+import hashlib
+import json
+from pathlib import Path
+from typing import Any, Sequence
+
+REPAIR_STYLE_TO_CATEGORY = {
+    "physics_lean_notational_collapse_repair_plan": "notational_collapse",
+    "physics_lean_abstraction_elevation_repair_plan": "abstraction_elevation",
+    "physics_lean_proof_strategy_alignment_repair_plan": "proof_strategy_substitution",
+    "physics_lean_implicit_premise_normalization_plan": "implicit_premise_selection",
+}
+
+TERMINAL_WORKBENCH_STATUSES = {
+    "mathformer_reused",
+    "candidate_promoted",
+    "explicitly_blocked",
+    "blocked",
+    "not_required",
+    "complete",
+}
+
+TERMINAL_REPAIR_STATUSES = {
+    "ready",
+    "not_required",
+    "complete",
+}
+
+TERMINAL_GENERATIVE_STATUSES = {
+    "ready",
+    "not_required",
+    "complete",
+    "present",
+}
+
+RECURSIVE_RERUN_GATES = [
+    "critique.physics_lean_drift_pathology_monitor",
+    "repair.physics_math_object_detect",
+    "repair.mathformerphysicslib_object_workbench",
+    "repair.physics_lean_pathology_loop",
+    "repair.physics_lean_generative_repair",
+    "repair.physics_lean_repair_expansion_cartography",
+    "repair.physics_lean_recursive_repair_control",
+    "consistency.physics_lean_report",
+]
+
+
+def load_json(path: Path | None) -> dict[str, Any]:
+    """Load an optional JSON object."""
+    if path is None:
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_many(paths: Sequence[Path]) -> list[dict[str, Any]]:
+    """Load several JSON objects."""
+    return [load_json(path) for path in paths]
+
+
+def active_categories(
+    monitor_report: dict[str, Any], repair_loop: dict[str, Any]
+) -> list[str]:
+    """Return active pathology categories."""
+    if isinstance(repair_loop.get("active_categories"), list):
+        return sorted({str(item) for item in repair_loop["active_categories"]})
+    counts = monitor_report.get("category_counts", {})
+    if isinstance(counts, dict):
+        return sorted(str(key) for key, value in counts.items() if int(value) > 0)
+    findings = monitor_report.get("findings", [])
+    return sorted(
+        {
+            str(item.get("category"))
+            for item in findings
+            if isinstance(item, dict) and item.get("category")
+        }
+    )
+
+
+def object_classes(object_packet: dict[str, Any]) -> list[str]:
+    """Return detected object classes."""
+    classes = [
+        str(item.get("object_class"))
+        for item in object_packet.get("objects", [])
+        if isinstance(item, dict) and item.get("object_class")
+    ]
+    return sorted(set(classes))
+
+
+def repair_by_category(repair_plans: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Index repair plans by pathology category."""
+    indexed: dict[str, dict[str, Any]] = {}
+    for plan in repair_plans:
+        style = str(plan.get("style", "unknown"))
+        category = REPAIR_STYLE_TO_CATEGORY.get(style, style)
+        indexed[category] = plan
+    return indexed
+
+
+def workbench_by_object(workbench_plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Index workbench items by object class."""
+    indexed: dict[str, dict[str, Any]] = {}
+    for item in workbench_plan.get("items", []):
+        if isinstance(item, dict) and item.get("object_class"):
+            indexed[str(item["object_class"])] = item
+    return indexed
+
+
+def node(
+    *,
+    node_id: str,
+    kind: str,
+    status: str,
+    owner_skill: str,
+    evidence: dict[str, Any] | None = None,
+    blockers: list[str] | None = None,
+    terminal: bool = False,
+) -> dict[str, Any]:
+    """Create one expansion node."""
+    return {
+        "id": node_id,
+        "kind": kind,
+        "status": status,
+        "owner_skill": owner_skill,
+        "terminal": terminal,
+        "blockers": blockers or [],
+        "evidence": evidence or {},
+    }
+
+
+def stable_signature(payload: dict[str, Any]) -> str:
+    """Return a stable short signature for recursion control."""
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
+
+
+def seed_map(packets: dict[str, Any]) -> dict[str, Any]:
+    """Index evidence and append the initial monitor node."""
+    monitor_report = packets["monitor_report"]
+    object_packet = packets["object_packet"]
+    workbench_plan = packets["workbench_plan"]
+    repair_loop = packets["repair_loop"]
+    repair_plans = packets["repair_plans"]
+    categories = active_categories(monitor_report, repair_loop)
+    classes = object_classes(object_packet)
+    repairs = repair_by_category(repair_plans)
+    workbench = workbench_by_object(workbench_plan)
+    nodes: list[dict[str, Any]] = []
+
+    monitor_status = str(monitor_report.get("status", "missing"))
+    nodes.append(
+        node(
+            node_id="monitor.pathologies",
+            kind="monitor",
+            status=monitor_status,
+            owner_skill="physics-lean-drift-pathology-monitor",
+            evidence={"active_categories": categories},
+            terminal=monitor_status == "pass",
+        )
+    )
+
+    return {
+        "packets": packets,
+        "categories": categories,
+        "classes": classes,
+        "repairs": repairs,
+        "workbench": workbench,
+        "nodes": nodes,
+    }
+
+
+def expand_categories(state: dict[str, Any]) -> dict[str, Any]:
+    """Traverse the finite sorted category list once."""
+    state = deepcopy(state)
+    categories = state["categories"]
+    repairs, nodes = state["repairs"], state["nodes"]
+    for category in categories:
+        plan = repairs.get(category)
+        if plan is None:
+            nodes.append(
+                node(
+                    node_id=f"pathology.{category}.repair_plan",
+                    kind="pathology_repair_plan",
+                    status="missing_repair_plan",
+                    owner_skill="pathology-specific repair skills",
+                    blockers=[f"missing_repair_plan:{category}"],
+                )
+            )
+            continue
+        status = str(plan.get("status", "present"))
+        blockers = [str(item) for item in plan.get("blockers", [])]
+        terminal = status in TERMINAL_REPAIR_STATUSES and not blockers
+        nodes.append(
+            node(
+                node_id=f"pathology.{category}.repair_plan",
+                kind="pathology_repair_plan",
+                status=status,
+                owner_skill=str(plan.get("skill", "pathology-specific repair skills")),
+                evidence={"style": plan.get("style")},
+                blockers=blockers,
+                terminal=terminal,
+            )
+        )
+
+    return state
+
+
+def expand_objects(state: dict[str, Any]) -> dict[str, Any]:
+    """Detect missing objects and append workbench obligations in source order."""
+    state = deepcopy(state)
+    categories, classes = state["categories"], state["classes"]
+    workbench, nodes = state["workbench"], state["nodes"]
+    if categories and not classes:
+        nodes.append(
+            node(
+                node_id="objects.detected.none",
+                kind="object_detection",
+                status="missing_objects_for_active_pathologies",
+                owner_skill="physics-math-object-detector",
+                blockers=["missing_detected_physics_objects"],
+            )
+        )
+
+    for object_class in classes:
+        nodes.append(
+            node(
+                node_id=f"object.{object_class}",
+                kind="physics_math_object",
+                status="detected",
+                owner_skill="physics-math-object-detector",
+                terminal=True,
+            )
+        )
+        item = workbench.get(object_class)
+        if item is None:
+            nodes.append(
+                node(
+                    node_id=f"workbench.{object_class}",
+                    kind="mathformerphysicslib_workbench",
+                    status="missing_workbench_item",
+                    owner_skill="mathformerphysicslib-object-workbench",
+                    blockers=[f"missing_workbench_item:{object_class}"],
+                )
+            )
+            continue
+        item_status = str(item.get("status", "missing"))
+        terminal = item_status in TERMINAL_WORKBENCH_STATUSES
+        blockers = (
+            []
+            if terminal
+            else [f"library_object_not_ready:{object_class}:{item_status}"]
+        )
+        nodes.append(
+            node(
+                node_id=f"workbench.{object_class}",
+                kind="mathformerphysicslib_workbench",
+                status=item_status,
+                owner_skill="mathformerphysicslib-object-workbench",
+                evidence={
+                    "repair_surface": item.get("repair_surface"),
+                    "existing_hit_count": len(item.get("existing_hits", [])),
+                    "candidate_module_path": item.get("candidate_module_path"),
+                },
+                blockers=blockers,
+                terminal=terminal,
+            )
+        )
+
+    return state
+
+
+def append_policies(state: dict[str, Any]) -> dict[str, Any]:
+    """Append generative and target-refinement policy nodes."""
+    state = deepcopy(state)
+    categories = state["categories"]
+    nodes = state["nodes"]
+    generative_repair = state["packets"]["generative_repair"]
+    repair_loop = state["packets"]["repair_loop"]
+    gen_status = str(generative_repair.get("status", "missing"))
+    gen_required = bool(categories)
+    gen_terminal = (not gen_required) or gen_status in TERMINAL_GENERATIVE_STATUSES
+    nodes.append(
+        node(
+            node_id="generative.repair",
+            kind="generative_repair",
+            status=gen_status if gen_required else "not_required",
+            owner_skill="physics-lean-generative-repair-orchestrator",
+            evidence={
+                "style": generative_repair.get("style", "missing"),
+                "probe_count": len(generative_repair.get("probe_prompts", [])),
+            },
+            blockers=(
+                [] if gen_terminal else ["missing_or_unready_generative_repair_plan"]
+            ),
+            terminal=gen_terminal,
+        )
+    )
+
+    repair_loop_status = str(repair_loop.get("status", "missing"))
+    may_edit = bool(
+        repair_loop.get("target_refinement_policy", {}).get(
+            "may_edit_target_theorem", False
+        )
+    )
+    nodes.append(
+        node(
+            node_id="target.refinement.policy",
+            kind="target_refinement_policy",
+            status="allowed" if may_edit else "blocked",
+            owner_skill="physics-lean-pathology-repair-orchestrator",
+            evidence={"repair_loop_status": repair_loop_status},
+            blockers=(
+                []
+                if may_edit or not categories
+                else ["target_refinement_blocked_until_library_first_support"]
+            ),
+            terminal=may_edit or not categories,
+        )
+    )
+
+    return state
+
+
+def assess_map(state: dict[str, Any]) -> dict[str, Any]:
+    """Measure coverage separately from unresolved obligations."""
+    state = deepcopy(state)
+    categories, classes = state["categories"], state["classes"]
+    repairs, workbench, nodes = state["repairs"], state["workbench"], state["nodes"]
+    generative_repair = state["packets"]["generative_repair"]
+    gen_required = bool(categories)
+    gen_status = str(generative_repair.get("status", "missing"))
+    monitor_status = str(state["packets"]["monitor_report"].get("status", "missing"))
+    outstanding = [item for item in nodes if not item["terminal"]]
+    missing_repair_plans = [
+        item["id"].split(".")[1]
+        for item in nodes
+        if item["status"] == "missing_repair_plan"
+    ]
+    missing_workbench_items = [
+        item["id"].split(".")[1]
+        for item in nodes
+        if item["status"] == "missing_workbench_item"
+    ]
+    coverage_complete = (
+        not missing_repair_plans
+        and not missing_workbench_items
+        and (not gen_required or gen_status != "missing")
+    )
+    coverage = {
+        "active_pathology_categories": categories,
+        "categories_with_repair_plans": sorted(set(categories) & set(repairs)),
+        "categories_missing_repair_plans": missing_repair_plans,
+        "detected_object_classes": classes,
+        "object_classes_with_workbench_items": sorted(set(classes) & set(workbench)),
+        "object_classes_missing_workbench_items": missing_workbench_items,
+        "generative_repair_present": bool(generative_repair),
+        "coverage_complete": coverage_complete,
+    }
+    return {
+        "not_required": monitor_status == "pass" and not outstanding,
+        "has_outstanding": bool(outstanding),
+        "outstanding": outstanding,
+        "coverage_complete": coverage_complete,
+        "coverage": coverage,
+    }
+
+
+def assign_status(value: str) -> str:
+    """Apply the status assignment selected by the ordered guards."""
+    return value
+
+
+def finish_map(
+    state: dict[str, Any], assessment: dict[str, Any], status: str
+) -> dict[str, Any]:
+    """Build the ordered frontier, deterministic signature and final map."""
+    state = deepcopy(state)
+    categories, classes = state["categories"], state["classes"]
+    repairs, workbench, nodes = state["repairs"], state["workbench"], state["nodes"]
+    outstanding = assessment["outstanding"]
+    coverage_complete = assessment["coverage_complete"]
+    gen_status = str(state["packets"]["generative_repair"].get("status", "missing"))
+    repair_loop_status = str(state["packets"]["repair_loop"].get("status", "missing"))
+    next_frontier = []
+    for item in outstanding:
+        if item["kind"] == "pathology_repair_plan":
+            action = "run_or_fix_pathology_specific_repair_plan"
+        elif item["kind"] == "mathformerphysicslib_workbench":
+            action = "work_object_in_mathformerphysicslib_then_rerun_workbench"
+        elif item["kind"] == "generative_repair":
+            action = "build_or_validate_generative_repair_plan"
+        elif item["kind"] == "target_refinement_policy":
+            action = (
+                "keep_target_edits_blocked_and_recurse_on_library_first_obligations"
+            )
+        else:
+            action = "rerun_detection_or_monitoring"
+        next_frontier.append(
+            {
+                "node_id": item["id"],
+                "owner_skill": item["owner_skill"],
+                "action": action,
+                "blockers": item["blockers"],
+            }
+        )
+
+    signature_payload = {
+        "categories": categories,
+        "objects": classes,
+        "workbench": {
+            key: workbench[key].get("status", "missing") for key in sorted(workbench)
+        },
+        "repairs": {
+            key: {
+                "style": repairs[key].get("style"),
+                "status": repairs[key].get("status"),
+                "blockers": repairs[key].get("blockers", []),
+            }
+            for key in sorted(repairs)
+        },
+        "repair_loop_status": repair_loop_status,
+        "generative_repair_status": gen_status,
+        "outstanding_node_ids": [item["id"] for item in outstanding],
+    }
+
+    return {
+        "style": "physics_lean_repair_expansion_map",
+        "status": status,
+        "exhaustive": coverage_complete,
+        "coverage": assessment["coverage"],
+        "nodes": nodes,
+        "outstanding_nodes": outstanding,
+        "next_frontier": next_frontier,
+        "recursive_rerun_gates": RECURSIVE_RERUN_GATES,
+        "iteration_signature": stable_signature(signature_payload),
+        "iteration_signature_payload": signature_payload,
+    }
+
+
+def build_map(
+    *,
+    monitor_report: dict[str, Any],
+    object_packet: dict[str, Any],
+    workbench_plan: dict[str, Any],
+    repair_loop: dict[str, Any],
+    generative_repair: dict[str, Any],
+    repair_plans: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build the exhaustive expansion map."""
+    packets = dict(
+        monitor_report=monitor_report,
+        object_packet=object_packet,
+        workbench_plan=workbench_plan,
+        repair_loop=repair_loop,
+        generative_repair=generative_repair,
+        repair_plans=repair_plans,
+    )
+    state = append_policies(expand_objects(expand_categories(seed_map(packets))))
+    assessment = assess_map(state)
+    if assessment["not_required"]:
+        status = assign_status("not_required")
+    elif assessment["has_outstanding"]:
+        status = assign_status("needs_expansion")
+    else:
+        status = assign_status("complete")
+    return finish_map(state, assessment, status)
+
+
+def parse_args(
+    argv: Sequence[str] | None = None, *, prog: str | None = None
+) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__, prog=prog)
+    parser.add_argument("--monitor-report", type=Path)
+    parser.add_argument("--object-packet", type=Path)
+    parser.add_argument("--workbench-plan", type=Path)
+    parser.add_argument("--repair-loop", type=Path)
+    parser.add_argument("--generative-repair", type=Path)
+    parser.add_argument("--repair-plan", type=Path, action="append", default=[])
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    return parser.parse_args(argv)
+
+
+def fixture_packets() -> dict[str, Any]:
+    """The CLI's fixed self-test evidence, shared with MCP loading."""
+    return dict(
+        monitor_report={
+            "status": "fail",
+            "category_counts": {"notational_collapse": 1},
+        },
+        object_packet={"objects": [{"object_class": "commutator"}]},
+        workbench_plan={
+            "items": [{"object_class": "commutator", "status": "reuse_candidate"}]
+        },
+        repair_loop={
+            "status": "blocked_on_library_or_labels",
+            "active_categories": ["notational_collapse"],
+            "target_refinement_policy": {"may_edit_target_theorem": False},
+        },
+        generative_repair={
+            "style": "physics_lean_generative_repair_plan",
+            "status": "ready",
+            "probe_prompts": [{}],
+        },
+        repair_plans=[
+            {
+                "style": "physics_lean_notational_collapse_repair_plan",
+                "status": "blocked_on_library",
+            }
+        ],
+    )
+
+
+def load_packets(args: argparse.Namespace) -> dict[str, Any]:
+    """Load evidence in CLI argument evaluation order; errors propagate."""
+    if args.self_test:
+        return fixture_packets()
+    return dict(
+        monitor_report=load_json(args.monitor_report),
+        object_packet=load_json(args.object_packet),
+        workbench_plan=load_json(args.workbench_plan),
+        repair_loop=load_json(args.repair_loop),
+        generative_repair=load_json(args.generative_repair),
+        repair_plans=load_many(args.repair_plan),
+    )
+
+
+def assert_fixture(expansion: dict[str, Any]) -> None:
+    """Apply the source-owned self-test assertions after mapping."""
+    assert expansion["style"] == "physics_lean_repair_expansion_map"
+    assert expansion["status"] == "needs_expansion"
+    assert expansion["exhaustive"] is True
+    assert any(
+        item["id"] == "workbench.commutator" for item in expansion["outstanding_nodes"]
+    )
+
+
+def emit_expansion(expansion: dict[str, Any], output_path: Path | None) -> int:
+    """Serialize and emit the native result, retaining the CLI's byte format."""
+    output = json.dumps(expansion, ensure_ascii=False, indent=2)
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(output + "\n", encoding="utf-8")
+    else:
+        print(output)
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run expansion mapping through the same stages as the callable tools."""
+    args = parse_args(argv)
+    expansion = build_map(**load_packets(args))
+    if args.self_test:
+        assert_fixture(expansion)
+    return emit_expansion(expansion, args.output)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

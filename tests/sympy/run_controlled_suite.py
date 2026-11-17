@@ -1,0 +1,568 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+#
+# Intent:
+#   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+#
+# Function:
+#   Contains executable tests, fixtures, and manifests used for local and CI validation.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Run the controlled SymPy equational-trace suite end to end."""
+
+from __future__ import annotations
+
+import argparse
+from contextvars import ContextVar
+import json
+from pathlib import Path
+import subprocess
+import sys
+import time
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+if not PYTHON.exists():
+    PYTHON = Path(sys.executable)
+
+
+WORKING_DIRECTORY = ContextVar("sympy_suite_working_directory", default=REPO_ROOT)
+
+
+SOURCES = [
+    Path("tests/latex/wiki_level/sum_first_odd_numbers.tex"),
+    Path("tests/sympy/controlled_latex/binomial_square.tex"),
+    Path("tests/sympy/controlled_latex/finite_geometric_sum.tex"),
+    Path("tests/sympy/controlled_latex/product_rule_derivative.tex"),
+    Path("tests/sympy/controlled_latex/matrix_distributivity.tex"),
+]
+
+
+OUTPUT_NAMES = {
+    "wiki_sum_first_odd_numbers": "AutoformalizedSumFirstOddNumbers.py",
+    "sympy_binomial_square": "AutoformalizedBinomialSquare.py",
+    "sympy_finite_geometric_sum": "AutoformalizedFiniteGeometricSum.py",
+    "sympy_product_rule_derivative": "AutoformalizedProductRuleDerivative.py",
+    "sympy_matrix_distributivity": "AutoformalizedMatrixDistributivity.py",
+}
+
+
+def run(check_id: str, cmd: list[str], timeout: int = 180) -> dict[str, Any]:
+    """Document the responsibility of ``run``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    started = time.perf_counter()
+    proc = subprocess.run(
+        cmd,
+        cwd=WORKING_DIRECTORY.get(),
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+    )
+    return {
+        "id": check_id,
+        "cmd": cmd,
+        "ok": proc.returncode == 0,
+        "returncode": proc.returncode,
+        "duration_ms": round((time.perf_counter() - started) * 1000, 3),
+        "stdout": proc.stdout[-4000:],
+        "stderr": proc.stderr[-4000:],
+    }
+
+
+def run_required(
+    results: list[dict[str, Any]], check_id: str, cmd: list[str], timeout: int = 180
+) -> bool:
+    """Document the responsibility of ``run_required``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    result = run(check_id, cmd, timeout)
+    results.append(result)
+    return result["ok"]
+
+
+def concepts_from_parse(path: Path) -> list[str]:
+    """Document the responsibility of ``concepts_from_parse``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    packet = json.loads(path.read_text(encoding="utf-8"))
+    concepts = sorted(
+        {
+            concept
+            for unit in packet.get("units", [])
+            for concept in unit.get("concepts", [])
+        }
+    )
+    return concepts or ["symbolic_simplification"]
+
+
+def write_index_html(case_reports: list[dict[str, Any]], output: Path) -> None:
+    """Document the responsibility of ``write_index_html``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    rows = []
+    for report in case_reports:
+        consistency = report.get("consistency", {})
+        score = consistency.get("aggregate_reference_free_score", 0.0)
+        metrics = consistency.get("metrics", {})
+        html_link = (
+            f"<a href='{report['html_rel']}'>case report</a>"
+            if report.get("html_rel")
+            else "not generated"
+        )
+        rows.append(
+            "<tr>"
+            f"<td><code>{report.get('case_id', report.get('source'))}</code></td>"
+            f"<td>{consistency.get('status', 'failed')}</td>"
+            f"<td>{score:.3f}</td>"
+            f"<td>{metrics.get('symbolic_equivalence', 0.0):.3f}</td>"
+            f"<td>{metrics.get('api_grounding_density', 0.0):.3f}</td>"
+            f"<td>{metrics.get('counterexample_absence', 0.0):.3f}</td>"
+            f"<td>{html_link}</td>"
+            "</tr>"
+        )
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SymPy Controlled Suite</title>
+  <script>window.MathJax = {{tex: {{inlineMath: [['$', '$'], ['\\\\(', '\\\\)']]}}}};</script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #1f2937; }}
+    main {{ max-width: 1100px; margin: 0 auto; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th, td {{ border-bottom: 1px solid #e5e7eb; padding: 10px; text-align: left; }}
+    code {{ font-size: 0.92em; }}
+  </style>
+</head>
+<body>
+<main>
+  <h1>SymPy Controlled Equational-Trace Suite</h1>
+  <p>Each case runs through parsing, assumptions, API grounding, drafting, execution, identity validation, bounded counterexample search, trace verification, and reference-free consistency reporting.</p>
+  <table>
+    <thead><tr><th>Case</th><th>Status</th><th>Score</th><th>Symbolic</th><th>Grounding</th><th>No Counterexample</th><th>Report</th></tr></thead>
+    <tbody>{''.join(rows)}</tbody>
+  </table>
+</main>
+</body>
+</html>
+"""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(html, encoding="utf-8")
+
+
+def run_case(source: Path, api_index: Path, root: Path) -> dict[str, Any]:
+    """Document the responsibility of ``run_case``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    results: list[dict[str, Any]] = []
+    source_stem = source.stem
+    case_root = root / source_stem
+    case_root.mkdir(parents=True, exist_ok=True)
+    parse = case_root / "parse_packet.json"
+    assumptions = case_root / "assumptions.json"
+    grounding = case_root / "api_grounding.json"
+    draft = case_root / "draft_report.json"
+    execution = case_root / "execution_report.json"
+    identity = case_root / "symbolic_validation.json"
+    counterexamples = case_root / "counterexample_report.json"
+    trace = case_root / "trace_verification.json"
+    consistency = case_root / "sympy_consistency_report.json"
+    markdown = case_root / "sympy_consistency_report.md"
+    html = case_root / "sympy_consistency_report.html"
+
+    if not run_required(
+        results,
+        f"{source_stem}.parse",
+        [
+            str(PYTHON),
+            "skills/sympy/sympy-expression-parser/scripts/parse_sympy_expressions.py",
+            "--source",
+            str(source),
+            "--output",
+            str(parse),
+            "--json",
+        ],
+    ):
+        return {"source": str(source), "ok": False, "results": results}
+    parse_packet = json.loads(parse.read_text(encoding="utf-8"))
+    case_id = parse_packet.get("case_id")
+    artifact = case_root / OUTPUT_NAMES.get(
+        case_id, f"Autoformalized{case_id.title().replace('_', '')}.py"
+    )
+    concept_args = [
+        part
+        for concept in concepts_from_parse(parse)
+        for part in ("--concept", concept)
+    ]
+    commands = [
+        (
+            f"{source_stem}.assumptions",
+            [
+                str(PYTHON),
+                "skills/sympy/sympy-assumption-modeler/scripts/model_sympy_assumptions.py",
+                "--parse-packet",
+                str(parse),
+                "--output",
+                str(assumptions),
+                "--json",
+            ],
+        ),
+        (
+            f"{source_stem}.grounding",
+            [
+                str(PYTHON),
+                "skills/sympy/sympy-concept-grounding-navigator/scripts/ground_sympy_concepts.py",
+                "--api-index",
+                str(api_index),
+                *concept_args,
+                "--output",
+                str(grounding),
+                "--json",
+            ],
+        ),
+        (
+            f"{source_stem}.draft",
+            [
+                str(PYTHON),
+                "skills/sympy/sympy-autoformalization-drafter/scripts/draft_sympy_case.py",
+                "--parse-packet",
+                str(parse),
+                "--assumptions",
+                str(assumptions),
+                "--grounding",
+                str(grounding),
+                "--output",
+                str(artifact),
+                "--report",
+                str(draft),
+                "--json",
+            ],
+        ),
+        (
+            f"{source_stem}.execute",
+            [
+                str(PYTHON),
+                "skills/sympy/sympy-execution-runner/scripts/run_sympy_artifact.py",
+                "--artifact",
+                str(artifact),
+                "--output",
+                str(execution),
+                "--json",
+            ],
+        ),
+        (
+            f"{source_stem}.identity",
+            [
+                str(PYTHON),
+                "skills/sympy/sympy-identity-validator/scripts/validate_sympy_identity.py",
+                "--artifact",
+                str(artifact),
+                "--output",
+                str(identity),
+                "--json",
+            ],
+        ),
+        (
+            f"{source_stem}.counterexamples",
+            [
+                str(PYTHON),
+                "skills/sympy/sympy-counterexample-searcher/scripts/search_sympy_counterexamples.py",
+                "--artifact",
+                str(artifact),
+                "--max-n",
+                "100",
+                "--output",
+                str(counterexamples),
+                "--json",
+            ],
+        ),
+        (
+            f"{source_stem}.trace",
+            [
+                str(PYTHON),
+                "skills/sympy/sympy-transformation-trace-verifier/scripts/verify_sympy_trace.py",
+                "--artifact",
+                str(artifact),
+                "--output",
+                str(trace),
+                "--json",
+            ],
+        ),
+        (
+            f"{source_stem}.consistency",
+            [
+                str(PYTHON),
+                "skills/sympy/sympy-consistency-report-orchestrator/scripts/run_sympy_consistency_report.py",
+                "--artifact",
+                str(artifact),
+                "--parse-packet",
+                str(parse),
+                "--assumptions",
+                str(assumptions),
+                "--grounding",
+                str(grounding),
+                "--draft-report",
+                str(draft),
+                "--execution",
+                str(execution),
+                "--identity",
+                str(identity),
+                "--counterexamples",
+                str(counterexamples),
+                "--trace",
+                str(trace),
+                "--output",
+                str(consistency),
+                "--markdown",
+                str(markdown),
+                "--html",
+                str(html),
+                "--json",
+            ],
+        ),
+    ]
+    for check_id, cmd in commands:
+        if not run_required(results, check_id, cmd):
+            return {
+                "source": str(source),
+                "case_id": case_id,
+                "ok": False,
+                "results": results,
+            }
+    consistency_report = json.loads(consistency.read_text(encoding="utf-8"))
+    return {
+        "source": str(source),
+        "case_id": case_id,
+        "artifact": str(artifact),
+        "ok": True,
+        "results": results,
+        "consistency": consistency_report,
+        "html": str(html),
+        "html_rel": (
+            html.name if html.parent == root else html.relative_to(root).as_posix()
+        ),
+    }
+
+
+def initialize(
+    artifact_root: Path = Path("artifacts/sympy/controlled_suite"),
+    api_index: Path = Path("artifacts/sympy_api/index.json"),
+    json_output: bool = True,
+) -> dict[str, Any]:
+    """Initialize the native suite's loop-carried state."""
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    return {
+        "python": str(PYTHON),
+        "root": str(artifact_root),
+        "api_index": str(api_index),
+        "cursor": 0,
+        "preflight_ok": True,
+        "preflight_results": [],
+        "case_reports": [],
+        "json_output": json_output,
+    }
+
+
+def preflight_commands(state: dict) -> list:
+    root, api_index = Path(state["root"]), Path(state["api_index"])
+    return [
+        (
+            "dependency_probe",
+            [
+                str(PYTHON),
+                "skills/sympy/sympy-dependency-prober/scripts/probe_sympy_dependencies.py",
+                "--output",
+                str(root / "dependency_probe.json"),
+                "--json",
+            ],
+        ),
+        (
+            "api_index",
+            [
+                str(PYTHON),
+                "skills/sympy/sympy-api-docs-indexer/scripts/index_sympy_api.py",
+                "--output",
+                str(api_index),
+                "--self-test",
+                "--json",
+            ],
+        ),
+    ]
+
+
+def preflight_step(state: dict) -> dict:
+    state = {**state, "preflight_results": list(state["preflight_results"])}
+    check_id, cmd = preflight_commands(state)[state["cursor"]]
+    state["preflight_ok"] = run_required(state["preflight_results"], check_id, cmd)
+    state["cursor"] += 1
+    return {"state": state, "done": not state["preflight_ok"] or state["cursor"] == 2}
+
+
+def emit_report(state: dict, report: dict, index_html: str | None) -> dict:
+    path = Path(state["root"]) / "suite_report.json"
+    path.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    print(
+        json.dumps(report, indent=2, sort_keys=True)
+        if state["json_output"]
+        else f"sympy controlled suite ok={report['ok']}"
+    )
+    return {
+        "exit_code": 0 if report["ok"] else 1,
+        "suite_report": str(path),
+        "index_html": index_html,
+    }
+
+
+def preflight_failure(state: dict) -> dict:
+    return emit_report(
+        state, {"ok": False, "results": state["preflight_results"]}, None
+    )
+
+
+def prepare_cases(state: dict) -> dict:
+    if not state["preflight_ok"]:
+        return state
+    return {**state, "cursor": 0, "case_reports": []}
+
+
+def skip_cases(state: dict) -> dict:
+    """Carry failed preflight through the guarded loop without case work."""
+    return {"state": state, "done": True}
+
+
+def suite_case(state: dict) -> dict:
+    return run_case(
+        SOURCES[state["cursor"]], Path(state["api_index"]), Path(state["root"])
+    )
+
+
+def collect_case(state: dict, report: dict) -> dict:
+    state = {
+        **state,
+        "case_reports": [*state["case_reports"], report],
+        "cursor": state["cursor"] + 1,
+    }
+    return {"state": state, "done": state["cursor"] == len(SOURCES)}
+
+
+def finish(state: dict) -> dict:
+    reports, root = state["case_reports"], Path(state["root"])
+    ok = all(item.get("ok") for item in reports)
+    write_index_html(reports, root / "index.html")
+    report = {
+        "ok": ok,
+        "python": state["python"],
+        "preflight": state["preflight_results"],
+        "cases": reports,
+        "index_html": str(root / "index.html"),
+    }
+    return emit_report(state, report, str(root / "index.html"))
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--artifact-root", type=Path, default=Path("artifacts/sympy/controlled_suite")
+    )
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+
+    state = initialize(args.artifact_root, json_output=args.json)
+    while True:
+        step = preflight_step(state)
+        state = step["state"]
+        if step["done"]:
+            break
+    if not state["preflight_ok"]:
+        return preflight_failure(state)["exit_code"]
+    state = prepare_cases(state)
+    for _ in SOURCES:
+        state = collect_case(state, suite_case(state))["state"]
+    return finish(state)["exit_code"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

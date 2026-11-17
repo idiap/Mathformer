@@ -1,0 +1,542 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_validate_normalized_workflows_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected single-action validation route through native controls.",
+  "aliases": [
+    "validate.normalized_workflows"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "SelectedMatch": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "properties": {
+              "route_id": {
+                "const": "validate.normalized_workflows",
+                "type": "string"
+              },
+              "action_ids": {
+                "type": "array",
+                "items": {
+                  "const": "control:normalized-workflows",
+                  "type": "string"
+                },
+                "minItems": 1,
+                "maxItems": 1
+              }
+            }
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "description": "Canonical WorkflowAction registry projected as values; no caller-added actions."
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "ok"
+              ],
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "control:normalized-workflows"
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Explicit repository mount, or null/omitted for the native default."
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "SelectedMatch"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot",
+      "required": false
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_normalized_route_initialize",
+          "operation": "mathformer_normalized_route_initialize"
+        }
+      }
+    },
+    "select": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_normalized_route_select",
+          "operation": "mathformer_normalized_route_select"
+        }
+      }
+    },
+    "invoke_action": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot",
+          "required": false
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_normalized_route_invoke_action",
+          "operation": "mathformer_normalized_route_invoke_action"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_normalized_route_advance",
+          "operation": "mathformer_normalized_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_normalized_route_finish",
+          "operation": "mathformer_normalized_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "Exactly one native route iteration; done is true at the bound even on failure.",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "invoke",
+              "kind": "call",
+              "operation": "invoke_action",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.invoke.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": []
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Validation transport only; no scientific truth, promotion, or runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "main; check; inventory; audit_action_dependencies; render_descriptors; check_rendered; finish",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_normalized_workflows_route_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/normalized_workflows_route_tools.py",
+        "selector": "register_normalized_workflows_route_tools; selected_match; checked_registry; check_state",
+        "digest": "sha256:c249ce8b309ac59afc23b617111fdff68eff15a6c9ff09ffa435811dbcacb4ed"
+      },
+      {
+        "path": "scripts/adoption_check_tools.py",
+        "selector": "Context",
+        "digest": "sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac"
+      },
+      {
+        "path": "scripts/workflow_write_audit.py",
+        "selector": "snapshot_repository; audit_snapshots",
+        "digest": "sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/validate_workflow.py",
+        "selector": "validate",
+        "digest": "sha256:ea01aae8567bda203251f46a68bab0e8545b34f5cf4ded960388734f7b700b21"
+      }
+    ],
+    "gaps": [
+      "Admission, preflight, subprocess capture, native validator traversals, and write audit remain inside invoke_action; coverage is partial at this native operation boundary.",
+      "Native timeout_seconds remains None. Lunar enforces the 3600-second enclosing budget; standalone native tools retain native execution behavior.",
+      "Required v1 receipts, digests, events, and provenance are recorded by Lunar; optional native logging is preserved without claiming it implements all v1 observability."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "validate.normalized_workflows",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "validate.normalized_workflows",
+        "title": "Validate normalized workflow skill contracts",
+        "action_ids": [
+          "control:normalized-workflows"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "MCP ports call the shared native run_intent_match steps. run_action owns the action boundary; Lunar executes the typed outer graph.",
+      "callers": [
+        "CLI ask --run",
+        "scripts/mcp_server.py:mathformer_ask",
+        "scripts/mcp_server.py:mathformer_run_workflow"
+      ],
+      "selection": "Already selected route; match and registry must come from the canonical native resolver and registry.",
+      "repository_root": "Native default mount or caller-provided mount is shared by preflight, subprocess, and audit.",
+      "effects_status": "Read-only check; unexpected writes are audited as failures.",
+      "failure_policy": "Return native unsuccessful payloads unchanged; uncaught controller exceptions terminate.",
+      "limits": "Five descriptive block calls, one run_action call, at most one subprocess; exhaustion is unreachable for this route."
+    },
+    "mathformer.bindings": {
+      "context": "All native RunContext fields and an optional nullable repository_root are supported.",
+      "registry": "Exact native action_to_dict projections are materialized from the source-owned registry; caller-defined argv is rejected."
+    },
+    "mathformer.operation_boundaries": {
+      "initialize": "Initialize the shared native ordered route accumulator.",
+      "select": "Select the native action using the number of child observations.",
+      "invoke_action": "scripts/mathformer.py:run_action owns admission, then run_leaf_action preflight. This action has no dependencies and receives no extra arguments. Rejection returns failure data; preflight errors or dry_run return without launching. Otherwise resolve_command uses sys.executable to launch skills/control/workflow-contract-validator/scripts/normalize_workflows.py --check --json. Capture stdout/stderr/returncode, then audit repository snapshots; nonzero exit or unexpected writes sets ok=false. Unexpected launch errors propagate. normalize_workflows.py:main/check inventories canonical definitions, rejects dependency references/cycles and identity collisions, then renders descriptors and catalog in memory. check_rendered traverses finite expected files in order, carrying files/catalog/errors: missing or stale files append errors and skip deeper validation; matching workflow descriptors receive schema, semantic/dataflow, and provenance checks. A subsequent disk traversal appends unexpected-descriptor errors. finish emits JSON and exits 0 iff errors is empty, otherwise 1; uncaught exceptions terminate the subprocess. No descriptor writes or scientific workflows occur on this check path. Traversal helpers remain inside this operation.",
+      "advance": "Append child, retain sticky success, and stop at the one-action bound regardless of keep_going.",
+      "finish": "Pack native route metadata, status and ordered child observations."
+    }
+  }
+}

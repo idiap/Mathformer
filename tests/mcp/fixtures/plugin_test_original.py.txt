@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+"""Exercise plugin generation and checkout-independent distribution layout."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+import shutil
+import tempfile
+import unittest
+import hashlib
+import sys
+import subprocess
+import tomllib
+
+ROOT = Path(__file__).resolve().parents[2]
+SPEC = importlib.util.spec_from_file_location(
+    "sync_agent_plugins", ROOT / "scripts/sync_agent_plugins.py"
+)
+assert SPEC and SPEC.loader
+plugins = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(plugins)
+sys.path.insert(0, str(ROOT / 'scripts'))
+from workflow_catalog import WORKFLOWS, load_catalog, plugin_skill_name  # noqa: E402
+
+
+class AgentPluginTests(unittest.TestCase):
+    """Check discovery parity and changes that previously risked silent drift."""
+
+    def fixture(self, root: Path) -> Path:
+        """Create a minimal source tree, including legacy pre-frontmatter comments."""
+        (root / "pyproject.toml").write_text('[project]\nversion = "0.1.0"\n')
+        (root / "LICENSE").write_text("MIT\n")
+        (root / "LICENSES").mkdir()
+        (root / "LICENSES/MIT.txt").write_text("MIT\n")
+        source = root / "skills/lean/demo/SKILL.md"
+        source.parent.mkdir(parents=True)
+        source.write_text(
+            "<!-- license -->\n\n---\nname: demo\ndescription: Execute a demo.\n---\nBody\n"
+        )
+        return source
+
+    def test_repository_is_current(self):
+        self.assertEqual(plugins.synchronize(ROOT, check=True), [])
+        canonical = list((ROOT / "skills").glob("*/*/SKILL.md"))
+        discovered = list((ROOT / plugins.PLUGIN / "skills").glob("*/SKILL.md"))
+        self.assertEqual(
+            {p.parent.name for p in canonical} | {plugin_skill_name(row['id']) for row in load_catalog()['workflows']},
+            {p.parent.name for p in discovered}
+        )
+
+    def test_drift_and_removal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = self.fixture(root)
+            plugins.synchronize(root, check=False)
+            self.assertEqual(plugins.synchronize(root, check=True), [])
+            entry = root / plugins.PLUGIN / "skills/demo/SKILL.md"
+            source.write_text(
+                source.read_text().replace("Execute a demo.", "Execute a changed demo.")
+            )
+            before = entry.read_bytes()
+            self.assertIn(
+                str(entry.relative_to(root)), plugins.synchronize(root, check=True)
+            )
+            self.assertEqual(entry.read_bytes(), before)
+            plugins.synchronize(root, check=False)
+            renamed = source.parent.with_name("renamed")
+            source.parent.rename(renamed)
+            (renamed / "SKILL.md").write_text(
+                (renamed / "SKILL.md")
+                .read_text()
+                .replace("name: demo", "name: renamed")
+            )
+            plugins.synchronize(root, check=False)
+            self.assertFalse(entry.exists())
+            self.assertTrue((entry.parent.with_name("renamed") / "SKILL.md").exists())
+
+    def test_duplicate_names_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = self.fixture(root)
+            duplicate = root / "skills/control/demo"
+            duplicate.mkdir(parents=True)
+            shutil.copy2(source, duplicate / "SKILL.md")
+            with self.assertRaisesRegex(ValueError, "Duplicate"):
+                plugins.expected_files(root)
+
+    def test_cached_plugin_is_self_contained_for_discovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cached = Path(directory) / "cache/mathformer"
+            shutil.copytree(ROOT / plugins.PLUGIN, cached)
+            for client in ("codex", "claude"):
+                manifest = json.loads(
+                    (cached / f".{client}-plugin/plugin.json").read_text()
+                )
+                self.assertEqual(manifest["name"], "mathformer")
+                skill_root = cached / manifest.get("skills", "./skills/")
+                self.assertEqual(
+                    len(list(skill_root.glob("*/SKILL.md"))),
+                    len(list((ROOT / "skills").glob("*/*/SKILL.md"))) + len(load_catalog()['workflows']),
+                )
+            for entry in (cached / "skills").glob("*/SKILL.md"):
+                self.assertFalse(entry.is_symlink())
+                self.assertTrue(entry.read_text().startswith("---\n"))
+                self.assertNotIn("SPDX-", entry.read_text())
+                self.assertNotIn(str(ROOT), entry.read_text())
+            self.assertEqual(
+                (cached / "REUSE.toml").read_text(),
+                plugins.expected_files(ROOT)[plugins.PLUGIN / "REUSE.toml"],
+            )
+            self.assertEqual(
+                (cached / "LICENSES/MIT.txt").read_bytes(),
+                (ROOT / "LICENSES/MIT.txt").read_bytes(),
+            )
+            for marketplace in (
+                ".agents/plugins/marketplace.json",
+                ".claude-plugin/marketplace.json",
+            ):
+                entry = json.loads((ROOT / marketplace).read_text())["plugins"][0]
+                source = entry["source"]
+                path = source["path"] if isinstance(source, dict) else source
+                self.assertEqual(
+                    (ROOT / path).resolve(), (ROOT / plugins.PLUGIN).resolve()
+                )
+
+    def test_every_workflow_has_a_cached_contract_in_both_clients(self):
+        catalog = load_catalog()
+        plugin_catalog = json.loads((ROOT / plugins.PLUGIN / 'workflow-catalog.json').read_text())
+        self.assertEqual({row['id'] for row in plugin_catalog['workflows']}, {row['id'] for row in catalog['workflows']})
+        self.assertEqual(plugin_catalog['counts'], catalog['counts'])
+        for row in plugin_catalog['workflows']:
+            path = ROOT / plugins.PLUGIN / row['path']
+            content = path.read_bytes()
+            self.assertEqual(row['descriptor_digest'], 'sha256:' + hashlib.sha256(content).hexdigest())
+            original = (ROOT / WORKFLOWS / next(item['path'] for item in catalog['workflows'] if item['id'] == row['id'])).read_text()
+            self.assertTrue(content.decode().endswith(original))
+            self.assertLessEqual(len(row['plugin_skill']), 64)
+            for client in ('codex', 'claude'):
+                manifest = json.loads((ROOT / plugins.PLUGIN / f'.{client}-plugin/plugin.json').read_text())
+                entry = ROOT / plugins.PLUGIN / manifest.get('skills', './skills/') / row['plugin_skill'] / 'SKILL.md'
+                self.assertTrue(entry.is_file())
+                self.assertIn(row['id'], entry.read_text())
+
+    def test_plugin_retains_canonical_contributors(self):
+        self.assertLessEqual(
+            set(plugins.contributors_for(ROOT, Path("LICENSE.license"))),
+            set(plugins.contributors_for(ROOT, plugins.PLUGIN / "LICENSE.license")),
+        )
+        metadata = tomllib.loads((ROOT / plugins.PLUGIN / "REUSE.toml").read_text())
+        self.assertTrue(all(item["precedence"] == "override" for item in metadata["annotations"]))
+        for source in (ROOT / "skills").glob("*/*/SKILL.md"):
+            entry = plugins.PLUGIN / "skills" / source.parent.name / "SKILL.md"
+            self.assertLessEqual(
+                set(plugins.contributors_for(ROOT, source.relative_to(ROOT))),
+                set(plugins.contributors_for(ROOT, entry)),
+            )
+
+    def test_git_contributors_have_per_file_attribution(self):
+        """REUSE does not validate contributor fields; check Git authors separately."""
+        aliases = {
+            "andre freitas": "Andre Freitas <andre.freitas@idiap.ch>",
+            "andré freitas": "Andre Freitas <andre.freitas@idiap.ch>",
+            "afreitas": "Andre Freitas <andre.freitas@idiap.ch>",
+            "andrenfreitas": "Andre Freitas <andre.freitas@idiap.ch>",
+            "danilo gusicuma": "Danilo Gusicuma <danilo.gusicuma@idiap.ch>",
+        }
+        history = subprocess.check_output(
+            ["git", "log", "--format=AUTHOR:%an", "--name-only"], cwd=ROOT, text=True
+        )
+        expected: dict[str, set[str]] = {}
+        author = None
+        for line in history.splitlines():
+            if line.startswith("AUTHOR:"):
+                author = aliases.get(line[7:].lower())
+                self.assertIsNotNone(author, f"Unmapped Git author: {line[7:]}")
+            elif line and author:
+                expected.setdefault(line, set()).add(author)
+        tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode().split("\0")
+        missing = []
+        for name in tracked:
+            if not name or name.endswith(".license") or name.startswith("vendor/") or "LICENSES" in Path(name).parts:
+                continue
+            path = ROOT / name
+            if not path.is_file():
+                continue
+            actual = set(plugins.contributors_for(ROOT, Path(name)))
+            sidecar = ROOT / (name + ".license")
+            if sidecar.is_file():
+                actual.update(plugins.contributors_for(ROOT, Path(name + ".license")))
+            absent = expected.get(name, set()) - actual
+            if absent:
+                missing.append(f"{name}: {sorted(absent)}")
+        self.assertEqual(missing, [], "\n".join(missing))
+
+    def test_cached_workflow_schemas_and_dataflow_are_self_contained(self):
+        sys.path.insert(0, str(ROOT / 'skills/control/workflow-contract-validator/scripts'))
+        import validate_workflow as contract_validator
+        from jsonschema import Draft202012Validator
+        with tempfile.TemporaryDirectory() as directory:
+            cached = (Path(directory) / 'mathformer').resolve()
+            shutil.copytree(ROOT / plugins.PLUGIN, cached)
+            schema = json.loads((cached / 'workflow.schema.json').read_text())
+            Draft202012Validator.check_schema(schema)
+            validator = Draft202012Validator(schema)
+            catalog = json.loads((cached / 'workflow-catalog.json').read_text())
+            for row in catalog['workflows']:
+                path = cached / row['path']
+                descriptor = contract_validator.load_yaml(path)
+                validator.validate(descriptor)
+                self.assertEqual(contract_validator.Semantics(descriptor, path.parent, cached).validate(), [])
+
+    def test_workflow_alias_names_are_portable_and_unique(self):
+        names = [plugin_skill_name(row['id']) for row in load_catalog()['workflows']]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertTrue(all(len(name) <= 64 for name in names))
+        self.assertNotEqual(plugin_skill_name('a' * 80 + '_workflow'), plugin_skill_name('a' * 79 + 'b_workflow'))
+
+    def test_missing_catalog_cannot_silently_remove_workflow_discovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            schema = root / WORKFLOWS.parent / 'workflow.schema.json'
+            schema.parent.mkdir(parents=True, exist_ok=True)
+            schema.write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'catalog missing'):
+                plugins.expected_files(root)
+
+    def test_removal_of_workflow_entry_preserves_unmanaged_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            stale = root / plugins.PLUGIN / 'skills/obsolete'
+            stale.mkdir(parents=True)
+            (stale / 'SKILL.md').write_text('Generated by `scripts/sync_agent_plugins.py`\n')
+            (stale / 'workflow.yaml').write_text('# Generated by `scripts/sync_agent_plugins.py`; old\n')
+            (stale / 'user-notes.md').write_text('retain')
+            plugins.synchronize(root, check=False)
+            self.assertFalse((stale / 'SKILL.md').exists())
+            self.assertFalse((stale / 'workflow.yaml').exists())
+            self.assertEqual((stale / 'user-notes.md').read_text(), 'retain')
+
+
+if __name__ == "__main__":
+    unittest.main()

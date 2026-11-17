@@ -1,0 +1,102 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Frozen selected entrypoint and recursive controller from source-original.py.
+def run_intent_match(
+    match: IntentMatch,
+    registry: Mapping[str, WorkflowAction],
+    context: RunContext,
+    *,
+    repository_root: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Execute the controlled action sequence selected by an NL route.
+
+    Motivation:
+        Allow NL requests to drive workflows without bypassing safety checks.
+
+    Intent:
+        Run only registered action ids from the selected route and reuse the
+        existing execution engine for preflight, dry-run, and mutation policy.
+
+    Inputs:
+        The selected match, action registry, and run context.
+
+    Outputs:
+        A result dictionary containing one child result per action.
+    """
+
+    state = initialize_intent_state()
+    mount = {} if repository_root is None else {"repository_root": repository_root}
+    for _action_id in match.route.action_ids:
+        action_id = select_intent_action(state, match)
+        child = run_action(action_id, registry, context, **mount)
+        state, done = advance_intent_state(state, child, context, len(match.route.action_ids))
+        if done:
+            break
+    return finish_intent_state(state, match, registry)
+
+
+def run_action(
+    action_id: str,
+    registry: Mapping[str, WorkflowAction],
+    context: RunContext,
+    *,
+    extra_args: Sequence[str] = (),
+    seen: Optional[Set[str]] = None,
+    repository_root: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Run a registered action or composed workflow sequence.
+
+    Motivation:
+        Let higher-level quality gates reuse smaller controlled actions without
+        duplicating command lists.
+
+    Intent:
+        Resolve the action id, prevent dependency cycles, run dependencies in
+        order, and stop on failure unless keep-going is requested.
+
+    Inputs:
+        The action id, registry, execution context, optional extra args, and
+        recursion guard. An explicit repository_root carries the caller's mount
+        through dependency recursion, preflight, subprocess cwd and write audits;
+        omitted mounts preserve the CLI's repository default.
+
+    Outputs:
+        A result dictionary for the action or sequence.
+    """
+
+    mount = {} if repository_root is None else {"repository_root": repository_root}
+    prepared = prepare_action(action_id, registry, context, extra_args=extra_args, seen=seen, **mount)
+    if 'result' in prepared:
+        return prepared['result']
+    item = registry[action_id]
+    leaf = run_leaf_action(item, context, extra_args, **mount)
+    if 'state' in prepared:
+        return aggregate_dependencies(item, prepared['state'], leaf)
+    return leaf
+
+
+def prepare_action(action_id, registry, context, *, extra_args=(), seen=None, dependency_runner=None,
+                   repository_root=None):
+    """Shared admission and ordered dependency traversal before leaf preflight.
+
+    Staged in-process callers supply a native dependency runner; the CLI retains
+    visit_dependency and its subprocess execution without a timeout override.
+    """
+    admission = admit_action(action_id, registry, extra_args, seen)
+    if not admission['accepted']:
+        return {'result': reject_action(action_id, admission)}
+    item = registry[action_id]
+    if not item.depends_on:
+        return {}
+    state = initialize_dependencies(admission)
+    mount = {} if repository_root is None else {"repository_root": repository_root}
+    for _child_id in item.depends_on:
+        child = (visit_dependency(item, registry, context, state, **mount) if dependency_runner is None
+                 else dependency_runner(item.depends_on[state['index']], set(state['ancestry'])))
+        state, done = advance_dependencies(item, state, child, context)
+        if done:
+            break
+    if not dependency_command_guard(item, state, context):
+        return {'result': finish_dependencies(item, state)}
+    return {'state': state}
+

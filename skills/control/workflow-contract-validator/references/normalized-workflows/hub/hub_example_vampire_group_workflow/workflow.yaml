@@ -1,0 +1,437 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_example_vampire_group_workflow
+version: 1.0.0
+kind: workflow
+description: Fixed group inverse-product example; read, search, persist, print and
+  return.
+aliases:
+- example:vampire-group
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Statement:
+    schema:
+      type: string
+  Flag:
+    schema:
+      type: boolean
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+  SearchState:
+    schema:
+      type: object
+      required:
+      - token
+      - revision
+      - evidence
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+        revision:
+          type: integer
+          minimum: 0
+        evidence:
+          type: object
+  RawAttempt:
+    schema:
+      type: object
+      required:
+      - token
+      - revision
+      - evidence
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+        revision:
+          type: integer
+          minimum: 0
+        evidence:
+          type: object
+  DiscoveryReport:
+    schema:
+      type: object
+      required:
+      - ok
+      - attempts
+      - winning_status
+      - winning_formal_proof
+      - winning_informal_proof
+      properties:
+        ok:
+          type: boolean
+        attempts:
+          type: array
+          items:
+            type: object
+        winning_status:
+          type:
+          - string
+          - 'null'
+        winning_formal_proof:
+          type:
+          - string
+          - 'null'
+        winning_informal_proof:
+          type:
+          - object
+          - 'null'
+inputs: {}
+outputs:
+  report:
+    type: DiscoveryReport
+    value:
+      ref: flow.outputs.report
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  read_statement:
+    inputs: {}
+    outputs:
+      statement:
+        type: Statement
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_group_example_read_statement
+        operation: mathformer_group_example_read_statement
+  initialize_search:
+    inputs:
+      statement:
+        type: Statement
+    outputs:
+      state:
+        type: SearchState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_group_example_initialize_search
+        operation: mathformer_group_example_initialize_search
+  direct_attempt:
+    inputs:
+      state:
+        type: SearchState
+    outputs:
+      attempt:
+        type: RawAttempt
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_group_example_direct_attempt
+        operation: mathformer_group_example_direct_attempt
+  carry_candidate:
+    inputs:
+      state:
+        type: SearchState
+      attempt:
+        type: RawAttempt
+    outputs:
+      state:
+        type: SearchState
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_group_example_carry_candidate
+        operation: mathformer_group_example_carry_candidate
+  finalize_report:
+    inputs:
+      statement:
+        type: Statement
+      state:
+        type: SearchState
+    outputs:
+      report:
+        type: DiscoveryReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_group_example_finalize_report
+        operation: mathformer_group_example_finalize_report
+  print_and_check:
+    inputs:
+      statement:
+        type: Statement
+      report:
+        type: DiscoveryReport
+    outputs:
+      accepted:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_group_example_print_and_check
+        operation: mathformer_group_example_print_and_check
+  return_code:
+    inputs:
+      code:
+        type: ExitCode
+    outputs:
+      code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_group_example_return_code
+        operation: mathformer_group_example_return_code
+flow:
+  kind: sequence
+  steps:
+  - id: read
+    kind: call
+    operation: read_statement
+    arguments: {}
+  - id: initialize
+    kind: call
+    operation: initialize_search
+    arguments:
+      statement:
+        ref: steps.read.outputs.statement
+  - id: search
+    kind: loop
+    description: Fixed input yields exactly one candidate; last-candidate completion
+      is normal even without a proof.
+    state_type: SearchState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: attempt
+        kind: call
+        operation: direct_attempt
+        arguments:
+          state:
+            ref: loop.state
+      - id: carry
+        kind: call
+        operation: carry_candidate
+        arguments:
+          state:
+            ref: loop.state
+          attempt:
+            ref: steps.attempt.outputs.attempt
+      outputs:
+        state:
+          type: SearchState
+          value:
+            ref: steps.carry.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: steps.carry.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: SearchState
+        value:
+          ref: body.outputs.state
+  - id: finalize
+    kind: call
+    operation: finalize_report
+    arguments:
+      statement:
+        ref: steps.read.outputs.statement
+      state:
+        ref: steps.search.outputs.state
+  - id: print_check
+    kind: call
+    operation: print_and_check
+    arguments:
+      statement:
+        ref: steps.read.outputs.statement
+      report:
+        ref: steps.finalize.outputs.report
+  - id: finish
+    kind: switch
+    cases:
+    - id: accepted
+      when:
+        ref: steps.print_check.outputs.accepted
+      body:
+        kind: call
+        operation: return_code
+        arguments:
+          code:
+            literal: 0
+    default:
+      kind: call
+      operation: return_code
+      arguments:
+        code:
+          literal: 3
+    outputs:
+      code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.code
+  outputs:
+    report:
+      type: DiscoveryReport
+      value:
+        ref: steps.finalize.outputs.report
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.finish.outputs.code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/vampire_atp/group_inverse_product_example/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 180
+    max_operation_calls: 7
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked description only; completion establishes no scientific
+    endorsement or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: examples/vampire_complex_group_theorem_to_proofs.py
+    selector: main; print_and_check; proof_excerpt
+    digest: sha256:84a2b8f1d0025fe7907207267112abbede053466ec9ad5999efe980651497515
+  - path: backends/atp/MathformerATP/vampire.py
+    selector: discover_proof; discover_proof_steps; _run_direct_attempt; VampireRunner
+    digest: sha256:8b7d92bed2c701f704e124507d567c068969f4db6990a9ff0a906a180373bb2a
+  - path: scripts/mathformer.py
+    selector: build_registry/action:example:vampire-group; run_action; run_leaf_action;
+      prepare_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/vampire_group_example_tools.py
+    selector: register_vampire_group_example_tools
+    digest: sha256:2ff66db0facebfbbc68c75a3fe960d9949eceb1338d2baeb6b50d4a971b1ef7c
+  - path: scripts/mcp_server.py
+    selector: _group_example_guard; _GROUP_EXAMPLE_TOOLS
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: hub example:vampire-group authored projection
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: examples/vampire_group_inverse_product_input.md
+    selector: fixed statement
+    digest: sha256:8933fb6abad7a22cf17a0d4d0ec9c9f939a981d12eb58d588ff96f59f73e4acb
+  - path: scripts/mathformer_mcp_service.py
+    selector: mcp_tools inventory
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  gaps:
+  - Hub admission, capture, 180-second subprocess timeout and write audit remain native
+    controller boundary behavior outside this main graph.
+  - Native runner, candidates and accumulated history remain in single-use service
+    continuations; public handles expose native stage observations. Report payloads
+    retain native nested data.
+  - Network/external capability labels remain unqualified declarations, not runtime
+    grants.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: example:vampire-group
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: example:vampire-group
+      summary: Run the group inverse informal-to-Vampire example.
+      family: atp
+      kind: demo
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - examples/vampire_complex_group_theorem_to_proofs.py
+      depends_on: []
+      required_paths:
+      - examples/vampire_complex_group_theorem_to_proofs.py
+      required_tools: []
+      optional_tools:
+      - vampire
+      writes:
+      - artifacts/vampire_atp/group_inverse_product_example/
+      allows_extra_args: false
+      timeout_seconds: 180
+  mathformer.native_boundary:
+    execution: Native hub dispatch remains available. MCP operations advance the same
+      discover_proof_steps generator used by discover_proof; native handles remain
+      service-owned, revisions prevent replay.
+    controls: Reject extra arguments; skip subprocess on dry-run/preflight errors;
+      capture output; audit declared writes afterward.
+    timeout: Hub subprocess timeout is 180 seconds; Vampire internal limit is 10 seconds
+      per attempt without Python timeout.
+    failure_policy: Missing Vampire and uncaught errors terminate script; hub reports
+      nonzero/timeout/audit failure as unsuccessful.
+  mathformer.specialization:
+    input: examples/vampire_group_inverse_product_input.md
+    artifact_root: artifacts/vampire_atp/group_inverse_product_example/
+    constraints: No caller statement override; the repository input selects one two-element
+      inverse-product template candidate.
+    premise_loop: false
+    branch: Direct search only; premise generation/minimization bypassed.
+    stop: First proof_found status (Theorem, Unsatisfiable, ContradictoryAxioms) or
+      finite candidate exhaustion.
+    bound: One iteration follows the fixed single candidate; carry.done is true at
+      the bound even on no proof, allowing report persistence.
+    failure: No winner leaves winning_informal_proof null; main prints preceding output
+      then raises on informal_proof["text"], without returning 3.
+# REUSE-IgnoreEnd

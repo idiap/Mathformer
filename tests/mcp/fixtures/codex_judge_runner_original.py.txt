@@ -1,0 +1,390 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+"""Prepare or execute FormalPhysics Codex-exec judge prompts."""
+
+from __future__ import annotations
+
+import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from build_synthesis_report import (
+    parse_json_object_text,
+    read_json,
+    write_json,
+)
+
+STYLE = "formalphysics_codex_exec_judge_runner"
+DEFAULT_PROMPTS = (
+    REPO_ROOT
+    / "artifacts"
+    / "formalphysics_comparative_analysis"
+    / "hub_selected_examples_report"
+    / "codex_exec_judge_prompts.json"
+)
+
+
+def slug(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", text).strip("_") or "prompt"
+
+
+def load_prompts(path: Path) -> list[dict[str, Any]]:
+    payload = read_json(path)
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        if isinstance(payload.get("codex_exec_judge_prompts"), list):
+            return [
+                item
+                for item in payload["codex_exec_judge_prompts"]
+                if isinstance(item, dict)
+            ]
+        if isinstance(payload.get("prompts"), list):
+            return [item for item in payload["prompts"] if isinstance(item, dict)]
+    raise ValueError(f"Prompt file must be a list or contain prompts: {path}")
+
+
+def select_prompts(
+    prompts: list[dict[str, Any]], args: argparse.Namespace
+) -> list[dict[str, Any]]:
+    selected = []
+    for prompt in prompts:
+        if args.case_id and prompt.get("case_id") != args.case_id:
+            continue
+        if args.candidate_id and prompt.get("candidate_id") != args.candidate_id:
+            continue
+        if args.judge_id and prompt.get("judge_id") != args.judge_id:
+            continue
+        selected.append(prompt)
+    if args.limit is not None:
+        selected = selected[: args.limit]
+    return selected
+
+
+def prompt_identifier(prompt: dict[str, Any], position: int) -> str:
+    return slug(
+        "__".join(
+            str(prompt.get(key, "unknown"))
+            for key in ("case_id", "candidate_id", "judge_id")
+        )
+        + f"__{position:04d}"
+    )
+
+
+def codex_command(args: argparse.Namespace, final_message: Path) -> list[str]:
+    command = [
+        args.codex_bin,
+        "exec",
+        "--cd",
+        str(REPO_ROOT),
+        "--sandbox",
+        args.sandbox,
+        "--output-last-message",
+        str(final_message),
+    ]
+    if args.model:
+        command.extend(["--model", args.model])
+    if args.profile:
+        command.extend(["--profile", args.profile])
+    command.append("-")
+    return command
+
+
+def row_from_final_message(
+    prompt: dict[str, Any],
+    final_path: Path,
+    *,
+    status: str,
+) -> dict[str, Any]:
+    final_text = final_path.read_text(encoding="utf-8") if final_path.exists() else ""
+    parsed = parse_json_object_text(final_text)
+    result: dict[str, Any] = {
+        "judge_id": prompt.get("judge_id"),
+        "case_id": prompt.get("case_id"),
+        "candidate_id": prompt.get("candidate_id"),
+        "final_message_path": str(final_path),
+        "status": status,
+        "returncode": 0 if isinstance(parsed, dict) else 2,
+        "stderr": "",
+    }
+    if isinstance(parsed, dict):
+        parsed.setdefault("judge_id", prompt.get("judge_id"))
+        parsed.setdefault("case_id", prompt.get("case_id"))
+        parsed.setdefault("candidate_id", prompt.get("candidate_id"))
+        result["result"] = parsed
+    else:
+        result["result"] = {
+            "judge_id": prompt.get("judge_id"),
+            "case_id": prompt.get("case_id"),
+            "candidate_id": prompt.get("candidate_id"),
+            "error": "codex_exec_output_not_strict_json",
+            "final_message_excerpt": final_text[:4000],
+        }
+    return result
+
+
+def execute_prompt(
+    prompt: dict[str, Any], args: argparse.Namespace, prompt_dir: Path, position: int
+) -> dict[str, Any]:
+    ident = prompt_identifier(prompt, position)
+    prompt_path = prompt_dir / f"{ident}.prompt.txt"
+    final_path = prompt_dir / f"{ident}.final.txt"
+    prompt_text = str(prompt.get("prompt", ""))
+    prompt_path.write_text(prompt_text, encoding="utf-8")
+    if args.resume and final_path.exists() and final_path.stat().st_size > 0:
+        result = row_from_final_message(
+            prompt, final_path, status="reused_existing_final_message"
+        )
+        result["prompt_path"] = str(prompt_path)
+        return result
+    result: dict[str, Any] = {
+        "judge_id": prompt.get("judge_id"),
+        "case_id": prompt.get("case_id"),
+        "candidate_id": prompt.get("candidate_id"),
+        "prompt_path": str(prompt_path),
+        "final_message_path": str(final_path),
+    }
+    if not args.execute:
+        result["status"] = "dry_run_prompt_written"
+        result["command"] = codex_command(args, final_path)
+        return result
+    completed = subprocess.run(
+        codex_command(args, final_path),
+        cwd=REPO_ROOT,
+        input=prompt_text,
+        text=True,
+        capture_output=True,
+        timeout=args.timeout,
+    )
+    result.update(
+        row_from_final_message(
+            prompt,
+            final_path,
+            status="completed" if completed.returncode == 0 else "failed",
+        )
+    )
+    result.update(
+        {
+            "status": "completed" if completed.returncode == 0 else "failed",
+            "returncode": completed.returncode,
+            "stderr": completed.stderr[-4000:],
+        }
+    )
+    return result
+
+
+def initialize_run(args: argparse.Namespace) -> dict[str, Any]:
+    """Select prompts and write the native selection before processing any rows."""
+    output_dir = args.output_dir
+    prompt_dir = output_dir / "prompts"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+    prompts = select_prompts(load_prompts(args.prompts_json), args)
+    if args.execute and not shutil.which(args.codex_bin):
+        raise SystemExit(f"codex executable not found: {args.codex_bin}")
+    selected_path = output_dir / "selected_codex_exec_judge_prompts.json"
+    results_path = output_dir / "codex_exec_judge_results.json"
+    manifest_path = output_dir / "codex_exec_judge_run_manifest.json"
+    write_json(selected_path, prompts)
+    return {
+        "args": {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in vars(args).items()
+        },
+        "artifacts": {
+            "selected_prompts": str(selected_path),
+            "results": str(results_path),
+            "manifest": str(manifest_path),
+            "prompt_dir": str(prompt_dir),
+        },
+        "selected": prompts,
+        "rows": [],
+    }
+
+
+def append_run_row(args: argparse.Namespace, state: dict[str, Any]) -> bool:
+    """Process the next sequential item; report exhaustion after appending it."""
+    index = len(state["rows"])
+    state["rows"].append(
+        execute_prompt(
+            state["selected"][index], args, Path(state["artifacts"]["prompt_dir"]), index
+        )
+    )
+    return len(state["rows"]) == len(state["selected"])
+
+
+def persist_run(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
+    """Write the same results and manifest for sequential and parallel runners."""
+    prompts, rows = state["selected"], state["rows"]
+    selected_path = Path(state["artifacts"]["selected_prompts"])
+    results_path = Path(state["artifacts"]["results"])
+    manifest_path = Path(state["artifacts"]["manifest"])
+    prompt_dir = Path(state["artifacts"]["prompt_dir"])
+    completed_results = [
+        row["result"]
+        for row in rows
+        if args.execute and isinstance(row.get("result"), dict)
+    ]
+    write_json(
+        results_path,
+        {"schema_version": 1, "style": STYLE, "results": completed_results},
+    )
+    manifest = {
+        "schema_version": 1,
+        "style": STYLE,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "execute": args.execute,
+        "prompts_json": str(args.prompts_json),
+        "selected_prompt_count": len(prompts),
+        "completed_result_count": len(completed_results),
+        "filters": {
+            "case_id": args.case_id,
+            "candidate_id": args.candidate_id,
+            "judge_id": args.judge_id,
+            "limit": args.limit,
+        },
+        "workers": args.workers,
+        "resume": args.resume,
+        "artifacts": {
+            "selected_prompts": str(selected_path),
+            "results": str(results_path),
+            "manifest": str(manifest_path),
+            "prompt_dir": str(prompt_dir),
+        },
+        "rows": rows,
+    }
+    write_json(manifest_path, manifest)
+    return manifest
+
+
+def run(args: argparse.Namespace) -> dict[str, Any]:
+    state = initialize_run(args)
+    prompts = state["selected"]
+    prompt_dir = Path(state["artifacts"]["prompt_dir"])
+    if args.execute and args.workers > 1:
+        rows_by_index: dict[int, dict[str, Any]] = {}
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            futures = {
+                executor.submit(execute_prompt, prompt, args, prompt_dir, index): index
+                for index, prompt in enumerate(prompts)
+            }
+            for future in as_completed(futures):
+                rows_by_index[futures[future]] = future.result()
+        state["rows"] = [rows_by_index[index] for index in sorted(rows_by_index)]
+    else:
+        for _ in prompts:
+            append_run_row(args, state)
+    return persist_run(args, state)
+
+
+def self_test_args(tmp: Path) -> argparse.Namespace:
+    """Write the single native fixture and parse fresh runner defaults."""
+    prompts = tmp / "prompts.json"
+    prompts.write_text(
+        json.dumps(
+            [
+                {
+                    "judge_id": "lean_tp_judge",
+                    "case_id": "formalphysics_0000",
+                    "candidate_id": "current_mathformer_lean",
+                    "prompt": "Return strict JSON.",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return parse_args(
+        [
+            "--prompts-json",
+            str(prompts),
+            "--output-dir",
+            str(tmp / "out"),
+            "--limit",
+            "1",
+        ]
+    )
+
+
+def check_self_test(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Preserve the native short-circuit checks, including a normal false result."""
+    return {
+        "ok": manifest["selected_prompt_count"] == 1
+        and Path(manifest["artifacts"]["selected_prompts"]).exists()
+        and Path(manifest["artifacts"]["results"]).exists(),
+        "style": STYLE,
+        "artifacts": manifest["artifacts"],
+    }
+
+
+def self_test() -> dict[str, Any]:
+    with tempfile.TemporaryDirectory() as raw_tmp:
+        args = self_test_args(Path(raw_tmp))
+        manifest = run(args)
+        return check_self_test(manifest)
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--prompts-json", type=Path, default=DEFAULT_PROMPTS)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path(
+            "artifacts/formalphysics_judge_synthesis/codex_exec_judges/latest"
+        ),
+    )
+    parser.add_argument("--case-id")
+    parser.add_argument("--candidate-id")
+    parser.add_argument("--judge-id")
+    parser.add_argument("--limit", type=int)
+    parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--codex-bin", default=shutil.which("codex") or "codex")
+    parser.add_argument("--sandbox", default="read-only")
+    parser.add_argument("--model")
+    parser.add_argument("--profile")
+    parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    report = self_test() if args.self_test else run(args)
+    if args.json:
+        print(
+            json.dumps(
+                {"ok": report.get("ok", True), **report}, ensure_ascii=False, indent=2
+            )
+        )
+    else:
+        print(
+            f"wrote: {report['artifacts']['manifest'] if 'manifest' in report.get('artifacts', {}) else report['artifacts']}"
+        )
+    return 0 if report.get("ok", True) else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

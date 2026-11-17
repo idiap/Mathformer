@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+def critic_integration(
+    inventory: Mapping[str, Any], concept_graph: Mapping[str, Any], repository_root: Path | None = None
+) -> dict[str, Any]:
+    """Check manifest, index, and discoverability integration."""
+    foundations_index = FOUNDATIONS_INDEX if repository_root is None else repository_root / "MathformerPhysicsLib/Lean/Foundations.lean"
+    findings: list[dict[str, Any]] = []
+    if not inventory.get("foundations_index_exists"):
+        findings.append(
+            {
+                "severity": "high",
+                "kind": "missing_foundations_index",
+                "message": "Missing libraries/MathformerPhysicsLib/Lean/Foundations.lean.",
+            }
+        )
+    if not inventory.get("manifest_has_foundations"):
+        findings.append(
+            {
+                "severity": "medium",
+                "kind": "manifest_missing_foundations",
+                "message": "MANIFEST.json does not expose Lean foundations metadata.",
+            }
+        )
+    for concept in concept_graph.get("concepts", []):
+        owner = str(concept.get("owner_module") or "")
+        if (
+            concept.get("owner_status") == "owned"
+            and "Foundations" in owner
+            and not foundations_index.exists()
+        ):
+            findings.append(
+                {
+                    "severity": "high",
+                    "kind": "foundation_owner_not_indexed",
+                    "concept_id": concept.get("concept_id"),
+                    "message": "Foundation owner exists but no accepted index can expose it.",
+                }
+            )
+    return {
+        "style": "mathformerphysicslib_integration_report",
+        "schema_version": 1,
+        "ok": not any(item["severity"] == "high" for item in findings),
+        "finding_count": len(findings),
+        "findings": findings,
+    }
+

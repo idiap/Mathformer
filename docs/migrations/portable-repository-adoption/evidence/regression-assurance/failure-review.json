@@ -1,0 +1,208 @@
+{
+  "summary": {
+    "before": {
+      "pass": 84,
+      "fail": 4,
+      "skip": 0,
+      "warn": 0,
+      "total": 88
+    },
+    "after": {
+      "pass": 84,
+      "fail": 4,
+      "skip": 0,
+      "warn": 0,
+      "total": 88
+    }
+  },
+  "module_families": {
+    "before": {
+      "atp": {
+        "pass": 3
+      },
+      "docs": {
+        "fail": 1,
+        "pass": 3
+      },
+      "environment": {
+        "pass": 2
+      },
+      "mathformerlib": {
+        "pass": 2
+      },
+      "mcp": {
+        "pass": 5
+      },
+      "physics_sympy": {
+        "pass": 51,
+        "fail": 3
+      },
+      "source": {
+        "pass": 4
+      },
+      "sympy": {
+        "pass": 14
+      }
+    },
+    "after": {
+      "atp": {
+        "pass": 3
+      },
+      "docs": {
+        "fail": 1,
+        "pass": 3
+      },
+      "environment": {
+        "pass": 2
+      },
+      "mathformerlib": {
+        "pass": 2
+      },
+      "mcp": {
+        "pass": 5
+      },
+      "physics_sympy": {
+        "pass": 51,
+        "fail": 3
+      },
+      "source": {
+        "pass": 4
+      },
+      "sympy": {
+        "pass": 14
+      }
+    }
+  },
+  "status_changes": [],
+  "failure_reviews": [
+    {
+      "check_id": "control.reasoning_flow_catalog.synchronized",
+      "reason": "Existing REASONING_FLOW_MATERIALIZATIONS.md is stale; semantic catalog itself is synchronized.",
+      "baseline_returncode": 1,
+      "candidate_returncode": 1,
+      "normalized_receipts_identical": true,
+      "normalized_difference_fields": [],
+      "regression_detected": false
+    },
+    {
+      "check_id": "physics_sympy.phase13_consistency_report.self",
+      "reason": "Five legacy generated-artifact locations are absent (MathformerSympyPhysics/Autoformalized*.py); artifact_realness=0.0 produces incomplete packet inventories and reference-free score 0.95.",
+      "baseline_returncode": 3,
+      "candidate_returncode": 3,
+      "normalized_receipts_identical": true,
+      "normalized_difference_fields": [],
+      "regression_detected": false
+    },
+    {
+      "check_id": "physics_sympy.formalphysics_two_samples.e2e",
+      "reason": "Both isolated checkouts lack data/benchmarks/formal_science/physics_top10_sources/01_formalphysics_0000.tex; the equational-semantics critic fails with FileNotFoundError.",
+      "baseline_returncode": 1,
+      "candidate_returncode": 1,
+      "normalized_receipts_identical": false,
+      "normalized_difference_fields": [
+        "stderr"
+      ],
+      "regression_detected": false,
+      "normalized_diff_excerpt": [
+        "--- \n",
+        "+++ \n",
+        "@@ -18,7 +18,7 @@\n",
+        "   \"status\": \"fail\",",
+        "   \"ok\": false,",
+        "   \"stdout\": \"\",",
+        "-  \"stderr\": \"Traceback (most recent call last):\\n  File \\\"<CHECKOUT>/skills/physics-sympy/physics-sympy-equational-semantics-critic/scripts/critique_physics_sympy_equational_semantics.py\\\", line 321, in <module>\\n    raise SystemExit(main())\\n                     ^^^^^^\\n  File \\\"<CHECKOUT>/skills/physics-sympy/physics-sympy-equational-semantics-critic/scripts/critique_physics_sympy_equational_semantics.py\\\", line 305, in main\\n    source_text=read_text(args.source_file, args.source_text),\\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \\\"<CHECKOUT>/skills/physics-sympy/physics-sympy-equational-semantics-critic/scripts/critique_physics_sympy_equational_semantics.py\\\", line 78, in read_text\\n    return path.read_text(encoding=\\\"utf-8\\\")\\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \\\"${HOME}/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/pathlib.py\\\", line 1027, in read_text\\n    with self.open(mode='r', encoding=encoding, errors=errors) as f:\\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \\\"${HOME}/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/pathlib.py\\\", line 1013, in open\\n    return io.open(self, mode, buffering, encoding, errors, newline)\\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\nFileNotFoundError: [Errno 2] No such file or directory: '<CHECKOUT>/data/benchmarks/formal_science/physics_top10_sources/01_formalphysics_0000.tex'\\nTraceback (most recent call last):\\n  File \\\"<CHECKOUT>/tests/physics_sympy/run_formalphysics_two_samples.py\\\", line 9\\n... <truncated> ...\\nore/tests/physics_sympy/run_formalphysics_two_samples.py\\\", line 598, in run_json_script\\n    subprocess.run([sys.executable, str(script), *args], cwd=REPO_ROOT, check=True)\\n  File \\\"${HOME}/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/subprocess.py\\\", line 571, in run\\n    raise CalledProcessError(retcode, process.args,\\nsubprocess.CalledProcessError: Command '['<CHECKOUT>/.venv/bin/python', '<CHECKOUT>/skills/physics-sympy/physics-sympy-equational-semantics-critic/scripts/critique_physics_sympy_equational_semantics.py', '--source-file', '<CHECKOUT>/data/benchmarks/formal_science/physics_top10_sources/01_formalphysics_0000.tex', '--artifact-file', '<CHECKOUT>/artifacts/physics_sympy/formalphysics_samples/formalphysics_0000/formalphysics_0000_sympy.py', '--equation-surface', '<CHECKOUT>/artifacts/physics_sympy/formalphysics_samples/formalphysics_0000/equation_surface_report.json', '--assumption-context', '<CHECKOUT>/artifacts/physics_sympy/formalphysics_samples/formalphysics_0000/assumption_context_report.json', '--execution-report', '<CHECKOUT>/artifacts/physics_sympy/formalphysics_samples/formalphysics_0000/execution_report.json', '--output', '<CHECKOUT>/artifacts/physics_sympy/formalphysics_samples/formalphysics_0000/semantics_critic.json']' returned non-zero exit status 1.\\n\",",
+        "+  \"stderr\": \"Traceback (most recent call last):\\n  File \\\"<CHECKOUT>/skills/physics-sympy/physics-sympy-equational-semantics-critic/scripts/critique_physics_sympy_equational_semantics.py\\\", line 321, in <module>\\n    raise SystemExit(main())\\n                     ^^^^^^\\n  File \\\"<CHECKOUT>/skills/physics-sympy/physics-sympy-equational-semantics-critic/scripts/critique_physics_sympy_equational_semantics.py\\\", line 305, in main\\n    source_text=read_text(args.source_file, args.source_text),\\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \\\"<CHECKOUT>/skills/physics-sympy/physics-sympy-equational-semantics-critic/scripts/critique_physics_sympy_equational_semantics.py\\\", line 78, in read_text\\n    return path.read_text(encoding=\\\"utf-8\\\")\\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \\\"${HOME}/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/pathlib.py\\\", line 1027, in read_text\\n    with self.open(mode='r', encoding=encoding, errors=errors) as f:\\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n  File \\\"${HOME}/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/pathlib.py\\\", line 1013, in open\\n    return io.open(self, mode, buffering, encoding, errors, newline)\\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\nFileNotFoundError: [Errno 2] No such file or directory: '<CHECKOUT>/data/benchmarks/formal_science/physics_top10_sources/01_formalphysics_0000.tex'\\nTraceback (most recent call last):\\n  File \\\"<CHECKOUT>/tests/physics_sympy/run_formalphysics_two_samples.py\\\", line 994, i\\n... <truncated> ...\\n01p3e/after/tests/physics_sympy/run_formalphysics_two_samples.py\\\", line 598, in run_json_script\\n    subprocess.run([sys.executable, str(script), *args], cwd=REPO_ROOT, check=True)\\n  File \\\"${HOME}/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/subprocess.py\\\", line 571, in run\\n    raise CalledProcessError(retcode, process.args,\\nsubprocess.CalledProcessError: Command '['<CHECKOUT>/.venv/bin/python', '<CHECKOUT>/skills/physics-sympy/physics-sympy-equational-semantics-critic/scripts/critique_physics_sympy_equational_semantics.py', '--source-file', '<CHECKOUT>/data/benchmarks/formal_science/physics_top10_sources/01_formalphysics_0000.tex', '--artifact-file', '<CHECKOUT>/artifacts/physics_sympy/formalphysics_samples/formalphysics_0000/formalphysics_0000_sympy.py', '--equation-surface', '<CHECKOUT>/artifacts/physics_sympy/formalphysics_samples/formalphysics_0000/equation_surface_report.json', '--assumption-context', '<CHECKOUT>/artifacts/physics_sympy/formalphysics_samples/formalphysics_0000/assumption_context_report.json', '--execution-report', '<CHECKOUT>/artifacts/physics_sympy/formalphysics_samples/formalphysics_0000/execution_report.json', '--output', '<CHECKOUT>/artifacts/physics_sympy/formalphysics_samples/formalphysics_0000/semantics_critic.json']' returned non-zero exit status 1.\\n\",",
+        "   \"returncode\": 1,",
+        "   \"write_audit\": {",
+        "     \"schema_version\": 1,"
+      ],
+      "residual_difference_explanation": "The test runner truncates streams before path normalization; different lengths of before/after checkout prefixes shift the partial lines adjacent to ... <truncated> ... . Retained complete diagnostic lines identify the same failure."
+    },
+    {
+      "check_id": "physics_sympy.phase18_release_criteria.e2e",
+      "reason": "Same missing legacy rc_discharge generated artifact leaves artifact_realness=0.0; 12/13 release checks pass and only rfde_report_includes_physics_specific_metrics fails.",
+      "baseline_returncode": 3,
+      "candidate_returncode": 3,
+      "normalized_receipts_identical": false,
+      "normalized_difference_fields": [
+        "stdout"
+      ],
+      "regression_detected": false,
+      "full_artifact_failure_checks": {
+        "before": [
+          {
+            "id": "rfde_report_includes_physics_specific_metrics",
+            "ok": false,
+            "details": {
+              "case_id": "rc_discharge",
+              "missing": [],
+              "metrics": {
+                "source_anchor_coverage": 1.0,
+                "equation_parse_coverage": 1.0,
+                "quantity_binding_completeness": 1.0,
+                "dimension_consistency": 1.0,
+                "unit_grounding_density": 1.0,
+                "law_grounding_density": 1.0,
+                "implicit_gap_closure": 1.0,
+                "step_executability": 1.0,
+                "assumption_regime_fidelity": 1.0,
+                "coordinate_frame_explicitness": 1.0,
+                "target_derivation_success": 1.0,
+                "artifact_realness": 0.0
+              },
+              "report_path": "artifacts/physics_sympy/rc_discharge/physics_consistency_report.json"
+            }
+          }
+        ],
+        "after": [
+          {
+            "id": "rfde_report_includes_physics_specific_metrics",
+            "ok": false,
+            "details": {
+              "case_id": "rc_discharge",
+              "missing": [],
+              "metrics": {
+                "source_anchor_coverage": 1.0,
+                "equation_parse_coverage": 1.0,
+                "quantity_binding_completeness": 1.0,
+                "dimension_consistency": 1.0,
+                "unit_grounding_density": 1.0,
+                "law_grounding_density": 1.0,
+                "implicit_gap_closure": 1.0,
+                "step_executability": 1.0,
+                "assumption_regime_fidelity": 1.0,
+                "coordinate_frame_explicitness": 1.0,
+                "target_derivation_success": 1.0,
+                "artifact_realness": 0.0
+              },
+              "report_path": "artifacts/physics_sympy/rc_discharge/physics_consistency_report.json"
+            }
+          }
+        ]
+      },
+      "full_artifact_failures_identical": true,
+      "full_artifact_check_statuses_identical": true,
+      "normalized_diff_excerpt": [
+        "--- \n",
+        "+++ \n",
+        "@@ -14,7 +14,7 @@\n",
+        "   \"fixture_ids\": [],",
+        "   \"status\": \"fail\",",
+        "   \"ok\": false,",
+        "-  \"stdout\": \"{\\n  \\\"ok\\\": false,\\n  \\\"backend\\\": \\\"sympy\\\",\\n  \\\"style\\\": \\\"sympy_physics_derivation_trace\\\",\\n  \\\"phase\\\": \\\"phase18_release_criteria_for_first_physics_slice\\\",\\n  \\\"generated_at\\\": \\\"<TIME>\\\",\\n  \\\"check_count\\\": 13,\\n  \\\"passed\\\": 12,\\n  \\\"failed\\\": 1,\\n  \\\"checks\\\": [\\n    {\\n      \\\"id\\\": \\\"physics_skills_have_skill_md_and_openai_agent\\\",\\n      \\\"ok\\\": true,\\n      \\\"details\\\": {\\n        \\\"skill_count\\\": 69,\\n        \\\"missing\\\": []\\n      }\\n    },\\n    {\\n      \\\"id\\\": \\\"hook_contract_strict_validation_passes\\\",\\n      \\\"ok\\\": true,\\n      \\\"details\\\": {\\n        \\\"ok\\\": true,\\n        \\\"returncode\\\": 0,\\n        \\\"stdout_json\\\": {\\n          \\\"ok\\\": true,\\n          \\\"strict\\\": true,\\n          \\\"hooks_file\\\": \\\"<CHECKOUT>/skills/SKILL_HOOKS.yaml\\\",\\n          \\\"skills_dir\\\": \\\"<CHECKOUT>/skills\\\",\\n          \\\"hook_count\\\": 200,\\n          \\\"direct_route_count\\\": 290,\\n          \\\"shared_runtime_script_count\\\": 163,\\n          \\\"summary\\\": {\\n            \\\"finding_count\\\": 0,\\n            \\\"severity_counts\\\": {\\n              \\\"info\\\": 0,\\n              \\\"low\\\": 0,\\n              \\\"medium\\\": 0,\\n              \\\"high\\\": 0\\n            },\\n            \\\"blocking_findings\\\": 0\\n          },\\n          \\\"findings\\\": []\\n        },\\n        \\\"stderr\\\": \\\"\\\"\\n      }\\n    },\\n    {\\n      \\\"id\\\": \\\"hook_coverage_remains_100_percent\\\",\\n      \\\"ok\\\": true,\\n      \\\"details\\\": {\\n        \\\"ok\\\": true,\\n        \\\"returncode\\\": 0,\\n        \\\"stdout_json\\\": {\\n          \\\"generated_at_utc\\\": \\\"<TIME>\\\",\\n          \\\"skill\\\": \\\"skill-hook-coverage-maximizer\\\",\\n          \\\"hook_id\\\": \\\"control.skill_hook_coverage\\\",\\n          \\\"ok\\\": true,\\n          \\\"summary\\\": {\\n            \\\"skill_count\\\": 188,\\n            \\\"hook_count\\\": 200,\\n            \\\"direct_route_count\\\": 290,\\n            \\\"non_wrapper_skill_count\\\": 185,\\n            \\\"covered_non_wrapper_skill_count\\\": 185,\\n            \\\"non_wrapper_coverage_ratio\\\": 1.0,\\n            \\\"wrapp\\n... <truncated> ...\\n               \\\"passed\\\": true,\\n                  \\\"trace_length\\\": 6,\\n                  \\\"failed_steps\\\": []\\n                },\\n                \\\"model_path\\\": \\\"artifacts/physics_sympy/phase17_human_reports/formalphysics_0000/human_derivation_report.model.json\\\",\\n                \\\"side_by_side_rows\\\": 3,\\n                \\\"graph_edges\\\": 4,\\n                \\\"unit_flow_rows\\\": 3,\\n                \\\"trajectory_cycles\\\": 6\\n              }\\n            ],\\n            \\\"findings\\\": [],\\n            \\\"report_path\\\": \\\"artifacts/physics_sympy/phase17_human_reports/phase17_report.json\\\"\\n          },\\n          \\\"stderr\\\": \\\"\\\"\\n        },\\n        \\\"html_paths\\\": [\\n          \\\"artifacts/physics_sympy/phase17_human_reports/rc_discharge/human_derivation_report.html\\\",\\n          \\\"artifacts/physics_sympy/phase17_human_reports/formalphysics_0000/human_derivation_report.html\\\"\\n        ],\\n        \\\"missing_markers\\\": []\\n      }\\n    },\\n    {\\n      \\\"id\\\": \\\"no_generated_artifact_with_unresolved_gaps_marked_complete\\\",\\n      \\\"ok\\\": true,\\n      \\\"details\\\": {\\n        \\\"case_count\\\": 19,\\n        \\\"violations\\\": []\\n      }\\n    }\\n  ],\\n  \\\"failed_checks\\\": [\\n    {\\n      \\\"id\\\": \\\"rfde_report_includes_physics_specific_metrics\\\",\\n      \\\"ok\\\": false,\\n      \\\"details\\\": {\\n        \\\"case_id\\\": \\\"rc_discharge\\\",\\n        \\\"missing\\\": [],\\n        \\\"metrics\\\": {\\n          \\\"source_anchor_coverage\\\": 1.0,\\n          \\\"equation_parse_coverage\\\": 1.0,\\n          \\\"quantity_binding_completeness\\\": 1.0,\\n          \\\"dimension_consistency\\\": 1.0,\\n          \\\"unit_grounding_density\\\": 1.0,\\n          \\\"law_grounding_density\\\": 1.0,\\n          \\\"implicit_gap_closure\\\": 1.0,\\n          \\\"step_executability\\\": 1.0,\\n          \\\"assumption_regime_fidelity\\\": 1.0,\\n          \\\"coordinate_frame_explicitness\\\": 1.0,\\n          \\\"target_derivation_success\\\": 1.0,\\n          \\\"artifact_realness\\\": 0.0\\n        },\\n        \\\"report_path\\\": \\\"artifacts/physics_sympy/rc_discharge/physics_consistency_report.json\\\"\\n      }\\n    }\\n  ],\\n  \\\"report_path\\\": \\\"artifacts/physics_sympy/phase18_release/phase18_release_report.json\\\"\\n}\\n\",",
+        "+  \"stdout\": \"{\\n  \\\"ok\\\": false,\\n  \\\"backend\\\": \\\"sympy\\\",\\n  \\\"style\\\": \\\"sympy_physics_derivation_trace\\\",\\n  \\\"phase\\\": \\\"phase18_release_criteria_for_first_physics_slice\\\",\\n  \\\"generated_at\\\": \\\"<TIME>\\\",\\n  \\\"check_count\\\": 13,\\n  \\\"passed\\\": 12,\\n  \\\"failed\\\": 1,\\n  \\\"checks\\\": [\\n    {\\n      \\\"id\\\": \\\"physics_skills_have_skill_md_and_openai_agent\\\",\\n      \\\"ok\\\": true,\\n      \\\"details\\\": {\\n        \\\"skill_count\\\": 69,\\n        \\\"missing\\\": []\\n      }\\n    },\\n    {\\n      \\\"id\\\": \\\"hook_contract_strict_validation_passes\\\",\\n      \\\"ok\\\": true,\\n      \\\"details\\\": {\\n        \\\"ok\\\": true,\\n        \\\"returncode\\\": 0,\\n        \\\"stdout_json\\\": {\\n          \\\"ok\\\": true,\\n          \\\"strict\\\": true,\\n          \\\"hooks_file\\\": \\\"<CHECKOUT>/skills/SKILL_HOOKS.yaml\\\",\\n          \\\"skills_dir\\\": \\\"<CHECKOUT>/skills\\\",\\n          \\\"hook_count\\\": 200,\\n          \\\"direct_route_count\\\": 290,\\n          \\\"shared_runtime_script_count\\\": 163,\\n          \\\"summary\\\": {\\n            \\\"finding_count\\\": 0,\\n            \\\"severity_counts\\\": {\\n              \\\"info\\\": 0,\\n              \\\"low\\\": 0,\\n              \\\"medium\\\": 0,\\n              \\\"high\\\": 0\\n            },\\n            \\\"blocking_findings\\\": 0\\n          },\\n          \\\"findings\\\": []\\n        },\\n        \\\"stderr\\\": \\\"\\\"\\n      }\\n    },\\n    {\\n      \\\"id\\\": \\\"hook_coverage_remains_100_percent\\\",\\n      \\\"ok\\\": true,\\n      \\\"details\\\": {\\n        \\\"ok\\\": true,\\n        \\\"returncode\\\": 0,\\n        \\\"stdout_json\\\": {\\n          \\\"generated_at_utc\\\": \\\"<TIME>\\\",\\n          \\\"skill\\\": \\\"skill-hook-coverage-maximizer\\\",\\n          \\\"hook_id\\\": \\\"control.skill_hook_coverage\\\",\\n          \\\"ok\\\": true,\\n          \\\"summary\\\": {\\n            \\\"skill_count\\\": 188,\\n            \\\"hook_count\\\": 200,\\n            \\\"direct_route_count\\\": 290,\\n            \\\"non_wrapper_skill_count\\\": 185,\\n            \\\"covered_non_wrapper_skill_count\\\": 185,\\n            \\\"non_wrapper_coverage_ratio\\\": 1.0,\\n            \\\"wrapper\\n... <truncated> ...\\n               \\\"passed\\\": true,\\n                  \\\"trace_length\\\": 6,\\n                  \\\"failed_steps\\\": []\\n                },\\n                \\\"model_path\\\": \\\"artifacts/physics_sympy/phase17_human_reports/formalphysics_0000/human_derivation_report.model.json\\\",\\n                \\\"side_by_side_rows\\\": 3,\\n                \\\"graph_edges\\\": 4,\\n                \\\"unit_flow_rows\\\": 3,\\n                \\\"trajectory_cycles\\\": 6\\n              }\\n            ],\\n            \\\"findings\\\": [],\\n            \\\"report_path\\\": \\\"artifacts/physics_sympy/phase17_human_reports/phase17_report.json\\\"\\n          },\\n          \\\"stderr\\\": \\\"\\\"\\n        },\\n        \\\"html_paths\\\": [\\n          \\\"artifacts/physics_sympy/phase17_human_reports/rc_discharge/human_derivation_report.html\\\",\\n          \\\"artifacts/physics_sympy/phase17_human_reports/formalphysics_0000/human_derivation_report.html\\\"\\n        ],\\n        \\\"missing_markers\\\": []\\n      }\\n    },\\n    {\\n      \\\"id\\\": \\\"no_generated_artifact_with_unresolved_gaps_marked_complete\\\",\\n      \\\"ok\\\": true,\\n      \\\"details\\\": {\\n        \\\"case_count\\\": 19,\\n        \\\"violations\\\": []\\n      }\\n    }\\n  ],\\n  \\\"failed_checks\\\": [\\n    {\\n      \\\"id\\\": \\\"rfde_report_includes_physics_specific_metrics\\\",\\n      \\\"ok\\\": false,\\n      \\\"details\\\": {\\n        \\\"case_id\\\": \\\"rc_discharge\\\",\\n        \\\"missing\\\": [],\\n        \\\"metrics\\\": {\\n          \\\"source_anchor_coverage\\\": 1.0,\\n          \\\"equation_parse_coverage\\\": 1.0,\\n          \\\"quantity_binding_completeness\\\": 1.0,\\n          \\\"dimension_consistency\\\": 1.0,\\n          \\\"unit_grounding_density\\\": 1.0,\\n          \\\"law_grounding_density\\\": 1.0,\\n          \\\"implicit_gap_closure\\\": 1.0,\\n          \\\"step_executability\\\": 1.0,\\n          \\\"assumption_regime_fidelity\\\": 1.0,\\n          \\\"coordinate_frame_explicitness\\\": 1.0,\\n          \\\"target_derivation_success\\\": 1.0,\\n          \\\"artifact_realness\\\": 0.0\\n        },\\n        \\\"report_path\\\": \\\"artifacts/physics_sympy/rc_discharge/physics_consistency_report.json\\\"\\n      }\\n    }\\n  ],\\n  \\\"report_path\\\": \\\"artifacts/physics_sympy/phase18_release/phase18_release_report.json\\\"\\n}\\n\",",
+        "   \"stderr\": \"\",",
+        "   \"returncode\": 3,",
+        "   \"write_audit\": {"
+      ],
+      "residual_difference_explanation": "The test runner truncates streams before path normalization; different lengths of before/after checkout prefixes shift the partial lines adjacent to ... <truncated> ... . Retained complete diagnostic lines identify the same failure."
+    }
+  ],
+  "new_failure_ids": [],
+  "notes": [
+    "Normalizes checkout prefixes including macOS /private aliases, duration_seconds, generated_at timestamps, run_id, and derived regression_fingerprint.",
+    "Some command stdout is truncated by the existing test runner; phase18 failure checks additionally compared from full report artifacts.",
+    "Absence of regression does not mean these workflows pass: four failures occur before and after.",
+    "No repository files changed during this review."
+  ]
+}

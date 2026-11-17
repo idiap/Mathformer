@@ -1,0 +1,366 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_report_formalphysics_judge_synthesis_workflow
+version: 1.0.0
+kind: workflow
+description: 'Execute the selected synthesis route: self-test, then report generation,
+  retaining ordered results and sticky failure.'
+aliases:
+- report.formalphysics.judge_synthesis
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  Boolean:
+    schema:
+      type: boolean
+  ActionId:
+    schema:
+      type: string
+      enum:
+      - physics-lean:formalphysics-judge-synthesis-report-self-test
+      - physics-lean:formalphysics-judge-synthesis-report
+  RouteState:
+    schema:
+      type: object
+      required:
+      - ok
+      - children
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+      additionalProperties: false
+  SelectedMatch:
+    schema:
+      type: object
+      description: Match metadata; the route definition is fixed by this contract's
+        native identity.
+      required:
+      - score
+      - matched_terms
+      properties:
+        score:
+          type: number
+        matched_terms:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+  Registry:
+    schema:
+      type: object
+      description: Checked native WorkflowAction projections keyed by action id. Missing
+        entries retain native unknown_action and final metadata KeyError behavior;
+        altered entries are rejected.
+      additionalProperties:
+        type: object
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: SelectedMatch
+  registry:
+    type: Registry
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_judge_synthesis_route_initialize
+        operation: mathformer_judge_synthesis_route_initialize
+  select_action:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_judge_synthesis_route_select_action
+        operation: mathformer_judge_synthesis_route_select_action
+  execute_action:
+    inputs:
+      action_id:
+        type: ActionId
+      registry:
+        type: Registry
+      context:
+        type: RunContext
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_judge_synthesis_route_execute_action
+        operation: mathformer_judge_synthesis_route_execute_action
+  advance:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+    outputs:
+      state:
+        type: RouteState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_judge_synthesis_route_advance
+        operation: mathformer_judge_synthesis_route_advance
+  finish:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_judge_synthesis_route_finish
+        operation: mathformer_judge_synthesis_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: At most two ordered actions; the second advancement always sets done,
+      so the native bound returns normally.
+    state_type: RouteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 2
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select_action
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: execute
+        kind: call
+        operation: execute_action
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          registry:
+            ref: inputs.registry
+          context:
+            ref: inputs.context
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.execute.outputs.child
+          context:
+            ref: inputs.context
+      outputs:
+        state:
+          type: RouteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RouteState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - temporary_self_test_fixtures
+      - artifacts/formalphysics_judge_synthesis/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 8
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Report synthesis and child execution status establish no scientific
+    truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes; initialize_intent_state; select_intent_action;
+      advance_intent_state; finish_intent_state; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/physics_lean/run_formalphysics_judge_synthesis_report.py
+    selector: run_check
+    digest: sha256:ebabd6af569653b77f6803e6aeee5d3a55fdd357babcfd181841688ab35aea79
+  - path: skills/physics-common/formalphysics-judge-synthesis-reporter/scripts/build_synthesis_report.py
+    selector: main; build_synthesis; compare_aspects; compare_next_aspect; emit
+    digest: sha256:dacee4e55a52990c28d1f88988c2bebdbc884a1258743e3af912b414d61f0017
+  - path: scripts/judge_synthesis_route_tools.py
+    selector: register_judge_synthesis_route_tools; selected_match; checked_registry
+    digest: sha256:55e622b89adb233cc2a3067b115ffdd833f9c14d70ba6726307a1fbd51c42fbc
+  - path: scripts/mcp_server.py
+    selector: register_judge_synthesis_route_tools; _analysis_write_policy; _path_allowed
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: judge_synthesis_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Native action internals remain owned by execute_action; report artifacts are captured
+    in HubResult stdout and filesystem outputs, rather than materialized as separate
+    workflow ports.
+  - The 3600-second limit is a Lunar descriptor budget, not a native route-wide deadline.
+    Native subprocess timeouts remain 180 and 300 seconds; the graph uses at most
+    eight operation calls.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: report.formalphysics.judge_synthesis
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+  mathformer.composition:
+    ordered_actions:
+    - physics-lean:formalphysics-judge-synthesis-report-self-test
+    - physics-lean:formalphysics-judge-synthesis-report
+    selection: Already selected route; supplied match carries score and matched terms,
+      with native route metadata reconstructed from build_intent_routes.
+    registry_constraint: Supplied registry entries must equal native action_to_dict
+      projections; native commands, write declarations, empty dependencies and 180/300-second
+      timeouts are pinned. Missing entries preserve native rejection and final metadata
+      failure.
+    bound_semantics: Two iterations complete normally; on_exhausted is unreachable
+      for conforming advance outputs.
+  mathformer.native_boundary:
+    execution: CLI ask --run and MCP dispatch retain run_intent_match. Callable MCP
+      ports share its native initialize/select/run_action/advance/finish functions;
+      Lunar compiles and executes the bounded graph with receipts and digests.
+    failure_policy: Failed children are data for sticky aggregation; unexpected exceptions
+      terminate without a final route envelope.
+    self_test: Temporary fixtures, builder invocation, artifact checks, JSON assertions
+      and HTML marker checks remain inside the first action.
+    report_builder: Load comparative JSON, ingest supplied Codex files if present,
+      summarize approaches and judge/reviewer evidence, compare aspects, derive strengths/weaknesses/cases/todos,
+      then emit JSON, Markdown, HTML and todo files.
+    aspect_traversal: Five fixed aspects carry approaches, IDs, index and accumulated
+      rows; rounded score gaps select clear advantage at >=0.75, slight advantage
+      at >0, otherwise tie.
+    completion: Other traversals are input-sized; pending judges become statuses and
+      todos, with no judge execution, repair loop, retry or resume.
+# REUSE-IgnoreEnd

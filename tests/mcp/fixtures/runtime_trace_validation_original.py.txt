@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Ensure runtime skill traces are complete enough to support diagnosis,
+#   workflow evolution, and promotion decisions.
+#
+# Intent:
+#   Validate JSONL trace files against the local runtime schema.
+#
+# Function:
+#   Checks required event fields, allowed steps, referenced artifacts, and
+#   writes an artifact report.
+#
+# Maintenance Notes:
+#   Keep allowed steps synchronized with skills/SKILL_HOOKS.yaml.
+
+"""Validate runtime skill-application traces."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCHEMA_PATH = (
+    REPO_ROOT / "meta_skills" / "schemas" / "runtime_skill_application.schema.json"
+)
+TRACE_ROOT = REPO_ROOT / "artifacts" / "meta_skills" / "runtime"
+OUTPUT_PATH = REPO_ROOT / "artifacts" / "meta_skills" / "runtime_trace_validation.json"
+
+
+def rel(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def validate_file(
+    path: Path, schema: dict[str, Any]
+) -> tuple[int, list[dict[str, Any]]]:
+    findings: list[dict[str, Any]] = []
+    allowed_steps = set(schema["allowed_steps"])
+    event_count = 0
+    with path.open(encoding="utf-8") as handle:
+        for line_no, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            event_count += 1
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                findings.append(
+                    {
+                        "severity": "error",
+                        "code": "invalid_jsonl",
+                        "path": rel(path),
+                        "line": line_no,
+                        "detail": str(exc),
+                    }
+                )
+                continue
+            for field in schema["required"]:
+                if field not in row:
+                    findings.append(
+                        {
+                            "severity": "error",
+                            "code": "missing_field",
+                            "path": rel(path),
+                            "line": line_no,
+                            "field": field,
+                        }
+                    )
+            if row.get("step") not in allowed_steps:
+                findings.append(
+                    {
+                        "severity": "error",
+                        "code": "invalid_step",
+                        "path": rel(path),
+                        "line": line_no,
+                        "step": row.get("step"),
+                    }
+                )
+            if not isinstance(row.get("evidence"), list) or not row.get("evidence"):
+                findings.append(
+                    {
+                        "severity": "error",
+                        "code": "missing_evidence",
+                        "path": rel(path),
+                        "line": line_no,
+                    }
+                )
+            if not isinstance(row.get("artifacts"), list):
+                findings.append(
+                    {
+                        "severity": "error",
+                        "code": "artifacts_not_list",
+                        "path": rel(path),
+                        "line": line_no,
+                    }
+                )
+            else:
+                for artifact in row["artifacts"]:
+                    artifact_path = REPO_ROOT / str(artifact)
+                    if not artifact_path.exists():
+                        findings.append(
+                            {
+                                "severity": "error",
+                                "code": "missing_artifact",
+                                "path": rel(path),
+                                "line": line_no,
+                                "artifact": rel(artifact_path),
+                            }
+                        )
+    if event_count == 0:
+        findings.append({"severity": "error", "code": "empty_trace", "path": rel(path)})
+    return event_count, findings
+
+
+def run() -> dict[str, Any]:
+    schema = load_json(SCHEMA_PATH)
+    traces = sorted(TRACE_ROOT.glob("*.jsonl"))
+    results = []
+    all_findings = []
+    for path in traces:
+        count, findings = validate_file(path, schema)
+        all_findings.extend(findings)
+        results.append(
+            {
+                "path": rel(path),
+                "event_count": count,
+                "ok": not any(f["severity"] == "error" for f in findings),
+                "findings": findings,
+            }
+        )
+    payload = {
+        "schema_version": 1,
+        "style": "mathformer_meta_runtime_trace_validation",
+        "ok": bool(traces) and not any(f["severity"] == "error" for f in all_findings),
+        "trace_count": len(traces),
+        "results": results,
+        "findings": all_findings,
+    }
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    OUTPUT_PATH.write_text(
+        json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    return payload
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    payload = run()
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print("PASS runtime traces" if payload["ok"] else "FAIL runtime traces")
+    return 0 if payload["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

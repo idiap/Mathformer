@@ -1,0 +1,522 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Capture the research-paper production workflow as auditable agent skills and helper scripts.
+#
+# Intent:
+#   Separate scientific writing, evidence mapping, figure generation, and theory-evolution modeling roles.
+#
+# Function:
+#   Provides structured guidance and automation for paper-oriented artifacts.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Build structured mechanistic diagram models for Mathformer papers."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def mathformer_framework_model() -> dict:
+    """Return the default Mathformer dynamical-system diagram model."""
+
+    return {
+        "id": "mathformer_mechanistic_diagram",
+        "title": "Mathformer controlled autoformalization dynamics",
+        "caption": (
+            "Mechanistic view of Mathformer as a constrained dynamical system. "
+            "Generative transitions propose Lean artifacts and critiques; "
+            "deterministic validation criteria, source anchors, mathlib grounding, and RFDE "
+            "observations constrain which transitions are accepted."
+        ),
+        "layers": [
+            {"id": "source", "label": "Source and provenance", "x": 40, "y": 60},
+            {"id": "preformal", "label": "Preformalization", "x": 270, "y": 60},
+            {"id": "formal", "label": "Lean artifact", "x": 500, "y": 60},
+            {"id": "criteria", "label": "Criteria and critics", "x": 730, "y": 60},
+            {"id": "observe", "label": "RFDE observability", "x": 960, "y": 60},
+        ],
+        "nodes": [
+            {
+                "id": "X",
+                "label": "Literal source X",
+                "label_tex": r"Literal source $X$",
+                "label_svg": "Literal source X",
+                "layer": "source",
+                "role": "state",
+                "equation": "X=(x_1,...,x_n)",
+                "equation_tex": r"X=(x_1,\ldots,x_n)",
+                "equation_svg": "X=(x_1,...,x_n)",
+                "x": 40,
+                "y": 130,
+            },
+            {
+                "id": "U",
+                "label": "Formalizable units U",
+                "label_tex": r"Formalizable units $U$",
+                "label_svg": "Formalizable units U",
+                "layer": "preformal",
+                "role": "state",
+                "equation": "u_j=(A_j,l_j,k_j,s_j,d_j)",
+                "equation_tex": r"u_j=(A_j,\ell_j,k_j,s_j,d_j)",
+                "equation_svg": "u_j=(A_j,l_j,k_j,s_j,d_j)",
+                "x": 270,
+                "y": 130,
+            },
+            {
+                "id": "G",
+                "label": "Mathlib grounding G_t",
+                "label_tex": r"Mathlib grounding $G_t$",
+                "label_svg": "Mathlib grounding G_t",
+                "layer": "preformal",
+                "role": "state",
+                "equation": "Rel_ground(U, Mathlib)",
+                "equation_tex": r"\mathcal{R}_{\mathrm{ground}}(U,\mathsf{Mathlib})",
+                "equation_svg": "R_{ground}(U, Mathlib)",
+                "x": 270,
+                "y": 300,
+            },
+            {
+                "id": "L",
+                "label": "Lean artifact L_t",
+                "label_tex": r"Lean artifact $L_t$",
+                "label_svg": "Lean artifact L_t",
+                "layer": "formal",
+                "role": "state",
+                "equation": "L_t=(D_t,P_t,I_t)",
+                "equation_tex": r"L_t=(D_t,P_t,I_t)",
+                "equation_svg": "L_t=(D_t,P_t,I_t)",
+                "x": 500,
+                "y": 130,
+            },
+            {
+                "id": "C",
+                "label": "Critics and criteria C_t",
+                "label_tex": r"Critics and criteria $C_t$",
+                "label_svg": "Critics and criteria C_t",
+                "layer": "criteria",
+                "role": "criterion",
+                "equation": "Hard_t in {0,1}^5",
+                "equation_tex": r"\mathcal{H}_t\in\{0,1\}^5",
+                "equation_svg": "H_t in {0,1}^5",
+                "x": 730,
+                "y": 130,
+            },
+            {
+                "id": "R",
+                "label": "Reverse informalization R_t",
+                "label_tex": r"Reverse informalization $R_t$",
+                "label_svg": "Reverse informalization R_t",
+                "layer": "criteria",
+                "role": "critic",
+                "equation": "Rel_informalize(D_t,R_t)",
+                "equation_tex": r"\mathcal{R}_{\mathrm{informalize}}(D_t,R_t)",
+                "equation_svg": "R_{informalize}(D_t,R_t)",
+                "x": 730,
+                "y": 300,
+            },
+            {
+                "id": "M",
+                "label": "Metric vector M_t",
+                "label_tex": r"Metric vector $\mathcal{M}_t$",
+                "label_svg": "Metric vector M_t",
+                "layer": "observe",
+                "role": "metric",
+                "equation": "(E,A,V,S,R,M,N,D,P,B,W)",
+                "equation_tex": r"(E,A,V,S,R,M,N,D,P,B,W)",
+                "equation_svg": "(E,A,V,S,R,M,N,D,P,B,W)",
+                "x": 960,
+                "y": 130,
+            },
+            {
+                "id": "Theta",
+                "label": "Trajectory and phases",
+                "label_tex": r"Trajectory and phases",
+                "label_svg": "Trajectory and phases",
+                "layer": "observe",
+                "role": "observation",
+                "equation": "Theta_t=(Pi_t,Dhat_t,Delta Omega_t)",
+                "equation_tex": r"\Theta_t=(\Pi_t,\widehat{\Delta}_t,\Delta\Omega_t)",
+                "equation_svg": "Theta_t=(Pi_t,Dhat_t,Delta Omega_t)",
+                "x": 960,
+                "y": 300,
+            },
+            {
+                "id": "Reflect",
+                "label": "Reflective improvement",
+                "label_tex": r"Reflective improvement",
+                "label_svg": "Reflective improvement",
+                "layer": "observe",
+                "role": "feedback",
+                "equation": "non-regressive skill updates",
+                "equation_tex": r"\text{non-regressive skill updates}",
+                "equation_svg": "non-regressive skill updates",
+                "x": 500,
+                "y": 465,
+            },
+        ],
+        "edges": [
+            {
+                "id": "e_extract",
+                "source": "X",
+                "target": "U",
+                "label": "extract",
+                "kind": "forward",
+            },
+            {
+                "id": "e_ground",
+                "source": "U",
+                "target": "G",
+                "label": "ground",
+                "kind": "forward",
+            },
+            {
+                "id": "e_draft",
+                "source": "U",
+                "target": "L",
+                "label": "draft",
+                "kind": "generative",
+                "label_dy": -24,
+            },
+            {
+                "id": "e_import",
+                "source": "G",
+                "target": "L",
+                "label": "import support",
+                "kind": "constraint",
+                "label_dy": 18,
+            },
+            {
+                "id": "e_execute",
+                "source": "L",
+                "target": "C",
+                "label": "execute / validate",
+                "kind": "deterministic",
+                "label_dy": -24,
+            },
+            {
+                "id": "e_informalize",
+                "source": "L",
+                "target": "R",
+                "label": "informalize",
+                "kind": "deterministic",
+            },
+            {
+                "id": "e_consistency",
+                "source": "R",
+                "target": "C",
+                "label": "consistency",
+                "kind": "deterministic",
+            },
+            {
+                "id": "e_metrics",
+                "source": "C",
+                "target": "M",
+                "label": "observe",
+                "kind": "observation",
+            },
+            {
+                "id": "e_phases",
+                "source": "M",
+                "target": "Theta",
+                "label": "phase transitions",
+                "kind": "observation",
+            },
+            {
+                "id": "e_reflect",
+                "source": "Theta",
+                "target": "Reflect",
+                "label": "reflect",
+                "kind": "feedback",
+            },
+            {
+                "id": "e_repair",
+                "source": "C",
+                "target": "L",
+                "label": "repair",
+                "kind": "feedback",
+                "label_dy": 14,
+            },
+            {
+                "id": "e_semantic_repair",
+                "source": "R",
+                "target": "L",
+                "label": "semantic repair",
+                "kind": "feedback",
+                "label_dy": 42,
+            },
+            {
+                "id": "e_skill_update",
+                "source": "Reflect",
+                "target": "U",
+                "label": "workflow update",
+                "kind": "feedback",
+                "label_dx": -22,
+                "label_dy": 88,
+            },
+        ],
+        "validation_criteria": [
+            {"id": "compile", "label": "compile"},
+            {"id": "realness", "label": "realness"},
+            {"id": "anchor", "label": "anchor"},
+            {"id": "nonvacuity", "label": "non-vacuity"},
+            {"id": "consistency", "label": "consistency"},
+        ],
+    }
+
+
+def observability_stack_model() -> dict:
+    """Return a diagram model for reasoning-log and RFDE inspection surfaces."""
+
+    return {
+        "id": "mathformer_observability_stack",
+        "title": "Mathformer observability stack",
+        "caption": (
+            "Observability stack for controlled autoformalization. Skill "
+            "execution emits structured reasoning-log events; validation checks "
+            "the trace schema; dashboards and monitor plots project the trace "
+            "for inspection; reflection converts observed gaps into targeted "
+            "skill updates. The figure describes inspection and control, not a "
+            "proof of theorem correctness."
+        ),
+        "layers": [
+            {"id": "execution", "label": "Execution", "x": 40, "y": 60},
+            {"id": "trace", "label": "Structured trace", "x": 260, "y": 60},
+            {"id": "validation", "label": "Validation", "x": 480, "y": 60},
+            {"id": "projection", "label": "Inspection projection", "x": 700, "y": 60},
+            {
+                "id": "monitoring",
+                "label": "Reference-free monitoring",
+                "x": 920,
+                "y": 60,
+            },
+        ],
+        "nodes": [
+            {
+                "id": "SkillRun",
+                "label": "Skill execution",
+                "label_tex": r"Skill execution",
+                "label_svg": "Skill execution",
+                "layer": "execution",
+                "role": "state",
+                "equation": "phase-owned action",
+                "equation_tex": r"\text{phase-owned action}",
+                "equation_svg": "phase-owned action",
+                "x": 40,
+                "y": 130,
+            },
+            {
+                "id": "EventStream",
+                "label": "Reasoning-log event stream",
+                "label_tex": r"Reasoning-log event stream",
+                "label_svg": "Reasoning-log event stream",
+                "layer": "trace",
+                "role": "event_stream",
+                "equation": "JSONL lifecycle events",
+                "equation_tex": r"\text{JSONL lifecycle events}",
+                "equation_svg": "JSONL lifecycle events",
+                "x": 260,
+                "y": 130,
+            },
+            {
+                "id": "Validation",
+                "label": "Trace validation gate",
+                "label_tex": r"Trace validation gate",
+                "label_svg": "Trace validation gate",
+                "layer": "validation",
+                "role": "gate",
+                "equation": "schema + lifecycle checks",
+                "equation_tex": r"\text{schema + lifecycle checks}",
+                "equation_svg": "schema + lifecycle checks",
+                "x": 480,
+                "y": 130,
+            },
+            {
+                "id": "Dashboard",
+                "label": "HTML dashboard projection",
+                "label_tex": r"HTML dashboard projection",
+                "label_svg": "HTML dashboard projection",
+                "layer": "projection",
+                "role": "dashboard",
+                "equation": "inspect(trace)",
+                "equation_tex": r"\mathrm{inspect}(\mathrm{trace})",
+                "equation_svg": "inspect(trace)",
+                "x": 700,
+                "y": 130,
+            },
+            {
+                "id": "Monitor",
+                "label": "RFDE monitor plot",
+                "label_tex": r"RFDE monitor plot",
+                "label_svg": "RFDE monitor plot",
+                "layer": "monitoring",
+                "role": "monitor",
+                "equation": "weakest dimension",
+                "equation_tex": r"\text{weakest dimension}",
+                "equation_svg": "weakest dimension",
+                "x": 920,
+                "y": 130,
+            },
+            {
+                "id": "HumanInspection",
+                "label": "Human inspection",
+                "label_tex": r"Human inspection",
+                "label_svg": "Human inspection",
+                "layer": "projection",
+                "role": "inspection",
+                "equation": "artifact review",
+                "equation_tex": r"\text{artifact review}",
+                "equation_svg": "artifact review",
+                "x": 700,
+                "y": 315,
+            },
+            {
+                "id": "Reflection",
+                "label": "Reflective update",
+                "label_tex": r"Reflective update",
+                "label_svg": "Reflective update",
+                "layer": "execution",
+                "role": "feedback",
+                "equation": "non-regressive skill patch",
+                "equation_tex": r"\text{non-regressive skill patch}",
+                "equation_svg": "non-regressive skill patch",
+                "x": 260,
+                "y": 470,
+            },
+        ],
+        "edges": [
+            {
+                "id": "e_emit",
+                "source": "SkillRun",
+                "target": "EventStream",
+                "label": "emit",
+                "kind": "forward",
+            },
+            {
+                "id": "e_validate",
+                "source": "EventStream",
+                "target": "Validation",
+                "label": "validate",
+                "kind": "deterministic",
+            },
+            {
+                "id": "e_project",
+                "source": "Validation",
+                "target": "Dashboard",
+                "label": "project",
+                "kind": "observation",
+            },
+            {
+                "id": "e_monitor",
+                "source": "Validation",
+                "target": "Monitor",
+                "label": "measure",
+                "kind": "observation",
+                "label_dy": -22,
+            },
+            {
+                "id": "e_inspect",
+                "source": "Dashboard",
+                "target": "HumanInspection",
+                "label": "inspect",
+                "kind": "observation",
+            },
+            {
+                "id": "e_diagnose",
+                "source": "Monitor",
+                "target": "HumanInspection",
+                "label": "diagnose",
+                "kind": "observation",
+                "label_dy": 18,
+            },
+            {
+                "id": "e_reflect",
+                "source": "HumanInspection",
+                "target": "Reflection",
+                "label": "target update",
+                "kind": "feedback",
+                "label_dy": 22,
+            },
+            {
+                "id": "e_apply",
+                "source": "Reflection",
+                "target": "SkillRun",
+                "label": "apply",
+                "kind": "feedback",
+                "label_dy": 68,
+            },
+        ],
+        "validation_criteria": [
+            {"id": "schema", "label": "schema"},
+            {"id": "lifecycle", "label": "lifecycle"},
+            {"id": "artifact_paths", "label": "artifact paths"},
+            {"id": "nonclaim", "label": "non-claim boundary"},
+        ],
+    }
+
+
+PRESETS = {
+    "mathformer-framework": mathformer_framework_model,
+    "observability-stack": observability_stack_model,
+}
+
+
+def parse_options(argv: list[str] | None = None) -> dict:
+    """Parse the native CLI; argparse termination remains owned by the caller."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--preset", choices=sorted(PRESETS), default="mathformer-framework"
+    )
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--json", action="store_true")
+    return vars(parser.parse_args(argv))
+
+
+def construct_model(options: dict) -> dict:
+    """Construct exactly one fixed preset, without executing diagram edges."""
+    return PRESETS[options["preset"]]()
+
+
+def write_model(options: dict, model: dict) -> str:
+    """Write the native sorted JSON once, propagating serialization and I/O errors."""
+    output = Path(options["output"])
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(model, indent=2, sort_keys=True) + "\n")
+    return str(output)
+
+
+def report_and_return(options: dict, model: dict, output: str) -> dict:
+    """Emit the native report once and expose its payload and return code."""
+    if options["json"]:
+        report = {
+            "ok": True,
+            "output": output,
+            "node_count": len(model["nodes"]),
+            "edge_count": len(model["edges"]),
+        }
+        print(json.dumps(report, indent=2))
+    else:
+        report = f"Wrote {output}"
+        print(report)
+    return {"report": report, "exit_code": 0}
+
+
+def main() -> int:
+    """Parse, construct, write and report once; no retries or scientific execution."""
+    options = parse_options()
+    model = construct_model(options)
+    output = write_model(options, model)
+    return report_and_return(options, model, output)["exit_code"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

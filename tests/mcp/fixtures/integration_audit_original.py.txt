@@ -1,0 +1,433 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+# File Documentation
+#
+# Motivation:
+#   The workflow graph report intentionally shows a readable subset of the
+#   Mathformer control surface, but the repository contains many more skills.
+#   Operators need to know whether unmodeled skills are genuinely unused or
+#   merely absent from the visualization.
+#
+# Intent:
+#   Audit skill integration across the workflow graph, hook registry, direct
+#   routes, shared runtime scripts, and AgenticHub documentation.
+#
+# Function:
+#   Emits JSON and Markdown reports that separate graph coverage from actual
+#   workflow integration.
+#
+# Maintenance Notes:
+#   This script uses conservative text parsing so it does not require PyYAML.
+#   Keep regexes aligned with skills/SKILL_HOOKS.yaml and docs/architecture/AGENTIC_HUB.md.
+
+"""Audit how Mathformer skills are integrated into workflows."""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict
+import json
+from pathlib import Path
+import re
+import sys
+from typing import Any, Dict, List, Mapping
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_GRAPH = REPO_ROOT / "artifacts" / "workflow_graphs" / "workflow_graphs.json"
+DEFAULT_HOOKS = REPO_ROOT / "skills" / "SKILL_HOOKS.yaml"
+DEFAULT_HUB = REPO_ROOT / "docs" / "architecture" / "AGENTIC_HUB.md"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "workflow_graphs"
+VALIDATOR_SCRIPTS = (
+    REPO_ROOT / "skills" / "control" / "workflow-contract-validator" / "scripts"
+)
+COVERAGE_SCRIPTS = (
+    REPO_ROOT / "skills" / "control" / "skill-hook-coverage-maximizer" / "scripts"
+)
+for script_dir in (VALIDATOR_SCRIPTS, COVERAGE_SCRIPTS):
+    if str(script_dir) not in sys.path:
+        sys.path.insert(0, str(script_dir))
+
+from audit_skill_hook_coverage import (
+    list_values_after_key,
+    parse_loop_contracts,
+)
+from validate_skill_hooks import (
+    parse_hooks_manifest,
+)
+
+
+def infer_skill_theme(name: str) -> str:
+    """Return the thematic skill bucket used by one-level skill views."""
+    if name in {
+        "gate-policy-controller",
+        "mathformer-generative-workflow-coordinator",
+        "mathformer-workflow-router",
+        "reasoning-flow-language",
+        "workflow-contract-validator",
+        "skill-hook-coverage-maximizer",
+        "skill-test-program-orchestrator",
+        "reasoning-log-schema-guardian",
+    }:
+        return "control"
+    if name.startswith("formalphysics-"):
+        return "physics-common"
+    if name.startswith(
+        (
+            "autoformalization-",
+            "final-derivation-",
+            "mathematical-final-",
+            "result-existence-",
+            "proof-expansion-",
+            "source-",
+        )
+    ):
+        return "autoformalization"
+    if name.startswith("lean-"):
+        return "lean"
+    if name.startswith("mathlib-") or name == "informal-proof-mathlib-concepts":
+        return "mathlib"
+    if name.startswith("mathformerlib-") or name.startswith("mathformer-library-"):
+        return "mathformerlib"
+    if name.startswith("mathformerphysicslib-"):
+        return "mathformerphysicslib"
+    if name.startswith("physics-lean-"):
+        return "physics-lean"
+    if name.startswith("physics-sympy-"):
+        return "physics-sympy"
+    if name.startswith("physics-isabelle-"):
+        return "physics-isabelle"
+    if name.startswith("physics-"):
+        return "physics-common"
+    if name.startswith("sympy-") or name.startswith("mathematical-sympy-"):
+        return "sympy"
+    if name.startswith(("isabelle-", "isarmathlib-", "mathematical-isabelle-")):
+        return "isabelle"
+    if name.startswith("rocq-"):
+        return "rocq"
+    if name.startswith("vampire-"):
+        return "atp"
+    if name.startswith("premise-kb-"):
+        return "premise-kb"
+    if name.startswith("proofnet-"):
+        return "benchmarks"
+    if name.startswith("paper-"):
+        return "paper"
+    if name.startswith(("latex-", "textbook-")):
+        return "latex-textbook"
+    if name.startswith("reference-free-"):
+        return "rfde"
+    return "misc"
+
+
+def read_skill_inventory() -> Dict[str, Dict[str, str]]:
+    """Read local skills from skills/ and proj_skills/."""
+    inventory: Dict[str, Dict[str, str]] = {}
+    for root in (REPO_ROOT / "skills", REPO_ROOT / "proj_skills"):
+        pattern = "*/*/SKILL.md" if root.name == "skills" else "*/SKILL.md"
+        for skill_file in sorted(root.glob(pattern)):
+            text = skill_file.read_text(encoding="utf-8", errors="ignore")
+            name_match = re.search(r"^name:\s*(.+)$", text, re.MULTILINE)
+            desc_match = re.search(r"^description:\s*(.+)$", text, re.MULTILINE)
+            name = name_match.group(1).strip() if name_match else skill_file.parent.name
+            inventory[name] = {
+                "path": str(skill_file.relative_to(REPO_ROOT)),
+                "description": desc_match.group(1).strip() if desc_match else "",
+                "root": root.name,
+                "theme": infer_skill_theme(name),
+            }
+    return inventory
+
+
+def parse_hook_registry(path: Path) -> Dict[str, Any]:
+    """Extract hook owners, direct-route skills, shared-runtime skills, and loop names."""
+    manifest = parse_hooks_manifest(path)
+    lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    owner_skills = [
+        str(hook["owner_skill"])
+        for hook in manifest["hooks"]
+        if hook.get("owner_skill")
+    ]
+    direct_route_skills = [
+        str(value) for value in manifest["direct_request_routing"].values() if value
+    ]
+    runtime_scripts = list_values_after_key(lines, "shared_runtime_scripts")
+    script_skill_names = {
+        parts[1]
+        for script in runtime_scripts
+        for parts in [script.split("/")]
+        if len(parts) >= 3 and parts[0] == "skills"
+    }
+    loop_contracts = [str(loop["id"]) for loop in parse_loop_contracts(lines)]
+    return {
+        "owner_skills": sorted(set(owner_skills)),
+        "direct_route_skills": sorted(set(direct_route_skills)),
+        "shared_runtime_skills": sorted(script_skill_names),
+        "loop_contracts": sorted(set(loop_contracts)),
+        "owner_counts": dict(Counter(owner_skills)),
+        "direct_route_counts": dict(Counter(direct_route_skills)),
+        "hook_count": len(manifest["hooks"]),
+        "direct_route_count": len(manifest["direct_request_routing"]),
+        "shared_runtime_script_count": len(runtime_scripts),
+    }
+
+
+def parse_agentic_hub(path: Path) -> Dict[str, Any]:
+    """Extract documented agent links and categories from AgenticHub."""
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    category = "Uncategorized"
+    agents: Dict[str, Dict[str, str]] = {}
+    categories: Dict[str, List[str]] = defaultdict(list)
+    for line in text.splitlines():
+        heading = re.match(r"^###\s+(.+)$", line)
+        if heading:
+            category = re.sub(r"\s+Count:\s*`?\d+`?", "", heading.group(1)).strip()
+            continue
+        item = re.match(r"^-\s+\[([^\]]+)\]\(([^)]+)\):\s*(.*)$", line)
+        if item:
+            name, href, description = item.groups()
+            agents[name] = {
+                "category": category,
+                "href": href,
+                "description": description,
+            }
+            categories[category].append(name)
+    return {
+        "agents": agents,
+        "categories": {key: sorted(value) for key, value in categories.items()},
+    }
+
+
+def graph_modeled_skills(graph_path: Path) -> Dict[str, Any]:
+    """Read modeled workflow hooks from the current graph JSON."""
+    model = json.loads(graph_path.read_text(encoding="utf-8"))
+    modeled = set(model.get("skill_inventory", {}).get("modeled", []))
+    if not modeled:
+        for stack in model.get("stacks", {}).values():
+            modeled.update(hook["skill"] for hook in stack.get("ordered_hooks", []))
+    return {"modeled": sorted(modeled), "summary": model.get("summary", {})}
+
+
+def classify_skills(
+    inventory: Mapping[str, Mapping[str, str]],
+    graph: Mapping[str, Any],
+    hooks: Mapping[str, Any],
+    hub: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Classify every skill by the strongest integration evidence available."""
+    modeled = set(graph["modeled"])
+    owner = set(hooks["owner_skills"])
+    route = set(hooks["direct_route_skills"])
+    runtime = set(hooks["shared_runtime_skills"])
+    hub_agents = set(hub["agents"])
+    rows = []
+    buckets: Dict[str, List[str]] = defaultdict(list)
+    for name in sorted(inventory):
+        evidence = []
+        if name in modeled:
+            evidence.append("graph_modeled")
+        if name in owner:
+            evidence.append("hook_owner")
+        if name in route:
+            evidence.append("direct_route")
+        if name in runtime:
+            evidence.append("shared_runtime_script")
+        if name in hub_agents:
+            evidence.append("agentic_hub_documented")
+        if name in modeled:
+            status = "visualized_in_graph"
+        elif name in owner:
+            status = "workflow_hook_owner"
+        elif name in route:
+            status = "direct_route_only"
+        elif name in runtime:
+            status = "shared_runtime_only"
+        elif name in hub_agents:
+            status = "documented_agent_only"
+        else:
+            status = "no_integration_evidence"
+        buckets[status].append(name)
+        rows.append(
+            {
+                "skill": name,
+                "path": inventory[name]["path"],
+                "theme": inventory[name].get("theme", "misc"),
+                "category": hub["agents"]
+                .get(name, {})
+                .get("category", "Uncategorized"),
+                "status": status,
+                "evidence": evidence,
+            }
+        )
+    return {
+        "rows": rows,
+        "buckets": {key: sorted(value) for key, value in buckets.items()},
+    }
+
+
+def proposal_from_audit(
+    classification: Mapping[str, Any], hooks: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """Propose workflow graph expansion without forcing every skill into one view."""
+    buckets = classification["buckets"]
+    return {
+        "critical_findings": [
+            {
+                "finding": "The graph report under-models the platform.",
+                "evidence": "It visualizes major workflow stacks, while SKILL_HOOKS.yaml has broad hook coverage.",
+                "severity": "medium",
+            },
+            {
+                "finding": "Most non-visualized skills are still integrated.",
+                "evidence": "Hook owners, direct routes, shared runtime scripts, and AgenticHub entries cover far more skills than the graph.",
+                "severity": "low",
+            },
+            {
+                "finding": "Adding every skill to one graph would recreate the clutter problem.",
+                "evidence": "The audit should drive filtered workflow-stack views, not one mega-graph.",
+                "severity": "medium",
+            },
+        ],
+        "recommended_expansion_strategy": [
+            "Generate one workflow stack per loop contract in SKILL_HOOKS.yaml.",
+            "Use hook owners as ordered workflow_step nodes inside each loop.",
+            "Keep shared runtime scripts as metadata or optional overlays.",
+            "Keep direct-route-only skills in an intent-routing view, not the derivation graph.",
+            "Keep compatibility wrappers visible only in an inventory/audit table.",
+            "Add a coverage tab: visualized, hook owner, direct route, shared runtime, documented only, no evidence.",
+        ],
+        "candidate_next_workflow_stacks": hooks["loop_contracts"],
+        "bucket_counts": {key: len(value) for key, value in buckets.items()},
+    }
+
+
+def render_markdown(report: Mapping[str, Any]) -> str:
+    """Render the audit report as Markdown."""
+    lines = [
+        "<!--",
+        "# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>",
+        "#",
+        "# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>",
+        "# Neuro-symbolic AI Group",
+        "#",
+        # REUSE-IgnoreStart
+        "# SPDX-License-Identifier: MIT",
+        # REUSE-IgnoreEnd
+        "-->",
+        "",
+        "# Workflow Skill Integration Audit",
+        "",
+        "## Summary",
+        "",
+    ]
+    summary = report["summary"]
+    for key, value in summary.items():
+        lines.append(f"- {key}: `{value}`")
+    lines.extend(["", "## Critical Findings", ""])
+    for finding in report["proposal"]["critical_findings"]:
+        lines.append(
+            f"- **{finding['severity']}**: {finding['finding']} {finding['evidence']}"
+        )
+    lines.extend(["", "## Integration Buckets", ""])
+    for bucket, names in report["classification"]["buckets"].items():
+        sample = ", ".join(names[:12])
+        more = f" (+{len(names) - 12} more)" if len(names) > 12 else ""
+        lines.append(
+            f"- `{bucket}`: `{len(names)}`{(' - ' + sample + more) if sample else ''}"
+        )
+    lines.extend(["", "## Recommended Expansion Strategy", ""])
+    for item in report["proposal"]["recommended_expansion_strategy"]:
+        lines.append(f"- {item}")
+    lines.extend(["", "## Candidate Workflow Stacks From Hook Contracts", ""])
+    for loop in report["proposal"]["candidate_next_workflow_stacks"]:
+        lines.append(f"- `{loop}`")
+    lines.extend(["", "## Skills With No Integration Evidence", ""])
+    orphaned = report["classification"]["buckets"].get("no_integration_evidence", [])
+    if orphaned:
+        for name in orphaned:
+            lines.append(f"- `{name}`")
+    else:
+        lines.append("None.")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_report(graph_path: Path, hooks_path: Path, hub_path: Path) -> Dict[str, Any]:
+    """Build the full skill integration audit report."""
+    inventory = read_skill_inventory()
+    graph = graph_modeled_skills(graph_path)
+    hooks = parse_hook_registry(hooks_path)
+    hub = parse_agentic_hub(hub_path)
+    classification = classify_skills(inventory, graph, hooks, hub)
+    proposal = proposal_from_audit(classification, hooks)
+    summary = {
+        "available_skills": len(inventory),
+        "theme_counts": dict(
+            sorted(Counter(item["theme"] for item in inventory.values()).items())
+        ),
+        "graph_modeled_skills": len(graph["modeled"]),
+        "hook_owner_skills": len(hooks["owner_skills"]),
+        "direct_route_skills": len(hooks["direct_route_skills"]),
+        "shared_runtime_skills": len(hooks["shared_runtime_skills"]),
+        "agentic_hub_documented_skills": len(hub["agents"]),
+        "no_integration_evidence": len(
+            classification["buckets"].get("no_integration_evidence", [])
+        ),
+        "loop_contracts": len(hooks["loop_contracts"]),
+    }
+    return {
+        "summary": summary,
+        "graph": graph,
+        "hooks": hooks,
+        "hub_categories": hub["categories"],
+        "classification": classification,
+        "proposal": proposal,
+    }
+
+
+def main() -> int:
+    """CLI entry point."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--graph", type=Path, default=DEFAULT_GRAPH)
+    parser.add_argument("--hooks", type=Path, default=DEFAULT_HOOKS)
+    parser.add_argument("--hub", type=Path, default=DEFAULT_HUB)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    graph_path = args.graph if args.graph.is_absolute() else REPO_ROOT / args.graph
+    hooks_path = args.hooks if args.hooks.is_absolute() else REPO_ROOT / args.hooks
+    hub_path = args.hub if args.hub.is_absolute() else REPO_ROOT / args.hub
+    output_dir = (
+        args.output_dir
+        if args.output_dir.is_absolute()
+        else REPO_ROOT / args.output_dir
+    )
+    report = build_report(graph_path, hooks_path, hub_path)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = output_dir / "workflow_skill_integration_audit.json"
+    md_path = output_dir / "workflow_skill_integration_audit.md"
+    json_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    md_path.write_text(render_markdown(report), encoding="utf-8")
+    result = {
+        "ok": True,
+        "json_path": str(json_path.relative_to(REPO_ROOT)),
+        "markdown_path": str(md_path.relative_to(REPO_ROOT)),
+        "summary": report["summary"],
+        "bucket_counts": report["proposal"]["bucket_counts"],
+    }
+    print(
+        json.dumps(result, indent=2) if args.json else f"ok: {result['markdown_path']}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

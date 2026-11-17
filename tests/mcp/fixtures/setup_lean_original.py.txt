@@ -1,0 +1,354 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Automate repository maintenance tasks that would be error-prone if performed by hand.
+#
+# Intent:
+#   Expose command-line entry points for setup, generation, indexing, auditing, and proof execution.
+#
+# Function:
+#   Implements operational glue used by tests, skills, docs, and developer workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Cross-platform Mathformer environment installer."""
+
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+MCP_SERVICE_REQUIREMENTS = ROOT_DIR / "requirements-mcp-service.txt"
+
+
+def venv_python(venv_path: Path) -> Path:
+    """Document the responsibility of ``venv_python``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``venv_python`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if os.name == "nt":
+        return venv_path / "Scripts" / "python.exe"
+    return venv_path / "bin" / "python"
+
+
+def command_text(command: list[str]) -> str:
+    """Document the responsibility of ``command_text``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``command_text`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return " ".join(f'"{part}"' if " " in part else part for part in command)
+
+
+def run(command: list[str], *, cwd: Path | None = None) -> None:
+    """Document the responsibility of ``run``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    location = f" (cwd={cwd})" if cwd else ""
+    print(f"[install] $ {command_text(command)}{location}")
+    # MCP directs installer diagnostics to stderr, including child output.
+    # Ordinary CLI callers retain the native inherited-descriptor behavior.
+    output = {'stdout': sys.stderr} if sys.stdout is sys.stderr else {}
+    subprocess.run(command, cwd=cwd, check=True, **output)
+
+
+def require_command(name: str, *, install_hint: str) -> str:
+    """Document the responsibility of ``require_command``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``require_command`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    executable = shutil.which(name)
+    if executable:
+        return executable
+    raise SystemExit(f"Error: {name} is not installed or not on PATH. {install_hint}")
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Document the responsibility of ``parse_args``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Parse caller-provided input into the structured representation expected by downstream code.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--skip-python",
+        action="store_true",
+        help="Skip Python venv/dependency installation.",
+    )
+    parser.add_argument(
+        "--skip-lean",
+        action="store_true",
+        help="Compatibility option: do not run Lean setup even when --with-lean is selected.",
+    )
+    parser.add_argument(
+        "--with-lean",
+        action="store_true",
+        help="Run `lake update` / `lake build`. Requires elan/lake on PATH.",
+    )
+    parser.add_argument(
+        "--with-atp-kb",
+        action="store_true",
+        help=(
+            "Select the ATP/KB profile. This currently needs no third-party "
+            "Python packages, but documents intent and creates the venv."
+        ),
+    )
+    parser.add_argument(
+        "--with-benchmarks",
+        action="store_true",
+        help="Install benchmark download dependencies.",
+    )
+    parser.add_argument(
+        "--with-sympy",
+        action="store_true",
+        help="Install SymPy/NumPy dependencies for symbolic and physics paths.",
+    )
+    parser.add_argument(
+        "--with-paper-extraction",
+        action="store_true",
+        help="Install Docling for PDF layout extraction skills.",
+    )
+    parser.add_argument(
+        "--with-mcp",
+        action="store_true",
+        help="Install the MCP Python SDK to run scripts/mcp_server.py.",
+    )
+    parser.add_argument(
+        "--mcp-service",
+        action="store_true",
+        help="Install the independent whole-pipeline MCP service dependency profile.",
+    )
+    parser.add_argument(
+        "--all-extras",
+        action="store_true",
+        help="Install every Python extra known to this script.",
+    )
+    parser.add_argument(
+        "--venv-path",
+        type=Path,
+        default=Path(os.environ.get("VENV_PATH", ROOT_DIR / ".venv")),
+        help="Virtual environment path. Defaults to VENV_PATH or .venv.",
+    )
+    return parser.parse_args(argv)
+
+
+def read_requirements(path: Path) -> list[str]:
+    if not path.exists():
+        raise SystemExit(f"Error: missing requirements file: {path}")
+    deps = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            deps.append(stripped)
+    return deps
+
+
+def selected_python_deps(args: argparse.Namespace) -> list[str]:
+    """Document the responsibility of ``selected_python_deps``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``selected_python_deps`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    with_benchmarks = args.with_benchmarks or args.all_extras
+    with_sympy = args.with_sympy or args.all_extras
+    with_paper_extraction = args.with_paper_extraction or args.all_extras
+    with_mcp = args.with_mcp or args.all_extras
+
+    deps: list[str] = []
+    if args.mcp_service:
+        deps.extend(read_requirements(MCP_SERVICE_REQUIREMENTS))
+    if with_benchmarks:
+        deps.append("huggingface_hub>=0.23,<1")
+    if with_sympy:
+        deps.extend(["sympy>=1.12,<2", "numpy>=1.26,<3"])
+    if with_paper_extraction:
+        deps.append("docling>=2")
+    if with_mcp:
+        deps.append("mcp>=1.6,<2")
+    return list(dict.fromkeys(deps))
+
+
+def install_python(args: argparse.Namespace) -> None:
+    """Document the responsibility of ``install_python``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``install_python`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    uv = require_command(
+        "uv",
+        install_hint="Install uv from https://docs.astral.sh/uv/ and retry.",
+    )
+
+    venv_path = args.venv_path
+    if not venv_path.is_absolute():
+        venv_path = ROOT_DIR / venv_path
+    print(f"[install] Creating/updating venv at: {venv_path}")
+    run([uv, "venv", str(venv_path)])
+
+    python_bin = venv_python(venv_path)
+    if not python_bin.exists():
+        raise SystemExit(f"Error: expected Python executable at {python_bin}")
+
+    deps = selected_python_deps(args)
+    if deps:
+        print(f"[install] Installing Python dependencies: {', '.join(deps)}")
+        run([uv, "pip", "install", "--python", str(python_bin), *deps])
+    else:
+        print("[install] No third-party Python packages selected.")
+
+
+def install_lean() -> None:
+    """Document the responsibility of ``install_lean``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``install_lean`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    lake = require_command(
+        "lake",
+        install_hint="Install elan/Lean first, then retry.",
+    )
+    print("[install] Running lake update")
+    run([lake, "update"], cwd=ROOT_DIR)
+    print("[install] Running lake build")
+    run([lake, "build"], cwd=ROOT_DIR)
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    args = initialize()
+    if not args.skip_python:
+        install_python(args)
+    setup_lean(args)
+    return complete()
+
+
+def initialize(argv: list[str] | None = None) -> argparse.Namespace:
+    """Validate the interpreter before parsing the native installer arguments."""
+    if sys.version_info < (3, 10):
+        raise SystemExit("Error: Mathformer installer requires Python 3.10+.")
+
+    return parse_args(argv)
+
+
+def setup_lean(args: argparse.Namespace) -> None:
+    """Run the native Lean branch, retaining its skip diagnostics."""
+    if args.with_lean and not args.skip_lean:
+        install_lean()
+    elif args.with_lean and args.skip_lean:
+        print(
+            "[install] Lean setup requested and skipped because --skip-lean was provided."
+        )
+    else:
+        print(
+            "[install] Lean setup not requested. Use --with-lean to run lake update/build."
+        )
+
+
+def complete() -> int:
+    """Emit the native success diagnostic only after installations finish."""
+    print("[install] Environment setup complete.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

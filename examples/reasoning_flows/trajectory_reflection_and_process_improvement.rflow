@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Canonical epistemic projection; not an execution trace.
+erfl 0.3
+reasoning trajectory_reflection_and_process_improvement {
+  goal "produce a tested disposition over an immutable reasoning revision" -> improvement_status
+  steps
+    l0:L[
+      baseline_reasoning::Model<ReasoningSpecification>,
+      baseline_evidence::Evidence<ReasoningTrajectory>,
+      refinement_goal::Goal,
+      evaluation_cases::Bundle<EvaluationCase>,
+      evaluation_contract::Constraint<RefinementContract>,
+      trust_anchor::Constraint<AdoptionPolicy>
+      -> reflective_assessment::Assessment
+    ] -revise> ...
+    x:X[
+      baseline_reasoning::Model<ReasoningSpecification>,
+      reflective_assessment::Assessment,
+      evaluation_contract::Constraint<RefinementContract>,
+      trust_anchor::Constraint<AdoptionPolicy>
+      -> proposed_delta::Delta<ReasoningSpecification>
+    ] -construct> ...
+    f:F[
+      baseline_reasoning::Model<ReasoningSpecification>,
+      proposed_delta::Delta<ReasoningSpecification>
+      -> candidate_reasoning::Model<ReasoningSpecification>,
+      revision_record::Relation<ReasoningRevision>
+    ] -test> ...
+    p:P[
+      candidate_reasoning::Model<ReasoningSpecification>,
+      evaluation_cases::Bundle<EvaluationCase>,
+      evaluation_contract::Constraint<RefinementContract>
+      -> candidate_evidence::Evidence<ReasoningTrajectory>
+    ] -compare> ...
+    l1:L[
+      baseline_evidence::Evidence<ReasoningTrajectory>,
+      candidate_evidence::Evidence<ReasoningTrajectory>,
+      evaluation_contract::Constraint<RefinementContract>
+      -> comparative_assessment::Assessment
+    ] -assess> ...
+    r:R[
+      candidate_reasoning::Model<ReasoningSpecification>,
+      revision_record::Relation<ReasoningRevision>,
+      comparative_assessment::Assessment,
+      trust_anchor::Constraint<AdoptionPolicy>
+      -> adoption_assessment::Assessment
+    ] -calibrate> ...
+    e:E[
+      baseline_reasoning::Model<ReasoningSpecification>,
+      candidate_reasoning::Model<ReasoningSpecification>,
+      revision_record::Relation<ReasoningRevision>,
+      comparative_assessment::Assessment,
+      adoption_assessment::Assessment,
+      trust_anchor::Constraint<AdoptionPolicy>
+      -> improvement_status::Decision
+    ]
+  on e.adopted_for_scope => accept
+  on e.retained_as_experiment => stop
+  on e.rejected => stop
+  on e.blocked => stop
+}

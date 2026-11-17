@@ -1,0 +1,651 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_paper_mechanistic_diagram_model_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Parse arguments, construct a fixed preset diagram, write JSON once, report and return 0.",
+  "aliases": [
+    "paper:mechanistic-diagram-model"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Argv": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Options": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "preset",
+          "output",
+          "json",
+          "halted"
+        ],
+        "properties": {
+          "preset": {
+            "enum": [
+              "mathformer-framework",
+              "observability-stack"
+            ]
+          },
+          "output": {
+            "type": "string"
+          },
+          "json": {
+            "type": "boolean"
+          },
+          "halted": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Diagram": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "caption",
+          "layers",
+          "nodes",
+          "edges",
+          "validation_criteria"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string"
+          },
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "validation_criteria": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "representation": "value"
+    },
+    "DiagramFile": {
+      "schema": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "caption",
+              "layers",
+              "nodes",
+              "edges",
+              "validation_criteria"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "caption": {
+                "type": "string"
+              },
+              "layers": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "nodes": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "edges": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "validation_criteria": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "representation": "file",
+      "media_type": "application/json"
+    },
+    "Path": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "Report": {
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "ok",
+              "output",
+              "node_count",
+              "edge_count"
+            ],
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "output": {
+                "type": "string"
+              },
+              "node_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "edge_count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "const": 0
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Argv"
+    }
+  },
+  "outputs": {
+    "diagram": {
+      "type": "DiagramFile",
+      "value": {
+        "ref": "flow.outputs.diagram"
+      }
+    },
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "parse_arguments": {
+      "inputs": {
+        "argv": {
+          "type": "Argv"
+        }
+      },
+      "outputs": {
+        "options": {
+          "type": "Options"
+        },
+        "help_report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_diagram_parse",
+          "operation": "mathformer_diagram_parse"
+        }
+      }
+    },
+    "construct_model": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        }
+      },
+      "outputs": {
+        "model": {
+          "type": "Diagram"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_diagram_construct",
+          "operation": "mathformer_diagram_construct"
+        }
+      }
+    },
+    "write_model": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "model": {
+          "type": "Diagram"
+        }
+      },
+      "outputs": {
+        "diagram": {
+          "type": "DiagramFile"
+        },
+        "output": {
+          "type": "Path"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_diagram_write",
+          "operation": "mathformer_diagram_write"
+        }
+      }
+    },
+    "report_and_return": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "model": {
+          "type": "Diagram"
+        },
+        "output": {
+          "type": "Path"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_diagram_report",
+          "operation": "mathformer_diagram_report"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "parse",
+        "kind": "call",
+        "operation": "parse_arguments",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "help",
+            "when": {
+              "ref": "steps.parse.outputs.options.halted"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "halt",
+                  "kind": "gate",
+                  "condition": {
+                    "literal": true
+                  },
+                  "on_false": "fail"
+                }
+              ],
+              "outputs": {
+                "diagram": {
+                  "type": "DiagramFile",
+                  "value": {
+                    "literal": null
+                  }
+                },
+                "report": {
+                  "type": "Report",
+                  "value": {
+                    "ref": "steps.parse.outputs.help_report"
+                  }
+                },
+                "exit_code": {
+                  "type": "ExitCode",
+                  "value": {
+                    "literal": 0
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "construct",
+              "kind": "call",
+              "operation": "construct_model",
+              "arguments": {
+                "options": {
+                  "ref": "steps.parse.outputs.options"
+                }
+              }
+            },
+            {
+              "id": "write",
+              "kind": "call",
+              "operation": "write_model",
+              "arguments": {
+                "options": {
+                  "ref": "steps.parse.outputs.options"
+                },
+                "model": {
+                  "ref": "steps.construct.outputs.model"
+                }
+              }
+            },
+            {
+              "id": "report",
+              "kind": "call",
+              "operation": "report_and_return",
+              "arguments": {
+                "options": {
+                  "ref": "steps.parse.outputs.options"
+                },
+                "model": {
+                  "ref": "steps.construct.outputs.model"
+                },
+                "output": {
+                  "ref": "steps.write.outputs.output"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "diagram": {
+              "type": "DiagramFile",
+              "value": {
+                "ref": "steps.write.outputs.diagram"
+              }
+            },
+            "report": {
+              "type": "Report",
+              "value": {
+                "ref": "steps.report.outputs.report"
+              }
+            },
+            "exit_code": {
+              "type": "ExitCode",
+              "value": {
+                "ref": "steps.report.outputs.exit_code"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "diagram": {
+            "type": "DiagramFile",
+            "value": {
+              "ref": "selected.outputs.diagram"
+            }
+          },
+          "report": {
+            "type": "Report",
+            "value": {
+              "ref": "selected.outputs.report"
+            }
+          },
+          "exit_code": {
+            "type": "ExitCode",
+            "value": {
+              "ref": "selected.outputs.exit_code"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "diagram": {
+        "type": "DiagramFile",
+        "value": {
+          "ref": "steps.dispatch.outputs.diagram"
+        }
+      },
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.dispatch.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.dispatch.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "cli_output_path_and_parent_directories",
+          "artifacts/paper_skills/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 4
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Diagram generation only; feedback edges and validation criteria are data, not executed scientific validation."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "paper_skills/mechanistic-diagram-modeler/scripts/build_mechanistic_diagram_model.py",
+        "digest": "sha256:5c5df92403cb2b80a1619727b8af9a67c515109271d548cfaf6eb715bef82d95",
+        "selector": "main; parse_options; construct_model; write_model; report_and_return; PRESETS"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mechanistic_diagram_tools.py",
+        "digest": "sha256:c5b6ac2b5fec5071ad1dace40f3941b1fbf3e8c82623d8ab838ff86211a2082a"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Hub preflight/dry-run/subprocess audit controls remain boundary metadata; this graph exposes main(), not a hub invocation.",
+      "Diagram payload schemas describe top-level structure; preset dictionaries remain source-owned.",
+      "Normalization bounds are host-enforced, not native iteration or timeout behavior."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "paper:mechanistic-diagram-model",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "paper:mechanistic-diagram-model",
+        "summary": "Build the Mathformer mechanistic diagram model JSON.",
+        "family": "paper",
+        "kind": "generation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "paper_skills/mechanistic-diagram-modeler/scripts/build_mechanistic_diagram_model.py",
+          "--output",
+          "artifacts/paper_skills/mathformer_mechanistic_diagram.json",
+          "--json"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "paper_skills/mechanistic-diagram-modeler/scripts/build_mechanistic_diagram_model.py"
+        ],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [
+          "artifacts/paper_skills/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": null,
+        "notes": ""
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered action via run_action -> run_leaf_action launches main() once after native controls.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report"
+      ],
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "failure_policy": "Preflight failure or dry-run stops before launch. Otherwise capture subprocess results and audit writes; nonzero exit or undeclared writes makes the hub result unsuccessful.",
+      "scientific_payloads": "HubResult is a transport envelope; graph exports describe main() only.",
+      "hub_argv": [
+        "--output",
+        "artifacts/paper_skills/mathformer_mechanistic_diagram.json",
+        "--json"
+      ],
+      "hub_preset": "mathformer-framework",
+      "extra_arguments": "Rejected by hub; direct CLI supports both PRESETS and caller-selected output paths.",
+      "timeout": "No native subprocess timeout or global iteration budget."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "command_after_dependencies": false,
+      "keep_going_semantics": "No child dependencies; keep_going adds neither retries nor repeated launches.",
+      "extra_args_for_sequence": "native per-action policy",
+      "modeling": "Main sequence only; no loop, carried state, refinement or convergence test exists.",
+      "stopping": "One write and report then return 0; argparse termination or propagated exceptions stop downstream work."
+    }
+  }
+}

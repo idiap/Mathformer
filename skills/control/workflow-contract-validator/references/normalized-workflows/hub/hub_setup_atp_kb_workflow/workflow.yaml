@@ -1,0 +1,308 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_setup_atp_kb_workflow
+version: 1.0.0
+kind: workflow
+description: Installer main for the registered setup:atp-kb invocation; the native
+  hub owns the enclosing process boundary.
+aliases:
+- setup:atp-kb
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  InstallerArgs:
+    schema:
+      type: object
+      properties:
+        skip_python:
+          type: boolean
+          const: false
+        with_atp_kb:
+          type: boolean
+          const: true
+        with_lean:
+          type: boolean
+          const: false
+        skip_lean:
+          type: boolean
+          const: false
+        venv_path:
+          type: string
+        with_benchmarks:
+          const: false
+        with_sympy:
+          const: false
+        with_paper_extraction:
+          const: false
+        with_mcp:
+          const: false
+        mcp_service:
+          const: false
+        all_extras:
+          const: false
+      required:
+      - skip_python
+      - with_atp_kb
+      - with_lean
+      - skip_lean
+      - venv_path
+      - with_benchmarks
+      - with_sympy
+      - with_paper_extraction
+      - with_mcp
+      - mcp_service
+      - all_extras
+      additionalProperties: false
+    representation: value
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+    representation: value
+  MutationAuthorization:
+    representation: value
+    schema:
+      type: boolean
+inputs:
+  allow_mutating:
+    type: MutationAuthorization
+outputs:
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      args:
+        type: InstallerArgs
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_atp_kb_initialize
+        operation: mathformer_setup_atp_kb_initialize
+  install_python:
+    inputs:
+      args:
+        type: InstallerArgs
+      allow_mutating:
+        type: MutationAuthorization
+    outputs: {}
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_atp_kb_install_python
+        operation: mathformer_setup_atp_kb_install_python
+  setup_lean:
+    inputs:
+      args:
+        type: InstallerArgs
+    outputs: {}
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_atp_kb_setup_lean
+        operation: mathformer_setup_atp_kb_setup_lean
+  complete:
+    inputs: {}
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_setup_atp_kb_complete
+        operation: mathformer_setup_atp_kb_complete
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: install_python
+    kind: call
+    operation: install_python
+    arguments:
+      args:
+        ref: steps.initialize.outputs.args
+      allow_mutating:
+        ref: inputs.allow_mutating
+  - id: setup_lean
+    kind: call
+    operation: setup_lean
+    arguments:
+      args:
+        ref: steps.initialize.outputs.args
+  - id: complete
+    kind: call
+    operation: complete
+    arguments: {}
+  outputs:
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.complete.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - .venv/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 4
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked workflow description only; no scientific result, runtime
+    qualification or promotion is established.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/install_env.py
+    selector: main; initialize; install_python; setup_lean; complete
+    digest: sha256:2c8a00fbf461dddcb10899271ca41d47bf90c9a077b47add7db3c250aab1a5fd
+  - path: scripts/mathformer.py
+    selector: build_registry/action:setup:atp-kb; preflight; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/setup_atp_kb_tools.py
+    selector: register_setup_atp_kb_tools; unpack
+    digest: sha256:6179002ef8b2f7744d546b8b2d84e035d96b884a4fa6829985f19ec472777544
+  - path: scripts/mcp_server.py
+    selector: register_setup_atp_kb_tools; _graph_layout_write_policy
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory/setup:atp-kb
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - The graph specializes installer main to setup:atp-kb fixed argv; other CLI profiles
+    are outside this graph.
+  - Hub admission, preflight, dry-run, output capture and repository write audit remain
+    native enclosing CLI boundary behavior. MCP stages execute after launch and additionally
+    require allow_mutating and service write-root authorization.
+  - Lunar enforces a four-operation budget and 3600-second workflow wait; the native
+    action and installer subprocesses have no timeout or retries. Cancellation does
+    not guarantee child process termination.
+  - Network and external effects require environment qualification. VENV_PATH is preserved;
+    service checks the resolved write root, while native hub auditing does not contain
+    writes outside the repository.
+  - Mandatory Lunar receipts do not upgrade native optional logging, establish checkpoint
+    support or confer scientific authority.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: setup:atp-kb
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: setup:atp-kb
+      summary: Install the smaller ATP and premise-KB profile.
+      family: setup
+      kind: setup
+      safety: writes_environment
+      command:
+      - uv
+      - run
+      - python
+      - scripts/install_env.py
+      - --with-atp-kb
+      depends_on: []
+      required_paths:
+      - scripts/install_env.py
+      required_tools:
+      - uv
+      optional_tools: []
+      writes:
+      - .venv/
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: Native CLI/NL dispatch remains controlled by scripts/mathformer.py.
+      MCP binds each installer stage to shared source functions, with explicit mutation
+      authorization and service write-root checks.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    - VENV_PATH
+    entry: 'run_action checks admission through prepare_action. No dependencies: traversal
+      and aggregation are bypassed. run_leaf_action performs preflight: installer
+      path, uv, no extra args, and allow_mutating or dry_run.'
+    early_exit: Preflight errors return ok=false without launching. Dry-run after
+      successful preflight returns status=dry_run without launching; installer graph
+      is not entered.
+    execution_count: Otherwise launch_leaf_boundary starts the declared command once,
+      captures stdout/stderr and returncode, then finish_leaf_boundary audits repository
+      writes against .venv/.
+    failure_policy: Missing prerequisites or expected Python raise SystemExit. Installer
+      run uses check=True; subprocess failure stops main before complete. The enclosing
+      hub still captures nonzero exit as ok=false and audits writes after process
+      termination; undeclared writes force ok=false/status=undeclared_writes. Unexpected
+      hub launch errors propagate. MCP converts SystemExit to an operation error;
+      checked subprocess errors propagate and stop the sequence.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    scientific_payloads: exit_code is installer main's normal return only. Native
+      HubResult is a transport envelope with captured diagnostics and write audit,
+      not a proof artifact.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    extra_args_for_sequence: native per-action policy
+    modeling: Finite ordered main calls specialized to registry argv; no iterative
+      search, retries, dependency traversal or loop-carried state. skip_python=false
+      makes the Python guard true; with_lean=false selects Lean's diagnostic-only
+      branch. Native helper internals remain within their owning operations. Runtime
+      arguments are serialized losslessly and checked against the fixed invocation
+      before use.
+    keep_going_semantics: No dependencies on this route; keep_going does not recover
+      failed installer steps.
+# REUSE-IgnoreEnd

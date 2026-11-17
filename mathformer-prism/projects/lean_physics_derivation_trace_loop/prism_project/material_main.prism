@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import LeanPhysicsDerivationTraceLoop
+from lean_physics_derivation_trace_loop import PhysicsLeanDerivationRequest, PhysicsLeanConsistencyAssessment
+
+def main(
+    model_access: ModelGenerate,
+    disclosure: ContextDisclose,
+) -> Result[Computed[PhysicsLeanConsistencyAssessment], ModelFailure] ! {AI.Generate, Context.Disclose}:
+    workflow_source = PhysicsLeanDerivationRequest(
+        source_derivation = "fixture:lean_physics_derivation_trace_loop:source_derivation",
+        physical_context = "fixture:lean_physics_derivation_trace_loop:physical_context",
+        lean_context = "fixture:lean_physics_derivation_trace_loop:lean_context",
+    )
+    return solve LeanPhysicsDerivationTraceLoop(workflow_source)

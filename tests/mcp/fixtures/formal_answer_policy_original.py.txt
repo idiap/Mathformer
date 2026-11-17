@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Validate the optional post-hoc FormalPhysics formal_answer reflection policy."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+REFLECTOR = (
+    REPO_ROOT
+    / "skills"
+    / "physics-sympy"
+    / "physics-sympy-formal-answer-reflector"
+    / "scripts"
+    / "compare_sympy_formal_physics_answers.py"
+)
+
+
+def run_reflector(args: list[str]) -> tuple[int, dict[str, Any], str]:
+    """Run the reflector and parse stdout JSON."""
+    completed = subprocess.run(
+        [sys.executable, str(REFLECTOR), *args, "--json"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+    )
+    try:
+        parsed = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        parsed = {}
+    return completed.returncode, parsed, completed.stderr
+
+
+def run_policy_check() -> dict[str, Any]:
+    """Check positive and negative formal-answer reflection policy cases."""
+    findings: list[dict[str, Any]] = []
+    with tempfile.TemporaryDirectory() as raw_tmp:
+        tmp = Path(raw_tmp)
+        ledger = tmp / "pre_reflection_ledger.json"
+        ledger.write_text(
+            json.dumps(
+                {
+                    "case_id": "formalphysics_0000",
+                    "candidate_report_exists": True,
+                    "blocker_report_exists": False,
+                    "final_consistency_report_exists": True,
+                    "created_before_formal_answer_inspection": True,
+                    "formal_answer_inspected_before_ledger": False,
+                    "evidence_sources": [
+                        "source_evidence",
+                        "execution_evidence",
+                        "deterministic_critic",
+                    ],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        positive_code, positive, positive_stderr = run_reflector(
+            [
+                "--case-id",
+                "formalphysics_0000",
+                "--candidate-text",
+                "SymPy candidate derives force component with source evidence, vector projection, and dimension checks.",
+                "--formal-answer-text",
+                "theorem sample (h : positive q) : vector_projection = scalar := by ring",
+                "--pre-reflection-ledger",
+                str(ledger),
+            ]
+        )
+        negative_code, negative, negative_stderr = run_reflector(
+            [
+                "--case-id",
+                "formalphysics_0000",
+                "--candidate-text",
+                "SymPy candidate exists.",
+                "--formal-answer-text",
+                "theorem sample : vector_projection = scalar := by ring",
+            ]
+        )
+
+    if positive_code != 0:
+        findings.append(
+            {
+                "severity": "high",
+                "code": "positive_reflector_command_failed",
+                "stderr": positive_stderr,
+            }
+        )
+    if positive.get("status") not in {"complete", "warn"}:
+        findings.append(
+            {
+                "severity": "high",
+                "code": "valid_ledger_not_accepted",
+                "status": positive.get("status"),
+            }
+        )
+    if positive.get("pre_reflection_ledger_status") != "valid":
+        findings.append(
+            {
+                "severity": "high",
+                "code": "ledger_status_not_valid",
+                "status": positive.get("pre_reflection_ledger_status"),
+            }
+        )
+    if positive.get("policy", {}).get("not_ground_truth") is not True:
+        findings.append(
+            {"severity": "high", "code": "formal_answer_ground_truth_policy_missing"}
+        )
+    if positive.get("policy", {}).get("bypass_rejected") is not True:
+        findings.append(
+            {"severity": "high", "code": "monotonic_bypass_rejection_missing"}
+        )
+    for item in positive.get("improvement_candidates", []):
+        if (
+            item.get("acceptance_policy")
+            != "requires localized monotonic review refinement before any artifact change"
+        ):
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "improvement_candidate_missing_localized_route",
+                    "item": item,
+                }
+            )
+        if item.get("evidence_source") != "post_hoc_inspiration":
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "improvement_candidate_missing_source",
+                    "item": item,
+                }
+            )
+
+    if negative_code != 0:
+        findings.append(
+            {
+                "severity": "medium",
+                "code": "negative_reflector_command_returned_nonzero",
+                "stderr": negative_stderr,
+            }
+        )
+    if negative.get("status") != "blocked":
+        findings.append(
+            {
+                "severity": "high",
+                "code": "missing_ledger_not_blocked",
+                "status": negative.get("status"),
+            }
+        )
+    negative_codes = {item.get("code") for item in negative.get("findings", [])}
+    if "pre_reflection_ledger_missing" not in negative_codes:
+        findings.append(
+            {
+                "severity": "high",
+                "code": "missing_ledger_finding_absent",
+                "findings": negative.get("findings", []),
+            }
+        )
+
+    return {
+        "schema_version": 1,
+        "ok": not any(item["severity"] == "high" for item in findings),
+        "style": "physics_sympy_formal_answer_reflection_policy_test",
+        "positive_status": positive.get("status"),
+        "negative_status": negative.get("status"),
+        "findings": findings,
+        "policy": {
+            "formal_answer_reflection": "optional_post_hoc",
+            "pre_reflection_ledger_required": True,
+            "accepted_changes_require": "localized monotonic review refinement",
+        },
+    }
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the policy check."""
+    args = parse_args(argv)
+    report = run_policy_check()
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
+    else:
+        print(f"ok: {report['ok']}")
+        print(f"positive_status: {report['positive_status']}")
+        print(f"negative_status: {report['negative_status']}")
+    return 0 if report["ok"] else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

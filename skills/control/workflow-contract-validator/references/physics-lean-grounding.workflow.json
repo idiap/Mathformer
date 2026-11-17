@@ -1,0 +1,865 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lean_audit_grounding_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Textually audit Lean physics grounding; optionally assert high grounding and refresh consistency reports.",
+  "aliases": [
+    "physics-lean:audit-grounding"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Options": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "self_test": {
+            "type": "boolean"
+          },
+          "update_consistency": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "self_test",
+          "update_consistency"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Cases": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        },
+        "maxItems": 10000
+      }
+    },
+    "ScanState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "pending": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10000
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 10000
+          },
+          "nonempty": {
+            "type": "boolean"
+          },
+          "case_history": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10000,
+            "description": "Native case JSON in traversal order; preserves insertion order across canonical JSON envelopes for byte-identical audit emission."
+          }
+        },
+        "required": [
+          "pending",
+          "cases",
+          "nonempty",
+          "case_history"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "UpdateState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "pending": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 10000
+          },
+          "nonempty": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pending",
+          "nonempty"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Bool": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "AuditJson": {
+      "representation": "file",
+      "media_type": "application/json",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": 2
+          },
+          "summary": {
+            "type": "object"
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 10000
+          }
+        },
+        "required": [
+          "schema_version",
+          "summary",
+          "cases"
+        ]
+      }
+    },
+    "Markdown": {
+      "representation": "file",
+      "media_type": "text/markdown",
+      "schema": {
+        "type": "string"
+      }
+    },
+    "Counts": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "cases": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updated_consistency": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cases",
+          "updated_consistency"
+        ]
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "const": 0
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Repository mount containing MathformerPhysicsLib; resolves file effects relative to this root."
+      }
+    },
+    "CaseHistory": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 10000,
+        "description": "Native case JSON in traversal order; preserves insertion order across canonical JSON envelopes for byte-identical audit emission."
+      }
+    }
+  },
+  "inputs": {
+    "options": {
+      "type": "Options"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "audit_json": {
+      "type": "AuditJson",
+      "value": {
+        "ref": "flow.outputs.audit_json"
+      }
+    },
+    "audit_markdown": {
+      "type": "Markdown",
+      "value": {
+        "ref": "flow.outputs.audit_markdown"
+      }
+    },
+    "printed_counts": {
+      "type": "Counts",
+      "value": {
+        "ref": "flow.outputs.printed_counts"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "initialize_scan": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "ScanState"
+        },
+        "nonempty": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_grounding_initialize_scan",
+          "operation": "mathformer_physics_grounding_initialize_scan"
+        }
+      }
+    },
+    "audit_next": {
+      "inputs": {
+        "state": {
+          "type": "ScanState"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "ScanState"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_grounding_audit_next",
+          "operation": "mathformer_physics_grounding_audit_next"
+        }
+      }
+    },
+    "assert_grounding": {
+      "inputs": {
+        "cases": {
+          "type": "Cases"
+        }
+      },
+      "outputs": {
+        "cases": {
+          "type": "Cases"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_grounding_assert_grounding",
+          "operation": "mathformer_physics_grounding_assert_grounding"
+        }
+      }
+    },
+    "initialize_updates": {
+      "inputs": {
+        "cases": {
+          "type": "Cases"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "UpdateState"
+        },
+        "nonempty": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_grounding_initialize_updates",
+          "operation": "mathformer_physics_grounding_initialize_updates"
+        }
+      }
+    },
+    "update_next": {
+      "inputs": {
+        "state": {
+          "type": "UpdateState"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "UpdateState"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_grounding_update_next",
+          "operation": "mathformer_physics_grounding_update_next"
+        }
+      }
+    },
+    "emit_audit": {
+      "inputs": {
+        "cases": {
+          "type": "Cases"
+        },
+        "options": {
+          "type": "Options"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        },
+        "case_history": {
+          "type": "CaseHistory"
+        }
+      },
+      "outputs": {
+        "audit_json": {
+          "type": "AuditJson"
+        },
+        "audit_markdown": {
+          "type": "Markdown"
+        },
+        "printed_counts": {
+          "type": "Counts"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_grounding_emit_audit",
+          "operation": "mathformer_physics_grounding_emit_audit"
+        }
+      }
+    },
+    "retain_cases": {
+      "inputs": {
+        "cases": {
+          "type": "Cases"
+        }
+      },
+      "outputs": {
+        "cases": {
+          "type": "Cases"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_grounding_retain_cases",
+          "operation": "mathformer_physics_grounding_retain_cases"
+        }
+      }
+    },
+    "empty_scan": {
+      "inputs": {
+        "state": {
+          "type": "ScanState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "ScanState"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_grounding_empty_traversal",
+          "operation": "mathformer_physics_grounding_empty_traversal"
+        }
+      }
+    },
+    "empty_updates": {
+      "inputs": {
+        "state": {
+          "type": "UpdateState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "UpdateState"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_grounding_empty_traversal",
+          "operation": "mathformer_physics_grounding_empty_traversal"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "initialize_scan",
+        "arguments": {
+          "options": {
+            "ref": "inputs.options"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "kind": "loop",
+        "state_type": "ScanState",
+        "initial": {
+          "ref": "steps.prepare.outputs.state"
+        },
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "nonempty",
+              "when": {
+                "ref": "loop.state.nonempty"
+              },
+              "body": {
+                "kind": "call",
+                "operation": "audit_next",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  },
+                  "repository_root": {
+                    "ref": "inputs.repository_root"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "empty_scan",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "ScanState",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Bool",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 10000,
+        "on_exhausted": "fail",
+        "id": "scan",
+        "outputs": {
+          "cases": {
+            "type": "Cases",
+            "value": {
+              "ref": "body.outputs.state.cases"
+            }
+          },
+          "case_history": {
+            "type": "CaseHistory",
+            "value": {
+              "ref": "body.outputs.state.case_history"
+            }
+          }
+        }
+      },
+      {
+        "id": "self_test",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "requested",
+            "when": {
+              "ref": "inputs.options.self_test"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "assert_grounding",
+              "arguments": {
+                "cases": {
+                  "ref": "steps.scan.outputs.cases"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "retain_cases",
+          "arguments": {
+            "cases": {
+              "ref": "steps.scan.outputs.cases"
+            }
+          }
+        },
+        "outputs": {
+          "cases": {
+            "type": "Cases",
+            "value": {
+              "ref": "selected.outputs.cases"
+            }
+          }
+        }
+      },
+      {
+        "id": "pack_updates",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "requested",
+            "when": {
+              "ref": "inputs.options.update_consistency"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "initialize_updates",
+              "arguments": {
+                "cases": {
+                  "ref": "steps.scan.outputs.cases"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "initialize_updates",
+          "arguments": {
+            "cases": {
+              "literal": []
+            }
+          }
+        },
+        "outputs": {
+          "state": {
+            "type": "UpdateState",
+            "value": {
+              "ref": "selected.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "kind": "loop",
+        "state_type": "UpdateState",
+        "initial": {
+          "ref": "steps.pack_updates.outputs.state"
+        },
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "nonempty",
+              "when": {
+                "ref": "loop.state.nonempty"
+              },
+              "body": {
+                "kind": "call",
+                "operation": "update_next",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  },
+                  "repository_root": {
+                    "ref": "inputs.repository_root"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "empty_updates",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "UpdateState",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Bool",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 10000,
+        "on_exhausted": "fail",
+        "id": "updates"
+      },
+      {
+        "id": "emit",
+        "kind": "call",
+        "operation": "emit_audit",
+        "arguments": {
+          "cases": {
+            "ref": "steps.scan.outputs.cases"
+          },
+          "options": {
+            "ref": "inputs.options"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          },
+          "case_history": {
+            "ref": "steps.scan.outputs.case_history"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "audit_json": {
+        "type": "AuditJson",
+        "value": {
+          "ref": "steps.emit.outputs.audit_json"
+        }
+      },
+      "audit_markdown": {
+        "type": "Markdown",
+        "value": {
+          "ref": "steps.emit.outputs.audit_markdown"
+        }
+      },
+      "printed_counts": {
+        "type": "Counts",
+        "value": {
+          "ref": "steps.emit.outputs.printed_counts"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.emit.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "MathformerPhysicsLib/Lean/"
+        ],
+        "write": [
+          "MathformerPhysicsLib/MATHLIB_GROUNDING_AUDIT.json",
+          "MathformerPhysicsLib/MATHLIB_GROUNDING_AUDIT.md",
+          "MathformerPhysicsLib/Lean/formalphysics_*/consistency_report.json"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "audit_lexical_grounding",
+        "write_grounding_audit",
+        "refresh_existing_consistency_reports"
+      ],
+      "forbidden": [
+        "infer_scientific_truth_from_completion",
+        "bypass_native_controls"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 20004
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Textual grounding classification only; no Lean compilation, proof or scientific endorsement."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/audit_mathformer_physics_lean_grounding.py",
+        "selector": "main; discover_cases; initialize_scan; audit_next; assert_grounding; initialize_updates; update_next; emit_audit; audit_case; update_consistency_report; write_audit",
+        "digest": "sha256:26f1acc0bcc39d3f2395dab40a42a96d480693bc294632acaa42c66488b11630"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry; run_action; run_leaf_action; finish_leaf_boundary; audit_pack_sources",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/physics_lean_grounding_tools.py",
+        "selector": "register_physics_lean_grounding_tools",
+        "digest": "sha256:959401526704bfe2affbdc759a5bd3792a944c673e6d3e7f1f42e7ce8be94dd1"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_physics_lean_grounding_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "service_coverage_report",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "hub descriptors: physics-lean:audit-grounding",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Argparse help/error paths and the hub envelope are outside this main-flow projection. Options model parsed flags; the audit-grounding hub supplies both false, while direct main exposes both flags.",
+      "Discovery is performed from repository_root with at most 10000 eligible paths; the native CLI has no cap. Root-level loops guard each visit on the carried nonempty flag; an empty or disabled traversal invokes only an empty-iterator adapter. Exactly 10000 visits finish on the last iteration; larger discovery is rejected before scanning. Reduced descriptor bounds fail without emission.",
+      "The 3600-second and operation-call limits are descriptor budgets, not native timeouts. No retry, refinement, convergence or checkpoints occur.",
+      "Uncaught assertions, read/parse/write errors terminate; earlier report/JSON writes may persist without rollback. Lunar supplies mandatory receipts around registered operations; native stdout counts are emitted on MCP stderr. Service write controls additionally constrain mutations."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lean:audit-grounding",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "physics-lean:audit-grounding",
+        "family": "physics_lean",
+        "kind": "validation",
+        "safety": "read_only",
+        "command": [
+          "{python}",
+          "scripts/audit_mathformer_physics_lean_grounding.py"
+        ],
+        "depends_on": [],
+        "writes": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "run_action -> run_leaf_action invokes this dependency-free leaf with no arguments; both flags are false.",
+      "input_projection": "repository_root is an explicit filesystem mount. initialize_scan discovers actual eligible paths rather than accepting a caller-selected filter. Options project parse_args; only direct main invocation exposes flags.",
+      "alternate_action": "physics-lean:update-grounding-audit supplies --update-consistency; audit-grounding rejects extra arguments.",
+      "effects_status": "Default audit writes contradict native read_only and empty writes. Changed outputs can cause finish_leaf_boundary to set status=undeclared_writes and ok=false despite main returning 0."
+    },
+    "mathformer.operation_semantics": {
+      "initialize_scan": "Discover sorted eligible formalphysics_* paths from the explicit repository mount; reject more than 10000 at the normalized boundary, then initialize the native scan state.",
+      "audit_next": "main list comprehension/audit_case: consume the next directory, read UTF-8 Lean, strip comments for lexical signals, extract imports from original text, classify, and append the case; pack remaining paths and cases and compute done. grounding_level is high iff native count > 0, scaffold/opaque/string counts are zero and typed_prop_context; otherwise native count > 0 gives medium, else low. Preserve imports, signals, main_gap and complete_status_allowed=(level==high). No Lean compilation occurs; helper signal/gap loops remain internal.",
+      "assert_grounding": "main self_test: assert any case is high, then assert all cases are high. AssertionError stops execution before updates or audit writes.",
+      "initialize_updates": "main update_consistency traversal: pack cases in source order as pending report visits and compute nonempty. This is iterator-state projection, not new CLI behavior.",
+      "update_next": "main/update_consistency_report: visit next case; skip absent consistency_report.json. Otherwise refresh grounding evidence, default background_packet_present=false, remove old mathlib_grounding_* and missing-review/background blockers, then add missing review, non-high grounding and missing background blockers as appropriate. Deduplicate in order using local seen state. Status is complete with no blockers; otherwise draft iff compile_ok AND realness_ok AND anchor_ok, else blocked. Write the report; advance pending and compute done. Evidence/blockers/seen and their finite traversals remain internal to this operation.",
+      "emit_audit": "main/write_audit: count levels, write schema-version-2 aggregate JSON first, then build Markdown rows in case order and write Markdown, including its fixed conclusion and gate-policy text. Preserve cases/high/medium/low counts, high as maximally_grounded_complete_candidates and cases-minus-high as draft_or_legacy_candidates. Print JSON counts and updated_consistency, then return 0, even for zero cases. Markdown row accumulation and counts stay internal.",
+      "retain_cases": "Pass unchanged cases through a skipped or empty native branch."
+    }
+  }
+}

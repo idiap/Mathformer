@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathlib_grounding_loop import LeanFormalizationConceptDemand
+
+mathlib_index_builder_skill: Skill[LeanFormalizationConceptDemand] = skill_artifact[LeanFormalizationConceptDemand](
+    "mathlib-index-builder",
+    "0.0.0+imported",
+    "mathlib-index-builder",
+    "Build and validate a first-class Mathlib module/declaration/import index with version stamps, theorem-shape summaries, doc-comment metadata, declaration graph links, import-cost estimates, and stale-index detection. Use before Mathlib navigation, concept annotation, or controlled Lean drafting needs shared Mathlib evidence.",
+    "# Mathlib Index Builder\n\nUse this skill when Mathformer needs a reusable Mathlib index instead of\nrescanning source files inside each workflow.\n\nRun:\n\n```bash\npython skills/mathlib/mathlib-index-builder/scripts/build_mathlib_index.py --json\n```\n\nFor fast checks:\n\n```bash\npython skills/mathlib/mathlib-index-builder/scripts/build_mathlib_index.py --max-files 160 --json\n```\n\nThe index records module metadata, declaration metadata, imports, imported-by\nedges, theorem-shape summaries, doc comments, import-cost estimates, and a\nlightweight declaration graph. Use `--validate-existing` to fail if the\nexisting index was built against a different Lean or Mathlib revision.",
+    "{\"agents/openai.yaml\":\"aW50ZXJmYWNlOgogIGRpc3BsYXlfbmFtZTogIk1hdGhsaWIgSW5kZXggQnVpbGRlciIKICBzaG9ydF9kZXNjcmlwdGlvbjogIkJ1aWxkIHR5cGVkIE1hdGhsaWIgaW5kZXhlcyIKICBkZWZhdWx0X3Byb21wdDogIlVzZSAkbWF0aGxpYi1pbmRleC1idWlsZGVyIHRvIGJ1aWxkIG9yIHZhbGlkYXRlIHRoZSBzaGFyZWQgTWF0aGxpYiBtb2R1bGUvZGVjbGFyYXRpb24gaW5kZXggYmVmb3JlIG5hdmlnYXRpb24gb3IgZHJhZnRpbmcgcmVsaWVzIG9uIE1hdGhsaWIgZXZpZGVuY2UuIgo=\"}",
+)

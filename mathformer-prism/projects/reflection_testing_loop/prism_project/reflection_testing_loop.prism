@@ -1,0 +1,175 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Domain-specific source boundary for the named reflection_testing_loop Mathformer workflow.
+type MathformerWorkflowTrajectoryEvidence:
+    # Workflow run identifiers included in reflective analysis.
+    run_identifiers: List[String]
+    # Digest of the successful baseline that revisions must preserve.
+    baseline_digest: String
+    # Observed regressions or unresolved failures motivating revision.
+    observed_regressions: List[String]
+
+# Domain-specific result of critique.reference_free_monitor within the named reflection_testing_loop workflow.
+type ReflectionTestingCritiqueReferenceFreeMonitorArtifact:
+    # Exact subject processed by the critique.reference_free_monitor occurrence.
+    subject: String
+    # Source anchors retained by the critique.reference_free_monitor occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical critique.reference_free_monitor contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to critique.reference_free_monitor.
+    gate_disposition: String
+    # Known limitations that constrain use of the critique.reference_free_monitor result.
+    limitations: List[String]
+    # Named criteria applied by this scoped assessment.
+    criteria: List[String]
+    # Scoped findings with no authority beyond their cited grounds.
+    findings: List[String]
+    # Non-authoritative repairs proposed for identified findings.
+    recommended_repairs: List[String]
+
+# Domain-specific result of evaluation.rfde_report within the named reflection_testing_loop workflow.
+type ReflectionTestingEvaluationRfdeReportArtifact:
+    # Exact subject processed by the evaluation.rfde_report occurrence.
+    subject: String
+    # Source anchors retained by the evaluation.rfde_report occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical evaluation.rfde_report contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to evaluation.rfde_report.
+    gate_disposition: String
+    # Known limitations that constrain use of the evaluation.rfde_report result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of reflection.process_refinement within the named reflection_testing_loop workflow.
+type ReflectionTestingReflectionProcessRefinementArtifact:
+    # Exact subject processed by the reflection.process_refinement occurrence.
+    subject: String
+    # Source anchors retained by the reflection.process_refinement occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical reflection.process_refinement contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to reflection.process_refinement.
+    gate_disposition: String
+    # Known limitations that constrain use of the reflection.process_refinement result.
+    limitations: List[String]
+    # Candidate transformation or artifact produced for later checks.
+    candidate_content: String
+    # Obligations that remain before the candidate can be accepted.
+    unresolved_obligations: List[String]
+
+# Domain-specific result of test.skill_program within the named reflection_testing_loop workflow.
+type ReflectionTestingTestSkillProgramArtifact:
+    # Exact subject processed by the test.skill_program occurrence.
+    subject: String
+    # Source anchors retained by the test.skill_program occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical test.skill_program contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to test.skill_program.
+    gate_disposition: String
+    # Known limitations that constrain use of the test.skill_program result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of control.workflow_contract within the named reflection_testing_loop workflow.
+type ReflectionTestingControlWorkflowContractArtifact:
+    # Exact subject processed by the control.workflow_contract occurrence.
+    subject: String
+    # Source anchors retained by the control.workflow_contract occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical control.workflow_contract contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to control.workflow_contract.
+    gate_disposition: String
+    # Known limitations that constrain use of the control.workflow_contract result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of control.skill_hook_coverage within the named reflection_testing_loop workflow.
+type MathformerProcessImprovementDisposition:
+    # Exact subject processed by the control.skill_hook_coverage occurrence.
+    subject: String
+    # Source anchors retained by the control.skill_hook_coverage occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical control.skill_hook_coverage contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to control.skill_hook_coverage.
+    gate_disposition: String
+    # Known limitations that constrain use of the control.skill_hook_coverage result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Compare workflow evidence and expose bounded improvement hypotheses. This record retains the authority ceiling of a reflection occurrence.
+type TrajectoryAssessment:
+    # Scope-bound comparisons among the supplied trajectories or reviews.
+    comparisons: List[String]
+    # Defeasible hypotheses suggested by the comparison.
+    improvement_hypotheses: List[String]
+    # Limits on generalizing the reflective result.
+    limitations: List[String]
+
+# Reviewed domain inputs required by ProposeWorkflowRevision in reflection_testing_loop.
+type RevisionBasis:
+    # Reviewed workflow source supplied to ProposeWorkflowRevision.
+    workflow_source: MathformerWorkflowTrajectoryEvidence
+    # Reviewed trajectory assessment supplied to ProposeWorkflowRevision.
+    trajectory_assessment: TrajectoryAssessment
+
+# Create an immutable candidate revision with explicit preservation obligations. This record retains the authority ceiling of a plan occurrence.
+type WorkflowRevision:
+    # Prospective actions that remain unauthoritative until executed.
+    proposed_actions: List[String]
+    # Dependencies that constrain the proposed actions.
+    dependencies: List[String]
+    # Checks required after executing the plan.
+    revalidation_obligations: List[String]
+
+# Reviewed domain inputs required by TestWorkflowRevision in reflection_testing_loop.
+type RevisionTestCase:
+    # Reviewed workflow source supplied to TestWorkflowRevision.
+    workflow_source: MathformerWorkflowTrajectoryEvidence
+    # Reviewed workflow revision supplied to TestWorkflowRevision.
+    workflow_revision: WorkflowRevision
+
+# Run deterministic and content probes against the candidate revision and baseline cases. This record retains the authority ceiling of a evidence occurrence.
+type RevisionEvidence:
+    # Inspectible references to evidence in the declared scope.
+    evidence_refs: List[String]
+    # Results directly observed by the bounded probe or execution.
+    observed_results: List[String]
+    # Limits on what the evidence can establish.
+    limitations: List[String]
+
+# Reviewed domain inputs required by CalibrateProcessImprovement in reflection_testing_loop.
+type ImprovementCase:
+    # Reviewed trajectory assessment supplied to CalibrateProcessImprovement.
+    trajectory_assessment: TrajectoryAssessment
+    # Reviewed workflow revision supplied to CalibrateProcessImprovement.
+    workflow_revision: WorkflowRevision
+    # Reviewed revision evidence supplied to CalibrateProcessImprovement.
+    revision_evidence: RevisionEvidence
+
+# Adopt, retain experimentally, reject, or block the revision under regression and control constraints. This record retains the authority ceiling of a decision occurrence.
+type ProcessDisposition:
+    # Scoped policy status selected by calibration.
+    status: String
+    # Blocking findings retained by the decision.
+    blockers: List[String]
+    # Limits on interpreting or using the decision.
+    limitations: List[String]

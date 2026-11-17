@@ -1,0 +1,666 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_test_family_physics_sympy_workflow
+version: 1.0.0
+kind: workflow
+description: Native physics_sympy test traversal and publication; fixed hub defaults,
+  at most 4096 matrix rows.
+aliases:
+- test:family:physics-sympy
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Args:
+    schema:
+      type: object
+      required:
+      - module_family
+      - profile
+      - changed_files_only
+      - validate_matrix
+      - emit_dependency_map_only
+      - fail_on_warning
+      - run_id
+      - output_file
+      - write_jsonl
+      - write_junit
+      - json
+      additionalProperties: false
+      properties:
+        module_family:
+          const:
+          - physics_sympy
+        profile:
+          const: workstation
+        changed_files_only:
+          const: false
+        validate_matrix:
+          const: false
+        emit_dependency_map_only:
+          const: false
+        fail_on_warning:
+          const: false
+        run_id:
+          type: string
+        output_file:
+          const: artifacts/test_program/deterministic_tests.json
+        write_jsonl:
+          type: 'null'
+        write_junit:
+          type: 'null'
+        json:
+          const: true
+  MatrixFile:
+    representation: file
+    media_type: application/json
+    schema:
+      type: object
+      required:
+      - schema_version
+      - tests
+      properties:
+        schema_version:
+          const: 2
+        tests:
+          type: array
+          minItems: 1
+          maxItems: 4096
+          items:
+            type: object
+  CheckState:
+    schema:
+      type: object
+      required:
+      - matrix
+      - selected
+      - families
+      - index
+      - results
+      additionalProperties: false
+      properties:
+        matrix:
+          type: array
+          items:
+            type: object
+        selected:
+          type: array
+          maxItems: 4096
+          items:
+            type: object
+        families:
+          type: array
+          items:
+            type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 4096
+        results:
+          type: array
+          maxItems: 4096
+          items:
+            type: object
+  Bool:
+    schema:
+      type: boolean
+  Report:
+    schema:
+      type: object
+      required:
+      - run_id
+      - ok
+      - families
+      - summary
+      - results
+      - schema_errors
+      - matrix_errors
+      properties:
+        run_id:
+          type: string
+        ok:
+          type: boolean
+        families:
+          type: array
+          items:
+            type: string
+        summary:
+          type: object
+          additionalProperties:
+            type: integer
+        results:
+          type: array
+          items:
+            type: object
+        schema_errors:
+          type: array
+          items:
+            type: string
+        matrix_errors:
+          type: array
+          items:
+            type: string
+        capability_ledger:
+          type: object
+        dependency_map:
+          type: string
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+  Context:
+    schema:
+      type: object
+      required:
+      - handle
+      additionalProperties: false
+      properties:
+        handle:
+          type: string
+          minLength: 1
+  Publication:
+    schema:
+      type: object
+      required:
+      - report_path
+      - stdout
+      additionalProperties: false
+      properties:
+        report_path:
+          type: string
+        stdout:
+          type: string
+  Cursor:
+    schema:
+      type: object
+      required:
+      - state
+      - pending
+      additionalProperties: false
+      properties:
+        state:
+          type: object
+          required:
+          - matrix
+          - selected
+          - families
+          - index
+          - results
+          additionalProperties: false
+          properties:
+            matrix:
+              type: array
+              items:
+                type: object
+            selected:
+              type: array
+              maxItems: 4096
+              items:
+                type: object
+            families:
+              type: array
+              items:
+                type: string
+            index:
+              type: integer
+              minimum: 0
+              maximum: 4096
+            results:
+              type: array
+              maxItems: 4096
+              items:
+                type: object
+        pending:
+          type: boolean
+inputs:
+  args:
+    type: Args
+  matrix:
+    type: MatrixFile
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  publication:
+    type: Publication
+    value:
+      ref: flow.outputs.publication
+operations:
+  enter:
+    inputs:
+      args:
+        type: Args
+    outputs:
+      snapshot_only:
+        type: Bool
+      context:
+        type: Context
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_sympy_family_enter
+        operation: mathformer_physics_sympy_family_enter
+  prepare:
+    inputs:
+      args:
+        type: Args
+      matrix:
+        type: MatrixFile
+      context:
+        type: Context
+    outputs:
+      state:
+        type: CheckState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_sympy_family_prepare
+        operation: mathformer_physics_sympy_family_prepare
+  pending:
+    inputs:
+      state:
+        type: CheckState
+      context:
+        type: Context
+    outputs:
+      pending:
+        type: Bool
+      cursor:
+        type: Cursor
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_sympy_family_pending
+        operation: mathformer_physics_sympy_family_pending
+  advance:
+    inputs:
+      state:
+        type: CheckState
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      state:
+        type: CheckState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_sympy_family_advance
+        operation: mathformer_physics_sympy_family_advance
+  finalize:
+    inputs:
+      state:
+        type: CheckState
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_sympy_family_finalize
+        operation: mathformer_physics_sympy_family_finalize
+  publish:
+    inputs:
+      report:
+        type: Report
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      exit_code:
+        type: ExitCode
+      publication:
+        type: Publication
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_sympy_family_publish
+        operation: mathformer_physics_sympy_family_publish
+  retain_empty:
+    inputs:
+      cursor:
+        type: Cursor
+      context:
+        type: Context
+    outputs:
+      cursor:
+        type: Cursor
+      pending:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_sympy_family_retain_empty
+        operation: mathformer_physics_sympy_family_retain_empty
+  snapshot:
+    inputs:
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_sympy_family_snapshot
+        operation: mathformer_physics_sympy_family_snapshot
+flow:
+  kind: sequence
+  steps:
+  - id: enter
+    kind: call
+    operation: enter
+    arguments:
+      args:
+        ref: inputs.args
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      args:
+        ref: inputs.args
+      matrix:
+        ref: inputs.matrix
+      context:
+        ref: steps.enter.outputs.context
+  - id: initial_guard
+    kind: call
+    operation: pending
+    arguments:
+      state:
+        ref: steps.prepare.outputs.state
+      context:
+        ref: steps.enter.outputs.context
+  - id: traverse
+    kind: loop
+    state_type: Cursor
+    initial:
+      ref: steps.initial_guard.outputs.cursor
+    max_iterations: 4096
+    on_exhausted: fail
+    description: Carry the native cursor through one advance per selected row, or
+      retain_empty for zero rows. The final false guard stops normally, including
+      at 4096.
+    body:
+      kind: switch
+      cases:
+      - id: pending
+        when:
+          ref: loop.state.pending
+        body:
+          kind: sequence
+          steps:
+          - id: advance
+            kind: call
+            operation: advance
+            arguments:
+              state:
+                ref: loop.state.state
+              args:
+                ref: inputs.args
+              context:
+                ref: steps.enter.outputs.context
+          - id: guard
+            kind: call
+            operation: pending
+            arguments:
+              state:
+                ref: steps.advance.outputs.state
+              context:
+                ref: steps.enter.outputs.context
+          outputs:
+            cursor:
+              type: Cursor
+              value:
+                ref: steps.guard.outputs.cursor
+            pending:
+              type: Bool
+              value:
+                ref: steps.guard.outputs.pending
+      default:
+        kind: call
+        operation: retain_empty
+        arguments:
+          cursor:
+            ref: loop.state
+          context:
+            ref: steps.enter.outputs.context
+      outputs:
+        cursor:
+          type: Cursor
+          value:
+            ref: selected.outputs.cursor
+        pending:
+          type: Bool
+          value:
+            ref: selected.outputs.pending
+    next_state:
+      ref: body.outputs.cursor
+    until:
+      not:
+        ref: body.outputs.pending
+    outputs:
+      state:
+        type: CheckState
+        value:
+          ref: loop.state.state
+  - id: finalize
+    kind: call
+    operation: finalize
+    arguments:
+      state:
+        ref: steps.traverse.outputs.state
+      args:
+        ref: inputs.args
+      context:
+        ref: steps.enter.outputs.context
+  - id: publish
+    kind: call
+    operation: publish
+    arguments:
+      report:
+        ref: steps.finalize.outputs.report
+      args:
+        ref: inputs.args
+      context:
+        ref: steps.enter.outputs.context
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finalize.outputs.report
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.publish.outputs.exit_code
+    publication:
+      type: Publication
+      value:
+        ref: steps.publish.outputs.publication
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 900
+    max_operation_calls: 8197
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Native physics_sympy validation evidence and publication only; no
+    scientific truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: run; enter_checks; snapshot_report; prepare_checks; checks_pending;
+      advance_check; run_check; finalize_checks; publish_report; main
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: scripts/mathformer.py
+    selector: build_registry; main; run_action; run_leaf_action; preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mcp_server.py
+    selector: register_physics_sympy_family_tools; mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/physics_sympy_family_workflow_tools.py
+    selector: register_physics_sympy_family_tools
+    digest: sha256:766ee8252f32848ea6bcbd9fb6de627155b6a966f02a38308083ebac9e884a7a
+  - path: scripts/comprehensive_strict_tools.py
+    selector: source_runner
+    digest: sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: tests/test_matrix.json
+    selector: schema v2 canonical manifest order
+    digest: sha256:17b2fc38f51c7711873b68dc5f630cfc0eb06351160ad6401ea67a6044ace322
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory authored physics-sympy contract
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/fixtures/physics_sympy_family_original.py.txt
+    selector: selected original execution source run; main
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: tests/mcp/fixtures/physics_sympy_family_boundary.py
+    selector: external compiler/provider fixtures
+    digest: sha256:46f4f660375470201a4a23c02c027c35c9313e14ca95e91ac72bb5471f4970a9
+  - path: tests/mcp/run_physics_sympy_family_workflow_tests.py
+    selector: registered MCP and real Lunar/PRISM execution
+    digest: sha256:3ed1d3dd57e5ee6f74fc8172988c0bc0b6b9034db0db1b4964c1938ea31ccc55
+  gaps:
+  - Specializes fixed registered workstation arguments. The dependency-map-only branch
+    is unreachable in this graph; its native tool remains callable and tested separately.
+  - The 4096 total-matrix-row bound admits a subset of native manifests; larger files
+    are rejected before any check.
+  - Hub preflight, dry-run and final hub write audit remain outside the run graph.
+    Native per-check audits, timeouts, schema checks, reports and snapshots remain
+    inside shared source functions.
+  - Provider/network capabilities still require service qualification; tools and deterministic
+    fixture availability do not establish scientific truth or authorize promotion.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: test:family:physics-sympy
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: test:family:physics-sympy
+      family: physics_sympy
+      kind: validation
+      safety: writes_artifacts
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: 900
+  mathformer.native_boundary:
+    execution: Native hub dispatch remains main -> run_action -> run_leaf_action;
+      normalized operations call the same native runner functions with server-owned
+      args/state/report and recheck service write policy each time.
+    argv:
+    - '{python}'
+    - tests/test_program/run_comprehensive_tests.py
+    - --module-family
+    - physics_sympy
+    - --json
+    controls: Preflight precedes execution; dry-run skips the subprocess; declared
+      writes are audited. Failures remain failures.
+    traversal: Ordinary failures/timeouts are result data and do not stop iteration;
+      missing optional dependencies skip by default, fail under strict/fail-on-warning.
+      Unexpected exceptions propagate.
+    checks: Compare exit with expected_exit; audit writes after completed subprocesses
+      and fail undeclared writes. Timeout handling returns failure without that completed-process
+      audit. Row timeout defaults to 120 seconds.
+    bound: 'No native iteration cap: selected-row count bounds traversal. With input
+      tests <=4096 and one increment per row, until is true on the last permitted
+      iteration; finalization returns normally, including at 4096. on_exhausted is
+      unreachable for valid inputs/state.'
+    budgets: 900 seconds is the native outer subprocess limit; 8197 calls covers two
+      per row plus enter/prepare/initial guard/finalize/publish. The former 3600-second
+      projection was not native.
+    outputs: 'JSON: artifacts/test_program/deterministic_tests.json; dependency snapshot:
+      artifacts/test_program/dependency_map.json; native stdout and exit 0/3. Optional
+      JSONL/JUnit are disabled.'
+  mathformer.specialization:
+    matrix_input: Assertion of exact native tests/test_matrix.json; transported rows
+      never supply commands. The original 4096 total-row admission bound is retained.
+    context: Input args fixes registered workstation defaults, except run_id as source
+      context. enter parses once and returns an opaque handle; later tools require
+      owned state and phase.
+    loop: Root Cursor(state,pending) loop is equivalent to the native while guard,
+      including empty selection via retain_empty. This layout avoids unsupported branch-local
+      loop exhaustion in Lunar. No retry or truncation; finalization requires exhaustion.
+    snapshot: emit_dependency_map_only is constant false for this hub action, so the
+      unreachable early branch is specialized away. The shared native snapshot MCP
+      operation is bound and tested separately.
+    publication: Native stdout is emitted on MCP stderr and returned in publication.stdout
+      on success. JSON report is written before a native nonzero exit becomes an MCP
+      error; failure reports exit 3. The source exit gate is implemented inside publish
+      because Lunar does not compile gate nodes.
+    bound: At most 4096 advances and 8197 calls (enter, prepare, initial guard, two
+      per row, finalize, publish). Empty selection uses six calls; the native hub
+      wall limit remains 900 seconds.
+# REUSE-IgnoreEnd

@@ -1,0 +1,556 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_test_runner_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected test.runner route: one controlled test:quick action, then return its ordered aggregate envelope.",
+  "aliases": [
+    "test.runner"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Match": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "object",
+            "properties": {
+              "route_id": {
+                "const": "test.runner"
+              },
+              "action_ids": {
+                "const": [
+                  "test:quick"
+                ]
+              }
+            },
+            "required": [
+              "route_id",
+              "action_ids"
+            ]
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "description": "Lossless projection of the selected native IntentMatch; retain all route metadata."
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "description": "Source-owned WorkflowAction mapping containing test:quick, with no dependencies and the registered argv; native CLI or MCP-capped timeout profile.",
+        "required": [
+          "test:quick"
+        ],
+        "properties": {
+          "test:quick": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Native optional repository_root; null retains the controller default mount."
+      }
+    },
+    "RouteState": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 1
+          }
+        },
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "test:quick"
+      }
+    },
+    "ActionCount": {
+      "schema": {
+        "type": "integer",
+        "const": 1
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    }
+  },
+  "inputs": {
+    "match": {
+      "type": "Match"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "context": {
+      "type": "RunContext"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_test_runner_route_initialize",
+          "operation": "mathformer_test_runner_route_initialize"
+        }
+      }
+    },
+    "select": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "Match"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_test_runner_route_select",
+          "operation": "mathformer_test_runner_route_select"
+        }
+      }
+    },
+    "run_action": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_test_runner_route_run_action",
+          "operation": "mathformer_test_runner_route_run_action"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "action_count": {
+          "type": "ActionCount"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_test_runner_route_advance",
+          "operation": "mathformer_test_runner_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "Match"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_test_runner_route_finish",
+          "operation": "mathformer_test_runner_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "Native for-loop specialized to the sole registered action. done is true after the first append even on failure; reaching the literal bound returns normally through until.",
+        "state_type": "RouteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "run",
+              "kind": "call",
+              "operation": "run_action",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.run.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "action_count": {
+                  "literal": 1
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "RouteState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "RouteState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked native route execution; completion does not establish scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes:test.runner; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/run_quick.py",
+        "selector": "main",
+        "digest": "sha256:64fdcf4ff5e03e9376556d023d729b3625d1cdf033ed951043a78f2279299cbc"
+      },
+      {
+        "path": "tests/test_program/run_comprehensive_tests.py",
+        "selector": "run; prepare_checks; advance_check; run_check; finalize_checks; publish_report",
+        "digest": "sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_ask; mathformer_run_workflow; _cap_unbounded_timeouts",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/test_runner_route_tools.py",
+        "selector": "register_test_runner_route_tools; selected_match; checked_registry; check_state",
+        "digest": "sha256:b0b718e37484b211b838168cee2045cb439a7dae6b185d86fc7adee41f10b3df"
+      },
+      {
+        "path": "scripts/workflow_write_audit.py",
+        "selector": "snapshot_repository; audit_snapshots",
+        "digest": "sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "test_runner_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "run_action retains leaf and quick-runner internals opaquely; only the selected route controller is decomposed.",
+      "The 3600-second limit and required receipts/digests are Lunar normalization policies, not native CLI budgets or optional hub logs. MCP caps the native unbounded leaf at the configured service timeout (default 600 seconds)."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "test.runner",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "test.runner",
+        "title": "Run the general test matrix",
+        "description": "Use for quick, slow, comprehensive, or backend-oriented test runs.",
+        "action_ids": [
+          "test:quick"
+        ],
+        "skill_routes": [
+          "skill-test-program-orchestrator"
+        ],
+        "operator_note": "Selects the quick test action; ask for full quality or e2e for broader gates."
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Selected run_intent_match bound to shared native steps via registered MCP tools. JSON match/registry projections resolve native declarations; callers cannot install commands. NL selection and caller envelopes remain outside this graph.",
+      "callers": "main ask --run; MCP mathformer_ask(run=True) and mathformer_run_workflow. MCP checks service write roots before entry and rejects nonempty route extra_args.",
+      "leaf": "test:quick has no dependencies and runs Python tests/run_quick.py --json. Preflight errors or dry-run return without launch. Otherwise capture subprocess output and audit repository writes; nonzero exit, timeout or undeclared writes set child ok false. Unexpected launch exceptions propagate.",
+      "quick_runner": "The wrapper runs run_comprehensive_tests.py for control, source, environment and mcp with JSON, JSONL and JUnit output. Its finite selected list, matrix, families, index and accumulated results are loop-carried; advance once per check and continue after ordinary failures. Missing optional dependencies normally skip; configured check timeouts fail. Finalize validates and aggregates, writes reports, and returns exit 0 or 3.",
+      "bounds": "One route action; keep_going cannot add work. Nested traversal ends normally at selected-list exhaustion, including an empty list. Each check uses its configured timeout, default 120 seconds. CLI test:quick has no outer timeout; MCP caps it with a configurable timeout, default 600 seconds.",
+      "failure_policy": "A child ok false is ordinary result data and must reach advance and finish. Only execution exceptions terminate the graph. No retry, resume or checkpoint is implemented.",
+      "bound_behavior": "advance computes done = len(updated.children) == action_count or (not child.get('ok', false) and not context.keep_going). With the constrained singleton route, done is always true after one returned child. on_exhausted is an unreachable contract safeguard, not native exhaustion behavior.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "service_boundary": "The run_action tool applies the MCP read-only and write-root ceilings and _cap_unbounded_timeouts before native execution. CLI calls retain their original uncapped timeout."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "test:quick"
+      ],
+      "action_workflows": [
+        "hub_test_quick_workflow"
+      ],
+      "keep_going_semantics": "Stops on failure unless context.keep_going; aggregate ok retains failure. Singleton route always stops after one action."
+    }
+  }
+}

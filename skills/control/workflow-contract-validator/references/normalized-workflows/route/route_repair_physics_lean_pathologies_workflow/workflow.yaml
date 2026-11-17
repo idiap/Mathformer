@@ -1,0 +1,419 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_repair_physics_lean_pathologies_workflow
+version: 1.0.0
+kind: workflow
+description: Execute the selected six-action physics Lean planning route through native
+  controls.
+aliases:
+- repair.physics.lean.pathologies
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  SelectedMatch:
+    schema:
+      type: object
+      required:
+      - route
+      - score
+      - matched_terms
+      properties:
+        route:
+          type: object
+          required:
+          - route_id
+          - action_ids
+          properties:
+            route_id:
+              const: repair.physics.lean.pathologies
+              type: string
+            action_ids:
+              const:
+              - physics-lean:detect-pathology-objects
+              - physics-lean:object-workbench
+              - physics-lean:pathology-repair-loop
+              - physics-lean:generative-repair-plan
+              - physics-lean:repair-expansion-map
+              - physics-lean:recursive-repair-control
+              type: array
+              items:
+                type: string
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+  Registry:
+    schema:
+      type: object
+      description: JSON projections of native WorkflowActions; the adapter verifies
+        declarations, never accepting caller executable code.
+      additionalProperties:
+        type: object
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+  ActionId:
+    schema:
+      type: string
+      enum:
+      - physics-lean:detect-pathology-objects
+      - physics-lean:object-workbench
+      - physics-lean:pathology-repair-loop
+      - physics-lean:generative-repair-plan
+      - physics-lean:repair-expansion-map
+      - physics-lean:recursive-repair-control
+  IntentState:
+    schema:
+      type: object
+      required:
+      - ok
+      - children
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 6
+          items:
+            type: object
+  Boolean:
+    schema:
+      type: boolean
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+inputs:
+  match:
+    type: SelectedMatch
+  registry:
+    type: Registry
+  context:
+    type: RunContext
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: IntentState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_pathologies_route_initialize
+        operation: mathformer_physics_pathologies_route_initialize
+  select:
+    inputs:
+      state:
+        type: IntentState
+      match:
+        type: SelectedMatch
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_pathologies_route_select
+        operation: mathformer_physics_pathologies_route_select
+  run_child:
+    inputs:
+      action_id:
+        type: ActionId
+      registry:
+        type: Registry
+      context:
+        type: RunContext
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_pathologies_route_run_child
+        operation: mathformer_physics_pathologies_route_run_child
+  advance:
+    inputs:
+      state:
+        type: IntentState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+    outputs:
+      state:
+        type: IntentState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_pathologies_route_advance
+        operation: mathformer_physics_pathologies_route_advance
+  finish:
+    inputs:
+      state:
+        type: IntentState
+      match:
+        type: SelectedMatch
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_physics_pathologies_route_finish
+        operation: mathformer_physics_pathologies_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: One native action per iteration, in route order. Sixth advance always
+      sets done, so the native six-action bound returns normally.
+    state_type: IntentState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 6
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: run
+        kind: call
+        operation: run_child
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          registry:
+            ref: inputs.registry
+          context:
+            ref: inputs.context
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.run.outputs.child
+          context:
+            ref: inputs.context
+      outputs:
+        state:
+          type: IntentState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: IntentState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 20
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Planning envelopes establish no proof, scientific truth, approval
+    or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes; initialize_intent_state; select_intent_action;
+      advance_intent_state; finish_intent_state; run_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mcp_server.py
+    selector: mathformer_ask; mathformer_run_workflow; _cap_unbounded_timeouts
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/physics-lean/physics-lean-recursive-repair-loop-controller/scripts/control_recursive_repair_loop.py
+    selector: build_control_plan; prepare_state; finish_plan; parse_args
+    digest: sha256:a6a195dcece46a5742d237472c5117fbb8d1c31f907bf48a539e401cab328e12
+  - path: scripts/physics_pathologies_route_tools.py
+    selector: register_physics_pathologies_route_tools; selected_match; checked_registry;
+      check_state
+    digest: sha256:9cec63deb2f8fdbd6f847908679b6b5fc14b01f71173a6e44f9708aac58cd4c6
+  - path: scripts/adoption_check_tools.py
+    selector: Context
+    digest: sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac
+  - path: scripts/workflow_write_audit.py
+    selector: snapshot_repository; audit_snapshots
+    digest: sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: physics_pathologies_route_descriptor
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: skills/physics-common/physics-math-object-detector/scripts/detect_physics_math_objects.py
+    selector: main
+    digest: sha256:c3cad5498c48546366252fb412bf0e50047c51264cd2bef4043926f99ecaa72a
+  - path: skills/mathformerphysicslib/mathformerphysicslib-object-workbench/scripts/build_mathformerphysicslib_object_workbench.py
+    selector: main
+    digest: sha256:023e7c401ade03b69bac669e0d562d2202749e3f8006aacc84dd5e70c8fcc37f
+  - path: skills/physics-lean/physics-lean-pathology-repair-orchestrator/scripts/orchestrate_pathology_repair.py
+    selector: main
+    digest: sha256:ea8450476badb34d99593c51475fd53eed2bc2901c6c2fc9688df7dc92f90da1
+  - path: skills/physics-lean/physics-lean-generative-repair-orchestrator/scripts/build_physics_lean_generative_repair_plan.py
+    selector: main
+    digest: sha256:5fa3e6d8766bdd992c61935625ad292f071b8d574e832d26b9bb2648fde14d59
+  - path: skills/physics-lean/physics-lean-repair-expansion-cartographer/scripts/map_repair_expansion.py
+    selector: main
+    digest: sha256:6da95b91a9ca360312631d9fe67e51f52aa8e81931465e0ceb8e38a5d612fd03
+  gaps:
+  - Child internals remain native and opaque inside run_child; HubResult transports
+    process envelopes rather than scientific payloads.
+  - The 3600-second limit and required receipts are owned by Lunar; the native CLI
+    route has no global deadline and optional native logs. New ports retain native
+    leaf timeouts; legacy MCP ask/run_workflow retains its configurable cap.
+  - Network/external capability labels require host qualification and do not grant
+    authority.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: repair.physics.lean.pathologies
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: repair.physics.lean.pathologies
+      title: Run the Lean physics pathology repair loop
+  mathformer.native_boundary:
+    selection: Already selected route; NL ranking remains in callers CLI main ask
+      --run and MCP mathformer_ask.
+    dispatch: MCP mathformer_run_workflow resolves canonical ID to this route and
+      rejects nonempty route extra_args.
+    mount: 'Required nullable repository_root: null retains the native default; explicit
+      paths propagate to run_action, preflight, process cwd and write audit.'
+    failure: Unexpected exceptions propagate; failed child envelopes stop unless keep_going
+      and never clear aggregate failure.
+    child_status: Planner blocked status does not fail the route; native preflight,
+      process exit and write audit determine child ok.
+    dataflow: Six separate planner invocations; no automatic scientific repair feedback,
+      forwarded outputs or route arguments.
+    bounds: max_iterations=6 is exact route length; done is true on sixth child, so
+      on_exhausted is unreachable under native advance semantics.
+    calls: At most 20 modeled calls; nested native calls remain owned by run_child.
+    advisory_controller:
+      source: skills/physics-lean/physics-lean-recursive-repair-loop-controller/scripts/control_recursive_repair_loop.py
+        build_control_plan
+      inputs: Caller-supplied expansion/frontier and prior signatures; CLI iteration
+        defaults to 1 and maximum to 6.
+      priority:
+      - complete_or_not_required_without_outstanding
+      - non_exhaustive
+      - repeated_signature
+      - iteration_at_cap
+      - empty_outstanding
+      - recurse
+      override: Expansion status blocked overrides any selected decision.
+      outputs: Decision, blockers and frontier actions; blocked may also emit frontier
+        actions.
+      execution: One advisory decision only; no action execution, iteration increment
+        or persisted history.
+    bindings: Registered FastMCP tools invoke shared native intent-state helpers and
+      run_action. Registry and match projections resolve to verified native declarations.
+      No child outputs or extra_args are forwarded.
+# REUSE-IgnoreEnd

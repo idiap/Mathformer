@@ -1,0 +1,545 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_control_normalized_workflows_tests_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Run the normalized-contract unittest suite once through its native hub boundary.",
+  "aliases": [
+    "control:normalized-workflows-tests"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Boundary": {
+      "schema": {
+        "type": "object",
+        "description": "Native prepared payload, argv and before-snapshot; opaque transport state."
+      }
+    },
+    "SuiteState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "shared",
+          "remaining",
+          "results"
+        ],
+        "properties": {
+          "shared": {
+            "type": "object"
+          },
+          "remaining": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string"
+            }
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "Arguments": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "extra_args": {
+      "type": "Arguments"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "prepare": {
+      "inputs": {
+        "context": {
+          "type": "RunContext"
+        },
+        "extra_args": {
+          "type": "Arguments"
+        }
+      },
+      "outputs": {
+        "boundary": {
+          "type": "Boundary"
+        },
+        "execute": {
+          "type": "Flag"
+        },
+        "payload": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_normalized_tests_prepare",
+          "operation": "mathformer_normalized_tests_prepare"
+        }
+      }
+    },
+    "early_result": {
+      "inputs": {
+        "payload": {
+          "type": "HubResult"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_normalized_tests_early",
+          "operation": "mathformer_normalized_tests_early"
+        }
+      }
+    },
+    "initialize_suite": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "SuiteState"
+        },
+        "runnable": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_normalized_tests_initialize",
+          "operation": "mathformer_normalized_tests_initialize"
+        }
+      }
+    },
+    "visit_test": {
+      "inputs": {
+        "state": {
+          "type": "SuiteState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "SuiteState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_normalized_tests_visit",
+          "operation": "mathformer_normalized_tests_visit"
+        }
+      }
+    },
+    "retain_state": {
+      "inputs": {
+        "state": {
+          "type": "SuiteState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "SuiteState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_normalized_tests_retain",
+          "operation": "mathformer_normalized_tests_retain"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "SuiteState"
+        },
+        "boundary": {
+          "type": "Boundary"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_normalized_tests_finish",
+          "operation": "mathformer_normalized_tests_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          },
+          "extra_args": {
+            "ref": "inputs.extra_args"
+          }
+        }
+      },
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize_suite",
+        "arguments": {
+          "boundary": {
+            "ref": "steps.prepare.outputs.boundary"
+          }
+        }
+      },
+      {
+        "id": "run_tests",
+        "kind": "loop",
+        "state_type": "SuiteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 12,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "runnable",
+              "when": {
+                "ref": "steps.initialize.outputs.runnable"
+              },
+              "body": {
+                "kind": "call",
+                "operation": "visit_test",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "retain_state",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "SuiteState",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "selected.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "SuiteState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "execute",
+            "when": {
+              "ref": "steps.prepare.outputs.execute"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "finish",
+              "arguments": {
+                "state": {
+                  "ref": "steps.run_tests.outputs.state"
+                },
+                "boundary": {
+                  "ref": "steps.prepare.outputs.boundary"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "early_result",
+          "arguments": {
+            "payload": {
+              "ref": "steps.prepare.outputs.payload"
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "HubResult",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.dispatch.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "temporary_test_fixtures",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow",
+        "validate_descriptors",
+        "write_temporary_fixtures"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "execute_scientific_backends",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 16
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Contract-test outcomes only; no runtime qualification, proof or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/control/test_normalized_workflows.py",
+        "selector": "NormalizedWorkflowTests (entrypoint: unittest.main())",
+        "digest": "sha256:a62b5ffc980ec7c7889ee9909df424e71d815730bfef135f2c7d2b1443f874e1"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry; run_action; run_leaf_action; prepare_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory; check; check_rendered",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "direct normalized-workflow test invocation",
+        "digest": "sha256:936c3781b6fbc2c43861bc1e842dc2bd33dc11b9963e1e0ab95052bb4ea278c5"
+      },
+      {
+        "path": "scripts/normalized_workflow_test_tools.py",
+        "selector": "NormalizedTestTools; register_normalized_test_tools",
+        "digest": "sha256:3d1712c7c859f2979bee57932844110d52572f8e5134f1db9f89c37be8448895"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_normalized_test_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "tests/mcp/run_normalized_test_workflow_tests.py",
+        "selector": "NormalizedExecutionTests",
+        "digest": "sha256:5578751d4d17caa373e68fdcfb0b650ce981675847aebb320daf5959bbdf0eb6"
+      },
+      {
+        "path": "tests/mcp/fixtures/normalized_tests_original.py.txt",
+        "selector": "frozen original unittest source",
+        "digest": "sha256:22f0cce11641644197e5e5f93311c991bb740356f017879ad6395a5ddd62bc26"
+      }
+    ],
+    "gaps": [
+      "Default unittest discovery specializes this graph to at most twelve tests; session references transport live native fixture/result objects and reject stale progress.",
+      "Native hub timeout remains unset (the test matrix uses 180 seconds); Lunar enforces this contract wall time and operation budget.",
+      "Unittest assertions and errors are suite result data, not MCP failures; a completed graph may carry an unsuccessful HubResult.",
+      "The root loop uses one inert retain pass for preflight/dry-run/setup-failure, allowing the real Lunar compiler to enforce loop exhaustion outside branches without native test execution.",
+      "Native optional reports remain optional; Lunar records contract execution receipts and provenance."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "control:normalized-workflows-tests",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "control:normalized-workflows-tests",
+        "summary": "Test normalized workflow coverage, source fidelity boundaries and adversarial descriptor failures.",
+        "family": "control",
+        "kind": "validation",
+        "safety": "read_only",
+        "command": [
+          "{python}",
+          "tests/control/test_normalized_workflows.py"
+        ],
+        "depends_on": [],
+        "required_paths": [],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null,
+        "notes": ""
+      }
+    },
+    "mathformer.test_semantics": {
+      "ordering": "Default unittest name sorting; setup once, each discovered test once, then summary.",
+      "carried_state": "A live session owns descriptor inventory, alias map, unittest fixtures and results; JSON exposes ordered remaining names and recorded per-case status.",
+      "checks": "Coverage, freshness, validity, hub order, route links, execution boundaries, schema references, envelopes, malformed/stale rejection and determinism.",
+      "descriptor_branches": "Active draft-execute-refine differs from specification-only loop/profile contracts; neither is executed here.",
+      "traversal": "Finite descriptors/actions/routes and recursive finite schema containers; no refinement, convergence or retry loop.",
+      "normalizer_check": "Record stale/missing files and continue; validate matching workflows; then collect unexpected descriptors.",
+      "controller_fixtures": "Dry runs and stubbed failures only; default stops after first failed child, keep_going visits all, aggregate success stays false.",
+      "failures": "Test assertion/error is result data for suite continuation; operation failure denotes infrastructure failure, not an assertion.",
+      "effects": "Temporary fixtures are cleaned up, including one beneath the generated output directory; no scientific backend executes."
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered MCP ports use the same NormalizedCursor as unittest.main(), plus native prepare_leaf_boundary and finish_leaf_boundary.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report",
+        "extra_args (separate argument port)"
+      ],
+      "effects_status": "partial_native_declarations",
+      "failure_policy": "Preserve native failure envelopes and post-run write audit; never reinterpret failure as acceptance.",
+      "scientific_payloads": "HubResult is a transport envelope, not a scientific report."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "command_after_dependencies": false,
+      "modeling": "No dependency traversal for this leaf; sequence controller branches occur only in stubbed tests."
+    }
+  }
+}

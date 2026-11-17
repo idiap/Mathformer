@@ -1,0 +1,387 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Classify Mathformer skills without collapsing execution posture,
+#   specification style, composition role, implementation, effects, and
+#   epistemic authority into one overloaded label.
+#
+# Intent:
+#   Define a compositional skill taxonomy grounded in the existing
+#   deterministic/generative/hybrid test inventory and extend it with
+#   procedural, declarative, and other orthogonal axes.
+#
+# Function:
+#   Provides taxonomy axes, familiar composite archetypes, classification
+#   fields, examples, and testing consequences.
+#
+# Maintenance Notes:
+#   Keep execution-posture counts synchronized with the canonical inventory
+#   script. Do not infer authority from implementation posture: deterministic
+#   does not mean true, and generative does not mean useless or untestable.
+
+version: 2
+status: consolidated_draft
+inventory_snapshot:
+  canonical_skill_count: 188
+  source: skills/control/skill-test-program-orchestrator/scripts/inventory_skills.py
+  execution_posture_counts:
+    deterministic: 150
+    generative: 33
+    hybrid: 5
+  hybrid_skills:
+    - formalphysics-judge-synthesis-reporter
+    - lean-line-annotation
+    - physics-lean-generative-critic-orchestrator
+    - physics-lean-physical-semantics-critic
+    - physics-lean-review-refinement-router
+
+semantics:
+  taxonomy_shape: >
+    A skill type is a product of orthogonal axes. Deterministic, procedural,
+    declarative, orchestrator, stateful, and evidence-producing answer different
+    questions and must not be treated as sibling values in one enum.
+  canonical_label: >
+    Human-readable labels may combine axes, for example
+    deterministic/constraint-based/atomic-validator or
+    hybrid/compositional/iterative-controller.
+  relationship_to_reasoning_types: skills/REASONING_TYPES.yaml
+  relationship_to_output_types: skills/OUTPUT_TYPES.yaml
+  relationship_to_reasoning_flows: skills/control/reasoning-flow-language/references/erfl-0.3.json
+
+execution_postures:
+  deterministic:
+    definition: >
+      The skill's semantic output is selected by declared code, rules, queries,
+      or backend calls rather than open-ended model generation.
+    reproducibility_boundary: >
+      Reproducible only for normalized inputs plus recorded code, dependency,
+      backend, environment, seed, and resource-limit versions.
+    authority_ceiling: >
+      May produce strong backend or validator evidence, but determinism alone
+      establishes neither correctness nor semantic fidelity.
+    required_tests:
+      - contract_and_schema_tests
+      - fixed_fixture_regressions
+      - environment_and_version_capture
+  generative:
+    definition: >
+      A material semantic output depends on open-ended model or human generation
+      and is not expected to be identical across equivalent runs.
+    reproducibility_boundary: >
+      Prompt, context, model/provider, tool access, sampling settings, and saved
+      output must be recorded; replay may be behaviorally rather than textually
+      equivalent.
+    authority_ceiling: >
+      Generated outputs are proposals or assessments until source, backend,
+      deterministic, or human review evidence warrants stronger use.
+    required_tests:
+      - adversarial_content_probes
+      - structural_output_oracles
+      - forbidden_overclaim_checks
+      - non_regression_examples
+  hybrid:
+    definition: >
+      One skill boundary materially combines generative judgment or synthesis
+      with deterministic tools, validation, aggregation, or gates.
+    reproducibility_boundary: >
+      Deterministic substeps are replayable under their environments; generative
+      substeps retain model-dependent variability and must remain separately
+      identifiable.
+    authority_ceiling: >
+      Authority comes from the typed output and cited evidence of each substep,
+      never from the hybrid label itself.
+    required_tests:
+      - deterministic_contract_tests
+      - generative_content_probes
+      - boundary_and_handoff_tests
+      - stale_evidence_and_gate_tests
+  human_mediated:
+    definition: >
+      A skill contract requires a human judgment, authorization, or external
+      review as a material step rather than merely allowing optional inspection.
+    current_inventory_status: reserved_not_current_test_profile
+    required_tests:
+      - decision_provenance
+      - reviewer_identity_and_scope
+      - unresolved_handoff_behavior
+
+specification_styles:
+  procedural:
+    question: Which ordered actions should be executed?
+    definition: Specifies control flow, algorithms, commands, or step sequences.
+  declarative:
+    question: What state, relation, or output shape should hold?
+    definition: Specifies facts, mappings, schemas, desired states, or invariants without committing to one procedure.
+  constraint_based:
+    question: Which outputs are admissible?
+    definition: Specifies requirements, prohibitions, gates, and acceptance or rejection criteria.
+  query_based:
+    question: Which existing objects satisfy an information need?
+    definition: Specifies lookup, matching, ranking, navigation, or filtering behavior.
+  transformational:
+    question: How should an input representation be converted?
+    definition: Specifies an input-to-output transformation with preservation obligations.
+  evaluative:
+    question: How should an artifact be assessed?
+    definition: Specifies criteria, evidence, severity, and verdict semantics.
+  compositional:
+    question: How are subordinate skills coordinated?
+    definition: Specifies dependencies, branches, loops, handoffs, and aggregate gates.
+
+composition_roles:
+  atomic_operator:
+    definition: Owns one bounded transformation, query, check, or generation task.
+  sequential_orchestrator:
+    definition: Orders subordinate skill applications along a mostly linear path.
+  branching_router:
+    definition: Selects among skills or actions from request or evidence state.
+  iterative_controller:
+    definition: Controls retries, repair loops, convergence, or repeated-state stopping.
+  evidence_aggregator:
+    definition: Combines typed evidence and assessments without creating new atomic evidence.
+  adapter_wrapper:
+    definition: Preserves compatibility or translates interfaces while delegating core reasoning.
+  meta_controller:
+    definition: Governs skills, hooks, tests, logs, taxonomies, or promotion policies.
+
+implementation_surfaces:
+  - prompt_only
+  - script_only
+  - prompt_and_script
+  - backend_adapter
+  - registry_or_schema_driven
+  - external_service_adapter
+  - documentation_contract
+
+state_models:
+  stateless:
+    definition: Output depends only on declared inputs and environment.
+  artifact_stateful:
+    definition: Reads or revises a current artifact version.
+  run_stateful:
+    definition: Maintains workflow, iteration, or convergence state within a run.
+  corpus_stateful:
+    definition: Reads or updates an index, registry, library, or accumulated corpus.
+  environment_stateful:
+    definition: Reads or changes installed tools, dependencies, services, or configuration.
+
+effect_profiles:
+  - read_only
+  - writes_ephemeral_artifacts
+  - writes_durable_artifacts
+  - mutates_tracked_repository_files
+  - mutates_environment
+  - external_side_effects
+
+authority_profiles:
+  proposal_producer:
+    allowed_primary_outputs:
+      - retrieval_candidate_set
+      - hypothesis_obligation_set
+      - plan_directive
+      - candidate_artifact
+  observation_or_evidence_producer:
+    allowed_primary_outputs:
+      - source_observation_packet
+      - grounding_evidence_link
+      - derivation_certificate
+      - execution_evidence_record
+      - counterexample_witness
+  assessment_producer:
+    allowed_primary_outputs:
+      - scoped_assessment
+      - aggregate_synthesis
+  decision_authority:
+    allowed_primary_outputs:
+      - decision_record
+      - blocker_record
+  revision_authority:
+    allowed_primary_outputs:
+      - diagnosis_repair_specification
+      - revision_record
+      - candidate_artifact
+  memory_or_explanation_producer:
+    allowed_primary_outputs:
+      - explanation
+      - index_registry
+      - curated_knowledge_entry
+      - provenance_trace
+
+composite_archetypes:
+  deterministic_procedural_transformer:
+    axes:
+      execution_posture: deterministic
+      specification_styles: [procedural, transformational]
+      composition_role: atomic_operator
+    examples:
+      - source-formalizable-unit-extractor
+      - sympy-expression-parser
+      - textbook-theory-tex-organizer
+  deterministic_declarative_validator:
+    axes:
+      execution_posture: deterministic
+      specification_styles: [declarative, constraint_based, evaluative]
+      composition_role: atomic_operator
+    examples:
+      - workflow-contract-validator
+      - reasoning-flow-language
+      - lean-nonvacuity-consistency-checker
+      - autoformalization-result-realness-verifier
+  deterministic_query_retriever:
+    axes:
+      execution_posture: deterministic
+      specification_styles: [query_based, declarative]
+      composition_role: atomic_operator
+    examples:
+      - mathlib-hierarchy-navigator
+      - mathlib-result-existence-checker
+      - isarmathlib-grounding-navigator
+  deterministic_backend_executor:
+    axes:
+      execution_posture: deterministic
+      specification_styles: [procedural, constraint_based]
+      composition_role: atomic_operator
+    examples:
+      - lean-execution-runner
+      - isabelle-execution-runner
+      - rocq-execution-runner
+      - sympy-execution-runner
+  deterministic_evidence_aggregator:
+    axes:
+      execution_posture: deterministic
+      specification_styles: [compositional, evaluative]
+      composition_role: evidence_aggregator
+    examples:
+      - lean-consistency-report-orchestrator
+      - sympy-consistency-report-orchestrator
+      - reference-free-descriptive-evaluator
+  deterministic_policy_controller:
+    axes:
+      execution_posture: deterministic
+      specification_styles: [declarative, constraint_based]
+      composition_role: meta_controller
+    examples:
+      - gate-policy-controller
+      - mathformerlib-promotion-gate
+      - reasoning-log-schema-guardian
+  generative_constructor:
+    axes:
+      execution_posture: generative
+      specification_styles: [transformational, constraint_based]
+      composition_role: atomic_operator
+    examples:
+      - lean-autoformalization-drafter
+      - isabelle-autoformalization-drafter
+      - latex-prerequisite-expander
+  generative_interpreter_or_rewriter:
+    axes:
+      execution_posture: generative
+      specification_styles: [transformational, declarative]
+      composition_role: atomic_operator
+    examples:
+      - lean-output-denoiser
+      - proof-expansion-web-researcher
+  generative_critic:
+    axes:
+      execution_posture: generative
+      specification_styles: [evaluative, constraint_based]
+      composition_role: atomic_operator
+    examples:
+      - lean-semantic-preservation-critic
+      - lean-logical-soundness-critic
+      - latex-expansion-completeness-reviewer
+  generative_planner:
+    axes:
+      execution_posture: generative
+      specification_styles: [procedural, compositional, constraint_based]
+      composition_role: sequential_orchestrator
+    examples:
+      - autoformalization-workflow-orchestrator
+      - latex-expansion-review-orchestrator
+      - proof-expansion-support-orchestrator
+  generative_reflector:
+    axes:
+      execution_posture: generative
+      specification_styles: [evaluative, transformational]
+      composition_role: meta_controller
+    examples:
+      - autoformalization-reflective-refinement-loop
+      - lean-refinement-taxonomy
+  hybrid_generate_then_verify:
+    axes:
+      execution_posture: hybrid
+      specification_styles: [transformational, constraint_based]
+      composition_role: atomic_operator
+    examples:
+      - lean-line-annotation
+      - physics-lean-physical-semantics-critic
+  hybrid_tool_augmented_critic:
+    axes:
+      execution_posture: hybrid
+      specification_styles: [evaluative, compositional]
+      composition_role: sequential_orchestrator
+    examples:
+      - physics-lean-generative-critic-orchestrator
+      - formalphysics-judge-synthesis-reporter
+  hybrid_critic_repair_router:
+    axes:
+      execution_posture: hybrid
+      specification_styles: [evaluative, procedural, compositional]
+      composition_role: branching_router
+    examples:
+      - physics-lean-review-refinement-router
+
+classification_contract:
+  required_fields:
+    - skill
+    - execution_posture
+    - primary_specification_style
+    - secondary_specification_styles
+    - composition_role
+    - implementation_surfaces
+    - state_model
+    - effect_profile
+    - authority_profile
+    - primary_reasoning_type
+    - primary_output_types
+    - testing_obligations
+    - classification_evidence
+  invariants:
+    - Every skill has exactly one execution posture for a named version of its contract.
+    - Procedural and declarative are specification styles, not execution postures.
+    - A skill may have one primary and several secondary specification styles.
+    - Deterministic does not imply correct, pure, environment-independent, or proof-producing.
+    - Generative does not imply unconstrained; generative skills require explicit structural and semantic oracles.
+    - Hybrid substeps preserve separate provenance, output types, and authority boundaries.
+    - Orchestrators and wrappers do not inherit the authority of subordinate outputs.
+    - A skill contract change may require reclassification even when its directory name is unchanged.
+
+testing_matrix:
+  deterministic:
+    required:
+      - compile_or_parse
+      - schema_and_contract
+      - fixed_fixture_regression
+      - environment_capture
+  generative:
+    required:
+      - prompt_and_context_capture
+      - adversarial_content_probe
+      - required_and_forbidden_claim_oracle
+      - non_regression_examples
+  hybrid:
+    required:
+      - all_deterministic_requirements
+      - all_generative_requirements
+      - substep_provenance
+      - handoff_and_authority_boundary
+      - stale_evidence_regression
+  human_mediated:
+    required:
+      - reviewer_and_scope_record
+      - decision_provenance
+      - unresolved_handoff_test

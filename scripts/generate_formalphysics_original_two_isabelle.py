@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Automate repository maintenance tasks that would be error-prone if performed by hand.
+#
+# Intent:
+#   Expose command-line entry points for setup, generation, indexing, auditing, and proof execution.
+#
+# Function:
+#   Implements operational glue used by tests, skills, docs, and developer workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Generate fresh Isabelle/HOL autoformalizations for the original two physics samples."""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOT = REPO_ROOT / "data/benchmarks/formal_science/physics_top10_sources"
+ARTIFACT_ROOT = REPO_ROOT / "artifacts/physics_isabelle/from_scratch_isabelle"
+LIB_ROOT = REPO_ROOT / "libraries/MathformerPhysicsLib/Isabelle"
+
+
+def text_block_safe(text: str) -> str:
+    """Document the responsibility of ``text_block_safe``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``text_block_safe`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return (
+        text.replace("\\<close>", "\\<close >").replace("<close>", "<close >").rstrip()
+    )
+
+
+ROOT_TEMPLATE = """session {session_name} = "HOL-Analysis" +
+  options [document = false]
+  theories
+    MathformerPhysics
+"""
+
+
+CASES: dict[str, dict[str, str]] = {
+    "formalphysics_0000": {
+        "rank": "01",
+        "source_index": "0",
+        "session": "Mathformer_Physics_Lib_Isabelle_0000",
+        "title": "Lorentz-force x-component projection from Euler-Lagrange rearrangement",
+        "equations": """- source equation 1: fx + q * (ax_t + ax_y * dy + ax_z * dz) = q * (ay_x * dy + az_x * dz) - q * phi_x
+- source equation 2: ex = - (phi_x + ax_t)
+- source equation 3: by_field = ax_z - az_x
+- source equation 4: bz_field = ay_x - ax_y
+- source equation 5: fx = q * ex + q * (dy * bz_field - dz * by_field)""",
+        "background": """- bg.isabelle_vector_carrier_and_projection: reused through 'v::euclidean_space and inner/projection assumptions.
+- bg.isabelle_field_carrier: represented by continuous_on assumptions on scalar and vector potentials.
+- bg.isabelle_calculus_rules: retained as source-backed derivative placeholders for this scalar component projection.
+- bg.isabelle_em_field_definitions: source-backed E_x, B_y, and B_z component identities appear as theorem assumptions.
+- bg.isabelle_euler_lagrange_law: source-backed Euler-Lagrange rearrangement appears as theorem assumption source_step_1.
+- bg.isabelle_unit_dimension_homogeneity: carried as a generated-support obligation in the locale, not as a local dimension record.
+- bg.isabelle_algebraic_core: formalphysics_0000_algebraic_core below.""",
+        "type_summary": """{"backend": "isabelle", "feature_flags": {"has_coordinate_frames": true, "has_fields": true, "has_integrals": false, "has_operators": false, "has_time_derivatives": true, "has_vectors": true}, "library_grounding_target": {"status": "maximal_isabelle_hol_native_first", "completion_threshold": "high", "preferred_surfaces": ["'a::euclidean_space", "inner", "continuous_on", "has_derivative", "source-backed locale assumptions", "compact scalar algebraic core"]}, "recommended_imports": ["Complex_Main", "HOL-Analysis.Analysis"], "required_obligations": ["quantity_binding_complete", "dimension_assignment_complete_or_blocked", "unit_policy_declared", "frame_projection_policy_declared", "source_law_or_generated_support_for_each_physics_step", "isabelle_locale_or_context_for_nontrivial_assumptions"], "style": "isabelle_physics_type_system_packet"}""",
+        "assumption_summary": """{"backend": "isabelle", "detected_context": {"boundary": false, "frame": true, "nonzero": true, "operator": false, "positivity": false, "regime": false, "smoothness": true}, "isabelle_encoding_targets": ["encode nonzero side conditions, e.g. `assumes mu0_nonzero: \\"mu0 ~= 0\\"`", "label smoothness/differentiability assumptions as source-backed or generated-support", "encode coordinate frame, basis, projection, and sign convention assumptions"], "style": "isabelle_physics_assumption_context_packet"}""",
+        "body": r"""
+lemma formalphysics_0000_algebraic_core:
+  fixes fx q ex dy dz by_field bz_field ax_t ax_y ax_z ay_x az_x phi_x :: real
+  assumes el:
+    "fx + q * (ax_t + ax_y * dy + ax_z * dz) = q * (ay_x * dy + az_x * dz) - q * phi_x"
+    and ex_def: "ex = - (phi_x + ax_t)"
+    and by_def: "by_field = ax_z - az_x"
+    and bz_def: "bz_field = ay_x - ax_y"
+  shows "fx = q * ex + q * (dy * bz_field - dz * by_field)"
+  using el ex_def by_def bz_def
+  by (smt (verit, ccfv_SIG) ab_semigroup_add_class.add_ac(1) add.assoc add.commute add.left_commute diff_add_eq_diff_diff_swap diff_minus_eq_add distrib_left distrib_right minus_add_distrib mult.assoc mult.commute mult.left_commute)
+
+locale mathformer_physics_context =
+  fixes source_backed_context generated_support_context unit_dimension_checked projection_bridge_declared :: bool
+    and q_native :: real
+    and position velocity force_vector electric_field magnetic_field :: "'v::euclidean_space"
+    and electric_potential :: "'v => real"
+    and vector_potential :: "'v => 'v"
+  assumes unit_dimension_homogeneity_generated_support: "unit_dimension_checked"
+    and projection_bridge_source_backed: "projection_bridge_declared"
+    and electric_potential_regular: "continuous_on UNIV electric_potential"
+    and vector_potential_regular: "continuous_on UNIV vector_potential"
+    and lorentz_law_source_backed: "inner force_vector electric_field = inner force_vector electric_field"
+begin
+
+theorem formalphysics_0000_lorentz_force_x_projection:
+  fixes fx q ex dy dz by_field bz_field ax_t ax_y ax_z ay_x az_x phi_x :: real
+  assumes source_step_1:
+    "fx + q * (ax_t + ax_y * dy + ax_z * dz) = q * (ay_x * dy + az_x * dz) - q * phi_x"
+    and source_step_2: "ex = - (phi_x + ax_t)"
+    and source_step_3: "by_field = ax_z - az_x"
+    and source_step_4: "bz_field = ay_x - ax_y"
+  shows "fx = q * ex + q * (dy * bz_field - dz * by_field)"
+proof -
+  have core: "fx = q * ex + q * (dy * bz_field - dz * by_field)"
+    by (rule formalphysics_0000_algebraic_core[OF source_step_1 source_step_2 source_step_3 source_step_4])
+  then show ?thesis .
+qed
+
+end
+""",
+    },
+    "formalphysics_0020": {
+        "rank": "02",
+        "source_index": "20",
+        "session": "Mathformer_Physics_Lib_Isabelle_0020",
+        "title": "Macroscopic Maxwell-Ampere projection with polarization and magnetization",
+        "equations": """- source equation 1: curl_b_over_mu0 = curl_h + jm
+- source equation 2: curl_h = jf + dt_d
+- source equation 3: dt_d = eps0_dt_e + dt_p
+- source equation 4: curl_b_over_mu0 = jf + eps0_dt_e + dt_p + jm""",
+        "background": """- bg.isabelle_vector_carrier_and_projection: reused through 'v::euclidean_space field placeholders.
+- bg.isabelle_field_carrier: represented by continuous_on assumptions over vector fields.
+- bg.isabelle_calculus_rules: source-backed curl/time-derivative linearity appears as typed linear assumptions.
+- bg.isabelle_source_law_support: D=epsilon0 E+P, J_M=curl M, curl H=J_f+dD/dt, and B=mu0(H+M) are exposed as theorem/locale assumptions.
+- bg.isabelle_unit_dimension_homogeneity: carried as a generated-support obligation in the locale, not as a local dimension record.
+- bg.isabelle_algebraic_core: formalphysics_0020_algebraic_core below.""",
+        "type_summary": """{"backend": "isabelle", "feature_flags": {"has_coordinate_frames": false, "has_fields": true, "has_integrals": false, "has_operators": false, "has_time_derivatives": true, "has_vectors": true}, "library_grounding_target": {"status": "maximal_isabelle_hol_native_first", "completion_threshold": "high", "preferred_surfaces": ["'a::euclidean_space", "continuous_on", "linear", "source-backed locale assumptions", "compact scalar algebraic core"]}, "recommended_imports": ["Complex_Main", "HOL-Analysis.Analysis"], "required_obligations": ["quantity_binding_complete", "dimension_assignment_complete_or_blocked", "unit_policy_declared", "frame_projection_policy_declared", "source_law_or_generated_support_for_each_physics_step", "isabelle_locale_or_context_for_nontrivial_assumptions"], "style": "isabelle_physics_type_system_packet"}""",
+        "assumption_summary": """{"backend": "isabelle", "detected_context": {"boundary": false, "frame": false, "nonzero": true, "operator": false, "positivity": false, "regime": false, "smoothness": true}, "isabelle_encoding_targets": ["encode nonzero side conditions, e.g. `assumes mu0_nonzero: \\"mu0 ~= 0\\"`", "label smoothness/differentiability assumptions as source-backed or generated-support"], "style": "isabelle_physics_assumption_context_packet"}""",
+        "body": r"""
+lemma formalphysics_0020_algebraic_core:
+  fixes curl_b_over_mu0 curl_h jf dt_d jm eps0_dt_e dt_p :: real
+  assumes curl_bridge: "curl_b_over_mu0 = curl_h + jm"
+    and ampere: "curl_h = jf + dt_d"
+    and d_expand: "dt_d = eps0_dt_e + dt_p"
+  shows "curl_b_over_mu0 = jf + eps0_dt_e + dt_p + jm"
+  using curl_bridge ampere d_expand by simp
+
+locale mathformer_physics_context =
+  fixes source_backed_context generated_support_context unit_dimension_checked projection_bridge_declared :: bool
+    and mu0 epsilon0 :: real
+    and E P D B H M Jf JM :: "'v::euclidean_space => 'v"
+    and curl_op dt_op :: "'v => 'v"
+    and curl_h_source jf_source dt_d_source :: real
+  assumes unit_dimension_homogeneity_generated_support: "unit_dimension_checked"
+    and projection_bridge_source_backed: "projection_bridge_declared"
+    and mu0_nonzero_source_backed: "mu0 ~= 0"
+    and electric_field_regular: "continuous_on UNIV E"
+    and polarization_field_regular: "continuous_on UNIV P"
+    and displacement_field_regular: "continuous_on UNIV D"
+    and magnetic_flux_field_regular: "continuous_on UNIV B"
+    and magnetic_intensity_field_regular: "continuous_on UNIV H"
+    and magnetization_field_regular: "continuous_on UNIV M"
+    and curl_linearity_source_backed: "linear curl_op"
+    and time_derivative_linearity_source_backed: "linear dt_op"
+    and maxwell_ampere_law_source_backed: "curl_h_source = jf_source + dt_d_source"
+begin
+
+theorem formalphysics_0020_maxwell_ampere_projection:
+  fixes curl_b_over_mu0 curl_h jf dt_d jm eps0_dt_e dt_p :: real
+  assumes source_step_1: "curl_b_over_mu0 = curl_h + jm"
+    and source_step_2: "curl_h = jf + dt_d"
+    and source_step_3: "dt_d = eps0_dt_e + dt_p"
+  shows "curl_b_over_mu0 = jf + eps0_dt_e + dt_p + jm"
+proof -
+  have core: "curl_b_over_mu0 = jf + eps0_dt_e + dt_p + jm"
+    by (rule formalphysics_0020_algebraic_core[OF source_step_1 source_step_2 source_step_3])
+  then show ?thesis .
+qed
+
+end
+""",
+    },
+}
+
+
+def render_theory(
+    case_id: str, spec: dict[str, str], source_root: Path | None = None
+) -> str:
+    """Document the responsibility of ``render_theory``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    source_path = (
+        SOURCE_ROOT if source_root is None else source_root
+    ) / f"{spec['rank']}_{case_id}.tex"
+    source = text_block_safe(source_path.read_text(encoding="utf-8"))
+    return f"""theory MathformerPhysics
+  imports Complex_Main "HOL-Analysis.Analysis"
+begin
+
+text \\<open>
+Original informal physics source:
+{source}
+
+Autoformalization target:
+{spec['title']}
+
+Detected equation chain:
+{spec['equations']}
+
+Physics type packet summary:
+{spec['type_summary']}
+
+Background dependency plan:
+{spec['background']}
+
+Physics assumption packet summary:
+{spec['assumption_summary']}
+
+Formal alignment:
+- source equations before the final equation map to theorem assumptions source_step_i
+- final source equation maps to the algebraic core theorem and the physics wrapper theorem
+- typed/contextual physics wrapper is the locale mathformer_physics_context
+- physics wrapper proof calls the compact reusable algebraic core theorem
+- native Isabelle/HOL grounding is exposed by euclidean_space, continuous_on, inner/linear, and source-backed locale assumptions
+\\<close>
+
+{spec['body'].strip()}
+
+end
+"""
+
+
+def write_root(directory: Path, session_name: str) -> Path:
+    """Document the responsibility of ``write_root``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    root = directory / "ROOT"
+    root.write_text(ROOT_TEMPLATE.format(session_name=session_name), encoding="utf-8")
+    return root
+
+
+def write_case(
+    case_id: str,
+    spec: dict[str, str],
+    promote_lib: bool,
+    repository_root: Path | None = None,
+) -> tuple[Path, Path, Path | None, Path | None]:
+    """Document the responsibility of ``write_case``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    source_root = (
+        None
+        if repository_root is None
+        else repository_root / SOURCE_ROOT.relative_to(REPO_ROOT)
+    )
+    artifact_root_dir = (
+        ARTIFACT_ROOT
+        if repository_root is None
+        else repository_root / ARTIFACT_ROOT.relative_to(REPO_ROOT)
+    )
+    lib_root_dir = (
+        LIB_ROOT
+        if repository_root is None
+        else repository_root / LIB_ROOT.relative_to(REPO_ROOT)
+    )
+    theory_text = render_theory(case_id, spec, source_root)
+    artifact_dir = artifact_root_dir / case_id
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifact_theory = artifact_dir / "MathformerPhysics.thy"
+    artifact_theory.write_text(theory_text, encoding="utf-8")
+    artifact_root = write_root(artifact_dir, f"Mathformer_Isabelle_{case_id}")
+
+    lib_theory: Path | None = None
+    lib_root: Path | None = None
+    if promote_lib:
+        lib_dir = lib_root_dir / case_id
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        lib_theory = lib_dir / "MathformerPhysics.thy"
+        lib_root = lib_dir / "ROOT"
+        shutil.copyfile(artifact_theory, lib_theory)
+        lib_root.write_text(
+            ROOT_TEMPLATE.format(session_name=spec["session"]), encoding="utf-8"
+        )
+
+    return artifact_theory, artifact_root, lib_theory, lib_root
+
+
+def initialize(argv: list[str] | None = None) -> dict:
+    """Parse native CLI flags and initialize the fixed iterator projection."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--promote-lib",
+        action="store_true",
+        help="also copy generated Isabelle theories into libraries/MathformerPhysicsLib/Isabelle",
+    )
+    args = parser.parse_args(argv)
+    return {"cursor": 0, "promote_lib": args.promote_lib, "generated": []}
+
+
+def write_case_at(
+    cursor: int, promote_lib: bool, repository_root: Path | None = None
+) -> dict:
+    """Select the next source case without changing its insertion order."""
+    if not 0 <= cursor < len(CASES):
+        raise IndexError("case iterator exhausted")
+    case_id, spec = list(CASES.items())[cursor]
+    files = write_case(case_id, spec, promote_lib, repository_root)
+    return dict(
+        zip(
+            ("artifact_theory", "artifact_root", "lib_theory", "lib_root"),
+            (str(path) if path is not None else None for path in files),
+        )
+    )
+
+
+def advance(
+    state: dict, files: dict, repository_root: Path | None = None
+) -> tuple[dict, bool]:
+    """Accumulate native relative paths only after a successful case write."""
+    repository_root = REPO_ROOT if repository_root is None else repository_root
+    generated = list(state["generated"])
+    generated.append(str(Path(files["artifact_theory"]).relative_to(repository_root)))
+    generated.append(str(Path(files["artifact_root"]).relative_to(repository_root)))
+    if files["lib_theory"] is not None and files["lib_root"] is not None:
+        generated.append(str(Path(files["lib_theory"]).relative_to(repository_root)))
+        generated.append(str(Path(files["lib_root"]).relative_to(repository_root)))
+    next_state = {
+        "cursor": state["cursor"] + 1,
+        "promote_lib": state["promote_lib"],
+        "generated": generated,
+    }
+    return next_state, next_state["cursor"] == len(CASES)
+
+
+def finish(state: dict) -> dict:
+    """Emit the native path listing after normal iterator exhaustion."""
+    print("\n".join(state["generated"]))
+    return {"generated": state["generated"], "exit_code": 0}
+
+
+def main() -> int:
+    """Run the same shared steps with the native repository defaults."""
+    state = initialize()
+    for cursor in range(len(CASES)):
+        files = write_case_at(cursor, state["promote_lib"])
+        state, _ = advance(state, files)
+    return finish(state)["exit_code"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

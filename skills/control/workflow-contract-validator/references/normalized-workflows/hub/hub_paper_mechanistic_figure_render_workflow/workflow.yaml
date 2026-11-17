@@ -1,0 +1,487 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_paper_mechanistic_figure_render_workflow
+version: 1.0.0
+kind: workflow
+description: Load the model, render requested SVG/TeX/PDF in native order, print metadata
+  and return zero; argparse help stops before loading.
+aliases:
+- paper:mechanistic-figure-render
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Arguments:
+    schema:
+      type: array
+      items:
+        type: string
+  State:
+    schema:
+      type: object
+      required:
+      - model
+      - model_path
+      - args
+      - outputs
+      - tex_path
+      - working_directory
+      - output_order
+      properties:
+        model: {}
+        model_path:
+          type: string
+        args:
+          type: object
+        outputs:
+          type: object
+          additionalProperties:
+            type: string
+        tex_path:
+          type:
+          - string
+          - 'null'
+        working_directory:
+          type: string
+        output_order:
+          type: array
+          items:
+            type: string
+            enum:
+            - svg
+            - tex
+            - pdf
+      additionalProperties: false
+  Flag:
+    schema:
+      type: boolean
+  Result:
+    schema:
+      anyOf:
+      - type: object
+        required:
+        - ok
+        - model
+        - node_count
+        - edge_count
+        - outputs
+        properties:
+          ok:
+            const: true
+          model:
+            type: string
+          node_count:
+            type: integer
+            minimum: 0
+          edge_count:
+            type: integer
+            minimum: 0
+          outputs:
+            type: object
+            additionalProperties:
+              type: string
+        additionalProperties: false
+      - type: string
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+  Context:
+    schema:
+      type: object
+      required:
+      - working_directory
+      properties:
+        working_directory:
+          type: string
+      additionalProperties: false
+  Text:
+    schema:
+      type: string
+inputs:
+  argv:
+    type: Arguments
+  context:
+    type: Context
+outputs:
+  result:
+    type: Result
+    value:
+      ref: flow.outputs.result
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  load:
+    inputs:
+      argv:
+        type: Arguments
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      want_svg:
+        type: Flag
+      want_tex:
+        type: Flag
+      want_pdf:
+        type: Flag
+      halted:
+        type: Flag
+      help_text:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_figure_load
+        operation: mathformer_figure_load
+  svg:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_figure_svg
+        operation: mathformer_figure_svg
+  tex:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_figure_tex
+        operation: mathformer_figure_tex
+  pdf:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_figure_pdf
+        operation: mathformer_figure_pdf
+  report:
+    inputs:
+      state:
+        type: State
+    outputs:
+      result:
+        type: Result
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_figure_report
+        operation: mathformer_figure_report
+  carry:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_figure_carry
+        operation: mathformer_figure_carry
+  help:
+    inputs:
+      help_text:
+        type: Text
+    outputs:
+      result:
+        type: Result
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_figure_help
+        operation: mathformer_figure_help
+flow:
+  kind: sequence
+  steps:
+  - id: load
+    kind: call
+    operation: load
+    arguments:
+      argv:
+        ref: inputs.argv
+      context:
+        ref: inputs.context
+  - id: finish
+    kind: switch
+    cases:
+    - id: help
+      when:
+        ref: steps.load.outputs.halted
+      body:
+        kind: call
+        operation: help
+        arguments:
+          help_text:
+            ref: steps.load.outputs.help_text
+    default:
+      kind: sequence
+      steps:
+      - id: svg
+        kind: switch
+        cases:
+        - id: requested
+          when:
+            ref: steps.load.outputs.want_svg
+          body:
+            kind: call
+            operation: svg
+            arguments:
+              state:
+                ref: steps.load.outputs.state
+        default:
+          kind: call
+          operation: carry
+          arguments:
+            state:
+              ref: steps.load.outputs.state
+        outputs:
+          state:
+            type: State
+            value:
+              ref: selected.outputs.state
+      - id: tex
+        kind: switch
+        cases:
+        - id: requested
+          when:
+            ref: steps.load.outputs.want_tex
+          body:
+            kind: call
+            operation: tex
+            arguments:
+              state:
+                ref: steps.svg.outputs.state
+        default:
+          kind: call
+          operation: carry
+          arguments:
+            state:
+              ref: steps.svg.outputs.state
+        outputs:
+          state:
+            type: State
+            value:
+              ref: selected.outputs.state
+      - id: pdf
+        kind: switch
+        cases:
+        - id: requested
+          when:
+            ref: steps.load.outputs.want_pdf
+          body:
+            kind: call
+            operation: pdf
+            arguments:
+              state:
+                ref: steps.tex.outputs.state
+        default:
+          kind: call
+          operation: carry
+          arguments:
+            state:
+              ref: steps.tex.outputs.state
+        outputs:
+          state:
+            type: State
+            value:
+              ref: selected.outputs.state
+      - id: report
+        kind: call
+        operation: report
+        arguments:
+          state:
+            ref: steps.pdf.outputs.state
+      outputs:
+        result:
+          type: Result
+          value:
+            ref: steps.report.outputs.result
+        exit_code:
+          type: ExitCode
+          value:
+            ref: steps.report.outputs.exit_code
+    outputs:
+      result:
+        type: Result
+        value:
+          ref: selected.outputs.result
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+  outputs:
+    result:
+      type: Result
+      value:
+        ref: steps.finish.outputs.result
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.finish.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - requested_output_paths
+      - tectonic_output_directory
+      - artifacts/workflow_hub/
+    network:
+    - tectonic_native_capabilities_require_qualification
+    external_write: []
+  authority:
+    allowed:
+    - read_model
+    - render_requested_artifacts
+    - invoke_tectonic
+    forbidden:
+    - infer_scientific_truth_from_completion
+    - bypass_native_controls
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Rendering success establishes no scientific validity or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: paper_skills/mechanistic-figure-renderer/scripts/render_mechanistic_figure.py
+    selector: main; load_state; svg_step; tex_step; pdf_step; report_step
+    digest: sha256:3e549905af7fe4ed4c4211b318f93265eebed4c24736c8024841bc2f3bbb9c12
+  - path: scripts/mechanistic_figure_tools.py
+    selector: register_mechanistic_figure_tools
+    digest: sha256:f2315e05ae1703ac6816a92314f6561bfdeb7e2e9e548e7f5412a83fd78a7077
+  - path: scripts/mcp_server.py
+    selector: register_mechanistic_figure_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: scripts/mathformer.py
+    selector: build_registry; audit_control
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Rendering helper iterations remain inside their owning operations; state and bounds
+    are described in extensions.
+  - The graph selects main; enclosing hub preflight, dry-run, argument forwarding,
+    subprocess exit checking and write audit remain native controller responsibilities.
+  - The 3600-second ceiling and five-call budget are Lunar limits; main and tectonic
+    have no native timeout or global size budget.
+  - Required receipts/digests are supplied by Lunar beyond native metadata printing;
+    tectonic capabilities require qualification.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: paper:mechanistic-figure-render
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: paper:mechanistic-figure-render
+      family: paper
+      kind: generation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - paper_skills/mechanistic-figure-renderer/scripts/render_mechanistic_figure.py
+      depends_on: []
+      writes:
+      - artifacts/paper_skills/
+      allows_extra_args: true
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: 'scripts/mathformer.py run_action -> run_leaf_action: dependency-free
+      registered leaf; preflight, dry-run, extra argument forwarding, subprocess launch,
+      then write audit.'
+    failure_policy: Hub acceptance requires successful subprocess exit and write audit.
+      Parsing, lookup, filesystem, missing-tool and compilation errors propagate;
+      earlier files may remain.
+    scope: Graph represents selected main after controller dispatch. Hub dry-run does
+      not execute this graph.
+  mathformer.rendering:
+    iteration: Finite input layers, nodes, edges, criteria, words and characters.
+      No retry, refinement, convergence or repair. Feedback edges are drawing data
+      without execution cycles.
+    carried_state: SVG parts/deferred edge labels; TikZ lines; label-wrap buffers;
+      SVG math scanner advancing index/fragments. State.outputs accumulates SVG, TeX,
+      PDF paths in order. State.output_order preserves output insertion order across
+      canonical JSON transport.
+    branches: Role/kind styling, feedback curves, endpoint direction, escaped versus
+      explicit TeX, and validation_criteria with legacy gates fallback stay helper-owned.
+    bounds: SVG canvas 1200x630, node boxes 200x92, at most three wrapped SVG label
+      lines, edge-label widths clamped to 76-172. Traversals finish on finite input
+      exhaustion; no invented iteration cap.
+    stopping: After requested outputs finish, print metadata and return 0. With no
+      output flags, load JSON and succeed with empty outputs. Failure stops subsequent
+      branches and reporting.
+  mathformer.mcp:
+    context: working_directory establishes native relative-path resolution for each
+      serialized stage; restore service cwd afterward. Service write guards apply
+      before native writes. Callable carry ports export unchanged state for unrequested
+      output branches; the help port returns the already emitted argparse text. Native
+      stdout/help is forwarded to stderr to preserve MCP framing. argparse SystemExit(0)
+      yields the help branch; other parser exits reject the call. No providers are
+      used.
+# REUSE-IgnoreEnd

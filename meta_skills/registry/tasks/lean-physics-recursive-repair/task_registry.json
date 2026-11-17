@@ -1,0 +1,135 @@
+{
+  "schema_version": "mathformer.meta_skills.task_registry.v0.1",
+  "task_id": "lean-physics-recursive-repair",
+  "title": "Recursive Lean physics pathology repair loop",
+  "summary": "Monitor FormalScience pathologies, detect physics objects, work through MathformerPhysicsLib first, generate guarded repairs, map exhaustive expansion, and control recursion.",
+  "visible_workflows": [
+    {
+      "workflow_id": "physics_lean.recursive_repair.exhaustive_loop",
+      "description": "Repair Lean physics pathologies through library-first object work and recursive evidence gates.",
+      "entry_actions": [
+        "physics-lean:backend-suite",
+        "physics-lean:recursive-repair-control"
+      ],
+      "evidence_gates": [
+        "python tests/physics_lean/run_lean_physics_backend_suite.py --json",
+        "python meta_skills/scripts/validate_workflow_evolution.py --json"
+      ]
+    }
+  ],
+  "composed_skills": [
+    {
+      "skill_id": "physics-lean-drift-pathology-monitor",
+      "role": "Detect taxonomy pathologies in Lean physics artifacts."
+    },
+    {
+      "skill_id": "physics-math-object-detector",
+      "role": "Identify physics mathematical objects behind pathology findings."
+    },
+    {
+      "skill_id": "mathformerphysicslib-object-workbench",
+      "role": "Plan MathformerPhysicsLib-first work over detected objects."
+    },
+    {
+      "skill_id": "physics-lean-generative-repair-orchestrator",
+      "role": "Generate guarded repair probes that remain advisory until checked."
+    },
+    {
+      "skill_id": "physics-lean-repair-expansion-cartographer",
+      "role": "Map the exhaustive recursive repair expansion."
+    },
+    {
+      "skill_id": "physics-lean-recursive-repair-loop-controller",
+      "role": "Decide whether to recurse, complete, or block from the expansion map."
+    }
+  ],
+  "controlled_actions": [
+    {
+      "action_id": "physics-lean:drift-pathology-monitor",
+      "role": "Pathology monitor."
+    },
+    {
+      "action_id": "physics-lean:detect-pathology-objects",
+      "role": "Object detection."
+    },
+    {
+      "action_id": "physics-lean:object-workbench",
+      "role": "MathformerPhysicsLib object workbench."
+    },
+    {
+      "action_id": "physics-lean:pathology-repair-loop",
+      "role": "Deterministic repair orchestration."
+    },
+    {
+      "action_id": "physics-lean:generative-repair-plan",
+      "role": "Generative repair planning."
+    },
+    {
+      "action_id": "physics-lean:repair-expansion-map",
+      "role": "Expansion map generation."
+    },
+    {
+      "action_id": "physics-lean:recursive-repair-control",
+      "role": "Recursion control."
+    },
+    {
+      "action_id": "physics-lean:backend-suite",
+      "role": "End-to-end deterministic backend suite."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "artifacts/physics_lean/backend_suite/lean_physics_backend_suite_report.json",
+      "state": "validated"
+    },
+    {
+      "path": "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/repair_expansion_map.json",
+      "state": "validated"
+    },
+    {
+      "path": "artifacts/physics_lean/backend_suite/controlled_artifact/formalphysics_0000/recursive_repair_control.json",
+      "state": "validated"
+    },
+    {
+      "path": "meta_skills/registry/tasks/lean-physics-recursive-repair/workflow_evolution.json",
+      "state": "generated"
+    }
+  ],
+  "validators": [
+    {
+      "command": "python meta_skills/scripts/validate_task_registries.py --json",
+      "expected_artifact": "artifacts/meta_skills/task_registry_validation.json"
+    },
+    {
+      "command": "python meta_skills/scripts/validate_workflow_evolution.py --json",
+      "expected_artifact": "artifacts/meta_skills/workflow_evolution_validation.json"
+    }
+  ],
+  "generated_skills": [
+    {
+      "id": "physics-lean-repair-probes",
+      "state": "task_local_validated",
+      "promotion_boundary": "Repair probes must stay task-local unless repeated-use lifecycle evidence passes."
+    }
+  ],
+  "release_boundaries": [
+    {
+      "boundary": "library_first_repair",
+      "rule": "Target theorem refinement is blocked until MathformerPhysicsLib support objects are accepted or explicitly blocked."
+    },
+    {
+      "boundary": "recursive_exhaustiveness",
+      "rule": "Each recursion decision must cite expansion-map coverage and outstanding nodes."
+    }
+  ],
+  "risk_controls": [
+    {
+      "risk": "Recursive loop expands without a stopping policy.",
+      "control": "Recursive controller records iteration signature, maximum iterations, blockers, and next actions."
+    },
+    {
+      "risk": "Generative repair edits accepted code without deterministic confirmation.",
+      "control": "Generative repair plans remain advisory and must name rerun gates."
+    }
+  ]
+}

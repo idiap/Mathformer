@@ -1,0 +1,1802 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from lean_physics_derivation_trace_loop import (
+    AcceptanceCase,
+    FormalizationBasis,
+    GroundingBasis,
+    LeanAssessment,
+    LeanDerivation,
+    LeanPhysicsDerivationTraceAnnotateLineCommentGuardArtifact,
+    LeanPhysicsDerivationTraceArtifactRealnessGateArtifact,
+    LeanPhysicsDerivationTraceArtifactStatisticsArtifact,
+    LeanPhysicsDerivationTraceAuditCompatibilityArtifact,
+    LeanPhysicsDerivationTraceCheckCompileArtifact,
+    LeanPhysicsDerivationTraceConsistencyCrossFileConceptsArtifact,
+    LeanPhysicsDerivationTraceConsistencyDeclarationShapeArtifact,
+    LeanPhysicsDerivationTraceConsistencyNonvacuityArtifact,
+    LeanPhysicsDerivationTraceConsistencyPhysicsLeanReportArtifact,
+    LeanPhysicsDerivationTraceConsistencyUnifiedReportArtifact,
+    LeanPhysicsDerivationTraceCritiqueLogicalSoundnessArtifact,
+    LeanPhysicsDerivationTraceCritiqueMathlibAlignmentArtifact,
+    LeanPhysicsDerivationTraceCritiquePhysicsLeanAssumptionsArtifact,
+    LeanPhysicsDerivationTraceCritiquePhysicsLeanDimensionsArtifact,
+    LeanPhysicsDerivationTraceCritiquePhysicsLeanDriftPathologyMonitorArtifact,
+    LeanPhysicsDerivationTraceCritiquePhysicsLeanGenerativePanelArtifact,
+    LeanPhysicsDerivationTraceCritiquePhysicsLeanSemanticsArtifact,
+    LeanPhysicsDerivationTraceCritiqueReferenceFreeMonitorArtifact,
+    LeanPhysicsDerivationTraceCritiqueSemanticArtifact,
+    LeanPhysicsDerivationTraceCritiqueSemanticPreservationArtifact,
+    LeanPhysicsDerivationTraceCritiqueSuiteArtifact,
+    LeanPhysicsDerivationTraceCritiqueSyntaxArtifact,
+    LeanPhysicsDerivationTraceDependencyResolveArtifact,
+    LeanPhysicsDerivationTraceDraftPhysicsLeanDerivationArtifact,
+    LeanPhysicsDerivationTraceEvaluationRfdeReportArtifact,
+    LeanPhysicsDerivationTraceExecuteInitialArtifact,
+    LeanPhysicsDerivationTraceExecutePhysicsLeanInterpretArtifact,
+    LeanPhysicsDerivationTraceFoundationDownstreamRegressionArtifact,
+    LeanPhysicsDerivationTraceFoundationLeanDraftArtifact,
+    LeanPhysicsDerivationTraceFoundationMathlibGroundingArtifact,
+    LeanPhysicsDerivationTraceFoundationPhysicsObjectIntakeArtifact,
+    LeanPhysicsDerivationTraceFoundationPromoteArtifact,
+    LeanPhysicsDerivationTraceFoundationSurfaceDesignArtifact,
+    LeanPhysicsDerivationTraceFoundationVerifyArtifact,
+    LeanPhysicsDerivationTraceGoalPhysicsLeanSingleSampleAutoformalizationArtifact,
+    LeanPhysicsDerivationTraceIntakeSourceUnitInventoryArtifact,
+    LeanPhysicsDerivationTraceMathlibApiPlanArtifact,
+    LeanPhysicsDerivationTraceMathlibCompatibilityLoopArtifact,
+    LeanPhysicsDerivationTraceMathlibCoverageArtifact,
+    LeanPhysicsDerivationTraceMathlibDiscoveryArtifact,
+    LeanPhysicsDerivationTraceMathlibGroundingMaximizeArtifact,
+    LeanPhysicsDerivationTraceMathlibHierarchyDeclarationNeighborhoodArtifact,
+    LeanPhysicsDerivationTraceMathlibHierarchyModuleTreeArtifact,
+    LeanPhysicsDerivationTraceMathlibHierarchyNavigateArtifact,
+    LeanPhysicsDerivationTraceMathlibImportContextArtifact,
+    LeanPhysicsDerivationTraceMathlibImportMinimizeArtifact,
+    LeanPhysicsDerivationTraceMathlibImportPlanArtifact,
+    LeanPhysicsDerivationTraceMathlibOntologyValidateArtifact,
+    LeanPhysicsDerivationTraceMathlibResultExistenceSearchArtifact,
+    LeanPhysicsDerivationTraceMathlibVerifyArtifact,
+    LeanPhysicsDerivationTraceMathlibWebEvidenceArtifact,
+    LeanPhysicsDerivationTraceMathlibWebGroundingLoopArtifact,
+    LeanPhysicsDerivationTraceMathlibWebStrategyArtifact,
+    LeanPhysicsDerivationTraceOutputDenoiseArtifact,
+    LeanPhysicsDerivationTracePhysicsDimensionsModelArtifact,
+    LeanPhysicsDerivationTracePhysicsEquationsParseArtifact,
+    LeanPhysicsDerivationTracePhysicsFramesBuildArtifact,
+    LeanPhysicsDerivationTracePhysicsGapsDetectArtifact,
+    LeanPhysicsDerivationTracePhysicsGapsExpandArtifact,
+    LeanPhysicsDerivationTracePhysicsInformalElicitArtifact,
+    LeanPhysicsDerivationTracePhysicsInformalExpandArtifact,
+    LeanPhysicsDerivationTracePhysicsInformalReviewArtifact,
+    LeanPhysicsDerivationTracePhysicsLawsGroundArtifact,
+    LeanPhysicsDerivationTracePhysicsLeanAssumptionsEncodeArtifact,
+    LeanPhysicsDerivationTracePhysicsLeanTypeSystemBuildArtifact,
+    LeanPhysicsDerivationTracePhysicsLeanUnitsVerifyArtifact,
+    LeanPhysicsDerivationTracePhysicsLeanWorkflowPlanArtifact,
+    LeanPhysicsDerivationTracePhysicsRegimesModelArtifact,
+    LeanPhysicsDerivationTracePhysicsSourceExtractArtifact,
+    LeanPhysicsDerivationTracePhysicsSymbolsBuildArtifact,
+    LeanPhysicsDerivationTracePhysicsUnitsGroundArtifact,
+    LeanPhysicsDerivationTracePostformalizationInformalConsistencyArtifact,
+    LeanPhysicsDerivationTracePostformalizationInformalInternalConsistencyArtifact,
+    LeanPhysicsDerivationTracePostformalizationInformalizeArtifact,
+    LeanPhysicsDerivationTracePostformalizationSourceAnchorDriftGuardArtifact,
+    LeanPhysicsDerivationTracePreformalizationExpandArtifact,
+    LeanPhysicsDerivationTracePreformalizationExpansionDifficultyArtifact,
+    LeanPhysicsDerivationTracePreformalizationExpansionSupportArtifact,
+    LeanPhysicsDerivationTracePreformalizationExpansionWebSupportArtifact,
+    LeanPhysicsDerivationTracePreformalizationLineTranslationPacketArtifact,
+    LeanPhysicsDerivationTracePreformalizationResultExistencePrecheckArtifact,
+    LeanPhysicsDerivationTracePreformalizationReviewBindingsArtifact,
+    LeanPhysicsDerivationTracePreformalizationReviewCompletenessArtifact,
+    LeanPhysicsDerivationTracePreformalizationReviewSuiteArtifact,
+    LeanPhysicsDerivationTraceRefineFormalArtifact,
+    LeanPhysicsDerivationTraceRefinePhysicsLeanArtifact,
+    LeanPhysicsDerivationTraceRefinePhysicsLeanReviewArtifact,
+    LeanPhysicsDerivationTraceRefineSemanticArtifact,
+    LeanPhysicsDerivationTraceRepairMathformerphysicslibObjectWorkbenchArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanAbstractionElevationArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanGenerativeRepairArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanImplicitPremiseNormalizeArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanNotationalCollapseArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanPathologyLoopArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanProofStrategyAlignmentArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanRecursiveRepairControlArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanRepairExpansionCartographyArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsMathObjectDetectArtifact,
+    LeanPhysicsDerivationTraceReviewFinalDerivationHypothesesArtifact,
+    LeanPhysicsDerivationTraceReviewMathematicalFinalHypothesesArtifact,
+    LeanPhysicsDerivationTraceReviewPhysicsFinalHypothesesArtifact,
+    LeanPhysicsDerivationTraceTransitionTaxonomyArtifact,
+    LeanValidityCase,
+    MathlibGrounding,
+    PhysicalAssessment,
+    PhysicalFidelityCase,
+    PhysicsDisposition,
+    PhysicsInterpretation,
+    PhysicsLeanConsistencyAssessment,
+    PhysicsLeanDerivationRequest,
+    ProofObligations,
+)
+from material_relations import FormalizesPreformalizationExpansionSupportCertificate
+from material_relations import FormalizesPreformalizationExpansionWebSupportCertificate
+from material_relations import FormalizesPreformalizationExpandCertificate
+from material_relations import TestsPreformalizationReviewSuiteCertificate
+from material_relations import TestsPreformalizationReviewCompletenessCertificate
+from material_relations import TestsPreformalizationReviewBindingsCertificate
+from material_relations import SynthesizesMathlibCompatibilityLoopCertificate
+from material_relations import GroundsMathlibWebGroundingLoopCertificate
+from material_relations import RecommendsMathlibApiPlanCertificate
+from material_relations import TestsCritiqueSemanticCertificate
+from material_relations import TestsCritiqueSyntaxCertificate
+from material_relations import TestsCritiqueSemanticPreservationCertificate
+from material_relations import TestsCritiqueLogicalSoundnessCertificate
+from material_relations import TestsCritiqueMathlibAlignmentCertificate
+from material_relations import TestsCritiqueSuiteCertificate
+from material_relations import TestsCritiquePhysicsLeanSemanticsCertificate
+from material_relations import TestsCritiquePhysicsLeanGenerativePanelCertificate
+from material_relations import FormalizesRefineFormalCertificate
+from material_relations import FormalizesRefineSemanticCertificate
+from material_relations import FormalizesOutputDenoiseCertificate
+from material_relations import TestsRefinePhysicsLeanReviewCertificate
+from reasoning import ReconstructInLean
+from relations import AlignWithMathlibCertificate
+from relations import CalibrateFromAssessmentsCertificate
+from relations import ExposeProofObligationsCertificate
+from relations import ProposeFormalizationCertificate
+from relations import TestFormalValidityCertificate
+from relations import TestPhysicalFidelityCertificate
+from generated.preformalization_expansion_support_skill import proof_expansion_support_orchestrator_skill as preformalization_expansion_support_skill_binding
+from generated.preformalization_expansion_web_support_skill import proof_expansion_web_researcher_skill as preformalization_expansion_web_support_skill_binding
+from generated.preformalization_expand_skill import latex_prerequisite_expander_skill as preformalization_expand_skill_binding
+from generated.preformalization_review_suite_skill import latex_expansion_review_orchestrator_skill as preformalization_review_suite_skill_binding
+from generated.preformalization_review_completeness_skill import latex_expansion_completeness_reviewer_skill as preformalization_review_completeness_skill_binding
+from generated.preformalization_review_bindings_skill import latex_expansion_binding_reviewer_skill as preformalization_review_bindings_skill_binding
+from generated.mathlib_compatibility_loop_skill import mathlib_compatibility_loop_orchestrator_skill as mathlib_compatibility_loop_skill_binding
+from generated.mathlib_web_grounding_loop_skill import mathlib_web_grounding_orchestrator_skill as mathlib_web_grounding_loop_skill_binding
+from generated.mathlib_api_plan_skill import mathlib_api_compatibility_planner_skill as mathlib_api_plan_skill_binding
+from generated.critique_semantic_skill import lean_critique_and_judging_skill as critique_semantic_skill_binding
+from generated.critique_syntax_skill import lean_syntactic_correctness_critic_skill as critique_syntax_skill_binding
+from generated.critique_semantic_preservation_skill import lean_semantic_preservation_critic_skill as critique_semantic_preservation_skill_binding
+from generated.critique_logical_soundness_skill import lean_logical_soundness_critic_skill as critique_logical_soundness_skill_binding
+from generated.critique_mathlib_alignment_skill import lean_mathlib_alignment_critic_skill as critique_mathlib_alignment_skill_binding
+from generated.critique_suite_skill import lean_critique_suite_orchestrator_skill as critique_suite_skill_binding
+from generated.critique_physics_lean_semantics_skill import physics_lean_physical_semantics_critic_skill as critique_physics_lean_semantics_skill_binding
+from generated.critique_physics_lean_generative_panel_skill import physics_lean_generative_critic_orchestrator_skill as critique_physics_lean_generative_panel_skill_binding
+from generated.refine_formal_skill import lean_formal_refinement_skill as refine_formal_skill_binding
+from generated.refine_semantic_skill import lean_formal_refinement_skill as refine_semantic_skill_binding
+from generated.output_denoise_skill import lean_output_denoiser_skill as output_denoise_skill_binding
+from generated.refine_physics_lean_review_skill import physics_lean_review_refinement_router_skill as refine_physics_lean_review_skill_binding
+from generated.reasoning_interpreted_problem_1_skill import proof_expansion_support_orchestrator_skill as interpreted_problem_reasoning_skill_1
+from generated.reasoning_interpreted_problem_2_skill import proof_expansion_web_researcher_skill as interpreted_problem_reasoning_skill_2
+from generated.reasoning_interpreted_problem_3_skill import latex_prerequisite_expander_skill as interpreted_problem_reasoning_skill_3
+from generated.reasoning_derived_obligations_1_skill import latex_expansion_review_orchestrator_skill as derived_obligations_reasoning_skill_1
+from generated.reasoning_derived_obligations_2_skill import latex_expansion_completeness_reviewer_skill as derived_obligations_reasoning_skill_2
+from generated.reasoning_derived_obligations_3_skill import latex_expansion_binding_reviewer_skill as derived_obligations_reasoning_skill_3
+from generated.reasoning_grounded_mathlib_1_skill import mathlib_compatibility_loop_orchestrator_skill as grounded_mathlib_reasoning_skill_1
+from generated.reasoning_grounded_mathlib_2_skill import mathlib_web_grounding_orchestrator_skill as grounded_mathlib_reasoning_skill_2
+from generated.reasoning_grounded_mathlib_3_skill import mathlib_api_compatibility_planner_skill as grounded_mathlib_reasoning_skill_3
+from generated.reasoning_lean_candidate_1_skill import lean_formal_refinement_skill as lean_candidate_reasoning_skill_1
+from generated.reasoning_lean_candidate_2_skill import lean_output_denoiser_skill as lean_candidate_reasoning_skill_2
+from generated.reasoning_formal_assessment_1_skill import lean_critique_and_judging_skill as formal_assessment_reasoning_skill_1
+from generated.reasoning_formal_assessment_2_skill import lean_syntactic_correctness_critic_skill as formal_assessment_reasoning_skill_2
+from generated.reasoning_formal_assessment_3_skill import lean_semantic_preservation_critic_skill as formal_assessment_reasoning_skill_3
+from generated.reasoning_formal_assessment_4_skill import lean_logical_soundness_critic_skill as formal_assessment_reasoning_skill_4
+from generated.reasoning_formal_assessment_5_skill import lean_mathlib_alignment_critic_skill as formal_assessment_reasoning_skill_5
+from generated.reasoning_formal_assessment_6_skill import lean_critique_suite_orchestrator_skill as formal_assessment_reasoning_skill_6
+from generated.reasoning_physical_assessment_1_skill import physics_lean_physical_semantics_critic_skill as physical_assessment_reasoning_skill_1
+from generated.reasoning_physical_assessment_2_skill import physics_lean_generative_critic_orchestrator_skill as physical_assessment_reasoning_skill_2
+from generated.reasoning_disposition_1_skill import physics_lean_review_refinement_router_skill as disposition_reasoning_skill_1
+
+def derived_obligations_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ExposeProofObligationsCertificate[SourceValue, TargetValue]:
+    return ExposeProofObligationsCertificate(source = source, target = target)
+
+def grounded_mathlib_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AlignWithMathlibCertificate[SourceValue, TargetValue]:
+    return AlignWithMathlibCertificate(source = source, target = target)
+
+def lean_candidate_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ProposeFormalizationCertificate[SourceValue, TargetValue]:
+    return ProposeFormalizationCertificate(source = source, target = target)
+
+def formal_assessment_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestFormalValidityCertificate[SourceValue, TargetValue]:
+    return TestFormalValidityCertificate(source = source, target = target)
+
+def physical_assessment_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestPhysicalFidelityCertificate[SourceValue, TargetValue]:
+    return TestPhysicalFidelityCertificate(source = source, target = target)
+
+def disposition_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> CalibrateFromAssessmentsCertificate[SourceValue, TargetValue]:
+    return CalibrateFromAssessmentsCertificate(source = source, target = target)
+
+# Generative interpretation InterpretPhysics uses skill context selected from material steps: preformalization_expansion_support, preformalization_expansion_web_support, preformalization_expand.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: proof-expansion-support-orchestrator, proof-expansion-web-researcher, latex-prerequisite-expander.
+agent interpreted_problem_reasoning_agent(
+    task: PhysicsLeanDerivationRequest,
+) -> Result[Generated[PhysicsInterpretation], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PhysicsLeanDerivationRequest] = [interpreted_problem_reasoning_skill_1, interpreted_problem_reasoning_skill_2, interpreted_problem_reasoning_skill_3]
+
+# Generative interpretation DeriveProofObligations uses skill context selected from material steps: preformalization_review_suite, preformalization_review_completeness, preformalization_review_bindings.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: latex-expansion-review-orchestrator, latex-expansion-completeness-reviewer, latex-expansion-binding-reviewer.
+agent derived_obligations_reasoning_agent(
+    task: PhysicsInterpretation,
+) -> Result[Generated[ProofObligations], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PhysicsInterpretation] = [derived_obligations_reasoning_skill_1, derived_obligations_reasoning_skill_2, derived_obligations_reasoning_skill_3]
+
+# Generative interpretation GroundInMathlib uses skill context selected from material steps: mathlib_compatibility_loop, mathlib_web_grounding_loop, mathlib_api_plan.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: mathlib-compatibility-loop-orchestrator, mathlib-web-grounding-orchestrator, mathlib-api-compatibility-planner.
+agent grounded_mathlib_reasoning_agent(
+    task: GroundingBasis,
+) -> Result[Generated[MathlibGrounding], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[GroundingBasis] = [grounded_mathlib_reasoning_skill_1, grounded_mathlib_reasoning_skill_2, grounded_mathlib_reasoning_skill_3]
+
+# Generative interpretation SynthesizeLeanDerivation uses skill context selected from material steps: refine_formal, refine_semantic, output_denoise.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-formal-refinement, lean-output-denoiser.
+agent lean_candidate_reasoning_agent(
+    task: FormalizationBasis,
+) -> Result[Generated[LeanDerivation], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[FormalizationBasis] = [lean_candidate_reasoning_skill_1, lean_candidate_reasoning_skill_2]
+
+# Generative interpretation AssessLeanValidity uses skill context selected from material steps: critique_semantic, critique_syntax, critique_semantic_preservation, critique_logical_soundness, critique_mathlib_alignment, critique_suite.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: lean-critique-and-judging, lean-syntactic-correctness-critic, lean-semantic-preservation-critic, lean-logical-soundness-critic, lean-mathlib-alignment-critic, lean-critique-suite-orchestrator.
+agent formal_assessment_reasoning_agent(
+    task: LeanValidityCase,
+) -> Result[Generated[LeanAssessment], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanValidityCase] = [formal_assessment_reasoning_skill_1, formal_assessment_reasoning_skill_2, formal_assessment_reasoning_skill_3, formal_assessment_reasoning_skill_4, formal_assessment_reasoning_skill_5, formal_assessment_reasoning_skill_6]
+
+# Generative interpretation AssessPhysicalFidelity uses skill context selected from material steps: critique_physics_lean_semantics, critique_physics_lean_generative_panel.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-lean-physical-semantics-critic, physics-lean-generative-critic-orchestrator.
+agent physical_assessment_reasoning_agent(
+    task: PhysicalFidelityCase,
+) -> Result[Generated[PhysicalAssessment], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PhysicalFidelityCase] = [physical_assessment_reasoning_skill_1, physical_assessment_reasoning_skill_2]
+
+# Generative interpretation CalibrateAcceptance uses skill context selected from material steps: refine_physics_lean_review.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: physics-lean-review-refinement-router.
+agent disposition_reasoning_agent(
+    task: AcceptanceCase,
+) -> Result[Generated[PhysicsDisposition], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[AcceptanceCase] = [disposition_reasoning_skill_1]
+
+converted_reasoning = ReconstructInLean(
+    interpreted_problem = interpreted_problem_reasoning_agent,
+    derived_obligations = derived_obligations_reasoning_agent,
+    derived_obligations_by = derived_obligations_reasoning_relation_builder,
+    grounded_mathlib = grounded_mathlib_reasoning_agent,
+    grounded_mathlib_by = grounded_mathlib_reasoning_relation_builder,
+    lean_candidate = lean_candidate_reasoning_agent,
+    lean_candidate_by = lean_candidate_reasoning_relation_builder,
+    formal_assessment = formal_assessment_reasoning_agent,
+    formal_assessment_by = formal_assessment_reasoning_relation_builder,
+    physical_assessment = physical_assessment_reasoning_agent,
+    physical_assessment_by = physical_assessment_reasoning_relation_builder,
+    disposition = disposition_reasoning_agent,
+    disposition_by = disposition_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `source-formalizable-unit-extractor`; this does not execute the linked native resource.
+def intake_source_unit_inventory_material_binding(source: PhysicsLeanDerivationRequest) -> Computed[LeanPhysicsDerivationTraceIntakeSourceUnitInventoryArtifact]:
+    artifact = LeanPhysicsDerivationTraceIntakeSourceUnitInventoryArtifact(
+        subject = "typed material binding for intake_source_unit_inventory",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation intake_source_unit_inventory",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: intake_source_unit_inventory")
+
+# Epistemic occurrence owned by `proof-expansion-support-orchestrator`; output assurance remains Generated.
+agent preformalization_expansion_support_agent(
+    task: LeanPhysicsDerivationTraceIntakeSourceUnitInventoryArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTracePreformalizationExpansionSupportArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceIntakeSourceUnitInventoryArtifact] = [preformalization_expansion_support_skill_binding]
+
+def preformalization_expansion_support_relation_builder(
+    source: LeanPhysicsDerivationTraceIntakeSourceUnitInventoryArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationExpansionSupportArtifact],
+) -> FormalizesPreformalizationExpansionSupportCertificate:
+    return FormalizesPreformalizationExpansionSupportCertificate(source = source, target = target)
+
+# Material binding descriptor for `proof-expansion-difficulty-estimator`; this does not execute the linked native resource.
+def preformalization_expansion_difficulty_material_binding(source: LeanPhysicsDerivationTracePreformalizationExpansionSupportArtifact) -> Computed[LeanPhysicsDerivationTracePreformalizationExpansionDifficultyArtifact]:
+    artifact = LeanPhysicsDerivationTracePreformalizationExpansionDifficultyArtifact(
+        subject = "typed material binding for preformalization_expansion_difficulty",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_expansion_difficulty")
+
+# Epistemic occurrence owned by `proof-expansion-web-researcher`; output assurance remains Generated.
+agent preformalization_expansion_web_support_agent(
+    task: LeanPhysicsDerivationTracePreformalizationExpansionDifficultyArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTracePreformalizationExpansionWebSupportArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTracePreformalizationExpansionDifficultyArtifact] = [preformalization_expansion_web_support_skill_binding]
+
+def preformalization_expansion_web_support_relation_builder(
+    source: LeanPhysicsDerivationTracePreformalizationExpansionDifficultyArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationExpansionWebSupportArtifact],
+) -> FormalizesPreformalizationExpansionWebSupportCertificate:
+    return FormalizesPreformalizationExpansionWebSupportCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-prerequisite-expander`; output assurance remains Generated.
+agent preformalization_expand_agent(
+    task: LeanPhysicsDerivationTracePreformalizationExpansionWebSupportArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTracePreformalizationExpandArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTracePreformalizationExpansionWebSupportArtifact] = [preformalization_expand_skill_binding]
+
+def preformalization_expand_relation_builder(
+    source: LeanPhysicsDerivationTracePreformalizationExpansionWebSupportArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationExpandArtifact],
+) -> FormalizesPreformalizationExpandCertificate:
+    return FormalizesPreformalizationExpandCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-expansion-review-orchestrator`; output assurance remains Generated.
+agent preformalization_review_suite_agent(
+    task: LeanPhysicsDerivationTracePreformalizationExpandArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTracePreformalizationReviewSuiteArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTracePreformalizationExpandArtifact] = [preformalization_review_suite_skill_binding]
+
+def preformalization_review_suite_relation_builder(
+    source: LeanPhysicsDerivationTracePreformalizationExpandArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationReviewSuiteArtifact],
+) -> TestsPreformalizationReviewSuiteCertificate:
+    return TestsPreformalizationReviewSuiteCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-expansion-completeness-reviewer`; output assurance remains Generated.
+agent preformalization_review_completeness_agent(
+    task: LeanPhysicsDerivationTracePreformalizationReviewSuiteArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTracePreformalizationReviewCompletenessArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTracePreformalizationReviewSuiteArtifact] = [preformalization_review_completeness_skill_binding]
+
+def preformalization_review_completeness_relation_builder(
+    source: LeanPhysicsDerivationTracePreformalizationReviewSuiteArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationReviewCompletenessArtifact],
+) -> TestsPreformalizationReviewCompletenessCertificate:
+    return TestsPreformalizationReviewCompletenessCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-expansion-binding-reviewer`; output assurance remains Generated.
+agent preformalization_review_bindings_agent(
+    task: LeanPhysicsDerivationTracePreformalizationReviewCompletenessArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTracePreformalizationReviewBindingsArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTracePreformalizationReviewCompletenessArtifact] = [preformalization_review_bindings_skill_binding]
+
+def preformalization_review_bindings_relation_builder(
+    source: LeanPhysicsDerivationTracePreformalizationReviewCompletenessArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationReviewBindingsArtifact],
+) -> TestsPreformalizationReviewBindingsCertificate:
+    return TestsPreformalizationReviewBindingsCertificate(source = source, target = target)
+
+# Material binding descriptor for `autoformalization-workflow-orchestrator`; this does not execute the linked native resource.
+def dependency_resolve_material_binding(source: LeanPhysicsDerivationTracePreformalizationReviewBindingsArtifact) -> Computed[LeanPhysicsDerivationTraceDependencyResolveArtifact]:
+    artifact = LeanPhysicsDerivationTraceDependencyResolveArtifact(
+        subject = "typed material binding for dependency_resolve",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation dependency_resolve",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: dependency_resolve")
+
+# Material binding descriptor for `physics-derivation-source-extractor`; this does not execute the linked native resource.
+def physics_source_extract_material_binding(source: LeanPhysicsDerivationTraceDependencyResolveArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsSourceExtractArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsSourceExtractArtifact(
+        subject = "typed material binding for physics_source_extract",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_source_extract")
+
+# Material binding descriptor for `physics-informal-derivation-elicitor`; this does not execute the linked native resource.
+def physics_informal_elicit_material_binding(source: LeanPhysicsDerivationTracePhysicsSourceExtractArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsInformalElicitArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsInformalElicitArtifact(
+        subject = "typed material binding for physics_informal_elicit",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_informal_elicit",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_informal_elicit")
+
+# Material binding descriptor for `physics-informal-derivation-expander`; this does not execute the linked native resource.
+def physics_informal_expand_material_binding(source: LeanPhysicsDerivationTracePhysicsInformalElicitArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsInformalExpandArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsInformalExpandArtifact(
+        subject = "typed material binding for physics_informal_expand",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_informal_expand")
+
+# Material binding descriptor for `physics-informal-derivation-readiness-reviewer`; this does not execute the linked native resource.
+def physics_informal_review_material_binding(source: LeanPhysicsDerivationTracePhysicsInformalExpandArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsInformalReviewArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsInformalReviewArtifact(
+        subject = "typed material binding for physics_informal_review",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_informal_review")
+
+# Material binding descriptor for `physics-symbol-table-builder`; this does not execute the linked native resource.
+def physics_symbols_build_material_binding(source: LeanPhysicsDerivationTracePhysicsInformalReviewArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsSymbolsBuildArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsSymbolsBuildArtifact(
+        subject = "typed material binding for physics_symbols_build",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_symbols_build",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_symbols_build")
+
+# Material binding descriptor for `physics-dimension-modeler`; this does not execute the linked native resource.
+def physics_dimensions_model_material_binding(source: LeanPhysicsDerivationTracePhysicsSymbolsBuildArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsDimensionsModelArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsDimensionsModelArtifact(
+        subject = "typed material binding for physics_dimensions_model",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_dimensions_model",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_dimensions_model")
+
+# Material binding descriptor for `physics-unit-system-grounder`; this does not execute the linked native resource.
+def physics_units_ground_material_binding(source: LeanPhysicsDerivationTracePhysicsDimensionsModelArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsUnitsGroundArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsUnitsGroundArtifact(
+        subject = "typed material binding for physics_units_ground",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_units_ground")
+
+# Material binding descriptor for `physics-equation-parser`; this does not execute the linked native resource.
+def physics_equations_parse_material_binding(source: LeanPhysicsDerivationTracePhysicsUnitsGroundArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsEquationsParseArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsEquationsParseArtifact(
+        subject = "typed material binding for physics_equations_parse",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_equations_parse")
+
+# Material binding descriptor for `physics-regime-assumption-modeler`; this does not execute the linked native resource.
+def physics_regimes_model_material_binding(source: LeanPhysicsDerivationTracePhysicsEquationsParseArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsRegimesModelArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsRegimesModelArtifact(
+        subject = "typed material binding for physics_regimes_model",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_regimes_model",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_regimes_model")
+
+# Material binding descriptor for `physics-coordinate-frame-context-builder`; this does not execute the linked native resource.
+def physics_frames_build_material_binding(source: LeanPhysicsDerivationTracePhysicsRegimesModelArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsFramesBuildArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsFramesBuildArtifact(
+        subject = "typed material binding for physics_frames_build",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_frames_build",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_frames_build")
+
+# Material binding descriptor for `physics-implicit-gap-detector`; this does not execute the linked native resource.
+def physics_gaps_detect_material_binding(source: LeanPhysicsDerivationTracePhysicsFramesBuildArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsGapsDetectArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsGapsDetectArtifact(
+        subject = "typed material binding for physics_gaps_detect",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_gaps_detect",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_gaps_detect")
+
+# Material binding descriptor for `physics-derivation-gap-expander`; this does not execute the linked native resource.
+def physics_gaps_expand_material_binding(source: LeanPhysicsDerivationTracePhysicsGapsDetectArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsGapsExpandArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsGapsExpandArtifact(
+        subject = "typed material binding for physics_gaps_expand",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_gaps_expand")
+
+# Material binding descriptor for `physics-law-concept-grounding-navigator`; this does not execute the linked native resource.
+def physics_laws_ground_material_binding(source: LeanPhysicsDerivationTracePhysicsGapsExpandArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsLawsGroundArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsLawsGroundArtifact(
+        subject = "typed material binding for physics_laws_ground",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_laws_ground")
+
+# Material binding descriptor for `physics-lean-workflow-orchestrator`; this does not execute the linked native resource.
+def physics_lean_workflow_plan_material_binding(source: LeanPhysicsDerivationTracePhysicsLawsGroundArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsLeanWorkflowPlanArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsLeanWorkflowPlanArtifact(
+        subject = "typed material binding for physics_lean_workflow_plan",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_lean_workflow_plan")
+
+# Material binding descriptor for `physics-lean-type-system-builder`; this does not execute the linked native resource.
+def physics_lean_type_system_build_material_binding(source: LeanPhysicsDerivationTracePhysicsLeanWorkflowPlanArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsLeanTypeSystemBuildArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsLeanTypeSystemBuildArtifact(
+        subject = "typed material binding for physics_lean_type_system_build",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_lean_type_system_build",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_lean_type_system_build")
+
+# Material binding descriptor for `physics-lean-assumption-context-encoder`; this does not execute the linked native resource.
+def physics_lean_assumptions_encode_material_binding(source: LeanPhysicsDerivationTracePhysicsLeanTypeSystemBuildArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsLeanAssumptionsEncodeArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsLeanAssumptionsEncodeArtifact(
+        subject = "typed material binding for physics_lean_assumptions_encode",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation physics_lean_assumptions_encode",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_lean_assumptions_encode")
+
+# Material binding descriptor for `source-line-translation-packet-builder`; this does not execute the linked native resource.
+def preformalization_line_translation_packet_material_binding(source: LeanPhysicsDerivationTracePhysicsLeanAssumptionsEncodeArtifact) -> Computed[LeanPhysicsDerivationTracePreformalizationLineTranslationPacketArtifact]:
+    artifact = LeanPhysicsDerivationTracePreformalizationLineTranslationPacketArtifact(
+        subject = "typed material binding for preformalization_line_translation_packet",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_line_translation_packet")
+
+# Material binding descriptor for `result-existence-precheck-orchestrator`; this does not execute the linked native resource.
+def preformalization_result_existence_precheck_material_binding(source: LeanPhysicsDerivationTracePreformalizationLineTranslationPacketArtifact) -> Computed[LeanPhysicsDerivationTracePreformalizationResultExistencePrecheckArtifact]:
+    artifact = LeanPhysicsDerivationTracePreformalizationResultExistencePrecheckArtifact(
+        subject = "typed material binding for preformalization_result_existence_precheck",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_result_existence_precheck")
+
+# Material binding descriptor for `mathlib-result-existence-checker`; this does not execute the linked native resource.
+def mathlib_result_existence_search_material_binding(source: LeanPhysicsDerivationTracePreformalizationResultExistencePrecheckArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibResultExistenceSearchArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibResultExistenceSearchArtifact(
+        subject = "typed material binding for mathlib_result_existence_search",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_result_existence_search")
+
+# Material binding descriptor for `mathlib-concept-candidate-mapper`; this does not execute the linked native resource.
+def mathlib_discovery_material_binding(source: LeanPhysicsDerivationTraceMathlibResultExistenceSearchArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibDiscoveryArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibDiscoveryArtifact(
+        subject = "typed material binding for mathlib_discovery",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_discovery")
+
+# Material binding descriptor for `mathlib-concept-ontology-manager`; this does not execute the linked native resource.
+def mathlib_ontology_validate_material_binding(source: LeanPhysicsDerivationTraceMathlibDiscoveryArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibOntologyValidateArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibOntologyValidateArtifact(
+        subject = "typed material binding for mathlib_ontology_validate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_ontology_validate")
+
+# Material binding descriptor for `mathlib-hierarchy-navigator`; this does not execute the linked native resource.
+def mathlib_hierarchy_navigate_material_binding(source: LeanPhysicsDerivationTraceMathlibOntologyValidateArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibHierarchyNavigateArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibHierarchyNavigateArtifact(
+        subject = "typed material binding for mathlib_hierarchy_navigate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_hierarchy_navigate")
+
+# Material binding descriptor for `mathlib-module-tree-cartographer`; this does not execute the linked native resource.
+def mathlib_hierarchy_module_tree_material_binding(source: LeanPhysicsDerivationTraceMathlibHierarchyNavigateArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibHierarchyModuleTreeArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibHierarchyModuleTreeArtifact(
+        subject = "typed material binding for mathlib_hierarchy_module_tree",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_hierarchy_module_tree",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_hierarchy_module_tree")
+
+# Material binding descriptor for `mathlib-declaration-neighborhood-navigator`; this does not execute the linked native resource.
+def mathlib_hierarchy_declaration_neighborhood_material_binding(source: LeanPhysicsDerivationTraceMathlibHierarchyModuleTreeArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibHierarchyDeclarationNeighborhoodArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibHierarchyDeclarationNeighborhoodArtifact(
+        subject = "typed material binding for mathlib_hierarchy_declaration_neighborhood",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_hierarchy_declaration_neighborhood",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_hierarchy_declaration_neighborhood")
+
+# Material binding descriptor for `mathlib-candidate-verifier`; this does not execute the linked native resource.
+def mathlib_verify_material_binding(source: LeanPhysicsDerivationTraceMathlibHierarchyDeclarationNeighborhoodArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibVerifyArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibVerifyArtifact(
+        subject = "typed material binding for mathlib_verify",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_verify")
+
+# Epistemic occurrence owned by `mathlib-compatibility-loop-orchestrator`; output assurance remains Generated.
+agent mathlib_compatibility_loop_agent(
+    task: LeanPhysicsDerivationTraceMathlibVerifyArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceMathlibCompatibilityLoopArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceMathlibVerifyArtifact] = [mathlib_compatibility_loop_skill_binding]
+
+def mathlib_compatibility_loop_relation_builder(
+    source: LeanPhysicsDerivationTraceMathlibVerifyArtifact,
+    target: Generated[LeanPhysicsDerivationTraceMathlibCompatibilityLoopArtifact],
+) -> SynthesizesMathlibCompatibilityLoopCertificate:
+    return SynthesizesMathlibCompatibilityLoopCertificate(source = source, target = target)
+
+# Material binding descriptor for `mathlib-concept-coverage-reviewer`; this does not execute the linked native resource.
+def mathlib_coverage_material_binding(source: LeanPhysicsDerivationTraceMathlibCompatibilityLoopArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibCoverageArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibCoverageArtifact(
+        subject = "typed material binding for mathlib_coverage",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_coverage",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_coverage")
+
+# Material binding descriptor for `mathlib-web-search-strategist`; this does not execute the linked native resource.
+def mathlib_web_strategy_material_binding(source: LeanPhysicsDerivationTraceMathlibCoverageArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibWebStrategyArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibWebStrategyArtifact(
+        subject = "typed material binding for mathlib_web_strategy",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_web_strategy")
+
+# Material binding descriptor for `mathlib-web-evidence-validator`; this does not execute the linked native resource.
+def mathlib_web_evidence_material_binding(source: LeanPhysicsDerivationTraceMathlibWebStrategyArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibWebEvidenceArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibWebEvidenceArtifact(
+        subject = "typed material binding for mathlib_web_evidence",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_web_evidence",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_web_evidence")
+
+# Epistemic occurrence owned by `mathlib-web-grounding-orchestrator`; output assurance remains Generated.
+agent mathlib_web_grounding_loop_agent(
+    task: LeanPhysicsDerivationTraceMathlibWebEvidenceArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceMathlibWebGroundingLoopArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceMathlibWebEvidenceArtifact] = [mathlib_web_grounding_loop_skill_binding]
+
+def mathlib_web_grounding_loop_relation_builder(
+    source: LeanPhysicsDerivationTraceMathlibWebEvidenceArtifact,
+    target: Generated[LeanPhysicsDerivationTraceMathlibWebGroundingLoopArtifact],
+) -> GroundsMathlibWebGroundingLoopCertificate:
+    return GroundsMathlibWebGroundingLoopCertificate(source = source, target = target)
+
+# Material binding descriptor for `mathlib-grounding-maximizer`; this does not execute the linked native resource.
+def mathlib_grounding_maximize_material_binding(source: LeanPhysicsDerivationTraceMathlibWebGroundingLoopArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibGroundingMaximizeArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibGroundingMaximizeArtifact(
+        subject = "typed material binding for mathlib_grounding_maximize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_grounding_maximize")
+
+# Epistemic occurrence owned by `mathlib-api-compatibility-planner`; output assurance remains Generated.
+agent mathlib_api_plan_agent(
+    task: LeanPhysicsDerivationTraceMathlibGroundingMaximizeArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceMathlibApiPlanArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceMathlibGroundingMaximizeArtifact] = [mathlib_api_plan_skill_binding]
+
+def mathlib_api_plan_relation_builder(
+    source: LeanPhysicsDerivationTraceMathlibGroundingMaximizeArtifact,
+    target: Generated[LeanPhysicsDerivationTraceMathlibApiPlanArtifact],
+) -> RecommendsMathlibApiPlanCertificate:
+    return RecommendsMathlibApiPlanCertificate(source = source, target = target)
+
+# Material binding descriptor for `mathlib-import-set-builder`; this does not execute the linked native resource.
+def mathlib_import_plan_material_binding(source: LeanPhysicsDerivationTraceMathlibApiPlanArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibImportPlanArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibImportPlanArtifact(
+        subject = "typed material binding for mathlib_import_plan",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_import_plan")
+
+# Material binding descriptor for `lean-import-context-verifier`; this does not execute the linked native resource.
+def mathlib_import_context_material_binding(source: LeanPhysicsDerivationTraceMathlibImportPlanArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibImportContextArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibImportContextArtifact(
+        subject = "typed material binding for mathlib_import_context",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_import_context",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_import_context")
+
+# Material binding descriptor for `physics-lean-derivation-drafter`; this does not execute the linked native resource.
+def draft_physics_lean_derivation_material_binding(source: LeanPhysicsDerivationTraceMathlibImportContextArtifact) -> Computed[LeanPhysicsDerivationTraceDraftPhysicsLeanDerivationArtifact]:
+    artifact = LeanPhysicsDerivationTraceDraftPhysicsLeanDerivationArtifact(
+        subject = "typed material binding for draft_physics_lean_derivation",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: draft_physics_lean_derivation")
+
+# Material binding descriptor for `lean-execution-runner`; this does not execute the linked native resource.
+def execute_initial_material_binding(source: LeanPhysicsDerivationTraceDraftPhysicsLeanDerivationArtifact) -> Computed[LeanPhysicsDerivationTraceExecuteInitialArtifact]:
+    artifact = LeanPhysicsDerivationTraceExecuteInitialArtifact(
+        subject = "typed material binding for execute_initial",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation execute_initial",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: execute_initial")
+
+# Material binding descriptor for `physics-lean-execution-interpreter`; this does not execute the linked native resource.
+def execute_physics_lean_interpret_material_binding(source: LeanPhysicsDerivationTraceExecuteInitialArtifact) -> Computed[LeanPhysicsDerivationTraceExecutePhysicsLeanInterpretArtifact]:
+    artifact = LeanPhysicsDerivationTraceExecutePhysicsLeanInterpretArtifact(
+        subject = "typed material binding for execute_physics_lean_interpret",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation execute_physics_lean_interpret",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: execute_physics_lean_interpret")
+
+# Material binding descriptor for `lean-compile-checker`; this does not execute the linked native resource.
+def check_compile_material_binding(source: LeanPhysicsDerivationTraceExecutePhysicsLeanInterpretArtifact) -> Computed[LeanPhysicsDerivationTraceCheckCompileArtifact]:
+    artifact = LeanPhysicsDerivationTraceCheckCompileArtifact(
+        subject = "typed material binding for check_compile",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: check_compile")
+
+# Epistemic occurrence owned by `lean-critique-and-judging`; output assurance remains Generated.
+agent critique_semantic_agent(
+    task: LeanPhysicsDerivationTraceCheckCompileArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceCritiqueSemanticArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceCheckCompileArtifact] = [critique_semantic_skill_binding]
+
+def critique_semantic_relation_builder(
+    source: LeanPhysicsDerivationTraceCheckCompileArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSemanticArtifact],
+) -> TestsCritiqueSemanticCertificate:
+    return TestsCritiqueSemanticCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-syntactic-correctness-critic`; output assurance remains Generated.
+agent critique_syntax_agent(
+    task: LeanPhysicsDerivationTraceCritiqueSemanticArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceCritiqueSyntaxArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceCritiqueSemanticArtifact] = [critique_syntax_skill_binding]
+
+def critique_syntax_relation_builder(
+    source: LeanPhysicsDerivationTraceCritiqueSemanticArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSyntaxArtifact],
+) -> TestsCritiqueSyntaxCertificate:
+    return TestsCritiqueSyntaxCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-semantic-preservation-critic`; output assurance remains Generated.
+agent critique_semantic_preservation_agent(
+    task: LeanPhysicsDerivationTraceCritiqueSyntaxArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceCritiqueSemanticPreservationArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceCritiqueSyntaxArtifact] = [critique_semantic_preservation_skill_binding]
+
+def critique_semantic_preservation_relation_builder(
+    source: LeanPhysicsDerivationTraceCritiqueSyntaxArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSemanticPreservationArtifact],
+) -> TestsCritiqueSemanticPreservationCertificate:
+    return TestsCritiqueSemanticPreservationCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-logical-soundness-critic`; output assurance remains Generated.
+agent critique_logical_soundness_agent(
+    task: LeanPhysicsDerivationTraceCritiqueSemanticPreservationArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceCritiqueLogicalSoundnessArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceCritiqueSemanticPreservationArtifact] = [critique_logical_soundness_skill_binding]
+
+def critique_logical_soundness_relation_builder(
+    source: LeanPhysicsDerivationTraceCritiqueSemanticPreservationArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueLogicalSoundnessArtifact],
+) -> TestsCritiqueLogicalSoundnessCertificate:
+    return TestsCritiqueLogicalSoundnessCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-mathlib-alignment-critic`; output assurance remains Generated.
+agent critique_mathlib_alignment_agent(
+    task: LeanPhysicsDerivationTraceCritiqueLogicalSoundnessArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceCritiqueMathlibAlignmentArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceCritiqueLogicalSoundnessArtifact] = [critique_mathlib_alignment_skill_binding]
+
+def critique_mathlib_alignment_relation_builder(
+    source: LeanPhysicsDerivationTraceCritiqueLogicalSoundnessArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueMathlibAlignmentArtifact],
+) -> TestsCritiqueMathlibAlignmentCertificate:
+    return TestsCritiqueMathlibAlignmentCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-critique-suite-orchestrator`; output assurance remains Generated.
+agent critique_suite_agent(
+    task: LeanPhysicsDerivationTraceCritiqueMathlibAlignmentArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceCritiqueSuiteArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceCritiqueMathlibAlignmentArtifact] = [critique_suite_skill_binding]
+
+def critique_suite_relation_builder(
+    source: LeanPhysicsDerivationTraceCritiqueMathlibAlignmentArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSuiteArtifact],
+) -> TestsCritiqueSuiteCertificate:
+    return TestsCritiqueSuiteCertificate(source = source, target = target)
+
+# Material binding descriptor for `reference-free-critic-monitor`; this does not execute the linked native resource.
+def critique_reference_free_monitor_material_binding(source: LeanPhysicsDerivationTraceCritiqueSuiteArtifact) -> Computed[LeanPhysicsDerivationTraceCritiqueReferenceFreeMonitorArtifact]:
+    artifact = LeanPhysicsDerivationTraceCritiqueReferenceFreeMonitorArtifact(
+        subject = "typed material binding for critique_reference_free_monitor",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: critique_reference_free_monitor")
+
+# Material binding descriptor for `physics-lean-unit-analysis-verifier`; this does not execute the linked native resource.
+def physics_lean_units_verify_material_binding(source: LeanPhysicsDerivationTraceCritiqueReferenceFreeMonitorArtifact) -> Computed[LeanPhysicsDerivationTracePhysicsLeanUnitsVerifyArtifact]:
+    artifact = LeanPhysicsDerivationTracePhysicsLeanUnitsVerifyArtifact(
+        subject = "typed material binding for physics_lean_units_verify",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: physics_lean_units_verify")
+
+# Epistemic occurrence owned by `physics-lean-physical-semantics-critic`; output assurance remains Generated.
+agent critique_physics_lean_semantics_agent(
+    task: LeanPhysicsDerivationTracePhysicsLeanUnitsVerifyArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceCritiquePhysicsLeanSemanticsArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTracePhysicsLeanUnitsVerifyArtifact] = [critique_physics_lean_semantics_skill_binding]
+
+def critique_physics_lean_semantics_relation_builder(
+    source: LeanPhysicsDerivationTracePhysicsLeanUnitsVerifyArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiquePhysicsLeanSemanticsArtifact],
+) -> TestsCritiquePhysicsLeanSemanticsCertificate:
+    return TestsCritiquePhysicsLeanSemanticsCertificate(source = source, target = target)
+
+# Material binding descriptor for `physics-lean-assumption-critic`; this does not execute the linked native resource.
+def critique_physics_lean_assumptions_material_binding(source: LeanPhysicsDerivationTraceCritiquePhysicsLeanSemanticsArtifact) -> Computed[LeanPhysicsDerivationTraceCritiquePhysicsLeanAssumptionsArtifact]:
+    artifact = LeanPhysicsDerivationTraceCritiquePhysicsLeanAssumptionsArtifact(
+        subject = "typed material binding for critique_physics_lean_assumptions",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: critique_physics_lean_assumptions")
+
+# Material binding descriptor for `physics-lean-dimension-critic`; this does not execute the linked native resource.
+def critique_physics_lean_dimensions_material_binding(source: LeanPhysicsDerivationTraceCritiquePhysicsLeanAssumptionsArtifact) -> Computed[LeanPhysicsDerivationTraceCritiquePhysicsLeanDimensionsArtifact]:
+    artifact = LeanPhysicsDerivationTraceCritiquePhysicsLeanDimensionsArtifact(
+        subject = "typed material binding for critique_physics_lean_dimensions",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: critique_physics_lean_dimensions")
+
+# Epistemic occurrence owned by `physics-lean-generative-critic-orchestrator`; output assurance remains Generated.
+agent critique_physics_lean_generative_panel_agent(
+    task: LeanPhysicsDerivationTraceCritiquePhysicsLeanDimensionsArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceCritiquePhysicsLeanGenerativePanelArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceCritiquePhysicsLeanDimensionsArtifact] = [critique_physics_lean_generative_panel_skill_binding]
+
+def critique_physics_lean_generative_panel_relation_builder(
+    source: LeanPhysicsDerivationTraceCritiquePhysicsLeanDimensionsArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiquePhysicsLeanGenerativePanelArtifact],
+) -> TestsCritiquePhysicsLeanGenerativePanelCertificate:
+    return TestsCritiquePhysicsLeanGenerativePanelCertificate(source = source, target = target)
+
+# Material binding descriptor for `physics-lean-drift-pathology-monitor`; this does not execute the linked native resource.
+def critique_physics_lean_drift_pathology_monitor_material_binding(source: LeanPhysicsDerivationTraceCritiquePhysicsLeanGenerativePanelArtifact) -> Computed[LeanPhysicsDerivationTraceCritiquePhysicsLeanDriftPathologyMonitorArtifact]:
+    artifact = LeanPhysicsDerivationTraceCritiquePhysicsLeanDriftPathologyMonitorArtifact(
+        subject = "typed material binding for critique_physics_lean_drift_pathology_monitor",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: critique_physics_lean_drift_pathology_monitor")
+
+# Material binding descriptor for `physics-lean-goal-sample-autoformalizer`; this does not execute the linked native resource.
+def goal_physics_lean_single_sample_autoformalization_material_binding(source: LeanPhysicsDerivationTraceCritiquePhysicsLeanDriftPathologyMonitorArtifact) -> Computed[LeanPhysicsDerivationTraceGoalPhysicsLeanSingleSampleAutoformalizationArtifact]:
+    artifact = LeanPhysicsDerivationTraceGoalPhysicsLeanSingleSampleAutoformalizationArtifact(
+        subject = "typed material binding for goal_physics_lean_single_sample_autoformalization",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: goal_physics_lean_single_sample_autoformalization")
+
+# Material binding descriptor for `physics-math-object-detector`; this does not execute the linked native resource.
+def repair_physics_math_object_detect_material_binding(source: LeanPhysicsDerivationTraceGoalPhysicsLeanSingleSampleAutoformalizationArtifact) -> Computed[LeanPhysicsDerivationTraceRepairPhysicsMathObjectDetectArtifact]:
+    artifact = LeanPhysicsDerivationTraceRepairPhysicsMathObjectDetectArtifact(
+        subject = "typed material binding for repair_physics_math_object_detect",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: repair_physics_math_object_detect")
+
+# Material binding descriptor for `mathformerphysicslib-object-workbench`; this does not execute the linked native resource.
+def repair_mathformerphysicslib_object_workbench_material_binding(source: LeanPhysicsDerivationTraceRepairPhysicsMathObjectDetectArtifact) -> Computed[LeanPhysicsDerivationTraceRepairMathformerphysicslibObjectWorkbenchArtifact]:
+    artifact = LeanPhysicsDerivationTraceRepairMathformerphysicslibObjectWorkbenchArtifact(
+        subject = "typed material binding for repair_mathformerphysicslib_object_workbench",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: repair_mathformerphysicslib_object_workbench")
+
+# Material binding descriptor for `physics-foundation-object-intake`; this does not execute the linked native resource.
+def foundation_physics_object_intake_material_binding(source: LeanPhysicsDerivationTraceRepairMathformerphysicslibObjectWorkbenchArtifact) -> Computed[LeanPhysicsDerivationTraceFoundationPhysicsObjectIntakeArtifact]:
+    artifact = LeanPhysicsDerivationTraceFoundationPhysicsObjectIntakeArtifact(
+        subject = "typed material binding for foundation_physics_object_intake",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation foundation_physics_object_intake",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: foundation_physics_object_intake")
+
+# Material binding descriptor for `mathformerphysicslib-foundation-surface-designer`; this does not execute the linked native resource.
+def foundation_mathlib_grounding_material_binding(source: LeanPhysicsDerivationTraceFoundationPhysicsObjectIntakeArtifact) -> Computed[LeanPhysicsDerivationTraceFoundationMathlibGroundingArtifact]:
+    artifact = LeanPhysicsDerivationTraceFoundationMathlibGroundingArtifact(
+        subject = "typed material binding for foundation_mathlib_grounding",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: foundation_mathlib_grounding")
+
+# Material binding descriptor for `mathformerphysicslib-foundation-surface-designer`; this does not execute the linked native resource.
+def foundation_surface_design_material_binding(source: LeanPhysicsDerivationTraceFoundationMathlibGroundingArtifact) -> Computed[LeanPhysicsDerivationTraceFoundationSurfaceDesignArtifact]:
+    artifact = LeanPhysicsDerivationTraceFoundationSurfaceDesignArtifact(
+        subject = "typed material binding for foundation_surface_design",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation foundation_surface_design",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: foundation_surface_design")
+
+# Material binding descriptor for `mathformerphysicslib-foundation-drafter`; this does not execute the linked native resource.
+def foundation_lean_draft_material_binding(source: LeanPhysicsDerivationTraceFoundationSurfaceDesignArtifact) -> Computed[LeanPhysicsDerivationTraceFoundationLeanDraftArtifact]:
+    artifact = LeanPhysicsDerivationTraceFoundationLeanDraftArtifact(
+        subject = "typed material binding for foundation_lean_draft",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: foundation_lean_draft")
+
+# Material binding descriptor for `mathformerphysicslib-foundation-verifier`; this does not execute the linked native resource.
+def foundation_verify_material_binding(source: LeanPhysicsDerivationTraceFoundationLeanDraftArtifact) -> Computed[LeanPhysicsDerivationTraceFoundationVerifyArtifact]:
+    artifact = LeanPhysicsDerivationTraceFoundationVerifyArtifact(
+        subject = "typed material binding for foundation_verify",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: foundation_verify")
+
+# Material binding descriptor for `mathformerlib-promotion-gate`; this does not execute the linked native resource.
+def foundation_promote_material_binding(source: LeanPhysicsDerivationTraceFoundationVerifyArtifact) -> Computed[LeanPhysicsDerivationTraceFoundationPromoteArtifact]:
+    artifact = LeanPhysicsDerivationTraceFoundationPromoteArtifact(
+        subject = "typed material binding for foundation_promote",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation foundation_promote",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: foundation_promote")
+
+# Material binding descriptor for `physics-lean-recursive-repair-loop-controller`; this does not execute the linked native resource.
+def foundation_downstream_regression_material_binding(source: LeanPhysicsDerivationTraceFoundationPromoteArtifact) -> Computed[LeanPhysicsDerivationTraceFoundationDownstreamRegressionArtifact]:
+    artifact = LeanPhysicsDerivationTraceFoundationDownstreamRegressionArtifact(
+        subject = "typed material binding for foundation_downstream_regression",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation foundation_downstream_regression",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: foundation_downstream_regression")
+
+# Material binding descriptor for `physics-lean-notational-collapse-repairer`; this does not execute the linked native resource.
+def repair_physics_lean_notational_collapse_material_binding(source: LeanPhysicsDerivationTraceFoundationDownstreamRegressionArtifact) -> Computed[LeanPhysicsDerivationTraceRepairPhysicsLeanNotationalCollapseArtifact]:
+    artifact = LeanPhysicsDerivationTraceRepairPhysicsLeanNotationalCollapseArtifact(
+        subject = "typed material binding for repair_physics_lean_notational_collapse",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: repair_physics_lean_notational_collapse")
+
+# Material binding descriptor for `physics-lean-abstraction-elevation-repairer`; this does not execute the linked native resource.
+def repair_physics_lean_abstraction_elevation_material_binding(source: LeanPhysicsDerivationTraceRepairPhysicsLeanNotationalCollapseArtifact) -> Computed[LeanPhysicsDerivationTraceRepairPhysicsLeanAbstractionElevationArtifact]:
+    artifact = LeanPhysicsDerivationTraceRepairPhysicsLeanAbstractionElevationArtifact(
+        subject = "typed material binding for repair_physics_lean_abstraction_elevation",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: repair_physics_lean_abstraction_elevation")
+
+# Material binding descriptor for `physics-lean-proof-strategy-alignment-repairer`; this does not execute the linked native resource.
+def repair_physics_lean_proof_strategy_alignment_material_binding(source: LeanPhysicsDerivationTraceRepairPhysicsLeanAbstractionElevationArtifact) -> Computed[LeanPhysicsDerivationTraceRepairPhysicsLeanProofStrategyAlignmentArtifact]:
+    artifact = LeanPhysicsDerivationTraceRepairPhysicsLeanProofStrategyAlignmentArtifact(
+        subject = "typed material binding for repair_physics_lean_proof_strategy_alignment",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: repair_physics_lean_proof_strategy_alignment")
+
+# Material binding descriptor for `physics-lean-implicit-premise-normalizer`; this does not execute the linked native resource.
+def repair_physics_lean_implicit_premise_normalize_material_binding(source: LeanPhysicsDerivationTraceRepairPhysicsLeanProofStrategyAlignmentArtifact) -> Computed[LeanPhysicsDerivationTraceRepairPhysicsLeanImplicitPremiseNormalizeArtifact]:
+    artifact = LeanPhysicsDerivationTraceRepairPhysicsLeanImplicitPremiseNormalizeArtifact(
+        subject = "typed material binding for repair_physics_lean_implicit_premise_normalize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: repair_physics_lean_implicit_premise_normalize")
+
+# Material binding descriptor for `physics-lean-pathology-repair-orchestrator`; this does not execute the linked native resource.
+def repair_physics_lean_pathology_loop_material_binding(source: LeanPhysicsDerivationTraceRepairPhysicsLeanImplicitPremiseNormalizeArtifact) -> Computed[LeanPhysicsDerivationTraceRepairPhysicsLeanPathologyLoopArtifact]:
+    artifact = LeanPhysicsDerivationTraceRepairPhysicsLeanPathologyLoopArtifact(
+        subject = "typed material binding for repair_physics_lean_pathology_loop",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: repair_physics_lean_pathology_loop")
+
+# Material binding descriptor for `physics-lean-generative-repair-orchestrator`; this does not execute the linked native resource.
+def repair_physics_lean_generative_repair_material_binding(source: LeanPhysicsDerivationTraceRepairPhysicsLeanPathologyLoopArtifact) -> Computed[LeanPhysicsDerivationTraceRepairPhysicsLeanGenerativeRepairArtifact]:
+    artifact = LeanPhysicsDerivationTraceRepairPhysicsLeanGenerativeRepairArtifact(
+        subject = "typed material binding for repair_physics_lean_generative_repair",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: repair_physics_lean_generative_repair")
+
+# Material binding descriptor for `physics-lean-repair-expansion-cartographer`; this does not execute the linked native resource.
+def repair_physics_lean_repair_expansion_cartography_material_binding(source: LeanPhysicsDerivationTraceRepairPhysicsLeanGenerativeRepairArtifact) -> Computed[LeanPhysicsDerivationTraceRepairPhysicsLeanRepairExpansionCartographyArtifact]:
+    artifact = LeanPhysicsDerivationTraceRepairPhysicsLeanRepairExpansionCartographyArtifact(
+        subject = "typed material binding for repair_physics_lean_repair_expansion_cartography",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: repair_physics_lean_repair_expansion_cartography")
+
+# Material binding descriptor for `physics-lean-recursive-repair-loop-controller`; this does not execute the linked native resource.
+def repair_physics_lean_recursive_repair_control_material_binding(source: LeanPhysicsDerivationTraceRepairPhysicsLeanRepairExpansionCartographyArtifact) -> Computed[LeanPhysicsDerivationTraceRepairPhysicsLeanRecursiveRepairControlArtifact]:
+    artifact = LeanPhysicsDerivationTraceRepairPhysicsLeanRecursiveRepairControlArtifact(
+        subject = "typed material binding for repair_physics_lean_recursive_repair_control",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        directives = [],
+        dependencies = [],
+        blockers = [],
+    )
+    return compute(artifact, procedure = "linked material binding: repair_physics_lean_recursive_repair_control")
+
+# Epistemic occurrence owned by `lean-formal-refinement`; output assurance remains Generated.
+agent refine_formal_agent(
+    task: LeanPhysicsDerivationTraceRepairPhysicsLeanRecursiveRepairControlArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceRefineFormalArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceRepairPhysicsLeanRecursiveRepairControlArtifact] = [refine_formal_skill_binding]
+
+def refine_formal_relation_builder(
+    source: LeanPhysicsDerivationTraceRepairPhysicsLeanRecursiveRepairControlArtifact,
+    target: Generated[LeanPhysicsDerivationTraceRefineFormalArtifact],
+) -> FormalizesRefineFormalCertificate:
+    return FormalizesRefineFormalCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `lean-formal-refinement`; output assurance remains Generated.
+agent refine_semantic_agent(
+    task: LeanPhysicsDerivationTraceRefineFormalArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceRefineSemanticArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceRefineFormalArtifact] = [refine_semantic_skill_binding]
+
+def refine_semantic_relation_builder(
+    source: LeanPhysicsDerivationTraceRefineFormalArtifact,
+    target: Generated[LeanPhysicsDerivationTraceRefineSemanticArtifact],
+) -> FormalizesRefineSemanticCertificate:
+    return FormalizesRefineSemanticCertificate(source = source, target = target)
+
+# Material binding descriptor for `physics-lean-refinement-loop`; this does not execute the linked native resource.
+def refine_physics_lean_material_binding(source: LeanPhysicsDerivationTraceRefineSemanticArtifact) -> Computed[LeanPhysicsDerivationTraceRefinePhysicsLeanArtifact]:
+    artifact = LeanPhysicsDerivationTraceRefinePhysicsLeanArtifact(
+        subject = "typed material binding for refine_physics_lean",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: refine_physics_lean")
+
+# Epistemic occurrence owned by `lean-output-denoiser`; output assurance remains Generated.
+agent output_denoise_agent(
+    task: LeanPhysicsDerivationTraceRefinePhysicsLeanArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceOutputDenoiseArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceRefinePhysicsLeanArtifact] = [output_denoise_skill_binding]
+
+def output_denoise_relation_builder(
+    source: LeanPhysicsDerivationTraceRefinePhysicsLeanArtifact,
+    target: Generated[LeanPhysicsDerivationTraceOutputDenoiseArtifact],
+) -> FormalizesOutputDenoiseCertificate:
+    return FormalizesOutputDenoiseCertificate(source = source, target = target)
+
+# Material binding descriptor for `lean-line-annotation`; this does not execute the linked native resource.
+def annotate_line_comment_guard_material_binding(source: LeanPhysicsDerivationTraceOutputDenoiseArtifact) -> Computed[LeanPhysicsDerivationTraceAnnotateLineCommentGuardArtifact]:
+    artifact = LeanPhysicsDerivationTraceAnnotateLineCommentGuardArtifact(
+        subject = "typed material binding for annotate_line_comment_guard",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation annotate_line_comment_guard",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: annotate_line_comment_guard")
+
+# Material binding descriptor for `lean-refinement-taxonomy`; this does not execute the linked native resource.
+def transition_taxonomy_material_binding(source: LeanPhysicsDerivationTraceAnnotateLineCommentGuardArtifact) -> Computed[LeanPhysicsDerivationTraceTransitionTaxonomyArtifact]:
+    artifact = LeanPhysicsDerivationTraceTransitionTaxonomyArtifact(
+        subject = "typed material binding for transition_taxonomy",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation transition_taxonomy",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: transition_taxonomy")
+
+# Material binding descriptor for `source-formalization-drift-guard`; this does not execute the linked native resource.
+def postformalization_source_anchor_drift_guard_material_binding(source: LeanPhysicsDerivationTraceTransitionTaxonomyArtifact) -> Computed[LeanPhysicsDerivationTracePostformalizationSourceAnchorDriftGuardArtifact]:
+    artifact = LeanPhysicsDerivationTracePostformalizationSourceAnchorDriftGuardArtifact(
+        subject = "typed material binding for postformalization_source_anchor_drift_guard",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: postformalization_source_anchor_drift_guard")
+
+# Material binding descriptor for `autoformalization-result-realness-verifier`; this does not execute the linked native resource.
+def artifact_realness_gate_material_binding(source: LeanPhysicsDerivationTracePostformalizationSourceAnchorDriftGuardArtifact) -> Computed[LeanPhysicsDerivationTraceArtifactRealnessGateArtifact]:
+    artifact = LeanPhysicsDerivationTraceArtifactRealnessGateArtifact(
+        subject = "typed material binding for artifact_realness_gate",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        considered_dispositions = ["pass", "warn", "fail", "blocked"],
+        selected_disposition = "not_tested",
+        rationale = "native execution is outside this structural PRISM fixture",
+    )
+    return compute(artifact, procedure = "linked material binding: artifact_realness_gate")
+
+# Material binding descriptor for `mathlib-import-minimizer`; this does not execute the linked native resource.
+def mathlib_import_minimize_material_binding(source: LeanPhysicsDerivationTraceArtifactRealnessGateArtifact) -> Computed[LeanPhysicsDerivationTraceMathlibImportMinimizeArtifact]:
+    artifact = LeanPhysicsDerivationTraceMathlibImportMinimizeArtifact(
+        subject = "typed material binding for mathlib_import_minimize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation mathlib_import_minimize",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: mathlib_import_minimize")
+
+# Material binding descriptor for `mathlib-abstraction-auditor`; this does not execute the linked native resource.
+def audit_compatibility_material_binding(source: LeanPhysicsDerivationTraceMathlibImportMinimizeArtifact) -> Computed[LeanPhysicsDerivationTraceAuditCompatibilityArtifact]:
+    artifact = LeanPhysicsDerivationTraceAuditCompatibilityArtifact(
+        subject = "typed material binding for audit_compatibility",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: audit_compatibility")
+
+# Material binding descriptor for `lean-informalization-extractor`; this does not execute the linked native resource.
+def postformalization_informalize_material_binding(source: LeanPhysicsDerivationTraceAuditCompatibilityArtifact) -> Computed[LeanPhysicsDerivationTracePostformalizationInformalizeArtifact]:
+    artifact = LeanPhysicsDerivationTracePostformalizationInformalizeArtifact(
+        subject = "typed material binding for postformalization_informalize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: postformalization_informalize")
+
+# Material binding descriptor for `lean-declaration-shape-consistency-checker`; this does not execute the linked native resource.
+def consistency_declaration_shape_material_binding(source: LeanPhysicsDerivationTracePostformalizationInformalizeArtifact) -> Computed[LeanPhysicsDerivationTraceConsistencyDeclarationShapeArtifact]:
+    artifact = LeanPhysicsDerivationTraceConsistencyDeclarationShapeArtifact(
+        subject = "typed material binding for consistency_declaration_shape",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_declaration_shape")
+
+# Material binding descriptor for `lean-informal-proof-internal-consistency-verifier`; this does not execute the linked native resource.
+def postformalization_informal_internal_consistency_material_binding(source: LeanPhysicsDerivationTraceConsistencyDeclarationShapeArtifact) -> Computed[LeanPhysicsDerivationTracePostformalizationInformalInternalConsistencyArtifact]:
+    artifact = LeanPhysicsDerivationTracePostformalizationInformalInternalConsistencyArtifact(
+        subject = "typed material binding for postformalization_informal_internal_consistency",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: postformalization_informal_internal_consistency")
+
+# Material binding descriptor for `lean-informal-consistency-verifier`; this does not execute the linked native resource.
+def postformalization_informal_consistency_material_binding(source: LeanPhysicsDerivationTracePostformalizationInformalInternalConsistencyArtifact) -> Computed[LeanPhysicsDerivationTracePostformalizationInformalConsistencyArtifact]:
+    artifact = LeanPhysicsDerivationTracePostformalizationInformalConsistencyArtifact(
+        subject = "typed material binding for postformalization_informal_consistency",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: postformalization_informal_consistency")
+
+# Material binding descriptor for `lean-nonvacuity-consistency-checker`; this does not execute the linked native resource.
+def consistency_nonvacuity_material_binding(source: LeanPhysicsDerivationTracePostformalizationInformalConsistencyArtifact) -> Computed[LeanPhysicsDerivationTraceConsistencyNonvacuityArtifact]:
+    artifact = LeanPhysicsDerivationTraceConsistencyNonvacuityArtifact(
+        subject = "typed material binding for consistency_nonvacuity",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_nonvacuity")
+
+# Material binding descriptor for `lean-cross-file-concept-consistency-indexer`; this does not execute the linked native resource.
+def consistency_cross_file_concepts_material_binding(source: LeanPhysicsDerivationTraceConsistencyNonvacuityArtifact) -> Computed[LeanPhysicsDerivationTraceConsistencyCrossFileConceptsArtifact]:
+    artifact = LeanPhysicsDerivationTraceConsistencyCrossFileConceptsArtifact(
+        subject = "typed material binding for consistency_cross_file_concepts",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_cross_file_concepts")
+
+# Material binding descriptor for `lean-consistency-report-orchestrator`; this does not execute the linked native resource.
+def consistency_unified_report_material_binding(source: LeanPhysicsDerivationTraceConsistencyCrossFileConceptsArtifact) -> Computed[LeanPhysicsDerivationTraceConsistencyUnifiedReportArtifact]:
+    artifact = LeanPhysicsDerivationTraceConsistencyUnifiedReportArtifact(
+        subject = "typed material binding for consistency_unified_report",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_unified_report")
+
+# Material binding descriptor for `physics-final-hypothesis-reviewer`; this does not execute the linked native resource.
+def review_physics_final_hypotheses_material_binding(source: LeanPhysicsDerivationTraceConsistencyUnifiedReportArtifact) -> Computed[LeanPhysicsDerivationTraceReviewPhysicsFinalHypothesesArtifact]:
+    artifact = LeanPhysicsDerivationTraceReviewPhysicsFinalHypothesesArtifact(
+        subject = "typed material binding for review_physics_final_hypotheses",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: review_physics_final_hypotheses")
+
+# Material binding descriptor for `mathematical-final-hypothesis-reviewer`; this does not execute the linked native resource.
+def review_mathematical_final_hypotheses_material_binding(source: LeanPhysicsDerivationTraceReviewPhysicsFinalHypothesesArtifact) -> Computed[LeanPhysicsDerivationTraceReviewMathematicalFinalHypothesesArtifact]:
+    artifact = LeanPhysicsDerivationTraceReviewMathematicalFinalHypothesesArtifact(
+        subject = "typed material binding for review_mathematical_final_hypotheses",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: review_mathematical_final_hypotheses")
+
+# Material binding descriptor for `final-derivation-review-orchestrator`; this does not execute the linked native resource.
+def review_final_derivation_hypotheses_material_binding(source: LeanPhysicsDerivationTraceReviewMathematicalFinalHypothesesArtifact) -> Computed[LeanPhysicsDerivationTraceReviewFinalDerivationHypothesesArtifact]:
+    artifact = LeanPhysicsDerivationTraceReviewFinalDerivationHypothesesArtifact(
+        subject = "typed material binding for review_final_derivation_hypotheses",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: review_final_derivation_hypotheses")
+
+# Epistemic occurrence owned by `physics-lean-review-refinement-router`; output assurance remains Generated.
+agent refine_physics_lean_review_agent(
+    task: LeanPhysicsDerivationTraceReviewFinalDerivationHypothesesArtifact,
+) -> Result[Generated[LeanPhysicsDerivationTraceRefinePhysicsLeanReviewArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[LeanPhysicsDerivationTraceReviewFinalDerivationHypothesesArtifact] = [refine_physics_lean_review_skill_binding]
+
+def refine_physics_lean_review_relation_builder(
+    source: LeanPhysicsDerivationTraceReviewFinalDerivationHypothesesArtifact,
+    target: Generated[LeanPhysicsDerivationTraceRefinePhysicsLeanReviewArtifact],
+) -> TestsRefinePhysicsLeanReviewCertificate:
+    return TestsRefinePhysicsLeanReviewCertificate(source = source, target = target)
+
+# Material binding descriptor for `physics-lean-consistency-report-orchestrator`; this does not execute the linked native resource.
+def consistency_physics_lean_report_material_binding(source: LeanPhysicsDerivationTraceRefinePhysicsLeanReviewArtifact) -> Computed[LeanPhysicsDerivationTraceConsistencyPhysicsLeanReportArtifact]:
+    artifact = LeanPhysicsDerivationTraceConsistencyPhysicsLeanReportArtifact(
+        subject = "typed material binding for consistency_physics_lean_report",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: consistency_physics_lean_report")
+
+# Material binding descriptor for `autoformalization-workflow-orchestrator`; this does not execute the linked native resource.
+def artifact_statistics_material_binding(source: LeanPhysicsDerivationTraceConsistencyPhysicsLeanReportArtifact) -> Computed[LeanPhysicsDerivationTraceArtifactStatisticsArtifact]:
+    artifact = LeanPhysicsDerivationTraceArtifactStatisticsArtifact(
+        subject = "typed material binding for artifact_statistics",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation artifact_statistics",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: artifact_statistics")
+
+# Material binding descriptor for `reference-free-descriptive-evaluator`; this does not execute the linked native resource.
+def evaluation_rfde_report_material_binding(source: LeanPhysicsDerivationTraceArtifactStatisticsArtifact) -> Computed[LeanPhysicsDerivationTraceEvaluationRfdeReportArtifact]:
+    artifact = LeanPhysicsDerivationTraceEvaluationRfdeReportArtifact(
+        subject = "typed material binding for evaluation_rfde_report",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation evaluation_rfde_report",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: evaluation_rfde_report")
+
+# Material binding descriptor for `physics-lean-refinement-loop`; this does not execute the linked native resource.
+def reflection_physics_lean_process_material_binding(source: LeanPhysicsDerivationTraceEvaluationRfdeReportArtifact) -> Computed[PhysicsLeanConsistencyAssessment]:
+    artifact = PhysicsLeanConsistencyAssessment(
+        subject = "typed material binding for reflection_physics_lean_process",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation reflection_physics_lean_process",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: reflection_physics_lean_process")
+
+# controlled physics derivation autoformalization over Lean using maximal mathematical preformalization reuse, dependency resolution for intermediate definitions/background lemmas, proof-expansion web support, anchored source extraction, physical quantity typing, contextual assumption encoding, unit and dimension obligations, mathlib web grounding, Lean execution interpretation, refinement loops, reverse informalization, and reference-free consistency metrics.
+workflow LeanPhysicsDerivationTraceLoop(
+    workflow_source: PhysicsLeanDerivationRequest,
+) -> Computed[PhysicsLeanConsistencyAssessment]
+    fails ModelFailure
+    ! {AI.Generate, Context.Disclose}:
+    sequence:
+        [intake_source_unit_inventory: intake_source_unit_inventory_material_binding(workflow_source)]
+        [preformalization_expansion_support: preformalization_expansion_support_agent(intake_source_unit_inventory.value)]
+        [preformalization_expansion_difficulty: preformalization_expansion_difficulty_material_binding(preformalization_expansion_support.value)]
+        [preformalization_expansion_web_support: preformalization_expansion_web_support_agent(preformalization_expansion_difficulty.value)]
+        [preformalization_expand: preformalization_expand_agent(preformalization_expansion_web_support.value)]
+        [preformalization_review_suite: preformalization_review_suite_agent(preformalization_expand.value)]
+        [preformalization_review_completeness: preformalization_review_completeness_agent(preformalization_review_suite.value)]
+        [preformalization_review_bindings: preformalization_review_bindings_agent(preformalization_review_completeness.value)]
+        [dependency_resolve: dependency_resolve_material_binding(preformalization_review_bindings.value)]
+        [physics_source_extract: physics_source_extract_material_binding(dependency_resolve.value)]
+        [physics_informal_elicit: physics_informal_elicit_material_binding(physics_source_extract.value)]
+        [physics_informal_expand: physics_informal_expand_material_binding(physics_informal_elicit.value)]
+        [physics_informal_review: physics_informal_review_material_binding(physics_informal_expand.value)]
+        [physics_symbols_build: physics_symbols_build_material_binding(physics_informal_review.value)]
+        [physics_dimensions_model: physics_dimensions_model_material_binding(physics_symbols_build.value)]
+        [physics_units_ground: physics_units_ground_material_binding(physics_dimensions_model.value)]
+        [physics_equations_parse: physics_equations_parse_material_binding(physics_units_ground.value)]
+        [physics_regimes_model: physics_regimes_model_material_binding(physics_equations_parse.value)]
+        [physics_frames_build: physics_frames_build_material_binding(physics_regimes_model.value)]
+        [physics_gaps_detect: physics_gaps_detect_material_binding(physics_frames_build.value)]
+        [physics_gaps_expand: physics_gaps_expand_material_binding(physics_gaps_detect.value)]
+        [physics_laws_ground: physics_laws_ground_material_binding(physics_gaps_expand.value)]
+        [physics_lean_workflow_plan: physics_lean_workflow_plan_material_binding(physics_laws_ground.value)]
+        [physics_lean_type_system_build: physics_lean_type_system_build_material_binding(physics_lean_workflow_plan.value)]
+        [physics_lean_assumptions_encode: physics_lean_assumptions_encode_material_binding(physics_lean_type_system_build.value)]
+        [preformalization_line_translation_packet: preformalization_line_translation_packet_material_binding(physics_lean_assumptions_encode.value)]
+        [preformalization_result_existence_precheck: preformalization_result_existence_precheck_material_binding(preformalization_line_translation_packet.value)]
+        [mathlib_result_existence_search: mathlib_result_existence_search_material_binding(preformalization_result_existence_precheck.value)]
+        [mathlib_discovery: mathlib_discovery_material_binding(mathlib_result_existence_search.value)]
+        [mathlib_ontology_validate: mathlib_ontology_validate_material_binding(mathlib_discovery.value)]
+        [mathlib_hierarchy_navigate: mathlib_hierarchy_navigate_material_binding(mathlib_ontology_validate.value)]
+        [mathlib_hierarchy_module_tree: mathlib_hierarchy_module_tree_material_binding(mathlib_hierarchy_navigate.value)]
+        [mathlib_hierarchy_declaration_neighborhood: mathlib_hierarchy_declaration_neighborhood_material_binding(mathlib_hierarchy_module_tree.value)]
+        [mathlib_verify: mathlib_verify_material_binding(mathlib_hierarchy_declaration_neighborhood.value)]
+        [mathlib_compatibility_loop: mathlib_compatibility_loop_agent(mathlib_verify.value)]
+        [mathlib_coverage: mathlib_coverage_material_binding(mathlib_compatibility_loop.value)]
+        [mathlib_web_strategy: mathlib_web_strategy_material_binding(mathlib_coverage.value)]
+        [mathlib_web_evidence: mathlib_web_evidence_material_binding(mathlib_web_strategy.value)]
+        [mathlib_web_grounding_loop: mathlib_web_grounding_loop_agent(mathlib_web_evidence.value)]
+        [mathlib_grounding_maximize: mathlib_grounding_maximize_material_binding(mathlib_web_grounding_loop.value)]
+        [mathlib_api_plan: mathlib_api_plan_agent(mathlib_grounding_maximize.value)]
+        [mathlib_import_plan: mathlib_import_plan_material_binding(mathlib_api_plan.value)]
+        [mathlib_import_context: mathlib_import_context_material_binding(mathlib_import_plan.value)]
+        [draft_physics_lean_derivation: draft_physics_lean_derivation_material_binding(mathlib_import_context.value)]
+        [execute_initial: execute_initial_material_binding(draft_physics_lean_derivation.value)]
+        [execute_physics_lean_interpret: execute_physics_lean_interpret_material_binding(execute_initial.value)]
+        [check_compile: check_compile_material_binding(execute_physics_lean_interpret.value)]
+        [critique_semantic: critique_semantic_agent(check_compile.value)]
+        [critique_syntax: critique_syntax_agent(critique_semantic.value)]
+        [critique_semantic_preservation: critique_semantic_preservation_agent(critique_syntax.value)]
+        [critique_logical_soundness: critique_logical_soundness_agent(critique_semantic_preservation.value)]
+        [critique_mathlib_alignment: critique_mathlib_alignment_agent(critique_logical_soundness.value)]
+        [critique_suite: critique_suite_agent(critique_mathlib_alignment.value)]
+        [critique_reference_free_monitor: critique_reference_free_monitor_material_binding(critique_suite.value)]
+        [physics_lean_units_verify: physics_lean_units_verify_material_binding(critique_reference_free_monitor.value)]
+        [critique_physics_lean_semantics: critique_physics_lean_semantics_agent(physics_lean_units_verify.value)]
+        [critique_physics_lean_assumptions: critique_physics_lean_assumptions_material_binding(critique_physics_lean_semantics.value)]
+        [critique_physics_lean_dimensions: critique_physics_lean_dimensions_material_binding(critique_physics_lean_assumptions.value)]
+        [critique_physics_lean_generative_panel: critique_physics_lean_generative_panel_agent(critique_physics_lean_dimensions.value)]
+        [critique_physics_lean_drift_pathology_monitor: critique_physics_lean_drift_pathology_monitor_material_binding(critique_physics_lean_generative_panel.value)]
+        [goal_physics_lean_single_sample_autoformalization: goal_physics_lean_single_sample_autoformalization_material_binding(critique_physics_lean_drift_pathology_monitor.value)]
+        [repair_physics_math_object_detect: repair_physics_math_object_detect_material_binding(goal_physics_lean_single_sample_autoformalization.value)]
+        [repair_mathformerphysicslib_object_workbench: repair_mathformerphysicslib_object_workbench_material_binding(repair_physics_math_object_detect.value)]
+        [foundation_physics_object_intake: foundation_physics_object_intake_material_binding(repair_mathformerphysicslib_object_workbench.value)]
+        [foundation_mathlib_grounding: foundation_mathlib_grounding_material_binding(foundation_physics_object_intake.value)]
+        [foundation_surface_design: foundation_surface_design_material_binding(foundation_mathlib_grounding.value)]
+        [foundation_lean_draft: foundation_lean_draft_material_binding(foundation_surface_design.value)]
+        [foundation_verify: foundation_verify_material_binding(foundation_lean_draft.value)]
+        [foundation_promote: foundation_promote_material_binding(foundation_verify.value)]
+        [foundation_downstream_regression: foundation_downstream_regression_material_binding(foundation_promote.value)]
+        [repair_physics_lean_notational_collapse: repair_physics_lean_notational_collapse_material_binding(foundation_downstream_regression.value)]
+        [repair_physics_lean_abstraction_elevation: repair_physics_lean_abstraction_elevation_material_binding(repair_physics_lean_notational_collapse.value)]
+        [repair_physics_lean_proof_strategy_alignment: repair_physics_lean_proof_strategy_alignment_material_binding(repair_physics_lean_abstraction_elevation.value)]
+        [repair_physics_lean_implicit_premise_normalize: repair_physics_lean_implicit_premise_normalize_material_binding(repair_physics_lean_proof_strategy_alignment.value)]
+        [repair_physics_lean_pathology_loop: repair_physics_lean_pathology_loop_material_binding(repair_physics_lean_implicit_premise_normalize.value)]
+        [repair_physics_lean_generative_repair: repair_physics_lean_generative_repair_material_binding(repair_physics_lean_pathology_loop.value)]
+        [repair_physics_lean_repair_expansion_cartography: repair_physics_lean_repair_expansion_cartography_material_binding(repair_physics_lean_generative_repair.value)]
+        [repair_physics_lean_recursive_repair_control: repair_physics_lean_recursive_repair_control_material_binding(repair_physics_lean_repair_expansion_cartography.value)]
+        [refine_formal: refine_formal_agent(repair_physics_lean_recursive_repair_control.value)]
+        [refine_semantic: refine_semantic_agent(refine_formal.value)]
+        [refine_physics_lean: refine_physics_lean_material_binding(refine_semantic.value)]
+        [output_denoise: output_denoise_agent(refine_physics_lean.value)]
+        [annotate_line_comment_guard: annotate_line_comment_guard_material_binding(output_denoise.value)]
+        [transition_taxonomy: transition_taxonomy_material_binding(annotate_line_comment_guard.value)]
+        [postformalization_source_anchor_drift_guard: postformalization_source_anchor_drift_guard_material_binding(transition_taxonomy.value)]
+        [artifact_realness_gate: artifact_realness_gate_material_binding(postformalization_source_anchor_drift_guard.value)]
+        [mathlib_import_minimize: mathlib_import_minimize_material_binding(artifact_realness_gate.value)]
+        [audit_compatibility: audit_compatibility_material_binding(mathlib_import_minimize.value)]
+        [postformalization_informalize: postformalization_informalize_material_binding(audit_compatibility.value)]
+        [consistency_declaration_shape: consistency_declaration_shape_material_binding(postformalization_informalize.value)]
+        [postformalization_informal_internal_consistency: postformalization_informal_internal_consistency_material_binding(consistency_declaration_shape.value)]
+        [postformalization_informal_consistency: postformalization_informal_consistency_material_binding(postformalization_informal_internal_consistency.value)]
+        [consistency_nonvacuity: consistency_nonvacuity_material_binding(postformalization_informal_consistency.value)]
+        [consistency_cross_file_concepts: consistency_cross_file_concepts_material_binding(consistency_nonvacuity.value)]
+        [consistency_unified_report: consistency_unified_report_material_binding(consistency_cross_file_concepts.value)]
+        [review_physics_final_hypotheses: review_physics_final_hypotheses_material_binding(consistency_unified_report.value)]
+        [review_mathematical_final_hypotheses: review_mathematical_final_hypotheses_material_binding(review_physics_final_hypotheses.value)]
+        [review_final_derivation_hypotheses: review_final_derivation_hypotheses_material_binding(review_mathematical_final_hypotheses.value)]
+        [refine_physics_lean_review: refine_physics_lean_review_agent(review_final_derivation_hypotheses.value)]
+        [consistency_physics_lean_report: consistency_physics_lean_report_material_binding(refine_physics_lean_review.value)]
+        [artifact_statistics: artifact_statistics_material_binding(consistency_physics_lean_report.value)]
+        [evaluation_rfde_report: evaluation_rfde_report_material_binding(artifact_statistics.value)]
+        [reflection_physics_lean_process: reflection_physics_lean_process_material_binding(evaluation_rfde_report.value)]
+    return reflection_physics_lean_process

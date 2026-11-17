@@ -1,0 +1,692 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_hub_audit_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Inspect workflow control coverage in audit_control; complete finite collection scans before reporting findings.",
+  "aliases": [
+    "hub:audit"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "required": [
+            "action_id",
+            "command",
+            "depends_on"
+          ],
+          "properties": {
+            "action_id": {
+              "type": "string"
+            },
+            "command": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "depends_on": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Paths": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "uniqueItems": true
+      }
+    },
+    "Sources": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "hub_registry",
+          "comprehensive_test_matrix",
+          "skill_hooks",
+          "internal_helpers"
+        ],
+        "properties": {
+          "hub_registry": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "comprehensive_test_matrix": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "skill_hooks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "internal_helpers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "PathFindings": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "discovered",
+          "uncontrolled",
+          "direct_missing"
+        ],
+        "properties": {
+          "discovered": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "uncontrolled": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "direct_missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "DependencyErrors": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "action_id",
+            "missing_dependency"
+          ],
+          "properties": {
+            "action_id": {
+              "type": "string"
+            },
+            "missing_dependency": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "AuditReport": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "ok",
+          "entrypoint_count",
+          "controlled_count",
+          "uncontrolled_entrypoints",
+          "registry_script_count",
+          "matrix_script_count",
+          "skill_hook_script_count",
+          "direct_registered_missing_paths",
+          "dependency_errors",
+          "control_sources"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "entrypoint_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "controlled_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "registry_script_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "matrix_script_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skill_hook_script_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uncontrolled_entrypoints": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "direct_registered_missing_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dependency_errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "action_id",
+                "missing_dependency"
+              ],
+              "properties": {
+                "action_id": {
+                  "type": "string"
+                },
+                "missing_dependency": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "control_sources": {
+            "type": "object",
+            "required": [
+              "hub_registry",
+              "comprehensive_test_matrix",
+              "skill_hooks",
+              "internal_helpers"
+            ],
+            "properties": {
+              "hub_registry": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "comprehensive_test_matrix": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "skill_hooks": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "internal_helpers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "inputs": {
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "AuditReport",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "registered": {
+      "inputs": {
+        "registry": {
+          "type": "Registry"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "paths": {
+          "type": "Paths"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_audit_registered",
+          "operation": "mathformer_audit_registered"
+        }
+      }
+    },
+    "matrix": {
+      "inputs": {
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "paths": {
+          "type": "Paths"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_audit_matrix",
+          "operation": "mathformer_audit_matrix"
+        }
+      }
+    },
+    "hooks": {
+      "inputs": {
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "paths": {
+          "type": "Paths"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_audit_hooks",
+          "operation": "mathformer_audit_hooks"
+        }
+      }
+    },
+    "pack_sources": {
+      "inputs": {
+        "registered": {
+          "type": "Paths"
+        },
+        "matrix": {
+          "type": "Paths"
+        },
+        "hooks": {
+          "type": "Paths"
+        }
+      },
+      "outputs": {
+        "sources": {
+          "type": "Sources"
+        },
+        "controlled": {
+          "type": "Paths"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_audit_pack_sources",
+          "operation": "mathformer_audit_pack_sources"
+        }
+      }
+    },
+    "inspect_paths": {
+      "inputs": {
+        "sources": {
+          "type": "Sources"
+        },
+        "controlled": {
+          "type": "Paths"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "findings": {
+          "type": "PathFindings"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_audit_inspect_paths",
+          "operation": "mathformer_audit_inspect_paths"
+        }
+      }
+    },
+    "dependencies": {
+      "inputs": {
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "errors": {
+          "type": "DependencyErrors"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_audit_dependencies",
+          "operation": "mathformer_audit_dependencies"
+        }
+      }
+    },
+    "report": {
+      "inputs": {
+        "sources": {
+          "type": "Sources"
+        },
+        "findings": {
+          "type": "PathFindings"
+        },
+        "errors": {
+          "type": "DependencyErrors"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "AuditReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_audit_report",
+          "operation": "mathformer_audit_report"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "registered",
+        "kind": "call",
+        "operation": "registered",
+        "arguments": {
+          "registry": {
+            "ref": "inputs.registry"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "id": "matrix",
+        "kind": "call",
+        "operation": "matrix",
+        "arguments": {
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "id": "hooks",
+        "kind": "call",
+        "operation": "hooks",
+        "arguments": {
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "id": "pack_sources",
+        "kind": "call",
+        "operation": "pack_sources",
+        "arguments": {
+          "registered": {
+            "ref": "steps.registered.outputs.paths"
+          },
+          "matrix": {
+            "ref": "steps.matrix.outputs.paths"
+          },
+          "hooks": {
+            "ref": "steps.hooks.outputs.paths"
+          }
+        }
+      },
+      {
+        "id": "inspect_paths",
+        "kind": "call",
+        "operation": "inspect_paths",
+        "arguments": {
+          "sources": {
+            "ref": "steps.pack_sources.outputs.sources"
+          },
+          "controlled": {
+            "ref": "steps.pack_sources.outputs.controlled"
+          },
+          "repository_root": {
+            "ref": "inputs.repository_root"
+          }
+        }
+      },
+      {
+        "id": "dependencies",
+        "kind": "call",
+        "operation": "dependencies",
+        "arguments": {
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      },
+      {
+        "id": "report",
+        "kind": "call",
+        "operation": "report",
+        "arguments": {
+          "sources": {
+            "ref": "steps.pack_sources.outputs.sources"
+          },
+          "findings": {
+            "ref": "steps.inspect_paths.outputs.findings"
+          },
+          "errors": {
+            "ref": "steps.dependencies.outputs.errors"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "AuditReport",
+        "value": {
+          "ref": "steps.report.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository"
+        ],
+        "write": []
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "inspect_workflow_control_metadata"
+      ],
+      "forbidden": [
+        "execute_matrix_checks",
+        "promote_scientific_claims"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 7
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Repository control findings only; report ok is distinct from subprocess success."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "audit_control",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/workflow_runtime/audit_control_tools.py",
+        "digest": "sha256:b7c2949c7118a9e4a9733b337acb69427a16ed865634177e6b89e5fbcdac971d"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Finite scans and fallback branches remain within their native bulk operations; no Python equivalence proof is claimed.",
+      "The 3600-second budget and seven-call ceiling are enforced by Lunar, not by direct audit_control calls.",
+      "Native matrix-module import executes initialization and can create bytecode; receipts and digests are supplied by the Lunar runtime."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "hub:audit",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "hub:audit",
+        "summary": "Audit repository Python entrypoints against the hub, test matrix, and skill-hook contract.",
+        "family": "control",
+        "kind": "audit",
+        "safety": "read_only",
+        "command": [
+          "{python}",
+          "scripts/mathformer.py",
+          "audit",
+          "--json"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "scripts/mathformer.py",
+          "skills/SKILL_HOOKS.yaml",
+          "tests/test_program/run_comprehensive_tests.py"
+        ],
+        "writes": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Selected graph starts at audit_control(registry), after registry construction; it returns the native audit dictionary rather than a HubResult envelope.",
+      "callers": [
+        "main audit branch",
+        "control:all through hub:audit",
+        "scripts/mathformer_mcp_service.py:self_check"
+      ],
+      "pre_execution": "run_leaf_action preflight errors and dry-run return before the subprocess; direct audit_control calls bypass that boundary.",
+      "completion": "Normal leaf execution audits filesystem changes; undeclared writes can override exit-code success.",
+      "failure_policy": "hub:audit omits --strict: findings return JSON ok=false but CLI exit 0; run_leaf_action uses exit code and can report ok=true. Direct audit --strict exits 1 on findings.",
+      "effects_status": "Source declares read_only and no writes; matrix module import executes Python initialization and may create bytecode. Import/read/load_matrix exceptions propagate, not empty-set fallback.",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "context": "repository_root explicitly supplies the native REPO_ROOT context; registry preserves object insertion order and consumed WorkflowAction attributes."
+    },
+    "mathformer.iteration": {
+      "modeling": "Collection scans stay inside owning bulk operations; no graph-level retries, convergence loops, checkpoints, or artificial scan caps.",
+      "carried_state": "Path sets accumulate during command extraction, hook parsing and discovery; dependency_errors starts empty and appends in registry/dependency order.",
+      "bounds": "Finite command arguments, matrix records, hook text matches, six glob result collections, discovered paths, and registered dependency edges.",
+      "stopping": "Each scan completes its collection; findings never trigger early termination. Natural completion returns normally; there is no native exhaustion outcome."
+    }
+  }
+}

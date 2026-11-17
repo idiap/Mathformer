@@ -1,0 +1,684 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_control_reasoning_log_html_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Source-backed main(argv): select JSONL, prepare paths, load, optionally validate, render, write HTML and return status.",
+  "aliases": [
+    "control:reasoning-log-html"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Arguments": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Options": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "title",
+          "strict",
+          "require_instrumentation",
+          "require_skill_application",
+          "no_validation"
+        ],
+        "properties": {
+          "log_file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "output_file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "hooks_file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "strict": {
+            "type": "boolean"
+          },
+          "require_instrumentation": {
+            "type": "boolean"
+          },
+          "require_skill_application": {
+            "type": "boolean"
+          },
+          "no_validation": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "Path": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Paths": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "log_file",
+          "output_file"
+        ],
+        "properties": {
+          "log_file": {
+            "type": "string"
+          },
+          "output_file": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Events": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        }
+      },
+      "representation": "value"
+    },
+    "Validation": {
+      "schema": {
+        "type": [
+          "object",
+          "null"
+        ]
+      },
+      "representation": "value"
+    },
+    "Html": {
+      "schema": {
+        "type": "string"
+      },
+      "media_type": "text/html",
+      "representation": "value"
+    },
+    "Result": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "output_file",
+          "exit_code",
+          "stdout"
+        ],
+        "properties": {
+          "output_file": {
+            "type": "string"
+          },
+          "exit_code": {
+            "type": "integer",
+            "enum": [
+              0,
+              2
+            ]
+          },
+          "stdout": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "working_directory"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "working_directory": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "inputs": {
+    "extra_args": {
+      "type": "Arguments"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Result",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "parse_select": {
+      "inputs": {
+        "argv": {
+          "type": "Arguments"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "options": {
+          "type": "Options"
+        },
+        "selected": {
+          "type": "Path"
+        },
+        "missing": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reasoning_html_parse_select",
+          "operation": "mathformer_reasoning_html_parse_select"
+        }
+      }
+    },
+    "resolve_paths": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "selected": {
+          "type": "Path"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "paths": {
+          "type": "Paths"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reasoning_html_resolve_paths",
+          "operation": "mathformer_reasoning_html_resolve_paths"
+        }
+      }
+    },
+    "fixtures_resolve": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "selected": {
+          "type": "Path"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "paths": {
+          "type": "Paths"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reasoning_html_fixtures_resolve",
+          "operation": "mathformer_reasoning_html_fixtures_resolve"
+        }
+      }
+    },
+    "load": {
+      "inputs": {
+        "paths": {
+          "type": "Paths"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "events": {
+          "type": "Events"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reasoning_html_load",
+          "operation": "mathformer_reasoning_html_load"
+        }
+      }
+    },
+    "validate": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "paths": {
+          "type": "Paths"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "validation": {
+          "type": "Validation"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reasoning_html_validate",
+          "operation": "mathformer_reasoning_html_validate"
+        }
+      }
+    },
+    "render": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "paths": {
+          "type": "Paths"
+        },
+        "events": {
+          "type": "Events"
+        },
+        "validation": {
+          "type": "Validation"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "html": {
+          "type": "Html"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reasoning_html_render",
+          "operation": "mathformer_reasoning_html_render"
+        }
+      }
+    },
+    "write_finish": {
+      "inputs": {
+        "paths": {
+          "type": "Paths"
+        },
+        "html": {
+          "type": "Html"
+        },
+        "validation": {
+          "type": "Validation"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_reasoning_html_write_finish",
+          "operation": "mathformer_reasoning_html_write_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "parse",
+        "kind": "call",
+        "operation": "parse_select",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.extra_args"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "prepare",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "missing_input",
+            "when": {
+              "ref": "steps.parse.outputs.missing"
+            },
+            "body": {
+              "id": "fixtures",
+              "kind": "call",
+              "operation": "fixtures_resolve",
+              "arguments": {
+                "options": {
+                  "ref": "steps.parse.outputs.options"
+                },
+                "selected": {
+                  "ref": "steps.parse.outputs.selected"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "id": "existing",
+          "kind": "call",
+          "operation": "resolve_paths",
+          "arguments": {
+            "options": {
+              "ref": "steps.parse.outputs.options"
+            },
+            "selected": {
+              "ref": "steps.parse.outputs.selected"
+            },
+            "context": {
+              "ref": "inputs.context"
+            }
+          }
+        },
+        "outputs": {
+          "paths": {
+            "type": "Paths",
+            "value": {
+              "ref": "selected.outputs.paths"
+            }
+          }
+        }
+      },
+      {
+        "id": "load",
+        "kind": "call",
+        "operation": "load",
+        "arguments": {
+          "paths": {
+            "ref": "steps.prepare.outputs.paths"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "validate",
+        "kind": "call",
+        "operation": "validate",
+        "arguments": {
+          "options": {
+            "ref": "steps.parse.outputs.options"
+          },
+          "paths": {
+            "ref": "steps.prepare.outputs.paths"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "render",
+        "kind": "call",
+        "operation": "render",
+        "arguments": {
+          "options": {
+            "ref": "steps.parse.outputs.options"
+          },
+          "paths": {
+            "ref": "steps.prepare.outputs.paths"
+          },
+          "events": {
+            "ref": "steps.load.outputs.events"
+          },
+          "validation": {
+            "ref": "steps.validate.outputs.validation"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "write",
+        "kind": "call",
+        "operation": "write_finish",
+        "arguments": {
+          "paths": {
+            "ref": "steps.prepare.outputs.paths"
+          },
+          "html": {
+            "ref": "steps.render.outputs.html"
+          },
+          "validation": {
+            "ref": "steps.validate.outputs.validation"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Result",
+        "value": {
+          "ref": "steps.write.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/",
+          "requested_output_file"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "render_reasoning_dashboard",
+        "write_self_test_fixtures"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 6
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Dashboard emission is not log validity, scientific acceptance, or artifact promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/control/reasoning-log-schema-guardian/scripts/render_reasoning_log_html.py",
+        "selector": "main",
+        "digest": "sha256:f31ccd9b650ed4330787dc9d9c8c9debba2a64379001e73ab4d12533c1a24ab2"
+      },
+      {
+        "path": "skills/control/reasoning-log-schema-guardian/scripts/render_reasoning_log.py",
+        "selector": "load_events; build_summary; event_skill_application",
+        "digest": "sha256:1297df1c949220796f1b8404b660f4ed1c9dffac136e023a9e260a0ea6fafe66"
+      },
+      {
+        "path": "skills/control/reasoning-log-schema-guardian/scripts/validate_reasoning_log.py",
+        "selector": "validate_reasoning_log",
+        "digest": "sha256:1cf78d2c90b8e0c36eb1a527d3da952b831f8c805dfcf42984f9abed8afd40b6"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "control:reasoning-log-html registration; NL route; preflight; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/reasoning_html_tools.py",
+        "selector": "register_reasoning_html_tools; invocation",
+        "digest": "sha256:e23e568ef3e0de605977f6c4c3a223dd84ffc39c5e400932e1ea80486f5e5d72"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_reasoning_html_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/reasoning-log-schema-guardian/scripts/audit_reasoning_log_quality.py",
+        "selector": "write_self_test_fixtures",
+        "digest": "sha256:22ab6d873c6f6edee0f0011fdd1bb2990ec6c2f22ae2d80da8cce2dc5c528a54"
+      },
+      {
+        "path": "skills/control/reasoning-log-schema-guardian/scripts/reasoning_log.py",
+        "selector": "append_skill_start; append_skill_complete",
+        "digest": "sha256:375494159f2f38527e8eeb09d3c795996ea4d944ff02ca9aecff25176890f0f6"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "authored reasoning-html.workflow.json selection",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Helper internals remain source-owned finite collection passes; no full Python-equivalence claim.",
+      "3600 seconds and six operation calls are descriptor runtime budgets, not native main enforcement. Native main has no global time or event cap.",
+      "Hub preflight, dry-run and write audit remain outside this main(argv) workflow boundary; direct MCP step invocation does not invoke the hub."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "control:reasoning-log-html",
+      "owner_skill": "skills/control/reasoning-log-schema-guardian/SKILL.md",
+      "contract": {
+        "id": "control:reasoning-log-html",
+        "family": "control",
+        "kind": "render",
+        "safety": "writes_artifacts",
+        "depends_on": [],
+        "allows_extra_args": true,
+        "timeout_seconds": null,
+        "writes": [
+          "artifacts/"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "scripts/mathformer.py dependency-free leaf forwards argv to this renderer; NL route selects the same action. Self-test can call render_html_dashboard directly.",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report",
+        "working_directory"
+      ],
+      "failure_policy": "Hub preflight failure or dry-run prevents launch. Post-execution audit can mark writes outside artifacts/ unsuccessful; it does not prevent native writes. Preserve native nonzero subprocess status.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "scientific_payloads": "Result models main's output path, printed stdout and exit status; context.working_directory supplies CLI process path resolution. Repository hook/fixture defaults are source-owned."
+    },
+    "mathformer.iteration": {
+      "scope": "No loop in main. Helper loops are finite collection passes, not separate graph nodes.",
+      "load": "Accumulate events over all input lines; no native count cap; empty input returns an empty list.",
+      "validation": "Carry findings plus previous event index/timestamp over log events; no retry or convergence.",
+      "render": "Carry invocation-group lists, summaries using first/last event fields, rendered fragments, category counters and maximum elapsed time through finite passes over events, groups and findings; canonical and legacy skill applications are recognized.",
+      "stopping": "Exhausting collections completes normally. Validation blockers do not prevent rendering/writing; unhandled read/render/write exceptions abort. Argument parsing may exit before any subsequent step."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "command_after_dependencies": false,
+      "modeling": "Selected authoritative main control flow; no checkpoint, refinement, retry loop or generated loop bounds."
+    }
+  }
+}

@@ -1,0 +1,370 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_setup_all_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Fixed setup:all installer path, with Python extras followed by Lean setup.",
+  "aliases": [
+    "setup:all"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Settings": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "venv_path",
+          "skip_python",
+          "with_lean",
+          "skip_lean",
+          "all_extras",
+          "mcp_service"
+        ],
+        "properties": {
+          "venv_path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "skip_python": {
+            "type": "boolean",
+            "const": false
+          },
+          "with_lean": {
+            "type": "boolean",
+            "const": true
+          },
+          "skip_lean": {
+            "type": "boolean",
+            "const": false
+          },
+          "all_extras": {
+            "type": "boolean",
+            "const": true
+          },
+          "mcp_service": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      }
+    },
+    "ExitCode": {
+      "representation": "value",
+      "schema": {
+        "type": "integer",
+        "const": 0
+      }
+    },
+    "MutationAuthorization": {
+      "representation": "value",
+      "schema": {
+        "type": "boolean"
+      }
+    }
+  },
+  "inputs": {
+    "allow_mutating": {
+      "type": "MutationAuthorization"
+    }
+  },
+  "outputs": {
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "settings": {
+          "type": "Settings"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_setup_all_initialize",
+          "operation": "mathformer_setup_all_initialize"
+        }
+      }
+    },
+    "python_environment": {
+      "inputs": {
+        "settings": {
+          "type": "Settings"
+        },
+        "allow_mutating": {
+          "type": "MutationAuthorization"
+        }
+      },
+      "outputs": {},
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_setup_all_python_environment",
+          "operation": "mathformer_setup_all_python_environment"
+        }
+      }
+    },
+    "lean_environment": {
+      "inputs": {
+        "allow_mutating": {
+          "type": "MutationAuthorization"
+        }
+      },
+      "outputs": {},
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_setup_all_lean_environment",
+          "operation": "mathformer_setup_all_lean_environment"
+        }
+      }
+    },
+    "complete": {
+      "inputs": {},
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_setup_all_complete",
+          "operation": "mathformer_setup_all_complete"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "on_failure": "fail",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "python",
+        "kind": "call",
+        "description": "main: not args.skip_python is true for the registered argv.",
+        "operation": "python_environment",
+        "arguments": {
+          "settings": {
+            "ref": "steps.initialize.outputs.settings"
+          },
+          "allow_mutating": {
+            "ref": "inputs.allow_mutating"
+          }
+        }
+      },
+      {
+        "id": "lean",
+        "kind": "call",
+        "description": "main: args.with_lean and not args.skip_lean is true for this argv.",
+        "operation": "lean_environment",
+        "arguments": {
+          "allow_mutating": {
+            "ref": "inputs.allow_mutating"
+          }
+        }
+      },
+      {
+        "id": "completion",
+        "kind": "call",
+        "operation": "complete",
+        "arguments": {}
+      }
+    ],
+    "outputs": {
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.completion.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          ".venv/",
+          ".lake/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 4
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked installer description; no runtime qualification or scientific claim."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/install_env.py",
+        "selector": "main",
+        "digest": "sha256:2c8a00fbf461dddcb10899271ca41d47bf90c9a077b47add7db3c250aab1a5fd"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:setup:all; preflight; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/setup_all_tools.py",
+        "selector": "register_setup_all_tools",
+        "digest": "sha256:451f9ba957439445bb70f0684f7828c1652176ed7083f616b53026cb5a9e0da8"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_setup_all_tools; _graph_layout_write_policy",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory/setup:all",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "This graph specializes main to the immutable setup:all argv, not every direct installer invocation.",
+      "Hub preflight, dry-run, capture and write audit remain native CLI boundary behavior; this graph runs the installer stages after launch. MCP writes additionally require explicit allow_mutating and service write-root authorization.",
+      "Only installer success exports exit_code 0; source exceptions fail the operation and stop the graph.",
+      "Lunar enforces the four-call limit and bounds workflow waiting to 3600 seconds; the native synchronous installer has no subprocess timeout or retries, and cancellation does not guarantee termination of child processes.",
+      "Complete network and external effects require environment qualification; success is installation completion only."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "setup:all",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "setup:all",
+        "family": "setup",
+        "kind": "setup",
+        "safety": "writes_environment",
+        "command": [
+          "uv",
+          "run",
+          "python",
+          "scripts/install_env.py",
+          "--all-extras",
+          "--with-lean"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "scripts/install_env.py"
+        ],
+        "required_tools": [
+          "uv"
+        ],
+        "writes": [
+          ".venv/",
+          ".lake/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "CLI and setup.full dispatch through run_action then run_leaf_action.",
+      "preflight": "Check installer path, uv, extra-argument policy and mutation authorization.",
+      "dry_run": "Stop before installer launch; the installer graph applies only after launch.",
+      "completion": "Capture exit/output and audit repository writes; undeclared writes mark the hub result failed.",
+      "failure_policy": "Missing tools/interpreter or checked subprocess failure stops installation immediately.",
+      "failure_capture": "The native hub captures subprocess failure output and performs its boundary write audit; unexpected launch errors propagate.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "venv_path": "VENV_PATH or ROOT_DIR/.venv; relative paths resolve under ROOT_DIR.",
+      "venv_override": "Repository writes outside declared roots can fail audit; writes outside the repository are beyond its snapshot coverage."
+    },
+    "mathformer.installer": {
+      "dependencies": [
+        "huggingface_hub>=0.23,<1",
+        "sympy>=1.12,<2",
+        "numpy>=1.26,<3",
+        "docling>=2",
+        "mcp>=1.6,<2"
+      ],
+      "dependency_semantics": "selected_python_deps accumulates the listed dependencies in order and deduplicates with dict.fromkeys; all-extras does not select mcp-service. This selected list is nonempty, so install_python runs uv pip install.",
+      "helper_scope": "Dependency selection, platform Python paths, command logs and subprocess checks stay inside python_environment.",
+      "direct_flags": "Direct main skips Python for --skip-python; Lean runs only for --with-lean without --skip-lean. Otherwise its owning branch prints the appropriate skip message. These alternative flags cannot be appended by hub callers.",
+      "requirements_scope": "The separate mcp-service branch reads requirements-mcp-service.txt, accumulating stripped nonblank noncomment lines; it is not selected here.",
+      "iteration": "No workflow-level loop, iterative repair or loop-carried state.",
+      "stopping": "Sequential fail-fast execution; success prints completion and returns 0."
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [],
+      "dependency_workflows": [],
+      "keep_going_semantics": "No hub dependencies; keep-going does not change installer sequencing."
+    }
+  }
+}

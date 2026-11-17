@@ -1,0 +1,774 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_atp_demo_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Fixed group inverse-product demo; finite candidate, lemma and greedy deletion traversals.",
+  "aliases": [
+    "atp:demo"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Demo": {
+      "schema": {
+        "const": {
+          "text_file": "examples/vampire_group_inverse_product_input.md",
+          "artifact_root": "artifacts/vampire_atp/atp_function_demo",
+          "premise_loop": true,
+          "premise_budget": "medium",
+          "generate_premises": true,
+          "minimize_premises": true,
+          "time_limit": 3
+        }
+      }
+    },
+    "Bool": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Boundary": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "evidence": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "token",
+          "revision",
+          "evidence"
+        ],
+        "additionalProperties": false,
+        "description": "Process-local native continuation handle. Single-use stage revisions; evidence is a source-owned state projection. Scientific objects and histories remain in the worker, never reconstructed from client data."
+      }
+    },
+    "Search": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "evidence": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "token",
+          "revision",
+          "evidence"
+        ],
+        "additionalProperties": false,
+        "description": "Process-local native continuation handle. Single-use stage revisions; evidence is a source-owned state projection. Scientific objects and histories remain in the worker, never reconstructed from client data."
+      }
+    },
+    "Generation": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "evidence": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "token",
+          "revision",
+          "evidence"
+        ],
+        "additionalProperties": false,
+        "description": "Process-local native continuation handle. Single-use stage revisions; evidence is a source-owned state projection. Scientific objects and histories remain in the worker, never reconstructed from client data."
+      }
+    },
+    "Minimization": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "evidence": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "token",
+          "revision",
+          "evidence"
+        ],
+        "additionalProperties": false,
+        "description": "Process-local native continuation handle. Single-use stage revisions; evidence is a source-owned state projection. Scientific objects and histories remain in the worker, never reconstructed from client data."
+      }
+    },
+    "Attempt": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "evidence": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "token",
+          "revision",
+          "evidence"
+        ],
+        "additionalProperties": false,
+        "description": "Process-local native continuation handle. Single-use stage revisions; evidence is a source-owned state projection. Scientific objects and histories remain in the worker, never reconstructed from client data."
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "demo": {
+      "type": "Demo"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "boundary": {
+      "inputs": {
+        "context": {
+          "type": "RunContext"
+        },
+        "demo": {
+          "type": "Demo"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Boundary"
+        },
+        "execute": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_atp_boundary",
+          "operation": "mathformer_atp_boundary"
+        }
+      }
+    },
+    "initialize": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        },
+        "demo": {
+          "type": "Demo"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Search"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_atp_initialize",
+          "operation": "mathformer_atp_initialize"
+        }
+      }
+    },
+    "select_pack": {
+      "inputs": {
+        "state": {
+          "type": "Search"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Generation"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_atp_select_pack",
+          "operation": "mathformer_atp_select_pack"
+        }
+      }
+    },
+    "lemma_step": {
+      "inputs": {
+        "state": {
+          "type": "Generation"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Generation"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_atp_lemma_step",
+          "operation": "mathformer_atp_lemma_step"
+        }
+      }
+    },
+    "augment_pack": {
+      "inputs": {
+        "state": {
+          "type": "Generation"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Minimization"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_atp_augment_pack",
+          "operation": "mathformer_atp_augment_pack"
+        }
+      }
+    },
+    "deletion_step": {
+      "inputs": {
+        "state": {
+          "type": "Minimization"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Minimization"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_atp_deletion_step",
+          "operation": "mathformer_atp_deletion_step"
+        }
+      }
+    },
+    "final_attempt": {
+      "inputs": {
+        "state": {
+          "type": "Minimization"
+        }
+      },
+      "outputs": {
+        "attempt": {
+          "type": "Attempt"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_atp_final_attempt",
+          "operation": "mathformer_atp_final_attempt"
+        }
+      }
+    },
+    "carry_candidate": {
+      "inputs": {
+        "state": {
+          "type": "Search"
+        },
+        "attempt": {
+          "type": "Attempt"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Search"
+        },
+        "done": {
+          "type": "Bool"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_atp_carry_candidate",
+          "operation": "mathformer_atp_carry_candidate"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "Search"
+        },
+        "boundary": {
+          "type": "Boundary"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_atp_finish",
+          "operation": "mathformer_atp_finish"
+        }
+      }
+    },
+    "bypass": {
+      "inputs": {
+        "state": {
+          "type": "Boundary"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Search"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_atp_bypass",
+          "operation": "mathformer_atp_bypass"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "boundary",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          },
+          "demo": {
+            "ref": "inputs.demo"
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "execute",
+            "when": {
+              "ref": "steps.prepare.outputs.execute"
+            },
+            "body": {
+              "id": "init",
+              "kind": "call",
+              "operation": "initialize",
+              "arguments": {
+                "boundary": {
+                  "ref": "steps.prepare.outputs.state"
+                },
+                "demo": {
+                  "ref": "inputs.demo"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "bypass",
+          "arguments": {
+            "state": {
+              "ref": "steps.prepare.outputs.state"
+            }
+          }
+        },
+        "outputs": {
+          "state": {
+            "type": "Search",
+            "value": {
+              "ref": "selected.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "candidates",
+        "kind": "loop",
+        "state_type": "Search",
+        "initial": {
+          "ref": "steps.dispatch.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select_pack",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                }
+              }
+            },
+            {
+              "id": "lemmas",
+              "kind": "loop",
+              "state_type": "Generation",
+              "initial": {
+                "ref": "steps.select.outputs.state"
+              },
+              "max_iterations": 4,
+              "on_exhausted": "fail",
+              "body": {
+                "kind": "call",
+                "operation": "lemma_step",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              },
+              "next_state": {
+                "ref": "body.outputs.state"
+              },
+              "until": {
+                "ref": "body.outputs.done"
+              },
+              "outputs": {
+                "state": {
+                  "type": "Generation",
+                  "value": {
+                    "ref": "body.outputs.state"
+                  }
+                }
+              }
+            },
+            {
+              "id": "augment",
+              "kind": "call",
+              "operation": "augment_pack",
+              "arguments": {
+                "state": {
+                  "ref": "steps.lemmas.outputs.state"
+                }
+              }
+            },
+            {
+              "id": "minimize",
+              "kind": "loop",
+              "state_type": "Minimization",
+              "initial": {
+                "ref": "steps.augment.outputs.state"
+              },
+              "max_iterations": 11,
+              "on_exhausted": "fail",
+              "body": {
+                "kind": "call",
+                "operation": "deletion_step",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              },
+              "next_state": {
+                "ref": "body.outputs.state"
+              },
+              "until": {
+                "ref": "body.outputs.done"
+              },
+              "outputs": {
+                "state": {
+                  "type": "Minimization",
+                  "value": {
+                    "ref": "body.outputs.state"
+                  }
+                }
+              }
+            },
+            {
+              "id": "theorem",
+              "kind": "call",
+              "operation": "final_attempt",
+              "arguments": {
+                "state": {
+                  "ref": "steps.minimize.outputs.state"
+                }
+              }
+            },
+            {
+              "id": "carry",
+              "kind": "call",
+              "operation": "carry_candidate",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "attempt": {
+                  "ref": "steps.theorem.outputs.attempt"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "Search",
+              "value": {
+                "ref": "steps.carry.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Bool",
+              "value": {
+                "ref": "steps.carry.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "Search",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "report",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.candidates.outputs.state"
+          },
+          "boundary": {
+            "ref": "steps.prepare.outputs.state"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.report.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/vampire_atp/atp_function_demo/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 120,
+      "max_operation_calls": 25
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Native ATP execution with checked bindings; completion does not establish scientific truth."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "backends/atp/MathformerATP/vampire.py",
+        "selector": "discover_proof",
+        "digest": "sha256:77ee1217a3c7555b14ab77042214207a2d61c1c6a8fe38d162f94932c30d5e4c"
+      },
+      {
+        "path": "backends/atp/MathformerATP/generation.py",
+        "selector": "generate_candidate_lemmas; _group_inverse_product_lemmas",
+        "digest": "sha256:4e4c7f83ba77c26d1762dfecc9fcf7c0117771bd7622e9d3b49c989c21b2f4cd"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:atp:demo; run_action; run_leaf_action; prepare_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/run_vampire_atp.py",
+        "selector": "main",
+        "digest": "sha256:3802293eed59e7d7f8c1ae083e7854b87cf469033864b4fb5a7bbee586db4e2b"
+      },
+      {
+        "path": "examples/vampire_group_inverse_product_input.md",
+        "digest": "sha256:8933fb6abad7a22cf17a0d4d0ec9c9f939a981d12eb58d588ff96f59f73e4acb"
+      },
+      {
+        "path": "scripts/atp_demo_tools.py",
+        "digest": "sha256:fc7128958ae727c25234a5114cc5caa6e4a59dc46050c35213ea269a69071ead"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Only the fixed demo configuration is represented; direct, generation-disabled and minimization-disabled branches are excluded by Demo constraints.",
+      "Continuation handles require one live MCP server; no checkpoint or cross-server resume."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "atp:demo",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "atp:demo",
+        "family": "atp",
+        "kind": "demo",
+        "safety": "writes_artifacts",
+        "allows_extra_args": false,
+        "timeout_seconds": 120
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered staged tools retain native preflight/write audit and drain discover_proof_steps in a worker with the native 120-second deadline. Scientific operations, histories, outputs and CLI rendering are shared with the original entrypoint.",
+      "failure_policy": "Preflight failure/dry-run bypass execution. Native exceptions fail the current tool without retry; the bounded worker returns the native timeout envelope through inert remaining stages. Unproved completion retains CLI exit 3 and ok=false.",
+      "timeout_scope": "120 seconds bounds the staged worker from initialization, including time between calls. The worker is terminated at the deadline; Vampire retains its 3-second solver limit and deletion trials their 1-second solver limit.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true
+    },
+    "mathformer.specialization": {
+      "bounds": "Fixed source demo: one candidate, four generated entries (three proof-eligible), <=8 selected plus <=3 promoted premises. Each loop checks exhaustion after its final item and returns normally even without a proof.",
+      "exhaustion": "on_exhausted=fail denotes a violated specialization, never ordinary source list exhaustion; done is true at or before each bound.",
+      "state_semantics": "No convergence/refinement or automatic retry. Lemma proofs never consume earlier promotions; minimization traverses its initial augmented snapshot once and carries current premises/trial records.",
+      "configuration": "Use the repository demo file unchanged and the declared constants; no extra CLI arguments. Helpers own their callbacks, timing, logs, subprocesses and artifact writes.",
+      "limits": "25 bounds runtime operation calls; the wall budget remains 120 seconds.",
+      "bypass": "Dispatch chooses live initialization or an inert handle. Inert stages perform no scientific execution and each loop exits on its first call; finish returns the unmodified native preflight/dry-run payload. Root-scoped loops preserve Lunar exhaustion handling."
+    }
+  }
+}

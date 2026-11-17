@@ -1,0 +1,822 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Domain-specific source boundary for the named sympy_physics_derivation_trace_loop Mathformer workflow.
+type PhysicsSympyDerivationRequest:
+    # Source-anchored informal physics derivation to represent in SymPy.
+    source_derivation: String
+    # Units, dimensions, frames, regimes, and assumptions in scope.
+    physical_context: String
+    # Physical quantity or equation targeted by the derivation.
+    target_quantity: String
+
+# Domain-specific result of physics.sympy.goal_sample.plan within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSympyGoalSamplePlanArtifact:
+    # Exact subject processed by the physics.sympy.goal_sample.plan occurrence.
+    subject: String
+    # Source anchors retained by the physics.sympy.goal_sample.plan occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.sympy.goal_sample.plan contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.sympy.goal_sample.plan.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.sympy.goal_sample.plan result.
+    limitations: List[String]
+    # Prospective directives that remain unauthoritative until executed.
+    directives: List[String]
+    # Dependencies that constrain ordering or feasibility of the plan.
+    dependencies: List[String]
+    # Current blockers that prevent safe execution of plan directives.
+    blockers: List[String]
+
+# Domain-specific result of physics.sympy.source_only.run within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSympySourceOnlyRunArtifact:
+    # Exact subject processed by the physics.sympy.source_only.run occurrence.
+    subject: String
+    # Source anchors retained by the physics.sympy.source_only.run occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.sympy.source_only.run contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.sympy.source_only.run.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.sympy.source_only.run result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of physics.dependencies.probe within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsDependenciesProbeArtifact:
+    # Exact subject processed by the physics.dependencies.probe occurrence.
+    subject: String
+    # Source anchors retained by the physics.dependencies.probe occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.dependencies.probe contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.dependencies.probe.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.dependencies.probe result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of physics.source.extract within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSourceExtractArtifact:
+    # Exact subject processed by the physics.source.extract occurrence.
+    subject: String
+    # Source anchors retained by the physics.source.extract occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.source.extract contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.source.extract.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.source.extract result.
+    limitations: List[String]
+    # Retrieved or extracted candidates with retained identifiers.
+    candidate_references: List[String]
+    # Named retrieval, parsing, or grounding basis used for selection.
+    selection_basis: String
+    # Relevant candidates excluded together with their stated reason.
+    exclusions: List[String]
+
+# Domain-specific result of physics.informal.elicit within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsInformalElicitArtifact:
+    # Exact subject processed by the physics.informal.elicit occurrence.
+    subject: String
+    # Source anchors retained by the physics.informal.elicit occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.informal.elicit contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.informal.elicit.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.informal.elicit result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of physics.informal.expand within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsInformalExpandArtifact:
+    # Exact subject processed by the physics.informal.expand occurrence.
+    subject: String
+    # Source anchors retained by the physics.informal.expand occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.informal.expand contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.informal.expand.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.informal.expand result.
+    limitations: List[String]
+    # Candidate transformation or artifact produced for later checks.
+    candidate_content: String
+    # Obligations that remain before the candidate can be accepted.
+    unresolved_obligations: List[String]
+
+# Domain-specific result of physics.informal.review within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsInformalReviewArtifact:
+    # Exact subject processed by the physics.informal.review occurrence.
+    subject: String
+    # Source anchors retained by the physics.informal.review occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.informal.review contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.informal.review.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.informal.review result.
+    limitations: List[String]
+    # Named criteria applied by this scoped assessment.
+    criteria: List[String]
+    # Scoped findings with no authority beyond their cited grounds.
+    findings: List[String]
+    # Non-authoritative repairs proposed for identified findings.
+    recommended_repairs: List[String]
+
+# Domain-specific result of physics.symbols.build within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSymbolsBuildArtifact:
+    # Exact subject processed by the physics.symbols.build occurrence.
+    subject: String
+    # Source anchors retained by the physics.symbols.build occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.symbols.build contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.symbols.build.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.symbols.build result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of physics.dimensions.model within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsDimensionsModelArtifact:
+    # Exact subject processed by the physics.dimensions.model occurrence.
+    subject: String
+    # Source anchors retained by the physics.dimensions.model occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.dimensions.model contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.dimensions.model.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.dimensions.model result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of physics.units.ground within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsUnitsGroundArtifact:
+    # Exact subject processed by the physics.units.ground occurrence.
+    subject: String
+    # Source anchors retained by the physics.units.ground occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.units.ground contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.units.ground.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.units.ground result.
+    limitations: List[String]
+    # Retrieved or extracted candidates with retained identifiers.
+    candidate_references: List[String]
+    # Named retrieval, parsing, or grounding basis used for selection.
+    selection_basis: String
+    # Relevant candidates excluded together with their stated reason.
+    exclusions: List[String]
+
+# Domain-specific result of physics.equations.parse within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsEquationsParseArtifact:
+    # Exact subject processed by the physics.equations.parse occurrence.
+    subject: String
+    # Source anchors retained by the physics.equations.parse occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.equations.parse contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.equations.parse.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.equations.parse result.
+    limitations: List[String]
+    # Retrieved or extracted candidates with retained identifiers.
+    candidate_references: List[String]
+    # Named retrieval, parsing, or grounding basis used for selection.
+    selection_basis: String
+    # Relevant candidates excluded together with their stated reason.
+    exclusions: List[String]
+
+# Domain-specific result of physics.regimes.model within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsRegimesModelArtifact:
+    # Exact subject processed by the physics.regimes.model occurrence.
+    subject: String
+    # Source anchors retained by the physics.regimes.model occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.regimes.model contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.regimes.model.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.regimes.model result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of physics.frames.build within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsFramesBuildArtifact:
+    # Exact subject processed by the physics.frames.build occurrence.
+    subject: String
+    # Source anchors retained by the physics.frames.build occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.frames.build contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.frames.build.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.frames.build result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of physics.gaps.detect within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsGapsDetectArtifact:
+    # Exact subject processed by the physics.gaps.detect occurrence.
+    subject: String
+    # Source anchors retained by the physics.gaps.detect occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.gaps.detect contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.gaps.detect.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.gaps.detect result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of physics.gaps.expand within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsGapsExpandArtifact:
+    # Exact subject processed by the physics.gaps.expand occurrence.
+    subject: String
+    # Source anchors retained by the physics.gaps.expand occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.gaps.expand contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.gaps.expand.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.gaps.expand result.
+    limitations: List[String]
+    # Candidate transformation or artifact produced for later checks.
+    candidate_content: String
+    # Obligations that remain before the candidate can be accepted.
+    unresolved_obligations: List[String]
+
+# Domain-specific result of physics.laws.ground within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsLawsGroundArtifact:
+    # Exact subject processed by the physics.laws.ground occurrence.
+    subject: String
+    # Source anchors retained by the physics.laws.ground occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.laws.ground contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.laws.ground.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.laws.ground result.
+    limitations: List[String]
+    # Retrieved or extracted candidates with retained identifiers.
+    candidate_references: List[String]
+    # Named retrieval, parsing, or grounding basis used for selection.
+    selection_basis: String
+    # Relevant candidates excluded together with their stated reason.
+    exclusions: List[String]
+
+# Domain-specific result of physics.sympy.library_grounding.build within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSympyLibraryGroundingBuildArtifact:
+    # Exact subject processed by the physics.sympy.library_grounding.build occurrence.
+    subject: String
+    # Source anchors retained by the physics.sympy.library_grounding.build occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.sympy.library_grounding.build contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.sympy.library_grounding.build.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.sympy.library_grounding.build result.
+    limitations: List[String]
+    # Retrieved or extracted candidates with retained identifiers.
+    candidate_references: List[String]
+    # Named retrieval, parsing, or grounding basis used for selection.
+    selection_basis: String
+    # Relevant candidates excluded together with their stated reason.
+    exclusions: List[String]
+
+# Domain-specific result of physics.sympy.workflow.plan within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSympyWorkflowPlanArtifact:
+    # Exact subject processed by the physics.sympy.workflow.plan occurrence.
+    subject: String
+    # Source anchors retained by the physics.sympy.workflow.plan occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.sympy.workflow.plan contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.sympy.workflow.plan.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.sympy.workflow.plan result.
+    limitations: List[String]
+    # Prospective directives that remain unauthoritative until executed.
+    directives: List[String]
+    # Dependencies that constrain ordering or feasibility of the plan.
+    dependencies: List[String]
+    # Current blockers that prevent safe execution of plan directives.
+    blockers: List[String]
+
+# Domain-specific result of physics.sympy.equation_surface.build within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSympyEquationSurfaceBuildArtifact:
+    # Exact subject processed by the physics.sympy.equation_surface.build occurrence.
+    subject: String
+    # Source anchors retained by the physics.sympy.equation_surface.build occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.sympy.equation_surface.build contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.sympy.equation_surface.build.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.sympy.equation_surface.build result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of physics.sympy.assumptions.encode within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSympyAssumptionsEncodeArtifact:
+    # Exact subject processed by the physics.sympy.assumptions.encode occurrence.
+    subject: String
+    # Source anchors retained by the physics.sympy.assumptions.encode occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.sympy.assumptions.encode contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.sympy.assumptions.encode.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.sympy.assumptions.encode result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of draft.physics_sympy_derivation within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTraceDraftPhysicsSympyDerivationArtifact:
+    # Exact subject processed by the draft.physics_sympy_derivation occurrence.
+    subject: String
+    # Source anchors retained by the draft.physics_sympy_derivation occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical draft.physics_sympy_derivation contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to draft.physics_sympy_derivation.
+    gate_disposition: String
+    # Known limitations that constrain use of the draft.physics_sympy_derivation result.
+    limitations: List[String]
+    # Candidate transformation or artifact produced for later checks.
+    candidate_content: String
+    # Obligations that remain before the candidate can be accepted.
+    unresolved_obligations: List[String]
+
+# Domain-specific result of execute.physics_sympy_derivation within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTraceExecutePhysicsSympyDerivationArtifact:
+    # Exact subject processed by the execute.physics_sympy_derivation occurrence.
+    subject: String
+    # Source anchors retained by the execute.physics_sympy_derivation occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical execute.physics_sympy_derivation contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to execute.physics_sympy_derivation.
+    gate_disposition: String
+    # Known limitations that constrain use of the execute.physics_sympy_derivation result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of execute.physics_sympy_interpret within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTraceExecutePhysicsSympyInterpretArtifact:
+    # Exact subject processed by the execute.physics_sympy_interpret occurrence.
+    subject: String
+    # Source anchors retained by the execute.physics_sympy_interpret occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical execute.physics_sympy_interpret contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to execute.physics_sympy_interpret.
+    gate_disposition: String
+    # Known limitations that constrain use of the execute.physics_sympy_interpret result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of physics.units.verify within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsUnitsVerifyArtifact:
+    # Exact subject processed by the physics.units.verify occurrence.
+    subject: String
+    # Source anchors retained by the physics.units.verify occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.units.verify contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.units.verify.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.units.verify result.
+    limitations: List[String]
+    # Named criteria applied by this scoped assessment.
+    criteria: List[String]
+    # Scoped findings with no authority beyond their cited grounds.
+    findings: List[String]
+    # Non-authoritative repairs proposed for identified findings.
+    recommended_repairs: List[String]
+
+# Domain-specific result of physics.steps.verify within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsStepsVerifyArtifact:
+    # Exact subject processed by the physics.steps.verify occurrence.
+    subject: String
+    # Source anchors retained by the physics.steps.verify occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.steps.verify contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.steps.verify.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.steps.verify result.
+    limitations: List[String]
+    # Named criteria applied by this scoped assessment.
+    criteria: List[String]
+    # Scoped findings with no authority beyond their cited grounds.
+    findings: List[String]
+    # Non-authoritative repairs proposed for identified findings.
+    recommended_repairs: List[String]
+
+# Domain-specific result of physics.numeric.sample within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsNumericSampleArtifact:
+    # Exact subject processed by the physics.numeric.sample occurrence.
+    subject: String
+    # Source anchors retained by the physics.numeric.sample occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.numeric.sample contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.numeric.sample.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.numeric.sample result.
+    limitations: List[String]
+    # Summary of the linked material operation represented by this record.
+    operation_summary: String
+    # References to evidence that a native execution may later produce.
+    evidence_references: List[String]
+
+# Domain-specific result of critique.physics_sympy_semantics within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTraceCritiquePhysicsSympySemanticsArtifact:
+    # Exact subject processed by the critique.physics_sympy_semantics occurrence.
+    subject: String
+    # Source anchors retained by the critique.physics_sympy_semantics occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical critique.physics_sympy_semantics contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to critique.physics_sympy_semantics.
+    gate_disposition: String
+    # Known limitations that constrain use of the critique.physics_sympy_semantics result.
+    limitations: List[String]
+    # Named criteria applied by this scoped assessment.
+    criteria: List[String]
+    # Scoped findings with no authority beyond their cited grounds.
+    findings: List[String]
+    # Non-authoritative repairs proposed for identified findings.
+    recommended_repairs: List[String]
+
+# Domain-specific result of critique.physics_sympy_dimensions within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTraceCritiquePhysicsSympyDimensionsArtifact:
+    # Exact subject processed by the critique.physics_sympy_dimensions occurrence.
+    subject: String
+    # Source anchors retained by the critique.physics_sympy_dimensions occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical critique.physics_sympy_dimensions contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to critique.physics_sympy_dimensions.
+    gate_disposition: String
+    # Known limitations that constrain use of the critique.physics_sympy_dimensions result.
+    limitations: List[String]
+    # Named criteria applied by this scoped assessment.
+    criteria: List[String]
+    # Scoped findings with no authority beyond their cited grounds.
+    findings: List[String]
+    # Non-authoritative repairs proposed for identified findings.
+    recommended_repairs: List[String]
+
+# Domain-specific result of review.physics_sympy_final_equations within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTraceReviewPhysicsSympyFinalEquationsArtifact:
+    # Exact subject processed by the review.physics_sympy_final_equations occurrence.
+    subject: String
+    # Source anchors retained by the review.physics_sympy_final_equations occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical review.physics_sympy_final_equations contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to review.physics_sympy_final_equations.
+    gate_disposition: String
+    # Known limitations that constrain use of the review.physics_sympy_final_equations result.
+    limitations: List[String]
+    # Named criteria applied by this scoped assessment.
+    criteria: List[String]
+    # Scoped findings with no authority beyond their cited grounds.
+    findings: List[String]
+    # Non-authoritative repairs proposed for identified findings.
+    recommended_repairs: List[String]
+
+# Domain-specific result of review.mathematical_sympy_final_equations within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTraceReviewMathematicalSympyFinalEquationsArtifact:
+    # Exact subject processed by the review.mathematical_sympy_final_equations occurrence.
+    subject: String
+    # Source anchors retained by the review.mathematical_sympy_final_equations occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical review.mathematical_sympy_final_equations contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to review.mathematical_sympy_final_equations.
+    gate_disposition: String
+    # Known limitations that constrain use of the review.mathematical_sympy_final_equations result.
+    limitations: List[String]
+    # Named criteria applied by this scoped assessment.
+    criteria: List[String]
+    # Scoped findings with no authority beyond their cited grounds.
+    findings: List[String]
+    # Non-authoritative repairs proposed for identified findings.
+    recommended_repairs: List[String]
+
+# Domain-specific result of physics.sympy.design_guard.review within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSympyDesignGuardReviewArtifact:
+    # Exact subject processed by the physics.sympy.design_guard.review occurrence.
+    subject: String
+    # Source anchors retained by the physics.sympy.design_guard.review occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.sympy.design_guard.review contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.sympy.design_guard.review.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.sympy.design_guard.review result.
+    limitations: List[String]
+    # Named criteria applied by this scoped assessment.
+    criteria: List[String]
+    # Scoped findings with no authority beyond their cited grounds.
+    findings: List[String]
+    # Non-authoritative repairs proposed for identified findings.
+    recommended_repairs: List[String]
+
+# Domain-specific result of refine.physics_sympy_review within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTraceRefinePhysicsSympyReviewArtifact:
+    # Exact subject processed by the refine.physics_sympy_review occurrence.
+    subject: String
+    # Source anchors retained by the refine.physics_sympy_review occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical refine.physics_sympy_review contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to refine.physics_sympy_review.
+    gate_disposition: String
+    # Known limitations that constrain use of the refine.physics_sympy_review result.
+    limitations: List[String]
+    # Named criteria applied by this scoped assessment.
+    criteria: List[String]
+    # Scoped findings with no authority beyond their cited grounds.
+    findings: List[String]
+    # Non-authoritative repairs proposed for identified findings.
+    recommended_repairs: List[String]
+
+# Domain-specific result of physics.sympy.repair_expansion.map within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSympyRepairExpansionMapArtifact:
+    # Exact subject processed by the physics.sympy.repair_expansion.map occurrence.
+    subject: String
+    # Source anchors retained by the physics.sympy.repair_expansion.map occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.sympy.repair_expansion.map contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.sympy.repair_expansion.map.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.sympy.repair_expansion.map result.
+    limitations: List[String]
+    # Prospective directives that remain unauthoritative until executed.
+    directives: List[String]
+    # Dependencies that constrain ordering or feasibility of the plan.
+    dependencies: List[String]
+    # Current blockers that prevent safe execution of plan directives.
+    blockers: List[String]
+
+# Domain-specific result of physics.sympy.recursive_repair.control within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSympyRecursiveRepairControlArtifact:
+    # Exact subject processed by the physics.sympy.recursive_repair.control occurrence.
+    subject: String
+    # Source anchors retained by the physics.sympy.recursive_repair.control occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.sympy.recursive_repair.control contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.sympy.recursive_repair.control.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.sympy.recursive_repair.control result.
+    limitations: List[String]
+    # Prospective directives that remain unauthoritative until executed.
+    directives: List[String]
+    # Dependencies that constrain ordering or feasibility of the plan.
+    dependencies: List[String]
+    # Current blockers that prevent safe execution of plan directives.
+    blockers: List[String]
+
+# Domain-specific result of physics.sympy.grounded_sample.thoroughness within the named sympy_physics_derivation_trace_loop workflow.
+type SympyPhysicsDerivationTracePhysicsSympyGroundedSampleThoroughnessArtifact:
+    # Exact subject processed by the physics.sympy.grounded_sample.thoroughness occurrence.
+    subject: String
+    # Source anchors retained by the physics.sympy.grounded_sample.thoroughness occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical physics.sympy.grounded_sample.thoroughness contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to physics.sympy.grounded_sample.thoroughness.
+    gate_disposition: String
+    # Known limitations that constrain use of the physics.sympy.grounded_sample.thoroughness result.
+    limitations: List[String]
+    # Retrieved or extracted candidates with retained identifiers.
+    candidate_references: List[String]
+    # Named retrieval, parsing, or grounding basis used for selection.
+    selection_basis: String
+    # Relevant candidates excluded together with their stated reason.
+    exclusions: List[String]
+
+# Domain-specific result of consistency.physics_derivation_report within the named sympy_physics_derivation_trace_loop workflow.
+type PhysicsSympyConsistencyAssessment:
+    # Exact subject processed by the consistency.physics_derivation_report occurrence.
+    subject: String
+    # Source anchors retained by the consistency.physics_derivation_report occurrence.
+    source_anchors: List[String]
+    # Artifact labels declared by the canonical consistency.physics_derivation_report contract.
+    declared_artifacts: List[String]
+    # Disposition under the explicit gate attached to consistency.physics_derivation_report.
+    gate_disposition: String
+    # Known limitations that constrain use of the consistency.physics_derivation_report result.
+    limitations: List[String]
+    # Named criteria applied by this scoped assessment.
+    criteria: List[String]
+    # Scoped findings with no authority beyond their cited grounds.
+    findings: List[String]
+    # Non-authoritative repairs proposed for identified findings.
+    recommended_repairs: List[String]
+
+# Recover source-anchored laws, assumptions, regimes, and intended target. This record retains the authority ceiling of an interpretation occurrence.
+type SourceDerivationModel:
+    # Domain meanings explicitly attributed to the source.
+    interpreted_meanings: List[String]
+    # Assumptions required by the source_model.
+    assumptions: List[String]
+    # Regimes that bound use of the source_model.
+    validity_regimes: List[String]
+
+# Model quantities, units, dimensions, regimes, and frames. This record retains the authority ceiling of a context occurrence.
+type PhysicalModel:
+    # Domain elements fixed by this explicit context.
+    context_elements: List[String]
+    # Constraints governing use of the context.
+    constraints: List[String]
+    # Assumptions carried by the context.
+    assumptions: List[String]
+
+# Reviewed domain inputs required by ExpandDerivationSteps in sympy_physics_derivation_trace_loop.
+type SympyDerivationBasis:
+    # Reviewed source_model supplied to ExpandDerivationSteps.
+    source_model: SourceDerivationModel
+    # Reviewed physics context supplied to ExpandDerivationSteps.
+    physical_model: PhysicalModel
+
+# Propose explicit bridges for detected derivation gaps without claiming proof. This record retains the authority ceiling of a candidate occurrence.
+type ExpandedDerivation:
+    # Candidate artifacts produced for later checks.
+    candidate_artifacts: List[String]
+    # Source requirements explicitly retained by the sympy_artifact.
+    preserved_requirements: List[String]
+    # Validation obligations that remain open.
+    open_obligations: List[String]
+
+# Reviewed domain inputs required by PlanSympyDerivation in sympy_physics_derivation_trace_loop.
+type SympyGroundingBasis:
+    # Reviewed completed derivation supplied to PlanSympyDerivation.
+    expanded_steps: ExpandedDerivation
+    # Reviewed physics context supplied to PlanSympyDerivation.
+    physical_model: PhysicalModel
+
+# Align the physical model with applicable SymPy APIs and assumptions. This record retains the authority ceiling of a grounding occurrence.
+type SympyDerivationPlan:
+    # Items with scope-bound applicability or semantic alignment.
+    aligned_items: List[String]
+    # Candidates rejected by the grounding criteria.
+    rejected_candidates: List[String]
+    # Concepts for which grounding remains unresolved.
+    unresolved_gaps: List[String]
+
+# Reviewed domain inputs required by DraftSympyDerivation in sympy_physics_derivation_trace_loop.
+type SympyPhysicsBasis:
+    # Reviewed completed derivation supplied to DraftSympyDerivation.
+    expanded_steps: ExpandedDerivation
+    # Reviewed physics context supplied to DraftSympyDerivation.
+    physical_model: PhysicalModel
+    # Reviewed sympy grounding supplied to DraftSympyDerivation.
+    sympy_plan: SympyDerivationPlan
+
+# Construct the executable physics derivation sympy_artifact. This record retains the authority ceiling of a candidate occurrence.
+type SympyDerivationArtifact:
+    # Candidate artifacts produced for later checks.
+    candidate_artifacts: List[String]
+    # Source requirements explicitly retained by the sympy_artifact.
+    preserved_requirements: List[String]
+    # Validation obligations that remain open.
+    open_obligations: List[String]
+
+# Record execution results and their source_model. This record retains the authority ceiling of a evidence occurrence.
+type SympyExecutionReport:
+    # Inspectible references to evidence in the declared scope.
+    evidence_refs: List[String]
+    # Results directly observed by the bounded probe or execution.
+    observed_results: List[String]
+    # Limits on what the evidence can establish.
+    limitations: List[String]
+
+# Reviewed domain inputs required by ReviewSympyMathematics in sympy_physics_derivation_trace_loop.
+type SympyFormalReviewCase:
+    # Reviewed sympy_artifact supplied to ReviewSympyMathematics.
+    sympy_artifact: SympyDerivationArtifact
+    # Reviewed run evidence supplied to ReviewSympyMathematics.
+    execution_report: SympyExecutionReport
+
+# Assess steps, units, samples, and final mathematical equations. This record retains the authority ceiling of a assessment occurrence.
+type SympyMathematicalReview:
+    # Named criteria applied by this assessment.
+    criteria: List[String]
+    # Criterion-scoped findings supported by cited inputs.
+    findings: List[String]
+    # Findings that block the named downstream use.
+    blockers: List[String]
+
+# Reviewed domain inputs required by ReviewPhysicsFidelity in sympy_physics_derivation_trace_loop.
+type SympyPhysicalReviewCase:
+    # Reviewed sympy_artifact supplied to ReviewPhysicsFidelity.
+    sympy_artifact: SympyDerivationArtifact
+    # Reviewed physics context supplied to ReviewPhysicsFidelity.
+    physical_model: PhysicalModel
+    # Reviewed run evidence supplied to ReviewPhysicsFidelity.
+    execution_report: SympyExecutionReport
+
+# Assess physical meaning, dimensions, regimes, and governing laws. This record retains the authority ceiling of a assessment occurrence.
+type SympyPhysicsReview:
+    # Named criteria applied by this assessment.
+    criteria: List[String]
+    # Criterion-scoped findings supported by cited inputs.
+    findings: List[String]
+    # Findings that block the named downstream use.
+    blockers: List[String]
+
+# Reviewed domain inputs required by RouteSympyRepairs in sympy_physics_derivation_trace_loop.
+type SympyRepairCase:
+    # Reviewed sympy_artifact supplied to RouteSympyRepairs.
+    sympy_artifact: SympyDerivationArtifact
+    # Reviewed formal assessment supplied to RouteSympyRepairs.
+    math_review: SympyMathematicalReview
+    # Reviewed physical assessment supplied to RouteSympyRepairs.
+    physics_review: SympyPhysicsReview
+
+# Record a bounded revision and its explicit revalidation obligations. This record retains the authority ceiling of a candidate occurrence.
+type SympyRepairRoute:
+    # Candidate artifacts produced for later checks.
+    candidate_artifacts: List[String]
+    # Source requirements explicitly retained by the sympy_artifact.
+    preserved_requirements: List[String]
+    # Validation obligations that remain open.
+    open_obligations: List[String]
+
+# Probe the revised outcome over the declared grounded sample. This record retains the authority ceiling of a evidence occurrence.
+type SampleCoverageReview:
+    # Inspectible references to evidence in the declared scope.
+    evidence_refs: List[String]
+    # Results directly observed by the bounded probe or execution.
+    observed_results: List[String]
+    # Limits on what the evidence can establish.
+    limitations: List[String]
+
+# Reviewed domain inputs required by ReportSympyPhysics in sympy_physics_derivation_trace_loop.
+type SympyPhysicsCase:
+    # Reviewed repair outcome supplied to ReportSympyPhysics.
+    repair_route: SympyRepairRoute
+    # Reviewed grounded sample supplied to ReportSympyPhysics.
+    sample_review: SampleCoverageReview
+    # Reviewed formal assessment supplied to ReportSympyPhysics.
+    math_review: SympyMathematicalReview
+    # Reviewed physical assessment supplied to ReportSympyPhysics.
+    physics_review: SympyPhysicsReview
+
+# Assign a scoped status while preserving revalidation obligations after revision. This record retains the authority ceiling of a decision occurrence.
+type SympyPhysicsDisposition:
+    # Scoped policy status selected by calibration.
+    status: String
+    # Blocking findings retained by the decision.
+    blockers: List[String]
+    # Limits on interpreting or using the decision.
+    limitations: List[String]

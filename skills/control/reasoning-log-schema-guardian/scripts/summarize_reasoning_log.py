@@ -1,0 +1,189 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# ruff: noqa: E402 - imports follow explicit direct-script path setup
+#
+#
+
+"""Build a compact machine-readable summary of a reasoning-log JSONL file."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sys
+from typing import Any, Dict, List, Optional, Sequence
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from audit_reasoning_log_quality import (
+    audit_logs,
+    default_good_fixture,
+    write_self_test_fixtures,
+)  # noqa: E402
+from render_reasoning_log import event_skill_application, load_events  # noqa: E402
+from validate_reasoning_log import validate_reasoning_log  # noqa: E402
+
+
+def repo_rel(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def default_log_file() -> Path:
+    candidates = [
+        default_good_fixture(),
+        REPO_ROOT
+        / "artifacts"
+        / "physics_sympy"
+        / "recursive_goal_runs"
+        / "formalphysics_0000"
+        / "reasoning.jsonl",
+        REPO_ROOT / "artifacts" / "wiki_level_suite" / "reasoning.jsonl",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+def append_unique(items: List[Any], value: Any) -> None:
+    if value in ({}, [], None, ""):
+        return
+    if value not in items:
+        items.append(value)
+
+
+def validate_summary_log(log_file: Path, *, hooks_file: Path) -> Dict[str, Any]:
+    return validate_reasoning_log(
+        log_file,
+        hooks_file=hooks_file,
+        strict=True,
+        require_instrumentation=False,
+        require_skill_application=False,
+    )
+
+
+def initialize_summary(events: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Create the explicit ordered state for the native event traversal."""
+    state = dict(
+        cursor=0,
+        skills=[],
+        hooks=[],
+        run_ids=[],
+        timeline=[],
+        decisions=[],
+        risks=[],
+        next_actions=[],
+        artifacts={},
+    )
+    return {"state": state, "empty": not events}
+
+
+def advance_summary(
+    events: List[Dict[str, Any]], state: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Process exactly one event; status never determines traversal termination."""
+    event = events[state["cursor"]]
+    app = event_skill_application(event)
+    append_unique(state["skills"], app.get("skill"))
+    append_unique(state["hooks"], app.get("hook_id"))
+    append_unique(state["run_ids"], app.get("run_id"))
+    state["timeline"].append(
+        {
+            "event_index": event.get("event_index"),
+            "step": event.get("step"),
+            "skill": app.get("skill"),
+            "status": app.get("status"),
+            "human_summary": app.get("human_summary"),
+        }
+    )
+    append_unique(state["decisions"], app.get("decision"))
+    append_unique(state["risks"], app.get("risks"))
+    append_unique(state["next_actions"], app.get("next_action"))
+    for key, value in (app.get("artifacts") or {}).items():
+        state["artifacts"].setdefault(str(key), value)
+    state["cursor"] += 1
+    return {"state": state, "done": state["cursor"] == len(events)}
+
+
+def finish_summary(
+    log_file: Path,
+    events: List[Dict[str, Any]],
+    validation: Dict[str, Any],
+    quality: Dict[str, Any],
+    state: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "style": "reasoning_log_consumer_summary",
+        "ok": bool(validation.get("ok")) and bool(quality.get("ok")),
+        "run_id": state["run_ids"][0] if len(state["run_ids"]) == 1 else None,
+        "run_ids": state["run_ids"],
+        "log_file": repo_rel(log_file),
+        "event_count": len(events),
+        "skills": state["skills"],
+        "hooks": state["hooks"],
+        "timeline": state["timeline"],
+        "decisions": state["decisions"],
+        "risks": state["risks"],
+        "next_actions": state["next_actions"],
+        "artifacts": state["artifacts"],
+        "validation": {
+            "ok": validation.get("ok"),
+            "summary": validation.get("summary"),
+        },
+        "quality": {
+            "ok": quality.get("ok"),
+            "quality_scores": quality.get("quality_scores"),
+            "consumer_readiness": quality.get("consumer_readiness"),
+        },
+    }
+
+
+def summarize(log_file: Path, *, hooks_file: Path) -> Dict[str, Any]:
+    events = load_events(log_file)
+    validation = validate_summary_log(log_file, hooks_file=hooks_file)
+    quality = audit_logs([log_file], hooks_file=hooks_file)
+    state = initialize_summary(events)["state"]
+    for _event in events:
+        state = advance_summary(events, state)["state"]
+    return finish_summary(log_file, events, validation, quality, state)
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--log-file", type=Path)
+    parser.add_argument(
+        "--hooks-file", type=Path, default=REPO_ROOT / "skills" / "SKILL_HOOKS.yaml"
+    )
+    parser.add_argument("--output-file", type=Path)
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    args = parse_args(argv)
+    log_file = args.log_file or default_log_file()
+    if not log_file.exists() and log_file == default_good_fixture():
+        write_self_test_fixtures()
+    report = summarize(log_file, hooks_file=args.hooks_file)
+    rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
+    if args.output_file is not None:
+        args.output_file.parent.mkdir(parents=True, exist_ok=True)
+        args.output_file.write_text(rendered + "\n", encoding="utf-8")
+    if args.json or args.output_file is None:
+        print(rendered)
+    return 0 if report["ok"] else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

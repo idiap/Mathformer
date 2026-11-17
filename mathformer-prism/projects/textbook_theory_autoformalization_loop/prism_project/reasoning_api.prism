@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from materialization import converted_reasoning
+from reasoning import AutoformalizeTextbook
+from textbook_theory_autoformalization_loop import LatexTextbookArchiveSelection, TextbookDisposition
+
+def run_reasoning(
+    request: LatexTextbookArchiveSelection,
+    model_access: ModelGenerate,
+    disclosure: ContextDisclose,
+) -> Result[Generated[TextbookDisposition], ModelFailure] ! {AI.Generate, Context.Disclose}:
+    flow = converted_reasoning(request)
+    return solve AutoformalizeTextbook(request) using flow

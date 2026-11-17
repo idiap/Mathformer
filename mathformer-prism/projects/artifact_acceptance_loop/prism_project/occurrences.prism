@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from artifact_acceptance_loop import (
+    ArtifactAcceptanceCase,
+    ArtifactDisposition,
+    ArtifactMathlibGrounding,
+    CompatibilityCase,
+    CompatibilityCheck,
+    CorpusCheck,
+    LeanArtifactAcceptanceRequest,
+    LeanMeaning,
+    NonvacuityCheck,
+    NonvacuityReviewCase,
+    ProofCheck,
+    ProofReviewCase,
+    ReviewArtifact,
+    ShapeCheck,
+    ShapeReviewCase,
+    SourceCheck,
+    SourceReviewCase,
+)
+
+# Produce a review identity with controlled imports and source-aware comments.
+type PrepareLeanArtifact = (source: LeanArtifactAcceptanceRequest) -> Generated[ReviewArtifact]
+
+# Relate artifact concepts and imports to applicable mathlib declarations.
+type MaximizeMathlibGrounding = (source: ReviewArtifact) -> Generated[ArtifactMathlibGrounding]
+
+# Assess abstraction and API compatibility against the established grounding.
+type AuditAbstractionCompatibility = (source: CompatibilityCase) -> Generated[CompatibilityCheck]
+
+# Conservatively reconstruct statements and proof summaries from the Lean artifact.
+type InformalizeLeanArtifact = (source: ReviewArtifact) -> Generated[LeanMeaning]
+
+# Assess preservation of conditional, existential, uniqueness, and equivalence structure.
+type CheckDeclarationShape = (source: ShapeReviewCase) -> Generated[ShapeCheck]
+
+# Assess reverse proof packets for placeholders, circularity, and proof-shape contradictions.
+type CheckInformalProof = (source: ProofReviewCase) -> Generated[ProofCheck]
+
+# Assess agreement among source claims, comments, reverse meaning, and Lean signatures.
+type CheckSourceFidelity = (source: SourceReviewCase) -> Generated[SourceCheck]
+
+# Assess axioms, false-premise vacuity, target-restating hypotheses, and trivial wrappers.
+type CheckNonvacuity = (source: NonvacuityReviewCase) -> Generated[NonvacuityCheck]
+
+# Assess declaration collisions and divergent concept families across the artifact corpus.
+type CheckArtifactCorpus = (source: ReviewArtifact) -> Generated[CorpusCheck]
+
+# Aggregate required layers and realness findings into a scoped acceptance disposition.
+type IssueAcceptanceDecision = (source: ArtifactAcceptanceCase) -> Generated[ArtifactDisposition]

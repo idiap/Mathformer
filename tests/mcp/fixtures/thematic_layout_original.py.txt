@@ -1,0 +1,367 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Validate Mathformer's physically nested thematic repository layout.
+
+Skills are canonical at ``skills/<theme>/<skill-name>/``. Backend components
+are canonical below ``backends/<family>/`` and reusable libraries below
+``libraries/``. Scripts and aggregate test entrypoints retain stable root paths
+and expose relative symlink views; documentation and backend-specific tests are
+canonical in thematic folders.
+"""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+import json
+import os
+from pathlib import Path
+from typing import Iterable
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SKILLS_ROOT = REPO_ROOT / "skills"
+SCRIPTS_ROOT = REPO_ROOT / "scripts"
+TESTS_ROOT = REPO_ROOT / "tests"
+DOCS_ROOT = REPO_ROOT / "docs"
+BACKENDS_ROOT = REPO_ROOT / "backends"
+LIBRARIES_ROOT = REPO_ROOT / "libraries"
+
+BACKEND_COMPONENTS = {
+    "atp": ("MathformerATP",),
+    "isabelle": ("Isabelle",),
+    "lean": ("Main.lean", "Mathformer", "Mathformer.lean"),
+    "premise_kb": ("MathformerKB",),
+    "rocq": ("MathformerRocq",),
+    "sympy": ("MathformerPhysicsSympy", "MathformerSympy", "MathformerSympyPhysics"),
+}
+
+LIBRARY_COMPONENTS = (
+    "MathformerLib",
+    "MathformerLib.lean",
+    "MathformerPhysicsLib",
+    "MathformerPhysicsLib.lean",
+)
+
+LEGACY_COMPONENT_ROOTS = (
+    "Isabelle",
+    "Mathformer",
+    "Mathformer.lean",
+    "Main.lean",
+    "MathformerATP",
+    "MathformerKB",
+    "MathformerLib",
+    "MathformerLib.lean",
+    "MathformerPhysicsLib",
+    "MathformerPhysicsLib.lean",
+    "MathformerPhysicsSympy",
+    "MathformerRocq",
+    "MathformerSympy",
+    "MathformerSympyPhysics",
+)
+
+CONTROL_SKILLS = {
+    "gate-policy-controller",
+    "mathformer-generative-workflow-coordinator",
+    "mathformer-workflow-router",
+    "reasoning-flow-language",
+    "reasoning-log-schema-guardian",
+    "skill-hook-coverage-maximizer",
+    "skill-test-program-orchestrator",
+    "workflow-contract-validator",
+}
+
+SCRIPT_THEMES = {
+    "atp": ("run_vampire_atp.py",),
+    "control": (
+        "audit_workflow_skill_integration.py",
+        "mathformer.py",
+        "mcp_server.py",
+        "plan_workflow_graph_layout.py",
+        "render_workflow_graphs.py",
+        "workflow_write_audit.py",
+    ),
+    "mcp": (
+        "load_mcp_service_config.py",
+        "mathformer_mcp_service.py",
+        "mcp_server.py",
+        "mcp_service_config.py",
+        "probe_mcp_service_dependencies.py",
+    ),
+    "physics-common": ("build_physics_registry.py", "physics_ir.py"),
+    "physics-isabelle": (
+        "generate_formalphysics_extra_isabelle.py",
+        "generate_formalphysics_original_two_isabelle.py",
+    ),
+    "physics-lean": (
+        "audit_mathformer_physics_lean_grounding.py",
+        "generate_formalphysics_extra_lean.py",
+        "generate_formalphysics_original_two_lean.py",
+        "refresh_formalphysics_extra_lean_reports.py",
+    ),
+    "physics-sympy": (
+        "generate_formalphysics_extra_sympy.py",
+        "generate_formalphysics_original_two_sympy.py",
+        "generate_formalphysics_top10_sympy.py",
+    ),
+    "premise-kb": ("manage_premise_kb.py",),
+    "rocq": ("run_rocq_autoformalization.py",),
+    "setup": (
+        "generate_python_license_inventory.py",
+        "install_env.py",
+        "install_uv_env.sh",
+        "link_agent_skills.py",
+        "organize_repository_layout.py",
+    ),
+}
+
+TEST_ALIASES = {
+    "runners": (
+        "run_backend.py",
+        "run_docs.py",
+        "run_generative.py",
+        "run_quick.py",
+        "run_slow.py",
+    ),
+    "test_program": ("test_matrix.json", "test_matrix.json.license"),
+}
+
+DOC_THEMES = {
+    "architecture",
+    "archive",
+    "backends",
+    "getting-started",
+    "libraries",
+    "operations",
+}
+
+
+def infer_skill_theme(name: str) -> str:
+    """Return the navigation theme for a canonical skill name."""
+    if name in CONTROL_SKILLS:
+        return "control"
+    if name.startswith("formalphysics-"):
+        return "physics-common"
+    if name.startswith("physics-isabelle-"):
+        return "physics-isabelle"
+    if name.startswith("physics-lean-"):
+        return "physics-lean"
+    if name.startswith("physics-sympy-"):
+        return "physics-sympy"
+    if name.startswith("mathformerphysicslib-"):
+        return "mathformerphysicslib"
+    if name.startswith("mathformerlib-") or name.startswith("mathformer-library-"):
+        return "mathformerlib"
+    if name.startswith("mathlib-") or name == "informal-proof-mathlib-concepts":
+        return "mathlib"
+    if name.startswith("lean-"):
+        return "lean"
+    if name.startswith(("isabelle-", "isarmathlib-", "mathematical-isabelle-")):
+        return "isabelle"
+    if name.startswith(("sympy-", "mathematical-sympy-")):
+        return "sympy"
+    if name.startswith("rocq-"):
+        return "rocq"
+    if name.startswith("vampire-"):
+        return "atp"
+    if name.startswith("premise-kb-"):
+        return "premise-kb"
+    if name.startswith("proofnet-"):
+        return "benchmarks"
+    if name.startswith("paper-"):
+        return "paper"
+    if name.startswith(("latex-", "textbook-")):
+        return "latex-textbook"
+    if name.startswith("reference-free-"):
+        return "rfde"
+    if name.startswith("physics-"):
+        return "physics-common"
+    if name.startswith(
+        (
+            "autoformalization-",
+            "final-derivation-",
+            "mathematical-final-",
+            "result-existence-",
+            "proof-expansion-",
+            "source-",
+        )
+    ):
+        return "autoformalization"
+    raise ValueError(f"skill has no thematic classification: {name}")
+
+
+def canonical_skills() -> list[Path]:
+    """Discover canonical skills nested exactly one level below a theme."""
+    return sorted(path.parent for path in SKILLS_ROOT.glob("*/*/SKILL.md"))
+
+
+def expected_views() -> dict[Path, Path]:
+    """Return alias-to-canonical mappings for every managed view."""
+    views: dict[Path, Path] = {}
+    for theme, names in SCRIPT_THEMES.items():
+        for name in names:
+            views[SCRIPTS_ROOT / theme / name] = SCRIPTS_ROOT / name
+    for theme, names in TEST_ALIASES.items():
+        for name in names:
+            views[TESTS_ROOT / theme / name] = TESTS_ROOT / name
+    return views
+
+
+def relative_target(alias: Path, canonical: Path) -> str:
+    """Build a portable relative link target."""
+    return os.path.relpath(canonical, start=alias.parent)
+
+
+def inspect_view(alias: Path, canonical: Path) -> str:
+    """Classify the state of a managed alias."""
+    if not canonical.exists():
+        return "missing_canonical"
+    if not alias.is_symlink():
+        return "missing" if not alias.exists() else "occupied"
+    try:
+        return "ok" if alias.resolve() == canonical.resolve() else "wrong_target"
+    except OSError:
+        return "broken"
+
+
+def apply_views(views: dict[Path, Path]) -> None:
+    """Create missing views and repair only managed symlinks."""
+    unsafe = [
+        alias
+        for alias, canonical in views.items()
+        if inspect_view(alias, canonical) == "occupied"
+    ]
+    if unsafe:
+        names = ", ".join(path.relative_to(REPO_ROOT).as_posix() for path in unsafe)
+        raise SystemExit(f"refusing to replace non-symlink paths: {names}")
+    for alias, canonical in views.items():
+        state = inspect_view(alias, canonical)
+        if state == "missing_canonical":
+            raise SystemExit(
+                f"canonical path is missing: {canonical.relative_to(REPO_ROOT)}"
+            )
+        if state == "ok":
+            continue
+        alias.parent.mkdir(parents=True, exist_ok=True)
+        if alias.is_symlink():
+            alias.unlink()
+        alias.symlink_to(relative_target(alias, canonical))
+
+
+def unmanaged_root_files(root: Path, allowed: Iterable[str]) -> list[str]:
+    """List root files that are neither indexes nor declared stable entrypoints."""
+    allowed_names = set(allowed)
+    return sorted(
+        path.name
+        for path in root.iterdir()
+        if path.is_file() and not path.is_symlink() and path.name not in allowed_names
+    )
+
+
+def build_report() -> dict[str, object]:
+    """Build a machine-readable thematic-layout contract report."""
+    views = expected_views()
+    states = {
+        alias.relative_to(REPO_ROOT).as_posix(): inspect_view(alias, canonical)
+        for alias, canonical in views.items()
+    }
+    skills = canonical_skills()
+    skill_counts = Counter(path.parent.name for path in skills)
+    flat_skills = sorted(path.parent.name for path in SKILLS_ROOT.glob("*/SKILL.md"))
+    misclassified_skills = sorted(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in skills
+        if path.parent.name != infer_skill_theme(path.name)
+    )
+    script_names = {name for names in SCRIPT_THEMES.values() for name in names}
+    root_scripts = unmanaged_root_files(SCRIPTS_ROOT, {"README.md", *script_names})
+    root_tests = unmanaged_root_files(
+        TESTS_ROOT,
+        {"README.md", *(name for names in TEST_ALIASES.values() for name in names)},
+    )
+    root_docs = unmanaged_root_files(DOCS_ROOT, {"README.md"})
+    missing_doc_themes = sorted(
+        theme for theme in DOC_THEMES if not (DOCS_ROOT / theme).is_dir()
+    )
+    backend_component_states = {
+        f"{family}/{component}": (BACKENDS_ROOT / family / component).exists()
+        for family, components in BACKEND_COMPONENTS.items()
+        for component in components
+    }
+    library_component_states = {
+        component: (LIBRARIES_ROOT / component).exists()
+        for component in LIBRARY_COMPONENTS
+    }
+    missing_backend_components = sorted(
+        path for path, present in backend_component_states.items() if not present
+    )
+    missing_library_components = sorted(
+        path for path, present in library_component_states.items() if not present
+    )
+    legacy_component_roots = sorted(
+        path for path in LEGACY_COMPONENT_ROOTS if (REPO_ROOT / path).exists()
+    )
+    root_lean_files = sorted(path.name for path in REPO_ROOT.glob("*.lean"))
+    failures = sorted(path for path, state in states.items() if state != "ok")
+    return {
+        "ok": (
+            not failures
+            and not flat_skills
+            and not misclassified_skills
+            and not root_scripts
+            and not root_tests
+            and not root_docs
+            and not missing_doc_themes
+            and not missing_backend_components
+            and not missing_library_components
+            and not legacy_component_roots
+            and not root_lean_files
+        ),
+        "view_count": len(views),
+        "view_states": dict(Counter(states.values())),
+        "invalid_views": {path: states[path] for path in failures},
+        "skill_theme_counts": dict(sorted(skill_counts.items())),
+        "flat_skills": flat_skills,
+        "misclassified_skills": misclassified_skills,
+        "script_theme_counts": {
+            key: len(value) for key, value in sorted(SCRIPT_THEMES.items())
+        },
+        "test_alias_counts": {
+            key: len(value) for key, value in sorted(TEST_ALIASES.items())
+        },
+        "unclassified_root_scripts": root_scripts,
+        "unclassified_root_tests": root_tests,
+        "unclassified_root_docs": root_docs,
+        "missing_doc_themes": missing_doc_themes,
+        "backend_component_states": backend_component_states,
+        "library_component_states": library_component_states,
+        "missing_backend_components": missing_backend_components,
+        "missing_library_components": missing_library_components,
+        "legacy_component_roots": legacy_component_roots,
+        "root_lean_files": root_lean_files,
+    }
+
+
+def main() -> int:
+    """CLI entry point."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--apply", action="store_true", help="Create or repair managed symlink views."
+    )
+    parser.add_argument("--json", action="store_true", help="Print the report as JSON.")
+    args = parser.parse_args()
+    if args.apply:
+        apply_views(expected_views())
+    report = build_report()
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        status = "ok" if report["ok"] else "failed"
+        print(f"thematic repository layout: {status} ({report['view_count']} views)")
+    return 0 if report["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

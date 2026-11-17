@@ -1,0 +1,631 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_test_family_mathformerlib_workflow
+version: 1.0.0
+kind: workflow
+description: Source-level test-runner orchestration for the mathformerlib hub action.
+aliases:
+- test:family:mathformerlib
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Args:
+    schema:
+      type: object
+      required:
+      - module_family
+      - profile
+      - changed_files_only
+      - emit_dependency_map_only
+      - fail_on_warning
+      - validate_matrix
+      - run_id
+      - output_file
+      - write_jsonl
+      - write_junit
+      - json
+      properties:
+        module_family:
+          const:
+          - mathformerlib
+        profile:
+          enum:
+          - workstation
+          - strict
+        changed_files_only:
+          const: false
+        emit_dependency_map_only:
+          type: boolean
+        fail_on_warning:
+          type: boolean
+        validate_matrix:
+          type: boolean
+        run_id:
+          type: string
+        output_file:
+          const: artifacts/test_program/deterministic_tests.json
+        write_jsonl:
+          enum:
+          - null
+          - artifacts/test_program/deterministic_tests.jsonl
+        write_junit:
+          enum:
+          - null
+          - artifacts/test_program/deterministic_tests.xml
+        json:
+          type: boolean
+      additionalProperties: false
+  MatrixRevision:
+    schema:
+      description: Input precondition pins the canonical v2 matrix; mathformerlib
+        selects two rows, hence at most two advances.
+      const: sha256:17b2fc38f51c7711873b68dc5f630cfc0eb06351160ad6401ea67a6044ace322
+  Bool:
+    schema:
+      type: boolean
+  State:
+    schema:
+      type: object
+      required:
+      - matrix
+      - selected
+      - families
+      - index
+      - results
+      properties:
+        matrix:
+          type: array
+          items:
+            type: object
+        selected:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+        families:
+          type: array
+          items:
+            type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 2
+        results:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+      additionalProperties: false
+  Report:
+    schema:
+      type: object
+      required:
+      - run_id
+      - ok
+      - families
+      - summary
+      - results
+      - schema_errors
+      - matrix_errors
+      properties:
+        run_id:
+          type: string
+        ok:
+          type: boolean
+        families:
+          type: array
+          items:
+            type: string
+        summary:
+          type: object
+        results:
+          type: array
+          items:
+            type: object
+        schema_errors:
+          type: array
+        matrix_errors:
+          type: array
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+  Context:
+    schema:
+      type: object
+      required:
+      - handle
+      properties:
+        handle:
+          type: string
+      additionalProperties: false
+inputs:
+  args:
+    type: Args
+  matrix_revision:
+    type: MatrixRevision
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  enter:
+    inputs:
+      args:
+        type: Args
+    outputs:
+      snapshot_only:
+        type: Bool
+      context:
+        type: Context
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathformerlib_enter
+        operation: mathformer_mathformerlib_enter
+  snapshot:
+    inputs:
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathformerlib_snapshot
+        operation: mathformer_mathformerlib_snapshot
+  prepare:
+    inputs:
+      args:
+        type: Args
+      matrix_revision:
+        type: MatrixRevision
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathformerlib_prepare
+        operation: mathformer_mathformerlib_prepare
+  remaining:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      remaining:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathformerlib_remaining
+        operation: mathformer_mathformerlib_remaining
+  advance:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathformerlib_advance
+        operation: mathformer_mathformerlib_advance
+  finalize:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathformerlib_finalize
+        operation: mathformer_mathformerlib_finalize
+  publish:
+    inputs:
+      report:
+        type: Report
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathformerlib_publish
+        operation: mathformer_mathformerlib_publish
+  snapshot_frame:
+    inputs:
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathformerlib_snapshot_frame
+        operation: mathformer_mathformerlib_snapshot_frame
+  retain:
+    inputs:
+      context:
+        type: Context
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathformerlib_retain
+        operation: mathformer_mathformerlib_retain
+flow:
+  kind: sequence
+  steps:
+  - id: enter
+    kind: call
+    operation: enter
+    arguments:
+      args:
+        ref: inputs.args
+  - id: initial
+    kind: switch
+    cases:
+    - id: snapshot
+      when:
+        ref: steps.enter.outputs.snapshot_only
+      body:
+        id: frame
+        kind: call
+        operation: snapshot_frame
+        arguments:
+          context:
+            ref: steps.enter.outputs.context
+    default:
+      id: prepare
+      kind: call
+      operation: prepare
+      arguments:
+        args:
+          ref: inputs.args
+        matrix_revision:
+          ref: inputs.matrix_revision
+        context:
+          ref: steps.enter.outputs.context
+    outputs:
+      state:
+        type: State
+        value:
+          ref: selected.outputs.state
+  - id: checks
+    kind: loop
+    state_type: State
+    initial:
+      ref: steps.initial.outputs.state
+    max_iterations: 2
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: guard
+        kind: call
+        operation: remaining
+        arguments:
+          state:
+            ref: loop.state
+          context:
+            ref: steps.enter.outputs.context
+      - id: visit
+        kind: switch
+        cases:
+        - id: active
+          when:
+            ref: steps.guard.outputs.remaining
+          body:
+            kind: sequence
+            steps:
+            - id: advance
+              kind: call
+              operation: advance
+              arguments:
+                state:
+                  ref: loop.state
+                args:
+                  ref: inputs.args
+                context:
+                  ref: steps.enter.outputs.context
+            - id: guard
+              kind: call
+              operation: remaining
+              arguments:
+                state:
+                  ref: steps.advance.outputs.state
+                context:
+                  ref: steps.enter.outputs.context
+            outputs:
+              state:
+                type: State
+                value:
+                  ref: steps.advance.outputs.state
+              remaining:
+                type: Bool
+                value:
+                  ref: steps.guard.outputs.remaining
+        default:
+          kind: sequence
+          steps:
+          - id: retain
+            kind: call
+            operation: retain
+            arguments:
+              state:
+                ref: loop.state
+              context:
+                ref: steps.enter.outputs.context
+          outputs:
+            state:
+              type: State
+              value:
+                ref: steps.retain.outputs.state
+            remaining:
+              type: Bool
+              value:
+                literal: false
+        outputs:
+          state:
+            type: State
+            value:
+              ref: selected.outputs.state
+          remaining:
+            type: Bool
+            value:
+              ref: selected.outputs.remaining
+      outputs:
+        state:
+          type: State
+          value:
+            ref: steps.visit.outputs.state
+        remaining:
+          type: Bool
+          value:
+            ref: steps.visit.outputs.remaining
+    next_state:
+      ref: body.outputs.state
+    until:
+      not:
+        ref: body.outputs.remaining
+    outputs:
+      state:
+        type: State
+        value:
+          ref: loop.state
+  - id: finish
+    kind: switch
+    cases:
+    - id: snapshot
+      when:
+        ref: steps.enter.outputs.snapshot_only
+      body:
+        id: snapshot
+        kind: call
+        operation: snapshot
+        arguments:
+          args:
+            ref: inputs.args
+          context:
+            ref: steps.enter.outputs.context
+    default:
+      id: finalize
+      kind: call
+      operation: finalize
+      arguments:
+        state:
+          ref: steps.checks.outputs.state
+        args:
+          ref: inputs.args
+        context:
+          ref: steps.enter.outputs.context
+    outputs:
+      report:
+        type: Report
+        value:
+          ref: selected.outputs.report
+  - id: publish
+    kind: call
+    operation: publish
+    arguments:
+      report:
+        ref: steps.finish.outputs.report
+      args:
+        ref: inputs.args
+      context:
+        ref: steps.enter.outputs.context
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finish.outputs.report
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.publish.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 10
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Native test reports and exit status only; completion establishes
+    no scientific result or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: run
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: tests/test_matrix.json
+    selector: schema_version=2; module_family=mathformerlib
+    digest: sha256:17b2fc38f51c7711873b68dc5f630cfc0eb06351160ad6401ea67a6044ace322
+  - path: scripts/mathformer.py
+    selector: build_registry; mathformerlib.accumulation; run_action; run_leaf_action;
+      preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformerlib_family_tools.py
+    selector: register_mathformerlib_family_tools
+    digest: sha256:780d9791d3bf0c5fa3903555346311a2c452ff67f3c06aef22043ec02969489a
+  - path: scripts/comprehensive_strict_tools.py
+    selector: source_runner
+    digest: sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd
+  - path: scripts/mcp_server.py
+    selector: register_mathformerlib_family_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: hub authored mathformerlib override
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Two-iteration specialization requires the input matrix revision and fixed family/changed-files
+    scope; changed matrices require renormalization. Exhaustion fails without finalization
+    or publication.
+  - Hub preflight, dry-run, launch and outer write audit remain the native hub boundary;
+    the graph describes run and main publication. Explicit runner flags retain the
+    source branches.
+  - Payload schemas are compact projections. Contract receipts and global budgets
+    are enforced by the host; external effects remain unqualified.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: test:family:mathformerlib
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: test:family:mathformerlib
+      family: mathformerlib
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/test_program/run_comprehensive_tests.py
+      - --module-family
+      - mathformerlib
+      - --json
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: 900
+      writes:
+      - artifacts/
+  mathformer.native_boundary:
+    execution: Existing hub controller retains preflight, dry-run, subprocess launch
+      and write audit; graph describes run plus main publication.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Preserve failed preflight/subprocess status; report.ok=false publishes
+      exit 3; uncaught exceptions abort without publication.
+    scientific_payloads: Native test report and process exit status, not scientific
+      proof.
+  mathformer.bounds:
+    native_hub_timeout_seconds: 900
+    normalization_wall_time_seconds: 3600
+    selected_check_timeout_seconds: 120
+    hub_defaults:
+      profile: workstation
+      emit_dependency_map_only: false
+      fail_on_warning: false
+      validate_matrix: false
+      changed_files_only: false
+      write_jsonl: null
+      write_junit: null
+      json: true
+# REUSE-IgnoreEnd

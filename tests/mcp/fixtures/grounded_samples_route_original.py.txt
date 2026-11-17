@@ -1,0 +1,766 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Audit selected Lean physics samples for source-grounded formalization depth."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ARTIFACT_ROOT = (
+    REPO_ROOT / "artifacts" / "physics_lean" / "grounded_sample_thoroughness"
+)
+CHECKER = "skills/physics-lean/physics-lean-derivation-completeness-checker/scripts/check_derivation_completeness.py"
+
+OPERATOR_SOURCE_CUES = [
+    "operator",
+    "commutator",
+    "hamiltonian",
+    "heisenberg",
+    "unitary",
+    "self-adjoint",
+    "hermitian",
+    "tdse",
+    "schrodinger",
+    "\\hat",
+]
+
+CALCULUS_SOURCE_CUES = [
+    "derivative",
+    "differentiate",
+    "d/d",
+    "\\partial",
+    "integral",
+    "\\int",
+    "product rule",
+    "chain rule",
+]
+
+DEEP_GROUNDING_SIGNALS = [
+    "PhysicalLawWitness",
+    "Frontier",
+    "Grounding",
+    "HilbertBoundedOperator",
+    "UnboundedHilbertOperator",
+    "PositionMomentumPair",
+    "InnerProductSpace",
+    "HilbertStateCarrier",
+    "LinearMap",
+    "ContinuousLinearMap",
+    "Matrix",
+    "HasDerivAt",
+    "HasFDerivAt",
+    "Differentiable",
+    "ContDiff",
+    "IsSelfAdjoint",
+    "IsUnitary",
+    "commutatorValueOnCore",
+    "RealLineL2",
+]
+
+
+CASE_SPECS: dict[str, dict[str, Any]] = {
+    "formalphysics_0000": {
+        "required_terms": [
+            "LorentzForceXComponentFrontier",
+            "lorentzForceXComponentAlgebraCore",
+            "lorentzForceXComponent",
+            "lorentz_force_x_core_replay",
+            "lorentz_force_x",
+            "lorentz_euler_lagrange_x_component",
+            "lorentz_electric_field_x_from_potentials",
+            "lorentz_magnetic_field_y_from_potentials",
+            "lorentz_magnetic_field_z_from_potentials",
+            "RealVector3",
+            "EuclideanSpace",
+            "Differentiable",
+            "PhysicalLawWitness",
+            "euler_lagrange_x_component",
+            "electric_field_x_from_potentials",
+            "magnetic_field_y_from_potentials",
+            "magnetic_field_z_from_potentials",
+        ],
+        "minimum_proof_steps": 2,
+        "minimum_bridge_declarations": 10,
+    },
+    "formalphysics_0014": {
+        "required_terms": [
+            "RealLineL2PositionMomentumModel",
+            "canonical_commutator_expectation_from_real_line_l2_model",
+            "diracImaginaryQuotient_from_commutator_expectation",
+            "diracImaginaryQuotient_conjugate_lower_bound",
+            "heisenbergVarianceProductBoundFromInnerLower",
+            "heisenbergSquaredBoundFromVarianceIdentities",
+            "heisenbergBoundFromSquaredLowerBound",
+        ],
+        "minimum_proof_steps": 8,
+        "minimum_bridge_declarations": 8,
+    },
+    "formalphysics_0015": {
+        "required_terms": [
+            "TwoLevelRabiStateExpansion",
+            "TwoLevelRabiFrame",
+            "TwoLevelRabiDynamicsFrontier",
+            "TwoLevelRabiGroundMeasurementFrontier",
+            "TwoLevelRabiParameterCalibrationFrontier",
+            "VacuumRabiRecursiveFrontier",
+            "transitionAmplitude",
+            "probabilityFromAmplitude",
+            "projectionBornProbability",
+            "complex_normSq_neg_I_mul_real",
+            "vacuumRabiProbabilityFromStateExpansion",
+            "vacuumRabiRecursiveFrontier_probability_curve",
+        ],
+        "minimum_proof_steps": 3,
+        "minimum_bridge_declarations": 6,
+    },
+    "formalphysics_0020": {
+        "required_terms": [
+            "MaxwellAmpereMatterFrontier",
+            "maxwellAmpereMatterAlgebraCore",
+            "maxwellAmpereMatter",
+            "maxwell_ampere_matter_core_replay",
+            "maxwell_ampere_matter",
+            "maxwell_ampere_source_law",
+            "maxwell_magnetic_flux_constitutive",
+            "maxwell_electric_displacement_constitutive",
+            "maxwell_magnetization_current",
+            "LinearMap",
+            "timeDerivative",
+            "macroscopic_ampere_law",
+            "magnetic_flux_constitutive",
+            "electric_displacement_constitutive",
+            "magnetization_current_definition",
+            "mu0_nonzero",
+            "PhysicalLawWitness",
+        ],
+        "minimum_proof_steps": 2,
+        "minimum_bridge_declarations": 11,
+    },
+    "formalphysics_0021": {
+        "required_terms": [
+            "ParameterizedEigenstateEquation",
+            "ParameterizedHamiltonianDerivativeFrontier",
+            "ParameterizedHamiltonianRecursiveFrontier",
+            "parameterizedHamiltonianExpectationCurve",
+            "parameterizedHamiltonianActionCurve",
+            "parameterizedEigenvalueStateCurve",
+            "parameterizedActionCurve_eq_eigenvalueStateCurve_near_of_eigenstate",
+            "differentiatedEigenstateEquation_of_actionCurve_derivatives",
+            "ParameterizedHamiltonianGeneratedDerivativeFrontier",
+            "parameterizedHamiltonianGeneratedDerivativeFrontier_differentiated_eigen_eq",
+            "parameterizedHamiltonianGeneratedDerivativeFrontier_expectation",
+            "ParameterizedHamiltonianRecursiveExpansionFrontier",
+            "parameterizedHamiltonianRecursiveExpansionFrontier_expectation",
+            "ParameterizedHamiltonianGaugeFrontier",
+            "ParameterizedHamiltonianSpectralProjectionBranch",
+            "ParameterizedHamiltonianUnboundedDomainFrontier",
+            "ParameterizedStateNormalizationDerivativeConstraint",
+            "ParameterizedEigenstatePhaseGaugeCondition",
+            "operator_curve_derivative_grounding",
+            "expectation_derivative_closed",
+            "spectral_projection_tracks_state",
+            "bounded_core_matches_hamiltonian_near",
+            "ParameterizedHamiltonianDifferentiabilityFrontier",
+            "ParameterizedHamiltonianSpectralBranchFrontier",
+            "ParameterizedHamiltonianFullyGroundedRecursiveFrontier",
+            "EigenstateExpectationIdentityNear",
+            "DifferentiatedEigenstateEquation",
+            "hellmannFeynmanDerivativeFromDifferentiatedEigenEquation",
+            "energyDerivativeEqExpectationDerivative",
+        ],
+        "minimum_proof_steps": 8,
+        "minimum_bridge_declarations": 48,
+    },
+    "formalphysics_0026": {
+        "required_terms": [
+            "ParameterizedHamiltonianGeneratedDerivativeFrontier",
+            "ParameterizedHamiltonianDerivativeFrontier",
+            "ParameterizedHamiltonianRecursiveExpansionFrontier",
+            "ParameterizedHamiltonianSpectralProjectionBranch",
+            "ParameterizedHamiltonianGaugeFrontier",
+            "ParameterizedHamiltonianUnboundedDomainFrontier",
+            "ParameterizedStateNormalizationDerivativeConstraint",
+            "DifferentiatedEigenstateEquation",
+            "parameterizedHamiltonianGeneratedDerivativeFrontier_expectation",
+            "parameterizedHamiltonianGeneratedDerivativeFrontier_expectation_has_deriv",
+            "parameterizedHamiltonianActionCurve",
+            "parameterizedEigenvalueStateCurve",
+            "SelfAdjointOperatorWitness",
+            "hilbertExpectation",
+        ],
+        "minimum_proof_steps": 1,
+        "minimum_bridge_declarations": 12,
+    },
+    "formalphysics_0052": {
+        "required_terms": [
+            "PositionWavefunction",
+            "PositionMeasurementSpaceFrontier",
+            "PositionExpectationRecursiveFrontier",
+            "PositionSpectralMeasureGrounding",
+            "PositionL2WavefunctionGrounding",
+            "PositionExpectationIntegrabilityGrounding",
+            "PositionBornDensityIntegrable",
+            "PositionBornProbabilityNormalization",
+            "PositionExpectationIntegrable",
+            "positionBornDensity",
+            "positionExpectationFromMeasurementSpace",
+            "positionExpectationIntegrand_apply",
+            "PositionResolutionIdentityMeasureKernel",
+            "positionExpectationIntegral",
+            "positionExpectationIntegral_apply",
+            "MeasureTheory",
+        ],
+        "minimum_proof_steps": 3,
+        "minimum_bridge_declarations": 9,
+    },
+    "formalphysics_0054": {
+        "required_terms": [
+            "MaxwellAmpereBoundCurrentsFrontier",
+            "MaxwellAmpereMatterFrontier",
+            "maxwellAmpereBoundCurrents",
+            "maxwellAmpereMatter",
+            "ampere_matter_bound_currents_core_replay",
+            "ampere_matter_bound_currents",
+            "ampere_polarization_current",
+            "ampere_magnetization_current",
+            "ampere_bound_currents_source_law",
+            "ampere_bound_currents_matter_frontier",
+            "polarization_current_definition",
+            "magnetization_current_definition",
+            "macroscopic_ampere_law",
+            "magnetic_flux_constitutive",
+            "electric_displacement_constitutive",
+            "PhysicalLawWitness",
+        ],
+        "minimum_proof_steps": 2,
+        "minimum_bridge_declarations": 10,
+    },
+    "formalphysics_0059": {
+        "required_terms": [
+            "VariationChainIntegralFrontier",
+            "variationChainIntegralAlgebraCore",
+            "variationChainIntegral",
+            "variation_chain_integral_core_replay",
+            "variation_chain_integral",
+            "variation_differentiate_under_integral",
+            "variation_chain_rule_integral_substitution",
+            "variation_fixed_endpoints",
+            "differentiate_under_integral",
+            "chain_rule_integral_substitution",
+            "fixed_endpoints",
+            "base_differentiable",
+            "variation_differentiable",
+            "PhysicalLawWitness",
+        ],
+        "minimum_proof_steps": 2,
+        "minimum_bridge_declarations": 8,
+    },
+    "formalphysics_0066": {
+        "required_terms": [
+            "TimeDependentSchrodingerParameterIdentityFrontier",
+            "schrodingerParameterConnectionCurve",
+            "tdseParameterIdentity",
+            "tdse_parameter_identity",
+            "tdse_parameter_connection_curve",
+            "tdse_parameter_connection_derivative",
+            "tdse_differentiated_balance",
+            "tdse_mixed_partial_cancellation",
+            "HilbertBoundedOperator",
+            "hilbertExpectation",
+            "HasDerivAt",
+            "NormalizedStateWitness",
+            "SelfAdjointOperatorWitness",
+            "mixed_partials_commute",
+            "connection_has_deriv",
+            "tdse_at_time",
+            "Complex.I",
+        ],
+        "minimum_proof_steps": 1,
+        "minimum_bridge_declarations": 9,
+    },
+    "formalphysics_0074": {
+        "required_terms": [
+            "transitionAmplitude",
+            "DiracConjugateSymmetryWitness",
+            "DiracBraketPair",
+            "DiracImaginaryProjectionRecursiveFrontier",
+            "DiracSkewAdjointGeneratorGrounding",
+            "DiracCommutatorExpectationGrounding",
+            "diracImaginaryQuotient",
+            "diracBraketPairImaginaryQuotient",
+            "diracImaginaryQuotient_eq_im_of_conjugate",
+            "quotient_matches_imaginary_part",
+            "Complex.im",
+        ],
+        "minimum_proof_steps": 2,
+        "minimum_bridge_declarations": 9,
+    },
+    "formalphysics_0119": {
+        "required_terms": [
+            "LorentzCrossCurlXFrontier",
+            "lorentzCrossCurlXAlgebraCore",
+            "lorentzCrossCurlXComponent",
+            "lorentz_cross_curl_x_core_replay",
+            "lorentz_cross_curl_x",
+            "lorentz_cross_x_component",
+            "lorentz_curl_y_from_potential",
+            "lorentz_curl_z_from_potential",
+            "lorentz_expanded_force_component",
+            "RealVector3",
+            "cross_x_component",
+            "curl_y_from_potential",
+            "curl_z_from_potential",
+            "expanded_force_component",
+            "PhysicalLawWitness",
+        ],
+        "minimum_proof_steps": 2,
+        "minimum_bridge_declarations": 9,
+    },
+    "formalphysics_0172": {
+        "required_terms": [
+            "EulerLagrangeXForceBalanceFrontier",
+            "eulerLagrangeXForceBalanceAlgebraCore",
+            "eulerLagrangeXForceBalance",
+            "euler_lagrange_x_force_balance_core_replay",
+            "euler_lagrange_x_force_balance",
+            "euler_lagrange_x_before_cancellation",
+            "euler_lagrange_force_definition",
+            "RealVector3",
+            "euler_lagrange_x_before_cancellation",
+            "force_definition",
+            "vectorPotentialXX",
+            "potentials_differentiable",
+            "PhysicalLawWitness",
+        ],
+        "minimum_proof_steps": 2,
+        "minimum_bridge_declarations": 8,
+    },
+    "formalphysics_0176": {
+        "required_terms": [
+            "FirstVariationEvaluationFrontier",
+            "firstVariationEvaluationAlgebraCore",
+            "firstVariationEvaluation",
+            "first_variation_evaluation_core_replay",
+            "first_variation_evaluation",
+            "first_variation_differentiated_under_integral",
+            "first_variation_field_term_evaluated",
+            "first_variation_derivative_term_evaluated",
+            "differentiated_under_integral",
+            "field_term_evaluated",
+            "derivative_term_evaluated",
+            "fixed_endpoints",
+            "base_differentiable",
+            "variation_differentiable",
+            "PhysicalLawWitness",
+        ],
+        "minimum_proof_steps": 2,
+        "minimum_bridge_declarations": 9,
+    },
+    "formalphysics_0191": {
+        "required_terms": [
+            "TimeDependentSchrodingerProductDifferentiationFrontier",
+            "schrodingerParameterTimeConnectionCurve",
+            "tdseProductDifferentiationIdentityCore",
+            "tdseProductDifferentiation",
+            "tdse_product_identity",
+            "tdse_product_rule_decomposition",
+            "tdse_energy_derivative_substitution",
+            "tdse_ket_inner_substitution",
+            "tdse_adjoint_bra_substitution",
+            "tdse_parameter_time_connection_derivative",
+            "HilbertBoundedOperator",
+            "hilbertExpectation",
+            "HasDerivAt",
+            "NormalizedStateWitness",
+            "SelfAdjointOperatorWitness",
+            "product_rule_decomposition",
+            "energy_derivative_tdse_substitution",
+            "ket_tdse_inner_substitution",
+            "adjoint_tdse_bra_substitution",
+            "parameter_time_inner_has_deriv",
+            "Complex.I",
+        ],
+        "minimum_proof_steps": 1,
+        "minimum_bridge_declarations": 14,
+    },
+}
+
+FORBIDDEN_SHORTCUTS = [
+    "GeneratedSupportAssumption",
+    "amplitude_law : PhysicalLawWitness",
+    "probability_law : PhysicalLawWitness",
+    "expectation_identity : PhysicalLawWitness",
+    "differentiation_law : PhysicalLawWitness",
+    "wavefunction_law : PhysicalLawWitness",
+    "born_rule_integral_law : PhysicalLawWitness",
+    "z_law : PhysicalLawWitness",
+    "reverse_law : PhysicalLawWitness",
+    "quotient_law : PhysicalLawWitness",
+    "square_law : PhysicalLawWitness",
+    "exact physicalLawHolds",
+    "exact generatedSupportHolds",
+    "sorry",
+    "admit",
+]
+
+
+def rel(path: Path, repository_root: Path = REPO_ROOT) -> str:
+    return path.relative_to(repository_root).as_posix()
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def run_json(
+    args: list[str], repository_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    proc = subprocess.run(
+        [sys.executable, *args],
+        cwd=repository_root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0:
+        stripped = proc.stdout.strip()
+        if stripped.startswith("{"):
+            return json.loads(stripped)
+        raise RuntimeError(
+            f"command failed: {' '.join(args)}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+        )
+    return json.loads(proc.stdout)
+
+
+def proof_step_count(text: str) -> int:
+    return len(re.findall(r"^\s*(have|calc|exact)\b", text, re.M))
+
+
+def bridge_declaration_count(text: str) -> int:
+    return len(
+        re.findall(
+            r"^\s*(?:noncomputable\s+)?(?:def|theorem|lemma|structure)\s+[A-Za-z0-9_'.]+",
+            text,
+            re.M,
+        )
+    )
+
+
+def lean_code_surface(text: str) -> str:
+    """Return Lean code with comments and string literals removed.
+
+    Audit anchors intentionally live in strings, so anti-shallow checks must not
+    count them as real theorem-surface evidence.
+    """
+    without_blocks = re.sub(r"/-.*?-/", "", text, flags=re.S)
+    without_line_comments = re.sub(r"--.*", "", without_blocks)
+    return re.sub(r'"(?:\\.|[^"\\])*"', '""', without_line_comments)
+
+
+def source_record_path(
+    case_id: str, repository_root: Path = REPO_ROOT,
+) -> Path | None:
+    candidates = [
+        repository_root
+        / "artifacts"
+        / "physics_lean"
+        / "recursive_goal_runs"
+        / case_id
+        / "source_record.rebuilt.json",
+        repository_root
+        / "artifacts"
+        / "physics_lean"
+        / "dirac_recursive_batch"
+        / case_id
+        / "source_record.json",
+        repository_root
+        / "artifacts"
+        / "physics_lean"
+        / "new_qm_source_only"
+        / case_id
+        / "source_record.json",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def source_text_from_record(record: dict[str, Any]) -> str:
+    parts = [
+        str(record.get("field", "")),
+        str(record.get("question", "")),
+        str(record.get("answer", "")),
+        " ".join(str(item) for item in record.get("concepts", [])),
+    ]
+    return "\n".join(parts)
+
+
+def infer_source_features(record: dict[str, Any]) -> dict[str, bool]:
+    source = source_text_from_record(record).lower()
+    return {
+        "operator_or_commutator": any(
+            cue.lower() in source for cue in OPERATOR_SOURCE_CUES
+        ),
+        "calculus_or_integral": any(
+            cue.lower() in source for cue in CALCULUS_SOURCE_CUES
+        ),
+    }
+
+
+def deep_grounding_signals(code_text: str) -> list[str]:
+    return [
+        term
+        for term in DEEP_GROUNDING_SIGNALS
+        if re.search(rf"\b{re.escape(term)}\b", code_text)
+    ]
+
+
+def abstract_ring_module_wrapper_only(
+    code_text: str, source_features: dict[str, bool], signals: list[str]
+) -> bool:
+    if not source_features.get("operator_or_commutator"):
+        return False
+    abstract_evidence_wrapper = bool(
+        re.search(r"\{A\s*:\s*Type\*\}\s*\[Ring\s+A\]\s*\[Module\s+ℂ\s+A\]", code_text)
+        and re.search(r"\bHeisenbergEquationEvidence\s+A\b", code_text)
+    )
+    high_operator_signals = {
+        "PhysicalLawWitness",
+        "Frontier",
+        "HilbertBoundedOperator",
+        "UnboundedHilbertOperator",
+        "PositionMomentumPair",
+        "InnerProductSpace",
+        "LinearMap",
+        "ContinuousLinearMap",
+        "Matrix",
+        "HasDerivAt",
+        "HasFDerivAt",
+        "Differentiable",
+        "ContDiff",
+        "IsSelfAdjoint",
+        "IsUnitary",
+        "commutatorValueOnCore",
+        "RealLineL2",
+    }
+    return abstract_evidence_wrapper and not (high_operator_signals & set(signals))
+
+
+def checker_report(
+    case_id: str, repository_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    args = [
+        CHECKER if repository_root == REPO_ROOT else str(REPO_ROOT / CHECKER),
+        "--lean-file",
+        f"libraries/MathformerPhysicsLib/Lean/{case_id}/MathformerPhysics.lean",
+        "--recursive-frontier-count",
+        "0",
+        "--expect-complete",
+        "--json",
+    ]
+    source_record = source_record_path(case_id, repository_root)
+    if source_record and source_record.exists():
+        args[3:3] = ["--source-record", rel(source_record, repository_root)]
+    return run_json(args, repository_root)
+
+
+def audit_case(
+    case_id: str, spec: dict[str, Any], repository_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    lean_path = (
+        repository_root / "MathformerPhysicsLib" / "Lean" / case_id / "MathformerPhysics.lean"
+    )
+    text = lean_path.read_text(encoding="utf-8")
+    report = checker_report(case_id, repository_root)
+    artifact = (report.get("artifacts") or [{}])[0]
+
+    code_text = lean_code_surface(text)
+    required_terms_surface = str(spec.get("required_terms_surface", "text"))
+    required_terms_haystack = code_text if required_terms_surface == "code" else text
+    missing_terms = [
+        term for term in spec["required_terms"] if term not in required_terms_haystack
+    ]
+    forbidden_hits = [term for term in FORBIDDEN_SHORTCUTS if term in text]
+    steps = proof_step_count(text)
+    bridges = bridge_declaration_count(text)
+    source_features = spec.get("source_features", {})
+    signals = deep_grounding_signals(code_text)
+    minimum_deep_signals = int(spec.get("minimum_deep_grounding_signals", 0))
+    wrapper_only = abstract_ring_module_wrapper_only(
+        code_text, source_features, signals
+    )
+    checks = {
+        "complete_autoformalization": report.get("status")
+        == "complete_autoformalization"
+        and report.get("ok") is True,
+        "zero_blocked_obligations": artifact.get("blocked_obligation_count") == 0,
+        "zero_recursive_frontier": artifact.get("recursive_frontier_count") == 0,
+        "recursive_grounding_header": "Recursive grounding:" in text,
+        "required_grounding_terms_present": not missing_terms,
+        "forbidden_shortcuts_absent": not forbidden_hits,
+        "proof_chain_nontrivial": steps >= int(spec["minimum_proof_steps"]),
+        "bridge_declaration_depth": bridges >= int(spec["minimum_bridge_declarations"]),
+        "generative_probes_preserved": len(artifact.get("generative_repair_probes", []))
+        >= 4,
+        "repair_frontier_empty": len(artifact.get("repair_frontier_nodes", [])) == 0,
+        "deep_grounding_signals_present": len(signals) >= minimum_deep_signals,
+        "operator_source_not_abstract_wrapper_only": not wrapper_only,
+    }
+    return {
+        "case_id": case_id,
+        "ok": all(checks.values()),
+        "checks": checks,
+        "metrics": {
+            "proof_step_count": steps,
+            "bridge_declaration_count": bridges,
+            "generative_probe_count": len(artifact.get("generative_repair_probes", [])),
+            "deep_grounding_signal_count": len(signals),
+        },
+        "deep_grounding_signals": signals,
+        "missing_terms": missing_terms,
+        "forbidden_hits": forbidden_hits,
+        "status": report.get("status"),
+        "lean_path": rel(lean_path, repository_root),
+    }
+
+
+def selected_case_specs(
+    case_ids: Sequence[str] | None = None,
+    repository_root: Path = REPO_ROOT,
+) -> dict[str, dict[str, Any]]:
+    if not case_ids:
+        return CASE_SPECS
+    specs: dict[str, dict[str, Any]] = {}
+    unknown: list[str] = []
+    for case_id in case_ids:
+        if case_id in CASE_SPECS:
+            specs[case_id] = CASE_SPECS[case_id]
+            continue
+        source_record = source_record_path(case_id, repository_root)
+        if source_record and source_record.exists():
+            record = json.loads(source_record.read_text(encoding="utf-8"))
+            features = infer_source_features(record)
+            operator_like = features["operator_or_commutator"]
+            specs[case_id] = {
+                "required_terms": list(record.get("required_terms", [])),
+                "minimum_proof_steps": 4 if operator_like else 2,
+                "minimum_bridge_declarations": 8 if operator_like else 4,
+                "minimum_deep_grounding_signals": (
+                    2 if operator_like or features["calculus_or_integral"] else 1
+                ),
+                "required_terms_surface": "code",
+                "source_features": features,
+            }
+            continue
+        unknown.append(case_id)
+    if unknown:
+        known = ", ".join(sorted(CASE_SPECS))
+        raise SystemExit(
+            f"unknown case(s): {', '.join(unknown)}; known curated cases: {known}"
+        )
+    return specs
+
+
+def initialize_suite(
+    case_ids: Sequence[str] | None = None, repository_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    """Resolve the entire selection before any audit starts."""
+    specs = selected_case_specs(case_ids, repository_root)
+    return {"pending": [{"case_id": key, "spec": spec} for key, spec in specs.items()],
+            "completed": []}
+
+
+def audit_next(state: dict[str, Any], repository_root: Path = REPO_ROOT) -> dict[str, Any]:
+    item = state["pending"][0]
+    return audit_case(item["case_id"], item["spec"], repository_root)
+
+
+def append_guard(state: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    """Retain failed audits and advance once, without mutating the input frame."""
+    pending = state["pending"][1:]
+    return {"state": {"pending": pending, "completed": [*state["completed"], result]},
+            "done": not pending}
+
+
+def report_path(repository_root: Path = REPO_ROOT) -> Path:
+    if repository_root == REPO_ROOT:
+        return ARTIFACT_ROOT / "report.json"
+    return repository_root / "artifacts/physics_lean/grounded_sample_thoroughness/report.json"
+
+
+def finalize_suite(state: dict[str, Any], repository_root: Path = REPO_ROOT) -> dict[str, Any]:
+    cases = state["completed"]
+    payload = {
+        "schema_version": 1,
+        "style": "physics_lean_grounded_sample_thoroughness_report",
+        "ok": all(item["ok"] for item in cases),
+        "case_count": len(cases),
+        "cases": cases,
+        "policy": {
+            "complete_status_required": "complete_autoformalization",
+            "forbidden_shortcuts": FORBIDDEN_SHORTCUTS,
+            "grounding_direction": "MathformerPhysicsLib-first, Mathlib-grounded, recursive-frontier-empty",
+        },
+    }
+    write_json(report_path(repository_root), payload)
+    return payload
+
+
+def run_suite(
+    case_ids: Sequence[str] | None = None, repository_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    state = initialize_suite(case_ids, repository_root)
+    while state["pending"]:
+        state = append_guard(state, audit_next(state, repository_root))["state"]
+    return finalize_suite(state, repository_root)
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--case",
+        action="append",
+        help="Run the thoroughness gate for one FormalPhysics sample. Repeat to select several.",
+    )
+    parser.add_argument("--output", type=Path, help="Optional report path.")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def emit_report(
+    args: argparse.Namespace, payload: dict[str, Any], repository_root: Path = REPO_ROOT,
+) -> int:
+    if args.output:
+        write_json(args.output, payload)
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"Grounded sample thoroughness ok={payload['ok']}")
+        print(f"Report: {rel(report_path(repository_root), repository_root)}")
+    return 0 if payload["ok"] else 1
+
+
+def main(
+    argv: Sequence[str] | None = None, repository_root: Path = REPO_ROOT,
+) -> int:
+    args = parse_args(argv)
+    return emit_report(args, run_suite(args.case, repository_root), repository_root)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

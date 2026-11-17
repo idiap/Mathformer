@@ -1,0 +1,472 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_formalphysics_extra_isabelle_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Generate eight fixed Isabelle candidate theory/session pairs in source insertion order.",
+  "aliases": [
+    "formalphysics:extra-isabelle"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Argv": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Cursor": {
+      "schema": {
+        "type": "integer"
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Paths": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "const": 0
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "cursor",
+          "promote_lib",
+          "generated"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "type": "integer"
+          },
+          "promote_lib": {
+            "type": "boolean"
+          },
+          "generated": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "CaseFiles": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "artifact_theory",
+          "artifact_root",
+          "lib_theory",
+          "lib_root"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "artifact_theory": {
+            "type": "string"
+          },
+          "artifact_root": {
+            "type": "string"
+          },
+          "lib_theory": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lib_root": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Argv"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "generated": {
+      "type": "Paths",
+      "value": {
+        "ref": "flow.outputs.generated"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {
+        "argv": {
+          "type": "Argv"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_isabelle_initialize",
+          "operation": "mathformer_extra_isabelle_initialize"
+        }
+      }
+    },
+    "write_case": {
+      "inputs": {
+        "cursor": {
+          "type": "Cursor"
+        },
+        "promote_lib": {
+          "type": "Flag"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "files": {
+          "type": "CaseFiles"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_isabelle_write_case",
+          "operation": "mathformer_extra_isabelle_write_case"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "files": {
+          "type": "CaseFiles"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_isabelle_advance",
+          "operation": "mathformer_extra_isabelle_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "generated": {
+          "type": "Paths"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_extra_isabelle_finish",
+          "operation": "mathformer_extra_isabelle_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          }
+        }
+      },
+      {
+        "id": "cases",
+        "kind": "loop",
+        "description": "Visit exactly eight fixed cases serially. Each case uses only its own specification and promote_lib; generated is accumulated output, never input to theory generation. done is true on iteration eight, so reaching the source bound completes normally.",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 8,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "write",
+              "kind": "call",
+              "operation": "write_case",
+              "arguments": {
+                "cursor": {
+                  "ref": "loop.state.cursor"
+                },
+                "promote_lib": {
+                  "ref": "loop.state.promote_lib"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "files": {
+                  "ref": "steps.write.outputs.files"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.cases.outputs.state"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "generated": {
+        "type": "Paths",
+        "value": {
+          "ref": "steps.finish.outputs.generated"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.finish.outputs.exit_code"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "data/benchmarks/formal_science/physics_top10_sources/"
+        ],
+        "write": [
+          "artifacts/physics_isabelle/from_scratch_isabelle/",
+          "libraries/MathformerPhysicsLib/Isabelle/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "generate_candidate_files",
+        "copy_candidates_when_promote_lib"
+      ],
+      "forbidden": [
+        "infer_scientific_truth_from_completion",
+        "claim_isabelle_compilation"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 18
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Generated candidate files only; no Isabelle compilation or scientific validation."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/generate_formalphysics_extra_isabelle.py",
+        "digest": "sha256:3b5382a70492ef81c38981f934aa0e01e8ce51e775368f9e2f1f7c31b9806bb1",
+        "selector": "main; initialize; write_case_at; advance; finish; write_case; render_theory; CASES"
+      },
+      {
+        "path": "scripts/formalphysics_extra_isabelle_tools.py",
+        "digest": "sha256:a7ba11eb54be8b44ec33ef1bad03d3525ead67337699fdc042701f5600f95868"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Hub preflight, dry-run, subprocess execution and write audit remain caller boundaries, not main graph steps.",
+      "The 3600-second ceiling is inherited contract policy, not a native timeout; the subprocess has no configured timeout.",
+      "Lunar supplies required runtime receipts, digests and provenance; native completion prints generated paths."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "formalphysics:extra-isabelle",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "family": "physics_isabelle",
+      "safety": "writes_repo"
+    },
+    "mathformer.native_boundary": {
+      "execution": "main is authoritative; the hub invokes one subprocess without --promote-lib and rejects extra arguments.",
+      "route": "formalize.physics.isabelle",
+      "dependencies": [],
+      "caller_controls": "Required-path and mutation-authorization checks precede launch; dry-run returns without launch.",
+      "declared_write_roots": [
+        "libraries/MathformerPhysicsLib/backends/isabelle/Isabelle/"
+      ],
+      "audit": "Audited changes outside declared roots fail the hub result; implementation destinations differ from this declaration.",
+      "failure": "Unhandled read/render/write errors stop immediately; earlier or partial files persist, without rollback or retry.",
+      "outputs": "Eight artifact theory/ROOT pairs; with standalone --promote-lib, eight additional library pairs.",
+      "fixed_case_order": [
+        "formalphysics_0066",
+        "formalphysics_0191",
+        "formalphysics_0172",
+        "formalphysics_0119",
+        "formalphysics_0026",
+        "formalphysics_0176",
+        "formalphysics_0054",
+        "formalphysics_0059"
+      ],
+      "loop_bound": "Fixed source cardinality, not configurable; done=true after the eighth case prevents exhaustion failure on normal completion.",
+      "normalization_limits": "Eighteen projected calls; 3600 seconds requires host enforcement and is not a native bound.",
+      "context": "repository_root explicitly supplies the native filesystem context; fixed source, artifact and library paths remain relative to it. CLI defaults are unchanged."
+    }
+  }
+}

@@ -1,0 +1,549 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_benchmark_proofnet_evaluate_workflow
+version: 1.0.0
+kind: workflow
+description: Evaluate local ProofNet predictions, preserving input order, scoring
+  state and CLI output behavior.
+aliases:
+- benchmark:proofnet-evaluate
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  ExtraArguments:
+    schema:
+      type: array
+      items:
+        type: string
+      description: 'CLI argv specialization: referenced prediction file has at most
+        100000 physical lines and selected gold split at most 100000 examples; larger
+        resources are outside this contract, not truncated.'
+  Config:
+    schema:
+      type: object
+      description: Parsed gold_dir, split, predictions_file, id_key, prediction_key,
+        output_json and summary_only.
+      required:
+      - gold_dir
+      - split
+      - predictions_file
+      - id_key
+      - prediction_key
+      - output_json
+      - summary_only
+      properties:
+        gold_dir:
+          type: string
+        split:
+          enum:
+          - validation
+          - test
+        predictions_file:
+          type: string
+        id_key:
+          type: string
+        prediction_key:
+          type: string
+        output_json:
+          type:
+          - string
+          - 'null'
+        summary_only:
+          type: boolean
+  Gold:
+    schema:
+      type: array
+      maxItems: 100000
+      items:
+        type: object
+        required:
+        - id
+        - formal_statement
+        properties:
+          id:
+            type: string
+          formal_statement:
+            type: string
+  PredictionState:
+    schema:
+      type: object
+      description: Open server-owned UTF-8 iterator token, configured keys, physical
+        line number and accumulated prediction map. EOF/read errors close it; server
+        shutdown closes abandoned iterators.
+      required:
+      - line_number
+      - predictions
+      - predictions_file
+      - id_key
+      - prediction_key
+      - reader
+      properties:
+        line_number:
+          type: integer
+          minimum: 0
+        predictions:
+          type: object
+          additionalProperties:
+            type: string
+        predictions_file:
+          type: string
+        id_key:
+          type: string
+        prediction_key:
+          type: string
+        reader:
+          type: string
+  ScoreState:
+    schema:
+      type: object
+      description: Gold traversal position, gold examples and prediction map, total,
+        answered, exact, normalized_exact and ordered details.
+      required:
+      - index
+      - total
+      - answered
+      - exact
+      - normalized_exact
+      - details
+      - gold
+      - predictions
+      properties:
+        index:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+        answered:
+          type: integer
+          minimum: 0
+        exact:
+          type: integer
+          minimum: 0
+        normalized_exact:
+          type: integer
+          minimum: 0
+        details:
+          type: array
+          items:
+            type: object
+        gold:
+          type: array
+          maxItems: 100000
+          items:
+            type: object
+            required:
+            - id
+            - formal_statement
+            properties:
+              id:
+                type: string
+              formal_statement:
+                type: string
+        predictions:
+          type: object
+          additionalProperties:
+            type: string
+  Metrics:
+    schema:
+      type: object
+      description: Dataset, split, gold_file, predictions_file, total, answered, missing,
+        coverage, exact_match, normalized_exact_match, exact_match_on_answered, normalized_exact_match_on_answered;
+        details unless summary_only.
+  Payload:
+    schema:
+      type: string
+    media_type: application/json
+  Boolean:
+    schema:
+      type: boolean
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+inputs:
+  extra_args:
+    type: ExtraArguments
+outputs:
+  metrics:
+    type: Metrics
+    value:
+      ref: flow.outputs.metrics
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  parse:
+    inputs:
+      argv:
+        type: ExtraArguments
+    outputs:
+      config:
+        type: Config
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_parse
+        operation: mathformer_proofnet_parse
+  load_gold:
+    inputs:
+      config:
+        type: Config
+    outputs:
+      gold:
+        type: Gold
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_load_gold
+        operation: mathformer_proofnet_load_gold
+  initialize_predictions:
+    inputs:
+      config:
+        type: Config
+    outputs:
+      state:
+        type: PredictionState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_initialize_predictions
+        operation: mathformer_proofnet_initialize_predictions
+  read_prediction:
+    inputs:
+      state:
+        type: PredictionState
+    outputs:
+      state:
+        type: PredictionState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_read_prediction
+        operation: mathformer_proofnet_read_prediction
+  initialize_scores:
+    inputs:
+      gold:
+        type: Gold
+      predictions:
+        type: PredictionState
+    outputs:
+      state:
+        type: ScoreState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_initialize_scores
+        operation: mathformer_proofnet_initialize_scores
+  score_example:
+    inputs:
+      state:
+        type: ScoreState
+    outputs:
+      state:
+        type: ScoreState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_score_example
+        operation: mathformer_proofnet_score_example
+  finalize:
+    inputs:
+      config:
+        type: Config
+      scores:
+        type: ScoreState
+    outputs:
+      metrics:
+        type: Metrics
+      payload:
+        type: Payload
+      write_file:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_finalize
+        operation: mathformer_proofnet_finalize
+  write_output:
+    inputs:
+      config:
+        type: Config
+      payload:
+        type: Payload
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_write_output
+        operation: mathformer_proofnet_write_output
+  print_output:
+    inputs:
+      payload:
+        type: Payload
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_proofnet_print_output
+        operation: mathformer_proofnet_print_output
+flow:
+  kind: sequence
+  steps:
+  - id: args
+    kind: call
+    operation: parse
+    arguments:
+      argv:
+        ref: inputs.extra_args
+  - id: gold
+    kind: call
+    operation: load_gold
+    arguments:
+      config:
+        ref: steps.args.outputs.config
+  - id: prediction_seed
+    kind: call
+    operation: initialize_predictions
+    arguments:
+      config:
+        ref: steps.args.outputs.config
+  - id: predictions
+    kind: loop
+    state_type: PredictionState
+    initial:
+      ref: steps.prediction_seed.outputs.state
+    body:
+      kind: call
+      operation: read_prediction
+      arguments:
+        state:
+          ref: loop.state
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 100001
+    on_exhausted: fail
+    outputs:
+      state:
+        type: PredictionState
+        value:
+          ref: body.outputs.state
+  - id: score_seed
+    kind: call
+    operation: initialize_scores
+    arguments:
+      gold:
+        ref: steps.gold.outputs.gold
+      predictions:
+        ref: steps.predictions.outputs.state
+  - id: scores
+    kind: loop
+    state_type: ScoreState
+    initial:
+      ref: steps.score_seed.outputs.state
+    body:
+      kind: call
+      operation: score_example
+      arguments:
+        state:
+          ref: loop.state
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 100001
+    on_exhausted: fail
+    outputs:
+      state:
+        type: ScoreState
+        value:
+          ref: body.outputs.state
+  - id: summary
+    kind: call
+    operation: finalize
+    arguments:
+      config:
+        ref: steps.args.outputs.config
+      scores:
+        ref: steps.scores.outputs.state
+  - id: emit
+    kind: switch
+    cases:
+    - id: file
+      when:
+        ref: steps.summary.outputs.write_file
+      body:
+        kind: call
+        operation: write_output
+        arguments:
+          config:
+            ref: steps.args.outputs.config
+          payload:
+            ref: steps.summary.outputs.payload
+    default:
+      kind: call
+      operation: print_output
+      arguments:
+        payload:
+          ref: steps.summary.outputs.payload
+    outputs:
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+  outputs:
+    metrics:
+      type: Metrics
+      value:
+        ref: steps.summary.outputs.metrics
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.emit.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - local_gold_split
+      - predictions_file
+      write:
+      - output_json_and_parent_directories
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - evaluate_local_predictions
+    - emit_metrics
+    forbidden:
+    - infer_proof_validity_from_text_match
+    - promote_theorems
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 200010
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Text-comparison metrics only; successful completion establishes no
+    proof validity or metric threshold.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: benchmarks/proofnet/evaluate_predictions.py
+    selector: main
+    digest: sha256:4994e047baa1dd9d560b60782986747227ef76853bef086e9c1218b9b050e78b
+  - path: benchmarks/proofnet/evaluate_predictions.py
+    selector: parse_args; evaluate; load_prediction_map; normalize_formal_statement
+    digest: sha256:4994e047baa1dd9d560b60782986747227ef76853bef086e9c1218b9b050e78b
+  - path: benchmarks/proofnet/proofnet.py
+    selector: load_split
+    digest: sha256:4147fe268d8768f9b1caa5aa2b332de1463930195e7b718cf5c917296844ceae
+  - path: scripts/mathformer.py
+    selector: build_registry benchmark:proofnet-evaluate; run_action; run_leaf_action;
+      prepare_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/proofnet_evaluate_tools.py
+    selector: register_proofnet_evaluate_tools
+    digest: sha256:941a36049a7317650706fee7e5aa66158ea61b36faae14e89558e5900bd28d1d
+  - path: scripts/mcp_server.py
+    selector: register_proofnet_evaluate_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: authored ProofNet contract
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Input specialization excludes files above 100000 physical prediction lines or
+    100000 gold examples. Native loops have no cap; no truncation is authorized.
+  - Each loop includes an exhaustion observation after its last item; empty inputs
+    use one observation. At the admitted maximum, exhaustion returns normally on iteration
+    100001. on_exhausted is unreachable within scope; outside scope failure is a contract
+    guard, not native behavior.
+  - Native hub preflight, dry-run, subprocess timeout and write audit remain controller
+    responsibilities, outside this main graph.
+  - The 3600-second contract budget and operation budget are descriptor ceilings,
+    not native timeouts or source early stops. Lunar records runtime receipts; the
+    graph does not execute the native hub preflight/audit.
+  - MCP transports argparse termination as a failed tool call (including help exit
+    0), retaining diagnostics on stderr without terminating the server. Native CLI
+    argparse behavior is unchanged.
+  - Native stdout is redirected to server stderr for MCP framing; the payload and
+    exit code are typed outputs. Open prediction iterators are server-session resources,
+    closed at EOF, read error, or process shutdown after interruption.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: benchmark:proofnet-evaluate
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: benchmark:proofnet-evaluate
+      family: benchmark
+      kind: validation
+      safety: writes_artifacts
+      depends_on: []
+      allows_extra_args: true
+      timeout_seconds: 1200
+  mathformer.native_boundary:
+    execution: scripts/mathformer.py run_action -> run_leaf_action -> evaluate_predictions.py
+      with forwarded arguments; no dependencies.
+    failure_policy: Preflight failure or dry-run stops before main. Subprocess timeout
+      is 1200 seconds; nonzero exit fails. Post-execution write audit can fail even
+      when main returns 0.
+    declared_write_roots:
+    - artifacts/benchmarks/
+    scientific_payloads: Graph exports CLI metrics and exit code; hub transport remains
+      HubResult.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+# REUSE-IgnoreEnd

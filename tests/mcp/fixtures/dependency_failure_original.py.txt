@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Check that missing SymPy is reported as a structured dependency blocker."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def run_with_sympy_blocked(script: str) -> dict[str, Any]:
+    """Run one script with an import hook that makes `sympy` unavailable."""
+    with tempfile.TemporaryDirectory() as tmp_raw:
+        tmp = Path(tmp_raw)
+        (tmp / "sitecustomize.py").write_text(
+            """
+import importlib.abc
+
+class _BlockSympy(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "sympy" or fullname.startswith("sympy."):
+            raise ModuleNotFoundError("No module named 'sympy'", name="sympy")
+        return None
+
+import sys
+sys.meta_path.insert(0, _BlockSympy())
+""".lstrip(),
+            encoding="utf-8",
+        )
+        env = os.environ.copy()
+        env["PYTHONPATH"] = f"{tmp}{os.pathsep}{env.get('PYTHONPATH', '')}"
+        completed = subprocess.run(
+            [sys.executable, script, "--json"],
+            cwd=REPO_ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+        )
+    try:
+        parsed = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        parsed = {}
+    return {
+        "script": script,
+        "returncode": completed.returncode,
+        "stdout_json": parsed,
+        "stderr": completed.stderr,
+        "raw_stdout": completed.stdout,
+    }
+
+
+def run_check() -> dict[str, Any]:
+    """Run the dependency-failure regression over user-facing scripts."""
+    scripts = [
+        "tests/physics_sympy/run_phase1_dependency_grounding.py",
+        "tests/physics_sympy/run_controlled_suite.py",
+    ]
+    results = [run_with_sympy_blocked(script) for script in scripts]
+    findings: list[dict[str, Any]] = []
+    for result in results:
+        parsed = result["stdout_json"]
+        if not parsed:
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "missing_structured_json",
+                    "script": result["script"],
+                    "stdout": result["raw_stdout"][-500:],
+                    "stderr": result["stderr"][-500:],
+                }
+            )
+            continue
+        if parsed.get("style") != "physics_sympy_dependency_blocker":
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "wrong_missing_dependency_style",
+                    "script": result["script"],
+                    "style": parsed.get("style"),
+                }
+            )
+        codes = {
+            item.get("code")
+            for item in parsed.get("findings", [])
+            if isinstance(item, dict)
+        }
+        if "missing_required_dependency" not in codes:
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "missing_dependency_code_absent",
+                    "script": result["script"],
+                    "findings": parsed.get("findings", []),
+                }
+            )
+        if "Traceback" in result["stderr"] or "Traceback" in result["raw_stdout"]:
+            findings.append(
+                {
+                    "severity": "high",
+                    "code": "traceback_leaked",
+                    "script": result["script"],
+                }
+            )
+        if result["returncode"] == 0:
+            findings.append(
+                {
+                    "severity": "medium",
+                    "code": "missing_dependency_returned_success",
+                    "script": result["script"],
+                }
+            )
+    return {
+        "schema_version": 1,
+        "ok": not any(item["severity"] == "high" for item in findings),
+        "style": "physics_sympy_dependency_failure_policy",
+        "results": results,
+        "findings": findings,
+    }
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the policy test."""
+    args = parse_args(argv)
+    report = run_check()
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
+    else:
+        print(f"ok: {report['ok']}")
+        print(f"findings: {len(report['findings'])}")
+    return 0 if report["ok"] else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

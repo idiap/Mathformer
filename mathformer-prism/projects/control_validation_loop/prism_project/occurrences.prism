@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from control_validation_loop import (
+    ContractCheck,
+    ControlCase,
+    ControlDisposition,
+    CoverageCheck,
+    CoverageCheckBasis,
+    FlowCheck,
+    FlowCheckBasis,
+    LogCheck,
+    LogCheckBasis,
+    MathformerControlSurfaceSnapshot,
+    RouteCheck,
+    RoutingCheckBasis,
+)
+
+# Assess hook, owner, routing, and shared-runtime integrity against the canonical contract.
+type AuditWorkflowContract = (source: MathformerControlSurfaceSnapshot) -> Generated[ContractCheck]
+
+# Assess whether every controlled workflow family remains reachable from natural language.
+type AuditWorkflowRoutes = (source: RoutingCheckBasis) -> Generated[RouteCheck]
+
+# Assess typed handles, licensed relations, calibrated endpoints, and registry alignment.
+type ValidateReasoningFlows = (source: FlowCheckBasis) -> Generated[FlowCheck]
+
+# Assess whether skills, hooks, owners, and named loops remain fully connected.
+type AuditSkillHookCoverage = (source: CoverageCheckBasis) -> Generated[CoverageCheck]
+
+# Assess reasoning-log structure, event identity, skill attribution, and hook identity.
+type ValidateReasoningLogs = (source: LogCheckBasis) -> Generated[LogCheck]
+
+# Apply blocking and waiver policy without turning validation results into new evidence.
+type ApplyControlGate = (source: ControlCase) -> Generated[ControlDisposition]

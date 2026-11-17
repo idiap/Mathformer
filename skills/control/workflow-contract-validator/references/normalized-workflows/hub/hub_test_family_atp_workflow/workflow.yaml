@@ -1,0 +1,527 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_test_family_atp_workflow
+version: 1.0.0
+kind: workflow
+description: 'Registered ATP run: prepare, consume checks in manifest order, finalize
+  and publish.'
+aliases:
+- test:family:atp
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Matrix:
+    representation: file
+    schema:
+      type: object
+      required:
+      - schema_version
+      - tests
+      properties:
+        schema_version:
+          const: 2
+        tests:
+          type: array
+          minItems: 1
+          maxItems: 1024
+          items:
+            type: object
+      description: Canonical tests/test_matrix.json; this specialization admits at
+        most 1024 total rows.
+  Args:
+    schema:
+      type: object
+      required:
+      - module_family
+      - profile
+      - fail_on_warning
+      - changed_files_only
+      - validate_matrix
+      - emit_dependency_map_only
+      - json
+      - write_jsonl
+      - write_junit
+      - run_id
+      - output_file
+      properties:
+        module_family:
+          const:
+          - atp
+        profile:
+          const: workstation
+        fail_on_warning:
+          const: false
+        changed_files_only:
+          const: false
+        validate_matrix:
+          const: false
+        emit_dependency_map_only:
+          const: false
+        json:
+          const: true
+        write_jsonl:
+          type: 'null'
+        write_junit:
+          type: 'null'
+        run_id:
+          type: string
+        output_file:
+          type: string
+      additionalProperties: false
+      description: parse_args defaults for --module-family atp --json, including generated
+        run_id and default output path.
+  State:
+    schema:
+      type: object
+      required:
+      - matrix
+      - selected
+      - families
+      - index
+      - results
+      properties:
+        matrix:
+          type: array
+          items:
+            type: object
+          maxItems: 1024
+        selected:
+          type: array
+          items:
+            type: object
+          maxItems: 1024
+        families:
+          type: array
+          items:
+            type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 1024
+        results:
+          type: array
+          items:
+            type: object
+          maxItems: 1024
+      additionalProperties: false
+  Bool:
+    schema:
+      type: boolean
+  Report:
+    schema:
+      type: object
+      required:
+      - run_id
+      - ok
+      - profile
+      - families
+      - changed_files_only
+      - changed_files
+      - summary
+      - results
+      - schema_errors
+      - matrix_errors
+      - capability_ledger
+      - dependency_map
+      properties:
+        run_id:
+          type: string
+        ok:
+          type: boolean
+        profile:
+          type: string
+        families:
+          type: array
+          items:
+            type: string
+        changed_files_only:
+          type: boolean
+        changed_files:
+          type: array
+          items:
+            type: string
+        summary:
+          type: object
+        results:
+          type: array
+          items:
+            type: object
+        schema_errors:
+          type: array
+        matrix_errors:
+          type: array
+        capability_ledger:
+          type: object
+        dependency_map:
+          type: string
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+  Context:
+    schema:
+      type: object
+      required:
+      - handle
+      properties:
+        handle:
+          type: string
+      additionalProperties: false
+inputs:
+  manifest:
+    type: Matrix
+  args:
+    type: Args
+outputs:
+  report:
+    type: Report
+    value:
+      ref: steps.finalize.outputs.report
+  exit_code:
+    type: ExitCode
+    value:
+      ref: steps.publish.outputs.exit_code
+operations:
+  prepare:
+    inputs:
+      manifest:
+        type: Matrix
+      args:
+        type: Args
+    outputs:
+      state:
+        type: State
+      context:
+        type: Context
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_atp_family_prepare
+        operation: mathformer_atp_family_prepare
+  guard:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      more:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_atp_family_guard
+        operation: mathformer_atp_family_guard
+  advance:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_atp_family_advance
+        operation: mathformer_atp_family_advance
+  finalize:
+    inputs:
+      state:
+        type: State
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_atp_family_finalize
+        operation: mathformer_atp_family_finalize
+  publish:
+    inputs:
+      report:
+        type: Report
+      args:
+        type: Args
+      context:
+        type: Context
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_atp_family_publish
+        operation: mathformer_atp_family_publish
+  retain_empty:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      more:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_atp_family_retain_empty
+        operation: mathformer_atp_family_retain_empty
+flow:
+  kind: sequence
+  steps:
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      manifest:
+        ref: inputs.manifest
+      args:
+        ref: inputs.args
+  - id: initial_guard
+    kind: call
+    operation: guard
+    arguments:
+      state:
+        ref: steps.prepare.outputs.state
+      context:
+        ref: steps.prepare.outputs.context
+  - kind: loop
+    state_type: State
+    initial:
+      ref: steps.prepare.outputs.state
+    max_iterations: 1024
+    on_exhausted: fail
+    description: One native advance per selected row; empty selection retains state
+      once without executing a check. The final allowed advance exits normally; exhaustion
+      fails before finalization.
+    body:
+      kind: switch
+      cases:
+      - id: empty
+        when:
+          not:
+            ref: steps.initial_guard.outputs.more
+        body:
+          kind: call
+          operation: retain_empty
+          arguments:
+            state:
+              ref: loop.state
+            context:
+              ref: steps.prepare.outputs.context
+      default:
+        kind: sequence
+        steps:
+        - id: advance
+          kind: call
+          operation: advance
+          arguments:
+            state:
+              ref: loop.state
+            args:
+              ref: inputs.args
+            context:
+              ref: steps.prepare.outputs.context
+        - id: guard
+          kind: call
+          operation: guard
+          arguments:
+            state:
+              ref: steps.advance.outputs.state
+            context:
+              ref: steps.prepare.outputs.context
+        outputs:
+          state:
+            type: State
+            value:
+              ref: steps.advance.outputs.state
+          more:
+            type: Bool
+            value:
+              ref: steps.guard.outputs.more
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        more:
+          type: Bool
+          value:
+            ref: selected.outputs.more
+    next_state:
+      ref: body.outputs.state
+    until:
+      not:
+        ref: body.outputs.more
+    outputs:
+      state:
+        type: State
+        value:
+          ref: body.outputs.state
+    id: consume
+  - id: finalize
+    kind: call
+    operation: finalize
+    arguments:
+      state:
+        ref: steps.consume.outputs.state
+      args:
+        ref: inputs.args
+      context:
+        ref: steps.prepare.outputs.context
+  - id: publish
+    kind: call
+    operation: publish
+    arguments:
+      report:
+        ref: steps.finalize.outputs.report
+      args:
+        ref: inputs.args
+      context:
+        ref: steps.prepare.outputs.context
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finalize.outputs.report
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.publish.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 900
+    max_operation_calls: 2053
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Native ATP validation results establish no scientific truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: run
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: prepare_checks; advance_check; run_check; finalize_checks; main; publish_report
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: scripts/mathformer.py
+    selector: build_registry; run_intent_match; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/atp_family_workflow_tools.py
+    digest: sha256:c43aae3c5ee70f9d47e9b55ccc469e429e29e6cefe94c48b106e560572d43941
+  - path: scripts/comprehensive_strict_tools.py
+    digest: sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  gaps:
+  - Only registered ATP defaults; dependency-map-only, changed-file selection, strict
+    mode and alternate publication are outside this specialization.
+  - Input manifest is canonical tests/test_matrix.json, capped at 1024 total rows;
+    source itself has no fixed iteration cap.
+  - Native result/helper payload schemas and external capabilities remain partially
+    typed and unqualified.
+  - Required v1 receipts/provenance do not upgrade optional native logging.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: test:family:atp
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: test:family:atp
+      family: atp
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/test_program/run_comprehensive_tests.py
+      - --module-family
+      - atp
+      - --json
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: 900
+      writes:
+      - artifacts/
+  mathformer.native_boundary:
+    execution: Registered MCP steps invoke prepare_checks -> advance_check (manifest
+      order) -> finalize_checks -> publish_report, shared with run/main.
+    controls: MCP service write authorization and artifact path policy precede operations.
+      Canonical manifest and ATP argument assertions, owned phase/cursor/history,
+      and native per-check write audits are enforced. Hub CLI preflight/dry-run remain
+      owned by the unchanged hub entrypoint; this graph projects the native runner
+      after that boundary.
+    input_materialization: Args must be parse_args defaults and manifest must be the
+      canonical file read by prepare_checks.
+    failure_policy: Nonzero exit, preflight failure or failed hub write audit remains
+      failure.
+    qualification_capability_names_are_not_runtime_grants: true
+    limits: Prior 3600-second/one-call limits were normalization metadata; 900 seconds
+      is the hub subprocess timeout, 2053 bounds this expanded specification.
+# REUSE-IgnoreEnd

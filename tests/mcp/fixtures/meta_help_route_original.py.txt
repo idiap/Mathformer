@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Frozen selected entrypoint and its state helpers, before this implementation.
+def run_intent_match(
+    match: IntentMatch,
+    registry: Mapping[str, WorkflowAction],
+    context: RunContext,
+    *,
+    repository_root: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Execute the controlled action sequence selected by an NL route.
+
+    Motivation:
+        Allow NL requests to drive workflows without bypassing safety checks.
+
+    Intent:
+        Run only registered action ids from the selected route and reuse the
+        existing execution engine for preflight, dry-run, and mutation policy.
+
+    Inputs:
+        The selected match, action registry, and run context.
+
+    Outputs:
+        A result dictionary containing one child result per action.
+    """
+
+    state = initialize_intent_state()
+    mount = {} if repository_root is None else {"repository_root": repository_root}
+    for _action_id in match.route.action_ids:
+        action_id = select_intent_action(state, match)
+        child = run_action(action_id, registry, context, **mount)
+        state, done = advance_intent_state(state, child, context, len(match.route.action_ids))
+        if done:
+            break
+    return finish_intent_state(state, match, registry)
+
+
+def initialize_intent_state():
+    """Initialize the native ordered route accumulator without retained history."""
+    return {"ok": True, "children": []}
+
+
+def select_intent_action(state, match):
+    """Select the next native route item from its ordered observation history."""
+    return match.route.action_ids[len(state["children"])]
+
+
+def advance_intent_state(state, child, context, action_count):
+    """Append in route order; failure remains sticky even under keep-going."""
+    updated = {"ok": state["ok"] and bool(child.get("ok", False)),
+               "children": [*state["children"], child]}
+    done = len(updated["children"]) == action_count or (
+        not child.get("ok", False) and not context.keep_going)
+    return updated, done
+
+
+def finish_intent_state(state, match, registry):
+    """Pack the source-owned route metadata and ordered child observations."""
+    return {
+        "schema_version": 1,
+        "ok": state["ok"],
+        "status": "intent_run_completed" if state["ok"] else "intent_run_failed",
+        "route": intent_match_to_dict(match, registry),
+        "children": state["children"],
+    }
+
+

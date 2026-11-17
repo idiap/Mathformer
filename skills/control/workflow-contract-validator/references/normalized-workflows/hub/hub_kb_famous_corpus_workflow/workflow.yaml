@@ -1,0 +1,470 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_kb_famous_corpus_workflow
+version: 1.0.0
+kind: workflow
+description: 'Native famous corpus regression: reset artifacts, generate/read 500
+  candidates, index, probe, assess, print and return. Optional artifact-root context
+  supports isolated execution; default matches the hub JSON specialization.'
+aliases:
+- kb:famous-corpus
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Paths:
+    schema:
+      type: object
+      properties:
+        artifact_root:
+          type: string
+        corpus_path:
+          type: string
+        kb_root:
+          type: string
+      required:
+      - artifact_root
+      - corpus_path
+      - kb_root
+  Generated:
+    schema:
+      type: object
+      properties:
+        report:
+          type: object
+        records:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              status:
+                type: string
+              canonical_hashes:
+                type: object
+            required:
+            - id
+            - status
+            - canonical_hashes
+      required:
+      - report
+      - records
+  Indexed:
+    schema:
+      type: object
+      properties:
+        added_count:
+          type: integer
+        entry_count:
+          type: integer
+        bloom_paths:
+          type: object
+          properties:
+            manifest:
+              type: string
+          required:
+          - manifest
+        embedding_index:
+          type: string
+        smoke_hits:
+          type: array
+          items:
+            type: object
+      required:
+      - added_count
+      - entry_count
+      - bloom_paths
+      - embedding_index
+      - smoke_hits
+  Probes:
+    schema:
+      type: object
+      properties:
+        title_presence:
+          type: object
+        any_presence:
+          type: object
+        absent_presence:
+          type: object
+        target_distance:
+          type: object
+        unrelated_distance:
+          type: object
+        top_hit_ids:
+          type: array
+          items:
+            type: string
+      required:
+      - title_presence
+      - any_presence
+      - absent_presence
+      - target_distance
+      - unrelated_distance
+      - top_hit_ids
+  Payload:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        artifact_root:
+          type: string
+        assertions:
+          type: object
+          additionalProperties:
+            type: boolean
+        top_hit_ids:
+          type: array
+          items:
+            type: string
+        target_distance:
+          type: object
+        unrelated_distance:
+          type: object
+      required:
+      - ok
+      - artifact_root
+      - assertions
+      - top_hit_ids
+      - target_distance
+      - unrelated_distance
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+  Request:
+    schema:
+      type: object
+      properties:
+        artifact_root:
+          type: string
+      additionalProperties: false
+  Text:
+    schema:
+      type: string
+inputs:
+  request:
+    type: Request
+outputs:
+  payload:
+    type: Payload
+    value:
+      ref: flow.outputs.payload
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  stdout:
+    type: Text
+    value:
+      ref: flow.outputs.stdout
+operations:
+  prepare:
+    inputs:
+      request:
+        type: Request
+    outputs:
+      paths:
+        type: Paths
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_famous_prepare
+        operation: mathformer_famous_prepare
+  generate_read:
+    inputs:
+      paths:
+        type: Paths
+    outputs:
+      generated:
+        type: Generated
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_famous_generate_read
+        operation: mathformer_famous_generate_read
+  index:
+    inputs:
+      paths:
+        type: Paths
+    outputs:
+      indexed:
+        type: Indexed
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_famous_index
+        operation: mathformer_famous_index
+  probe:
+    inputs:
+      paths:
+        type: Paths
+      indexed:
+        type: Indexed
+    outputs:
+      probes:
+        type: Probes
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_famous_probe
+        operation: mathformer_famous_probe
+  assess:
+    inputs:
+      paths:
+        type: Paths
+      generated:
+        type: Generated
+      indexed:
+        type: Indexed
+      probes:
+        type: Probes
+    outputs:
+      payload:
+        type: Payload
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_famous_assess
+        operation: mathformer_famous_assess
+  emit:
+    inputs:
+      payload:
+        type: Payload
+      code:
+        type: ExitCode
+    outputs:
+      exit_code:
+        type: ExitCode
+      stdout:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_famous_emit
+        operation: mathformer_famous_emit
+flow:
+  kind: sequence
+  steps:
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      request:
+        ref: inputs.request
+  - id: generate
+    kind: call
+    operation: generate_read
+    arguments:
+      paths:
+        ref: steps.prepare.outputs.paths
+  - id: index
+    kind: call
+    operation: index
+    arguments:
+      paths:
+        ref: steps.prepare.outputs.paths
+    description: Runs only after generation and JSONL parsing complete; consumes generated
+      corpus file.
+  - id: probe
+    kind: call
+    operation: probe
+    arguments:
+      paths:
+        ref: steps.prepare.outputs.paths
+      indexed:
+        ref: steps.index.outputs.indexed
+  - id: assess
+    kind: call
+    operation: assess
+    arguments:
+      paths:
+        ref: steps.prepare.outputs.paths
+      generated:
+        ref: steps.generate.outputs.generated
+      indexed:
+        ref: steps.index.outputs.indexed
+      probes:
+        ref: steps.probe.outputs.probes
+  - id: finish
+    kind: switch
+    cases:
+    - id: passed
+      when:
+        ref: steps.assess.outputs.payload.ok
+      body:
+        id: emit_success
+        kind: call
+        operation: emit
+        arguments:
+          payload:
+            ref: steps.assess.outputs.payload
+          code:
+            literal: 0
+    default:
+      id: emit_failure
+      kind: call
+      operation: emit
+      arguments:
+        payload:
+          ref: steps.assess.outputs.payload
+        code:
+          literal: 3
+    outputs:
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+      stdout:
+        type: Text
+        value:
+          ref: selected.outputs.stdout
+  outputs:
+    payload:
+      type: Payload
+      value:
+        ref: steps.assess.outputs.payload
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.finish.outputs.exit_code
+    stdout:
+      type: Text
+      value:
+        ref: steps.finish.outputs.stdout
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/kb/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 6
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Corpus regression assertions only; generated candidates are not proved
+    or promoted.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/kb/run_famous_theorem_corpus.py
+    selector: main
+    digest: sha256:e18c800e28616c1b5d52623faadf654dba373f2af7ec974ac80389602f36a66f
+  - path: tests/kb/run_famous_theorem_corpus.py
+    selector: run_json
+    digest: sha256:e18c800e28616c1b5d52623faadf654dba373f2af7ec974ac80389602f36a66f
+  - path: skills/premise-kb/premise-kb-theorem-seed-generator/scripts/generate_famous_theorem_axiom_corpus.py
+    selector: main
+    digest: sha256:6668e72b9340e9963c9f4b8e452ef636d7ba189aca5ea06d57124ddaa5ba502e
+  - path: skills/premise-kb/premise-kb-indexer/scripts/index_premise_kb.py
+    selector: main
+    digest: sha256:92c948b8ce71704da1999309588b9ed763331aef1eb289bcd80463e2df091591
+  - path: scripts/mathformer.py
+    selector: build_registry/action:kb:famous-corpus; run_action; run_leaf_action;
+      preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/famous_corpus_tools.py
+    selector: register_famous_corpus_tools
+    digest: sha256:d34273a1f1d9c963015b7a8bfffc515ccf347286c122fd642c05e68cb9660cd2
+  - path: scripts/mcp_server.py
+    selector: register_famous_corpus_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  gaps:
+  - Hub preflight/dry-run and post-execution write audit remain native hub boundary
+    controls. The direct MCP step interface uses service write guards and Lunar invocation
+    authorization; it does not claim hub audit acceptance.
+  - The 3600-second and six-call limits are enforced by Lunar; native subprocesses
+    retain their original lack of a timeout.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: kb:famous-corpus
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: kb:famous-corpus
+      summary: Generate and validate the famous theorem and axiom corpus.
+      family: kb
+      kind: generation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/kb/run_famous_theorem_corpus.py
+      - --json
+      depends_on: []
+      writes:
+      - artifacts/kb/
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: 'scripts/mathformer.py: run_action -> run_leaf_action; NL route kb.famous.corpus
+      selects kb:famous-corpus.'
+    effects_status: partial_native_declarations
+    failure_policy: Preflight errors or dry-run prevent native execution. Nonzero
+      generator/indexer exit raises RuntimeError immediately; JSON parsing, I/O and
+      KB exceptions abort without payload completion. Hub audits writes afterward
+      and may mark undeclared writes failed; main exit 0 alone is not hub acceptance.
+    scientific_payloads: Payload is main() output, not the hub transport envelope.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    - request.artifact_root
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: One native main invocation; no iterative search, retry, checkpoint or
+      feedback loop. Finite traversals retain records, IDs, hits and assertions within
+      owning operations.
+# REUSE-IgnoreEnd

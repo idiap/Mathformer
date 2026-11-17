@@ -1,0 +1,933 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lean_generative_repair_plan_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Construct one advisory Lean physics repair plan; never execute proposed repairs or gates.",
+  "aliases": [
+    "physics-lean:generative-repair-plan"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Arguments": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Control": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "self_test": {
+            "type": "boolean"
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "halted": {
+            "type": "boolean"
+          },
+          "help_text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "self_test",
+          "output",
+          "halted",
+          "help_text"
+        ]
+      }
+    },
+    "PlanInputs": {
+      "schema": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "source_text": {
+            "type": "string"
+          },
+          "lean_text": {
+            "type": "string"
+          },
+          "monitor_report": {},
+          "object_packet": {},
+          "workbench_plan": {},
+          "repair_loop": {},
+          "repair_plans": {
+            "type": "array",
+            "items": {}
+          },
+          "high_risk": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source_text",
+          "lean_text",
+          "monitor_report",
+          "object_packet",
+          "workbench_plan",
+          "repair_loop",
+          "repair_plans",
+          "high_risk"
+        ]
+      }
+    },
+    "Prepared": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "source_preview": {
+            "type": "string",
+            "maxLength": 800
+          },
+          "lean_preview": {
+            "type": "string",
+            "maxLength": 800
+          },
+          "active_categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "object_classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "source_preview",
+          "lean_preview",
+          "active_categories",
+          "object_classes"
+        ]
+      }
+    },
+    "Prompts": {
+      "schema": {
+        "type": "array",
+        "minItems": 4,
+        "maxItems": 4,
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "repair_role": {
+              "type": "string"
+            },
+            "prompt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "repair_role",
+            "prompt"
+          ]
+        }
+      }
+    },
+    "Flags": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "monitor_pass": {
+            "type": "boolean"
+          },
+          "needs_loop": {
+            "type": "boolean"
+          },
+          "repair_loop_status": {}
+        },
+        "required": [
+          "monitor_pass",
+          "needs_loop",
+          "repair_loop_status"
+        ]
+      }
+    },
+    "Status": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "not_required",
+          "ready",
+          "needs_deterministic_repair_loop"
+        ]
+      }
+    },
+    "Plan": {
+      "schema": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "style": {
+            "const": "physics_lean_generative_repair_plan"
+          },
+          "status": {
+            "enum": [
+              "not_required",
+              "ready",
+              "needs_deterministic_repair_loop"
+            ]
+          },
+          "codex_exec_enabled": {
+            "const": true
+          },
+          "high_risk": {
+            "type": "boolean"
+          },
+          "requires_deterministic_first": {
+            "const": true
+          },
+          "repair_panel": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "active_categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "detected_object_classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workbench_status": {},
+          "deterministic_repair_loop_status": {},
+          "repair_plan_styles": {
+            "type": "array"
+          },
+          "probe_prompts": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "expected_report_schema": {
+            "type": "object"
+          },
+          "forbidden_shortcuts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recommended_command": {
+            "type": "string"
+          },
+          "acceptance_policy": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "style",
+          "status",
+          "codex_exec_enabled",
+          "high_risk",
+          "requires_deterministic_first",
+          "repair_panel",
+          "active_categories",
+          "detected_object_classes",
+          "workbench_status",
+          "deterministic_repair_loop_status",
+          "repair_plan_styles",
+          "probe_prompts",
+          "expected_report_schema",
+          "forbidden_shortcuts",
+          "recommended_command",
+          "acceptance_policy"
+        ]
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "const": 0
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "working_directory": {
+            "type": "string"
+          },
+          "program_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "working_directory",
+          "program_name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Text": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Arguments"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "plan": {
+      "type": "Plan",
+      "value": {
+        "ref": "flow.outputs.plan"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    },
+    "stdout": {
+      "type": "Text",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "load": {
+      "inputs": {
+        "argv": {
+          "type": "Arguments"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "data": {
+          "type": "PlanInputs"
+        },
+        "control": {
+          "type": "Control"
+        },
+        "data_json": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_repair_load",
+          "operation": "mathformer_generative_repair_load"
+        }
+      }
+    },
+    "prepare": {
+      "inputs": {
+        "data": {
+          "type": "PlanInputs"
+        },
+        "data_json": {
+          "type": "Text"
+        }
+      },
+      "outputs": {
+        "prepared": {
+          "type": "Prepared"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_repair_prepare",
+          "operation": "mathformer_generative_repair_prepare"
+        }
+      }
+    },
+    "prompts": {
+      "inputs": {
+        "data": {
+          "type": "PlanInputs"
+        },
+        "prepared": {
+          "type": "Prepared"
+        },
+        "data_json": {
+          "type": "Text"
+        }
+      },
+      "outputs": {
+        "prompts": {
+          "type": "Prompts"
+        },
+        "prompts_json": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_repair_prompts",
+          "operation": "mathformer_generative_repair_prompts"
+        }
+      }
+    },
+    "guards": {
+      "inputs": {
+        "data": {
+          "type": "PlanInputs"
+        },
+        "data_json": {
+          "type": "Text"
+        }
+      },
+      "outputs": {
+        "flags": {
+          "type": "Flags"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_repair_guards",
+          "operation": "mathformer_generative_repair_guards"
+        }
+      }
+    },
+    "assemble": {
+      "inputs": {
+        "data": {
+          "type": "PlanInputs"
+        },
+        "prepared": {
+          "type": "Prepared"
+        },
+        "prompts": {
+          "type": "Prompts"
+        },
+        "flags": {
+          "type": "Flags"
+        },
+        "status": {
+          "type": "Status"
+        },
+        "data_json": {
+          "type": "Text"
+        },
+        "prompts_json": {
+          "type": "Text"
+        }
+      },
+      "outputs": {
+        "plan": {
+          "type": "Plan"
+        },
+        "plan_json": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_repair_assemble",
+          "operation": "mathformer_generative_repair_assemble"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "control": {
+          "type": "Control"
+        },
+        "plan": {
+          "type": "Plan"
+        },
+        "plan_json": {
+          "type": "Text"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_repair_emit",
+          "operation": "mathformer_generative_repair_emit"
+        }
+      }
+    },
+    "help": {
+      "inputs": {
+        "control": {
+          "type": "Control"
+        }
+      },
+      "outputs": {
+        "plan": {
+          "type": "Plan"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_repair_help",
+          "operation": "mathformer_generative_repair_help"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "load",
+        "kind": "call",
+        "operation": "load",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "help_requested",
+            "when": {
+              "ref": "steps.load.outputs.control.halted"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "help",
+              "arguments": {
+                "control": {
+                  "ref": "steps.load.outputs.control"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "prepare",
+              "kind": "call",
+              "operation": "prepare",
+              "arguments": {
+                "data": {
+                  "ref": "steps.load.outputs.data"
+                },
+                "data_json": {
+                  "ref": "steps.load.outputs.data_json"
+                }
+              }
+            },
+            {
+              "id": "prompts",
+              "kind": "call",
+              "operation": "prompts",
+              "arguments": {
+                "data": {
+                  "ref": "steps.load.outputs.data"
+                },
+                "prepared": {
+                  "ref": "steps.prepare.outputs.prepared"
+                },
+                "data_json": {
+                  "ref": "steps.load.outputs.data_json"
+                }
+              }
+            },
+            {
+              "id": "guards",
+              "kind": "call",
+              "operation": "guards",
+              "arguments": {
+                "data": {
+                  "ref": "steps.load.outputs.data"
+                },
+                "data_json": {
+                  "ref": "steps.load.outputs.data_json"
+                }
+              }
+            },
+            {
+              "id": "status",
+              "kind": "switch",
+              "cases": [
+                {
+                  "id": "monitor_passes",
+                  "when": {
+                    "ref": "steps.guards.outputs.flags.monitor_pass"
+                  },
+                  "body": {
+                    "kind": "call",
+                    "operation": "assemble",
+                    "arguments": {
+                      "data": {
+                        "ref": "steps.load.outputs.data"
+                      },
+                      "prepared": {
+                        "ref": "steps.prepare.outputs.prepared"
+                      },
+                      "prompts": {
+                        "ref": "steps.prompts.outputs.prompts"
+                      },
+                      "flags": {
+                        "ref": "steps.guards.outputs.flags"
+                      },
+                      "status": {
+                        "literal": "not_required"
+                      },
+                      "data_json": {
+                        "ref": "steps.load.outputs.data_json"
+                      },
+                      "prompts_json": {
+                        "ref": "steps.prompts.outputs.prompts_json"
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": "deterministic_loop_missing",
+                  "when": {
+                    "ref": "steps.guards.outputs.flags.needs_loop"
+                  },
+                  "body": {
+                    "kind": "call",
+                    "operation": "assemble",
+                    "arguments": {
+                      "data": {
+                        "ref": "steps.load.outputs.data"
+                      },
+                      "prepared": {
+                        "ref": "steps.prepare.outputs.prepared"
+                      },
+                      "prompts": {
+                        "ref": "steps.prompts.outputs.prompts"
+                      },
+                      "flags": {
+                        "ref": "steps.guards.outputs.flags"
+                      },
+                      "status": {
+                        "literal": "needs_deterministic_repair_loop"
+                      },
+                      "data_json": {
+                        "ref": "steps.load.outputs.data_json"
+                      },
+                      "prompts_json": {
+                        "ref": "steps.prompts.outputs.prompts_json"
+                      }
+                    }
+                  }
+                }
+              ],
+              "default": {
+                "kind": "call",
+                "operation": "assemble",
+                "arguments": {
+                  "data": {
+                    "ref": "steps.load.outputs.data"
+                  },
+                  "prepared": {
+                    "ref": "steps.prepare.outputs.prepared"
+                  },
+                  "prompts": {
+                    "ref": "steps.prompts.outputs.prompts"
+                  },
+                  "flags": {
+                    "ref": "steps.guards.outputs.flags"
+                  },
+                  "status": {
+                    "literal": "ready"
+                  },
+                  "data_json": {
+                    "ref": "steps.load.outputs.data_json"
+                  },
+                  "prompts_json": {
+                    "ref": "steps.prompts.outputs.prompts_json"
+                  }
+                }
+              },
+              "outputs": {
+                "plan": {
+                  "type": "Plan",
+                  "value": {
+                    "ref": "selected.outputs.plan"
+                  }
+                },
+                "plan_json": {
+                  "type": "Text",
+                  "value": {
+                    "ref": "selected.outputs.plan_json"
+                  }
+                }
+              }
+            },
+            {
+              "id": "emit",
+              "kind": "call",
+              "operation": "emit",
+              "arguments": {
+                "control": {
+                  "ref": "steps.load.outputs.control"
+                },
+                "plan": {
+                  "ref": "steps.status.outputs.plan"
+                },
+                "plan_json": {
+                  "ref": "steps.status.outputs.plan_json"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "plan": {
+              "type": "Plan",
+              "value": {
+                "ref": "steps.status.outputs.plan"
+              }
+            },
+            "exit_code": {
+              "type": "ExitCode",
+              "value": {
+                "ref": "steps.emit.outputs.exit_code"
+              }
+            },
+            "stdout": {
+              "type": "Text",
+              "value": {
+                "ref": "steps.emit.outputs.stdout"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "plan": {
+            "type": "Plan",
+            "value": {
+              "ref": "selected.outputs.plan"
+            }
+          },
+          "exit_code": {
+            "type": "ExitCode",
+            "value": {
+              "ref": "selected.outputs.exit_code"
+            }
+          },
+          "stdout": {
+            "type": "Text",
+            "value": {
+              "ref": "selected.outputs.stdout"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "plan": {
+        "type": "Plan",
+        "value": {
+          "ref": "steps.dispatch.outputs.plan"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.dispatch.outputs.exit_code"
+        }
+      },
+      "stdout": {
+        "type": "Text",
+        "value": {
+          "ref": "steps.dispatch.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "requested_output"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "construct_advisory_plan",
+        "write_requested_output"
+      ],
+      "forbidden": [
+        "invoke_model",
+        "apply_repairs",
+        "execute_acceptance_gates",
+        "promote_artifacts",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 6
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Advisory prompts only; completion establishes no repair, proof, acceptance or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/physics-lean/physics-lean-generative-repair-orchestrator/scripts/build_physics_lean_generative_repair_plan.py",
+        "selector": "build_plan; prepare_inputs; prompts_for_inputs; plan_flags; assemble_plan; load_inputs; emit_plan; main",
+        "digest": "sha256:5fa3e6d8766bdd992c61935625ad292f071b8d574e832d26b9bb2648fde14d59"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:physics-lean:generative-repair-plan; prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/generative_repair_tools.py",
+        "selector": "register_generative_repair_tools; restored",
+        "digest": "sha256:4d4cd9da5564a2788a695460f2f60208c70afb3236d8befe8b72f5be2602c36a"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_generative_repair_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "service_coverage_report",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory: physics-lean:generative-repair-plan",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Hub preflight, dry-run and write auditing remain the native outer boundary, outside this main/build_plan graph. MCP output writes additionally obey the service read-only and path policies.",
+      "The native entrypoint has no timeout or mandatory receipts. Lunar supplies the descriptor time/call limits, effect records and replay artifacts; these do not establish scientific acceptance."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lean:generative-repair-plan",
+      "owner_skill": "skills/physics-lean/physics-lean-generative-repair-orchestrator/SKILL.md",
+      "contract": {
+        "id": "physics-lean:generative-repair-plan",
+        "family": "physics_lean",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "depends_on": [],
+        "allows_extra_args": true,
+        "writes": [
+          "artifacts/"
+        ],
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Native hub leaf launches main with pass-through argv; direct callers may invoke the script without hub controls.",
+      "launch_guards": "Preflight failure or dry-run prevents launch; executed results undergo write auditing, which can make hub ok false.",
+      "failure_policy": "Main returns 0 even for needs_deterministic_repair_loop; preserve subprocess errors and audit failures in the hub envelope.",
+      "scientific_payloads": "Plan is advisory JSON; codex_exec_enabled is data and does not launch Codex.",
+      "bounds": "No iterative repair, retries, convergence or exhaustion; finite input traversals stay inside helpers and prompt count is fixed at four.",
+      "timeout": "Native timeout_seconds is null; the descriptor's 3600-second limit is not enforced by this source.",
+      "receipts": "Native optional logs do not implement mandatory v1 receipts.",
+      "context": "Explicit working_directory resolves native relative paths without changing process cwd; program_name preserves argparse help. Help returns null plan and performs no input reads. Ordered JSON evidence preserves prompt repr and emitted bytes across host canonicalization."
+    }
+  }
+}

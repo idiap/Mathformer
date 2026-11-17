@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from textbook_theory_autoformalization_loop import (
+    BatchSummaryBasis,
+    ChapterQueue,
+    LatexTextbookArchiveSelection,
+    LeanCheckBasis,
+    LeanUnitSet,
+    OrganizedTheory,
+    TextbookAutoformalizationAcceptanceSummary,
+    TextbookDisposition,
+    TextbookTheoryAutoformalizationArtifactRealnessGateArtifact,
+    TextbookTheoryAutoformalizationCheckCompileArtifact,
+    TextbookTheoryAutoformalizationDraftTextbookBatchAutoformalizeArtifact,
+    TextbookTheoryAutoformalizationDraftTextbookChapterAutoformalizationArtifact,
+    TextbookTheoryAutoformalizationDraftTextbookObjectAutoformalizationRunArtifact,
+    TextbookTheoryAutoformalizationExecuteInitialArtifact,
+    TextbookTheoryAutoformalizationIntakeLatexArchiveTheoryExtractArtifact,
+    TextbookTheoryAutoformalizationMathlibGroundingMaximizeArtifact,
+    TextbookTheoryAutoformalizationPostformalizationSourceAnchorDriftGuardArtifact,
+    TextbookTheoryAutoformalizationPreformalizationLineTranslationPacketArtifact,
+    TextbookTheoryAutoformalizationPreformalizationResultExistencePrecheckArtifact,
+    TextbookTheoryAutoformalizationPreformalizationTextbookTheoryOrganizeArtifact,
+    TheoryCorpus,
+    UnitGateReport,
+    UnitJobSet,
+)
+
+type FormalizesDraftTextbookChapterAutoformalizationCertificate:
+    source: TextbookTheoryAutoformalizationPreformalizationTextbookTheoryOrganizeArtifact
+    target: Generated[TextbookTheoryAutoformalizationDraftTextbookChapterAutoformalizationArtifact]
+
+relation FormalizesDraftTextbookChapterAutoformalization(
+    source: TextbookTheoryAutoformalizationPreformalizationTextbookTheoryOrganizeArtifact,
+    target: Generated[TextbookTheoryAutoformalizationDraftTextbookChapterAutoformalizationArtifact],
+) -> FormalizesDraftTextbookChapterAutoformalizationCertificate
+
+type FormalizesDraftTextbookBatchAutoformalizeCertificate:
+    source: TextbookTheoryAutoformalizationDraftTextbookChapterAutoformalizationArtifact
+    target: Generated[TextbookTheoryAutoformalizationDraftTextbookBatchAutoformalizeArtifact]
+
+relation FormalizesDraftTextbookBatchAutoformalize(
+    source: TextbookTheoryAutoformalizationDraftTextbookChapterAutoformalizationArtifact,
+    target: Generated[TextbookTheoryAutoformalizationDraftTextbookBatchAutoformalizeArtifact],
+) -> FormalizesDraftTextbookBatchAutoformalizeCertificate
+
+type FormalizesDraftTextbookObjectAutoformalizationRunCertificate:
+    source: TextbookTheoryAutoformalizationPreformalizationResultExistencePrecheckArtifact
+    target: Generated[TextbookTheoryAutoformalizationDraftTextbookObjectAutoformalizationRunArtifact]
+
+relation FormalizesDraftTextbookObjectAutoformalizationRun(
+    source: TextbookTheoryAutoformalizationPreformalizationResultExistencePrecheckArtifact,
+    target: Generated[TextbookTheoryAutoformalizationDraftTextbookObjectAutoformalizationRunArtifact],
+) -> FormalizesDraftTextbookObjectAutoformalizationRunCertificate

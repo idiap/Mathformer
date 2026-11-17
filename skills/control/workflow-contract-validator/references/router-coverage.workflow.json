@@ -1,0 +1,812 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_control_workflow_router_coverage_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Audit registered family coverage by traversing every route and action reference.",
+  "aliases": [
+    "control:workflow-router-coverage"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Domain": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "route_cap": {
+            "const": 10000
+          },
+          "actions_per_route_cap": {
+            "const": 10000
+          }
+        },
+        "required": [
+          "route_cap",
+          "actions_per_route_cap"
+        ],
+        "additionalProperties": false,
+        "description": "Specialization requires native loaded routes <= route_cap and every action list <= actions_per_route_cap; these are domain constraints, not native CLI options."
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "registry": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "family": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "family"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "routes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "route_id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "action_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 10000
+                },
+                "skill_routes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "examples": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "route_id",
+                "title",
+                "action_ids",
+                "skill_routes",
+                "examples"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 10000
+          },
+          "all_families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "covered": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "route_rows": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "unknown_action_refs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "routes_without_actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "route_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "action_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "route_families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "phase": {
+            "enum": [
+              "begin",
+              "visit",
+              "finish",
+              "done"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "registry",
+          "routes",
+          "all_families",
+          "covered",
+          "route_rows",
+          "unknown_action_refs",
+          "routes_without_actions",
+          "route_index",
+          "action_index",
+          "route_families",
+          "phase"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "style": {
+            "const": "mathformer_workflow_router_coverage_report"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "family_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "covered_family_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "route_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "all_families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "covered_families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "missing_families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unknown_action_refs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "routes_without_actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "routes": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "missing_family_route_coverage",
+                "unknown_route_action_refs",
+                "routes_without_actions"
+              ]
+            }
+          }
+        },
+        "required": [
+          "style",
+          "ok",
+          "family_count",
+          "covered_family_count",
+          "route_count",
+          "all_families",
+          "covered_families",
+          "missing_families",
+          "unknown_action_refs",
+          "routes_without_actions",
+          "routes",
+          "blockers"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "registry": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "family": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "family"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "routes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "route_id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "action_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 10000
+                },
+                "skill_routes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "examples": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "route_id",
+                "title",
+                "action_ids",
+                "skill_routes",
+                "examples"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 10000
+          }
+        },
+        "required": [
+          "registry",
+          "routes"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "domain": {
+      "type": "Domain"
+    },
+    "context": {
+      "type": "Context",
+      "required": false
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {
+        "domain": {
+          "type": "Domain"
+        },
+        "context": {
+          "type": "Context",
+          "required": false
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "has_routes": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_router_coverage_initialize",
+          "operation": "mathformer_router_coverage_initialize"
+        }
+      }
+    },
+    "begin_route": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "has_actions": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_router_coverage_begin_route",
+          "operation": "mathformer_router_coverage_begin_route"
+        }
+      }
+    },
+    "visit_action": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "actions_done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_router_coverage_visit_action",
+          "operation": "mathformer_router_coverage_visit_action"
+        }
+      }
+    },
+    "finish_route": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "routes_done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_router_coverage_finish_route",
+          "operation": "mathformer_router_coverage_finish_route"
+        }
+      }
+    },
+    "finalize": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_router_coverage_finalize",
+          "operation": "mathformer_router_coverage_finalize"
+        }
+      }
+    },
+    "empty_state": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_router_coverage_empty_state",
+          "operation": "mathformer_router_coverage_empty_state"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "load",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "domain": {
+            "ref": "inputs.domain"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "traverse",
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.load.outputs.state"
+        },
+        "max_iterations": 100020000,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "begin",
+              "when": {
+                "eq": [
+                  {
+                    "ref": "loop.state.phase"
+                  },
+                  {
+                    "literal": "begin"
+                  }
+                ]
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "kind": "call",
+                    "operation": "begin_route",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      }
+                    },
+                    "id": "step"
+                  }
+                ],
+                "outputs": {
+                  "state": {
+                    "type": "State",
+                    "value": {
+                      "ref": "steps.step.outputs.state"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "visit",
+              "when": {
+                "eq": [
+                  {
+                    "ref": "loop.state.phase"
+                  },
+                  {
+                    "literal": "visit"
+                  }
+                ]
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "kind": "call",
+                    "operation": "visit_action",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      }
+                    },
+                    "id": "step"
+                  }
+                ],
+                "outputs": {
+                  "state": {
+                    "type": "State",
+                    "value": {
+                      "ref": "steps.step.outputs.state"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "finish",
+              "when": {
+                "eq": [
+                  {
+                    "ref": "loop.state.phase"
+                  },
+                  {
+                    "literal": "finish"
+                  }
+                ]
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "kind": "call",
+                    "operation": "finish_route",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      }
+                    },
+                    "id": "step"
+                  }
+                ],
+                "outputs": {
+                  "state": {
+                    "type": "State",
+                    "value": {
+                      "ref": "steps.step.outputs.state"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "empty_state",
+            "arguments": {
+              "state": {
+                "ref": "loop.state"
+              }
+            }
+          },
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "selected.outputs.state"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "eq": [
+            {
+              "ref": "body.outputs.state.phase"
+            },
+            {
+              "literal": "done"
+            }
+          ]
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "report",
+        "kind": "call",
+        "operation": "finalize",
+        "arguments": {
+          "state": {
+            "ref": "steps.traverse.outputs.state"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.report.outputs.report"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository"
+        ],
+        "write": []
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "audit_router_coverage"
+      ],
+      "forbidden": [
+        "execute_scientific_workflows",
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 100020002
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Router coverage audit only; completion establishes no scientific result."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py",
+        "selector": "build_coverage_report",
+        "digest": "sha256:d01e8b3964a4efc3dd4fc27ca3d5b33dbee69ea8fb48d50c0c6f86911da5730b"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:control:workflow-router-coverage; preflight; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "workflow-router coverage audit invocation",
+        "digest": "sha256:50839a42384b29b7d88025fca805401828ae28419102d2cbba0379e0754f26cc"
+      },
+      {
+        "path": "scripts/router_coverage_tools.py",
+        "digest": "sha256:3ee882fb7e3ac30dca54e54c3d888453be09cf8d7f46600dcfb2caa31a1a3e5e"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Finite specialization admits at most 10000 routes and 10000 action IDs per route; initialization rejects larger snapshots without truncation. The native CLI remains collection-bounded without these caps.",
+      "Registry state retains only the family projection consumed by the audit; route state retains the six native report fields.",
+      "The 3600-second and operation-call limits are Lunar budgets, not native CLI bounds; the test matrix separately allows 120 seconds.",
+      "The native CLI does not emit workflow receipts; Lunar supplies execution receipts. Optional native logging remains in its owning invocation."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "control:workflow-router-coverage",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "id": "control:workflow-router-coverage",
+        "summary": "Audit natural-language router coverage across every registered workflow family.",
+        "family": "control",
+        "kind": "validation",
+        "safety": "read_only",
+        "command": [
+          "{python}",
+          "skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py",
+          "--audit-coverage",
+          "--json"
+        ],
+        "depends_on": [],
+        "writes": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Hub preflight failure or dry-run prevents subprocess execution; action has no dependencies or native timeout.",
+      "invocation": "workflow.router selects this hub action; main also calls the audit in --self-test, whose other behavior is outside this selected function.",
+      "failure_policy": "main prints JSON for the registered invocation and exits 0 when report.ok is true, otherwise 1; audit findings never interrupt traversal.",
+      "state_encoding": "covered encodes the Python set; cursor fields encode for-loop positions; route_families resets for each route, while covered, route_rows, unknown_action_refs and routes_without_actions persist. phase records the next source block. One loop interleaves begin, each action, and finish in native order; done on empty routes uses a structural identity iteration with no native call. This avoids branch-local nested exhaustion unsupported by Lunar.",
+      "empty_branch": "Empty routes use the empty_state identity packing tool, which asserts zero source routes and returns initialized state. No native route or action is visited.",
+      "context": "Optional explicit registry/routes snapshot audits proposed data with the same native steps. Omission loads build_registry() then build_intent_routes(); no model/provider is involved."
+    }
+  }
+}

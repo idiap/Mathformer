@@ -1,0 +1,324 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_control_reasoning_flow_catalog_workflow
+version: 1.0.0
+kind: workflow
+description: Validate and render canonical reasoning-flow references in memory, then
+  check both existing documents using the hub-selected --check --json invocation.
+aliases:
+- control:reasoning-flow-catalog
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Construction:
+    schema:
+      type: object
+      required:
+      - ok
+      properties:
+        ok:
+          type: boolean
+        semantic:
+          type: string
+        materializations:
+          type: string
+        metadata:
+          type: object
+          description: Profile and loop counts/IDs, both SHA-256 digests, and zero
+            semantic forbidden-identifier count.
+        error:
+          type: string
+      description: 'Tagged native construct_catalog result: success carries both texts
+        and metadata; failure carries the caught error.'
+  Outcome:
+    schema:
+      type: object
+      required:
+      - ok
+      - action
+      - output_file
+      - materializations_file
+      properties:
+        ok:
+          type: boolean
+        action:
+          const: checked
+        output_file:
+          type: string
+        materializations_file:
+          type: string
+        semantic_synchronized:
+          type: boolean
+        materializations_synchronized:
+          type: boolean
+        synchronized:
+          type: boolean
+        error:
+          type: string
+      description: Native main payload. Successful construction also contributes all
+        metadata fields; caught exceptions contribute error instead.
+  Result:
+    schema:
+      type: object
+      required:
+      - payload
+      - exit_code
+      properties:
+        payload:
+          type: object
+        exit_code:
+          type: integer
+          enum:
+          - 0
+          - 1
+      description: Printed JSON payload and main return code; code 0 iff payload.ok,
+        otherwise 1.
+  Context:
+    schema:
+      type: object
+      required:
+      - repository_root
+      properties:
+        repository_root:
+          type: string
+      additionalProperties: false
+inputs:
+  context:
+    type: Context
+outputs:
+  result:
+    type: Result
+    value:
+      ref: flow.outputs.result
+operations:
+  construct:
+    inputs:
+      context:
+        type: Context
+    outputs:
+      construction:
+        type: Construction
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_catalog_construct
+        operation: mathformer_reasoning_catalog_construct
+  compare:
+    inputs:
+      construction:
+        type: Construction
+      context:
+        type: Context
+    outputs:
+      outcome:
+        type: Outcome
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_catalog_compare
+        operation: mathformer_reasoning_catalog_compare
+  construction_failure:
+    inputs:
+      construction:
+        type: Construction
+      context:
+        type: Context
+    outputs:
+      outcome:
+        type: Outcome
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_catalog_construction_failure
+        operation: mathformer_reasoning_catalog_construction_failure
+  emit:
+    inputs:
+      outcome:
+        type: Outcome
+    outputs:
+      result:
+        type: Result
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_catalog_emit
+        operation: mathformer_reasoning_catalog_emit
+flow:
+  kind: sequence
+  steps:
+  - id: construct
+    kind: call
+    operation: construct
+    arguments:
+      context:
+        ref: inputs.context
+  - id: resolve
+    kind: switch
+    cases:
+    - id: constructed
+      when:
+        ref: steps.construct.outputs.construction.ok
+      body:
+        kind: call
+        operation: compare
+        arguments:
+          construction:
+            ref: steps.construct.outputs.construction
+          context:
+            ref: inputs.context
+    default:
+      kind: call
+      operation: construction_failure
+      arguments:
+        construction:
+          ref: steps.construct.outputs.construction
+        context:
+          ref: inputs.context
+    outputs:
+      outcome:
+        type: Outcome
+        value:
+          ref: selected.outputs.outcome
+  - id: emit
+    kind: call
+    operation: emit
+    arguments:
+      outcome:
+        ref: steps.resolve.outputs.outcome
+  outputs:
+    result:
+      type: Result
+      value:
+        ref: steps.emit.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      write: []
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - check_reasoning_flow_catalogues
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 3
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Document synchronization and source validation only; materializations
+    do not establish execution or semantic goal achievement.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py
+    digest: sha256:208c892ff7c6fc3e0485dfb96cf578073b775a0a2d1804c6dae227c9600ed246
+    selector: main; construct_catalog; compare_catalog; catalog_failure; emit_catalog;
+      render_catalog
+  - path: scripts/mathformer.py
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/reasoning_catalog_tools.py
+    digest: sha256:a461db497a6dd701a36e6f21e79d10d56b19f53171248e8be66cddd37a4c4bf0
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - 'Specialized to the registered hub invocation: default paths, --check --json,
+    no dependencies or extra arguments. Standalone no-check writes both documents;
+    human output selects stdout/stderr by ok. Those alternate modes are outside this
+    graph.'
+  - Parser and renderer helper iterations remain inside construct; no full Python
+    equivalence or helper-level state graph is claimed.
+  - Hub preflight, dry-run, one subprocess and post-run undeclared-write audit remain
+    the external controller boundary, not extra subprocesses or internal renderer
+    steps.
+  - Native CLI has no timeout or retry; Lunar enforces the retained 3600-second and
+    three-call execution limits. The separate deterministic-test caller imposes 30
+    seconds.
+  - MCP stdio redirects native JSON emission to the diagnostic stream to preserve
+    transport framing; returned result carries the unchanged payload and exit code.
+    Lunar acceptance denotes completed execution; payload.ok and exit_code retain
+    native validation failure status.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: control:reasoning-flow-catalog
+    owner_skill: skills/control/reasoning-flow-language/SKILL.md
+    contract:
+      id: control:reasoning-flow-catalog
+      family: control
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py
+      - --check
+      - --json
+      depends_on: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Registered native MCP steps executed through Lunar/PRISM; explicit
+      repository_root read context constrained to the Mathformer checkout.
+    callers:
+    - control:all
+    - reasoning-flow-language natural-language route
+    - deterministic skill-test orchestrator
+    failure_policy: Payload ok=false must remain a failed result even though emission
+      completes normally.
+    paths:
+      flows: examples/reasoning_flows
+      semantic: docs/architecture/ALL_REASONING_FLOWS.md
+      materializations: docs/architecture/REASONING_FLOW_MATERIALIZATIONS.md
+  mathformer.iteration:
+    owner: construct/render_catalog and its helpers
+    carried_state:
+    - Parser active/current-record/list-target state; accumulated styles and loop
+      contracts
+    - Validated profile tuples in style order
+    - Semantic/materialization line buffers and forbidden-identifier sets
+    bounds: Finite input lines, discovered profiles and their finite nodes/contracts.
+      Empty collections use native zero-iteration behavior; no artificial cap or exhaustion
+      condition.
+    termination: First validation exception aborts construction. Otherwise each traversal
+      completes normally at input exhaustion; operational loop contracts are documented,
+      never executed.
+    persistence: No convergence loop, retry, checkpoint or persistent resume state.
+# REUSE-IgnoreEnd

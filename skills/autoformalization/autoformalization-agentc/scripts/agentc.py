@@ -1,0 +1,8832 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+#
+# Intent:
+#   Tell coding agents what context to load, what invariants to preserve, and how to validate their work.
+#
+# Function:
+#   Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""MASA-style agent abstractions and prompts for autoformalization.
+
+This module mirrors the multi-agent prompt templates from:
+https://github.com/lanzhang128/multi_agent_autoformalization
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from collections import Counter, defaultdict
+from dataclasses import asdict, dataclass, field, is_dataclass
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, cast
+
+_REASONING_LOG_EVENT_COUNTER: Dict[str, int] = {}
+_REASONING_LOG_FIRST_MONO_NS: Dict[str, int] = {}
+_REASONING_LOG_LAST_MONO_NS: Dict[str, int] = {}
+_HOOK_CONTRACT_CACHE: Optional[Dict[str, Dict[str, str]]] = None
+
+MATHLIB_CONCEPT_MAPPER_SKILL = (
+    "mathlib-concept-candidate-mapper/map_mathlib_concepts.py"
+)
+MATHLIB_CANDIDATE_VERIFIER_SKILL = "mathlib-candidate-verifier/map_mathlib_concepts.py"
+MATHLIB_ABSTRACTION_AUDITOR_SKILL = (
+    "mathlib-abstraction-auditor/check_mathlib_compat.py"
+)
+LEAN_COMPILE_CHECKER_SKILL = "lean-compile-checker/check_mathlib_compat.py"
+LEAN_EXECUTION_RUNNER_SKILL = "lean-execution-runner"
+LEAN_CONSISTENCY_REPORT_ORCHESTRATOR_SKILL = (
+    "lean-consistency-report-orchestrator/run_lean_consistency_report.py"
+)
+
+REFINEMENT_TAXONOMY_VERSION = "v1"
+
+REFINEMENT_TRIGGER_FAMILIES = (
+    "initial_generation",
+    "seed_replay",
+    "syntax_repair",
+    "semantic_realignment",
+    "stability_check",
+    "early_stop",
+)
+
+REFINEMENT_REASONING_TYPES = (
+    "theorem_prover_guided",
+    "semantic_critique_guided",
+    "source_alignment_guided",
+    "dependency_context_guided",
+    "mathlib_alignment_guided",
+    "interface_design_guided",
+    "stabilization_guided",
+)
+
+REFINEMENT_SYNTACTIC_TYPES = (
+    "import_edit",
+    "namespace_edit",
+    "binder_context_edit",
+    "declaration_added",
+    "declaration_removed",
+    "declaration_signature_edit",
+    "doc_comment_edit",
+    "proof_placeholder_edit",
+    "notation_or_term_edit",
+    "whitespace_or_formatting_only",
+    "no_syntactic_change",
+)
+
+REFINEMENT_SEMANTIC_TYPES = (
+    "theorem_statement_realignment",
+    "assumption_strengthening",
+    "assumption_weakening",
+    "abstraction_boundary_introduced",
+    "abstraction_boundary_reduced",
+    "mathlib_native_concretization",
+    "supporting_api_added",
+    "dependency_semantics_integrated",
+    "representation_scope_narrowed",
+    "representation_scope_broadened",
+    "no_semantic_change",
+)
+
+REFINEMENT_ARTIFACT_EFFECT_TYPES = (
+    "line_growth",
+    "line_reduction",
+    "declaration_growth",
+    "declaration_reduction",
+    "sorry_reduction",
+    "sorry_growth",
+    "error_log_changed",
+    "no_code_change",
+)
+
+REFINEMENT_PRIMARY_TYPES = (
+    "initial_generation",
+    "syntax_repair",
+    "semantic_realignment",
+    "theorem_statement_realignment",
+    "assumption_strengthening",
+    "assumption_weakening",
+    "abstraction_boundary_introduced",
+    "abstraction_boundary_reduced",
+    "mathlib_native_concretization",
+    "supporting_api_added",
+    "dependency_semantics_integrated",
+    "representation_scope_narrowed",
+    "representation_scope_broadened",
+    "import_edit",
+    "declaration_signature_edit",
+    "proof_placeholder_edit",
+    "no_substantive_change",
+)
+
+LEAN_DECL_HEADER_RE = re.compile(
+    r"^\s*(?:@[A-Za-z0-9_.]+\s*)*"
+    r"(?:noncomputable\s+)?(?:unsafe\s+)?(?:private\s+)?(?:protected\s+)?"
+    r"(def|theorem|lemma|axiom|structure|class|instance|abbrev|inductive|coinductive)\s+"
+    r"([^\s(:{]+)"
+)
+
+
+class BaseLLM(ABC):
+    """Document the responsibility of ``BaseLLM``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = "Abstract class for instantiating LLMs."
+
+    def __init__(self, name: str = "BaseLLM", **kwargs):
+        """Document the responsibility of ``BaseLLM.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        self.name = name
+        self._instantiate(**kwargs)
+
+    @abstractmethod
+    def _instantiate(self, **kwargs):
+        """Document the responsibility of ``BaseLLM._instantiate``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``BaseLLM._instantiate`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        pass
+
+    @abstractmethod
+    def generate(self, messages) -> str:
+        """Document the responsibility of ``BaseLLM.generate``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``BaseLLM.generate`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        pass
+
+
+class BaseAgent(ABC):
+    """Document the responsibility of ``BaseAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = "Abstract class for constructing agents."
+
+    def __init__(self, name: str = "BaseAgent"):
+        """Document the responsibility of ``BaseAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        self.name = name
+
+    @abstractmethod
+    def _agent_function(self, *args: Any, **kwargs: Any) -> Any:
+        """Document the responsibility of ``BaseAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``BaseAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        pass
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Document the responsibility of ``BaseAgent.__call__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``BaseAgent.__call__`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        return self._agent_function(*args, **kwargs)
+
+
+def extract_formal_code(text: str) -> str:
+    """Document the responsibility of ``extract_formal_code``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``extract_formal_code`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    code = re.findall("%%%%%%%%%%.*?%%%%%%%%%%", text, flags=re.DOTALL)
+    if code:
+        code = code[0]
+    else:
+        code = text
+    return code.replace("%%%%%%%%%%\n", "").replace("%%%%%%%%%%", "")
+
+
+def extract_judgement(text: str) -> str:
+    """Document the responsibility of ``extract_judgement``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``extract_judgement`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    code = re.findall("%%%%%%%%%%.*?%%%%%%%%%%", text, flags=re.DOTALL)
+    if code:
+        code = code[0]
+    else:
+        code = text
+    return code.replace("%%%%%%%%%%\n", "").replace("%%%%%%%%%%", "")
+
+
+def extract_json_object(text: str) -> Optional[Dict[str, Any]]:
+    """Best-effort extraction of a JSON object from raw LLM text."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped)
+        stripped = re.sub(r"\s*```$", "", stripped)
+    candidate_starts = [idx for idx, ch in enumerate(stripped) if ch == "{"]
+    candidate_ends = [idx for idx, ch in enumerate(stripped) if ch == "}"]
+    for start in candidate_starts:
+        for end in reversed(candidate_ends):
+            if end <= start:
+                continue
+            candidate = stripped[start : end + 1]
+            try:
+                parsed = json.loads(candidate)
+            except Exception:
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+    return None
+
+
+def _sanitize_label_list(
+    values: Any,
+    allowed: Sequence[str],
+) -> List[str]:
+    """Document the responsibility of ``_sanitize_label_list``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_sanitize_label_list`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    allowed_set = set(allowed)
+    out: List[str] = []
+    if not isinstance(values, list):
+        return out
+    for item in values:
+        if not isinstance(item, str):
+            continue
+        label = item.strip()
+        if not label or label not in allowed_set or label in out:
+            continue
+        out.append(label)
+    return out
+
+
+def _sanitize_single_label(
+    value: Any,
+    allowed: Sequence[str],
+) -> Optional[str]:
+    """Document the responsibility of ``_sanitize_single_label``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_sanitize_single_label`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if not isinstance(value, str):
+        return None
+    label = value.strip()
+    if not label or label not in set(allowed):
+        return None
+    return label
+
+
+def _hypothesis_score(signature: str) -> int:
+    """Document the responsibility of ``_hypothesis_score``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_hypothesis_score`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return (
+        signature.count("→")
+        + signature.count("->")
+        + signature.count("∀")
+        + signature.count("[")
+        + signature.count("{")
+        + signature.count("(")
+    )
+
+
+def _compact_surface(text: str) -> str:
+    """Document the responsibility of ``_compact_surface``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_compact_surface`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return re.sub(r"\s+", "", text)
+
+
+def _extract_declaration_signatures(text: str) -> Dict[str, Dict[str, str]]:
+    """Document the responsibility of ``_extract_declaration_signatures``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_extract_declaration_signatures`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    out: Dict[str, Dict[str, str]] = {}
+    for raw_line in text.splitlines():
+        match = LEAN_DECL_HEADER_RE.match(raw_line)
+        if match is None:
+            continue
+        kind, name = match.group(1), match.group(2)
+        out[name] = {
+            "kind": kind,
+            "signature": raw_line.strip(),
+        }
+    return out
+
+
+def _analyze_lean_text_structure(text: str) -> Dict[str, Any]:
+    """Document the responsibility of ``_analyze_lean_text_structure``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_analyze_lean_text_structure`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    lines = text.splitlines()
+    declarations = _extract_declaration_signatures(text)
+    imports = [line.strip() for line in lines if re.match(r"^\s*import\s+", line)]
+    namespace_lines = [
+        line.strip()
+        for line in lines
+        if re.match(r"^\s*(namespace|end|open(?:\s+scoped)?)\b", line)
+    ]
+    variable_lines = [
+        line.strip()
+        for line in lines
+        if re.match(r"^\s*(variable|variables|universe)\b", line)
+    ]
+    decl_counter = Counter(
+        str(payload.get("kind", "unknown")) for payload in declarations.values()
+    )
+    return {
+        "line_count": len(lines),
+        "nonempty_line_count": sum(1 for ln in lines if ln.strip()),
+        "import_count": len(imports),
+        "imports": imports,
+        "declaration_count": len(declarations),
+        "declarations": declarations,
+        "declaration_by_kind": dict(sorted(decl_counter.items())),
+        "doc_comment_count": len(re.findall(r"/--", text)),
+        "sorry_count": len(re.findall(r"\bsorry\b", text)),
+        "admit_count": len(re.findall(r"\badmit\b", text)),
+        "namespace_lines": namespace_lines,
+        "variable_lines": variable_lines,
+        "mathlib_native_token_count": len(
+            re.findall(
+                r"\b(?:Mathlib|MeasureTheory|ProbabilityTheory|Filter|TopologicalSpace|ContinuousLinearMap|HilbertBasis|Set\.)",
+                text,
+            )
+        ),
+    }
+
+
+def _build_refinement_diff_metrics(
+    previous_code: str,
+    current_code: str,
+) -> Dict[str, Any]:
+    """Document the responsibility of ``_build_refinement_diff_metrics``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Build the local data structure or artifact used by the next workflow stage.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    before = _analyze_lean_text_structure(previous_code)
+    after = _analyze_lean_text_structure(current_code)
+
+    before_decls = before["declarations"]
+    after_decls = after["declarations"]
+    added = sorted(name for name in after_decls if name not in before_decls)
+    removed = sorted(name for name in before_decls if name not in after_decls)
+    changed = sorted(
+        name
+        for name in after_decls
+        if name in before_decls
+        and after_decls[name]["signature"] != before_decls[name]["signature"]
+    )
+    changed_ratio = None
+    union_count = len(set(before_decls) | set(after_decls))
+    if union_count > 0:
+        changed_ratio = round(
+            (len(added) + len(removed) + len(changed)) / union_count, 4
+        )
+
+    return {
+        "line_count_before": before["line_count"],
+        "line_count_after": after["line_count"],
+        "nonempty_line_count_before": before["nonempty_line_count"],
+        "nonempty_line_count_after": after["nonempty_line_count"],
+        "line_delta": after["line_count"] - before["line_count"],
+        "nonempty_line_delta": after["nonempty_line_count"]
+        - before["nonempty_line_count"],
+        "import_count_before": before["import_count"],
+        "import_count_after": after["import_count"],
+        "import_delta": after["import_count"] - before["import_count"],
+        "declaration_count_before": before["declaration_count"],
+        "declaration_count_after": after["declaration_count"],
+        "declaration_delta": after["declaration_count"] - before["declaration_count"],
+        "doc_comment_count_before": before["doc_comment_count"],
+        "doc_comment_count_after": after["doc_comment_count"],
+        "doc_comment_delta": after["doc_comment_count"] - before["doc_comment_count"],
+        "sorry_count_before": before["sorry_count"],
+        "sorry_count_after": after["sorry_count"],
+        "sorry_delta": after["sorry_count"] - before["sorry_count"],
+        "added_declarations": added,
+        "removed_declarations": removed,
+        "changed_declarations": changed,
+        "changed_declaration_ratio": changed_ratio,
+        "surface_changed": previous_code != current_code,
+        "compact_surface_changed": _compact_surface(previous_code)
+        != _compact_surface(current_code),
+        "namespace_lines_changed": before["namespace_lines"]
+        != after["namespace_lines"],
+        "variable_lines_changed": before["variable_lines"] != after["variable_lines"],
+        "imports_changed": before["imports"] != after["imports"],
+        "mathlib_native_token_delta": (
+            after["mathlib_native_token_count"] - before["mathlib_native_token_count"]
+        ),
+        "before_declaration_by_kind": before["declaration_by_kind"],
+        "after_declaration_by_kind": after["declaration_by_kind"],
+        "before_hypothesis_score": sum(
+            _hypothesis_score(payload["signature"]) for payload in before_decls.values()
+        ),
+        "after_hypothesis_score": sum(
+            _hypothesis_score(payload["signature"]) for payload in after_decls.values()
+        ),
+    }
+
+
+def _default_primary_refinement_type(
+    trigger_family: str,
+    syntactic_types: Sequence[str],
+    semantic_types: Sequence[str],
+) -> str:
+    """Document the responsibility of ``_default_primary_refinement_type``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_default_primary_refinement_type`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    priority = [
+        "theorem_statement_realignment",
+        "assumption_strengthening",
+        "assumption_weakening",
+        "abstraction_boundary_introduced",
+        "abstraction_boundary_reduced",
+        "mathlib_native_concretization",
+        "supporting_api_added",
+        "dependency_semantics_integrated",
+        "representation_scope_narrowed",
+        "representation_scope_broadened",
+        "import_edit",
+        "declaration_signature_edit",
+        "proof_placeholder_edit",
+    ]
+    combined = list(semantic_types) + list(syntactic_types)
+    for label in priority:
+        if label in combined:
+            return label
+    if trigger_family in {
+        "initial_generation",
+        "seed_replay",
+        "syntax_repair",
+        "semantic_realignment",
+    }:
+        return trigger_family
+    return "no_substantive_change"
+
+
+def _heuristic_refinement_analysis(
+    *,
+    previous_code: str,
+    current_code: str,
+    agent_name: str,
+    trigger_family: str,
+    trigger_reason: str,
+    previous_hard_feedback: str,
+    current_hard_feedback: str,
+    previous_soft_feedback: str,
+    current_soft_feedback: str,
+    has_dependency_context: bool,
+    has_alignment_hints: bool,
+    has_core_statement_annotations: bool,
+) -> Dict[str, Any]:
+    """Document the responsibility of ``_heuristic_refinement_analysis``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_heuristic_refinement_analysis`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    diff_metrics = _build_refinement_diff_metrics(previous_code, current_code)
+    syntactic_types: List[str] = []
+    semantic_types: List[str] = []
+    artifact_effect_types: List[str] = []
+    reasoning_types: List[str] = []
+
+    if trigger_family == "syntax_repair":
+        reasoning_types.append("theorem_prover_guided")
+    if trigger_family == "semantic_realignment":
+        reasoning_types.append("semantic_critique_guided")
+    if trigger_family in {"stability_check", "early_stop"}:
+        reasoning_types.append("stabilization_guided")
+    if has_dependency_context:
+        reasoning_types.append("dependency_context_guided")
+    if has_alignment_hints:
+        reasoning_types.append("mathlib_alignment_guided")
+    if has_core_statement_annotations:
+        reasoning_types.append("source_alignment_guided")
+
+    if (
+        trigger_family == "initial_generation"
+        or "abstraction_boundary_introduced" in semantic_types
+    ):
+        reasoning_types.append("interface_design_guided")
+
+    if diff_metrics["surface_changed"]:
+        if diff_metrics["imports_changed"]:
+            syntactic_types.append("import_edit")
+        if diff_metrics["namespace_lines_changed"]:
+            syntactic_types.append("namespace_edit")
+        if diff_metrics["variable_lines_changed"]:
+            syntactic_types.append("binder_context_edit")
+        if diff_metrics["added_declarations"]:
+            syntactic_types.append("declaration_added")
+        if diff_metrics["removed_declarations"]:
+            syntactic_types.append("declaration_removed")
+        if diff_metrics["changed_declarations"]:
+            syntactic_types.append("declaration_signature_edit")
+        if diff_metrics["doc_comment_delta"] != 0:
+            syntactic_types.append("doc_comment_edit")
+        if diff_metrics["sorry_delta"] != 0:
+            syntactic_types.append("proof_placeholder_edit")
+        if not diff_metrics["compact_surface_changed"]:
+            syntactic_types.append("whitespace_or_formatting_only")
+        elif not syntactic_types:
+            syntactic_types.append("notation_or_term_edit")
+    else:
+        syntactic_types.append("no_syntactic_change")
+
+    before_kinds = diff_metrics["before_declaration_by_kind"]
+    after_kinds = diff_metrics["after_declaration_by_kind"]
+    theorem_like_changed = bool(diff_metrics["changed_declarations"])
+    theorem_like_changed = theorem_like_changed or (
+        before_kinds.get("theorem", 0) != after_kinds.get("theorem", 0)
+        or before_kinds.get("lemma", 0) != after_kinds.get("lemma", 0)
+    )
+    if theorem_like_changed:
+        semantic_types.append("theorem_statement_realignment")
+
+    hyp_delta = (
+        diff_metrics["after_hypothesis_score"] - diff_metrics["before_hypothesis_score"]
+    )
+    if hyp_delta > 0:
+        semantic_types.append("assumption_strengthening")
+    elif hyp_delta < 0:
+        semantic_types.append("assumption_weakening")
+
+    before_boundary = (
+        before_kinds.get("structure", 0)
+        + before_kinds.get("class", 0)
+        + before_kinds.get("axiom", 0)
+    )
+    after_boundary = (
+        after_kinds.get("structure", 0)
+        + after_kinds.get("class", 0)
+        + after_kinds.get("axiom", 0)
+    )
+    added_decl_names = diff_metrics["added_declarations"]
+    if after_boundary > before_boundary or any(
+        any(token in name for token in ("Model", "Assum", "Interface", "Scaffold"))
+        for name in added_decl_names
+    ):
+        semantic_types.append("abstraction_boundary_introduced")
+        if "interface_design_guided" not in reasoning_types:
+            reasoning_types.append("interface_design_guided")
+    elif after_boundary < before_boundary:
+        semantic_types.append("abstraction_boundary_reduced")
+
+    if diff_metrics["mathlib_native_token_delta"] > 0:
+        semantic_types.append("mathlib_native_concretization")
+
+    support_like_added = [
+        name
+        for name in added_decl_names
+        if any(
+            token in name.lower()
+            for token in ("iff", "of", "to", "mem", "eq", "congr", "map", "repr")
+        )
+    ]
+    if support_like_added or len(added_decl_names) >= 2:
+        semantic_types.append("supporting_api_added")
+
+    if has_dependency_context and diff_metrics["surface_changed"]:
+        semantic_types.append("dependency_semantics_integrated")
+
+    if diff_metrics["declaration_delta"] < 0 and hyp_delta < 0:
+        semantic_types.append("representation_scope_narrowed")
+    elif diff_metrics["declaration_delta"] > 0 and hyp_delta > 0:
+        semantic_types.append("representation_scope_broadened")
+
+    if not semantic_types:
+        semantic_types.append("no_semantic_change")
+
+    if diff_metrics["surface_changed"]:
+        if diff_metrics["line_delta"] > 0:
+            artifact_effect_types.append("line_growth")
+        elif diff_metrics["line_delta"] < 0:
+            artifact_effect_types.append("line_reduction")
+        if diff_metrics["declaration_delta"] > 0:
+            artifact_effect_types.append("declaration_growth")
+        elif diff_metrics["declaration_delta"] < 0:
+            artifact_effect_types.append("declaration_reduction")
+        if diff_metrics["sorry_delta"] < 0:
+            artifact_effect_types.append("sorry_reduction")
+        elif diff_metrics["sorry_delta"] > 0:
+            artifact_effect_types.append("sorry_growth")
+    else:
+        artifact_effect_types.append("no_code_change")
+
+    if previous_hard_feedback.strip() != current_hard_feedback.strip():
+        artifact_effect_types.append("error_log_changed")
+
+    if (
+        trigger_family == "initial_generation"
+        and "interface_design_guided" not in reasoning_types
+    ):
+        reasoning_types.append("interface_design_guided")
+
+    primary_refinement_type = _default_primary_refinement_type(
+        trigger_family,
+        syntactic_types,
+        semantic_types,
+    )
+
+    preservation_risk = "low"
+    if any(
+        label in semantic_types
+        for label in (
+            "theorem_statement_realignment",
+            "assumption_weakening",
+            "representation_scope_broadened",
+        )
+    ):
+        preservation_risk = "high"
+    elif (
+        any(
+            label in semantic_types
+            for label in (
+                "assumption_strengthening",
+                "abstraction_boundary_introduced",
+                "abstraction_boundary_reduced",
+                "mathlib_native_concretization",
+            )
+        )
+        or diff_metrics["removed_declarations"]
+    ):
+        preservation_risk = "medium"
+
+    summary = (
+        f"{agent_name} performed `{primary_refinement_type}` under `{trigger_family}` "
+        f"(lines {diff_metrics['line_count_before']}→{diff_metrics['line_count_after']}, "
+        f"declarations {diff_metrics['declaration_count_before']}→{diff_metrics['declaration_count_after']})."
+    )
+
+    return {
+        "taxonomy_version": REFINEMENT_TAXONOMY_VERSION,
+        "trigger_family": trigger_family,
+        "trigger_reason": trigger_reason,
+        "primary_refinement_type": primary_refinement_type,
+        "reasoning_types": reasoning_types,
+        "syntactic_refinement_types": syntactic_types,
+        "semantic_refinement_types": semantic_types,
+        "artifact_effect_types": artifact_effect_types,
+        "preservation_risk": preservation_risk,
+        "summary": summary,
+        "confidence": 0.55,
+        "diff_metrics": diff_metrics,
+        "changed_declarations": (
+            diff_metrics["added_declarations"]
+            + diff_metrics["removed_declarations"]
+            + diff_metrics["changed_declarations"]
+        )[:24],
+        "analysis_method": "heuristic",
+        "llm_summary": None,
+        "llm_json": None,
+        "llm_raw_response": None,
+    }
+
+
+def normalize_informal_statement(text: str) -> str:
+    """Normalize mixed markdown/LaTeX input into a compact NL statement."""
+    normalized = text
+    normalized = re.sub(r"\\begin\{document\}|\\end\{document\}", " ", normalized)
+    normalized = re.sub(r"\\section\*?\{[^}]*\}", " ", normalized)
+    normalized = re.sub(r"\\footnote\{[^}]*\}", " ", normalized)
+    normalized = re.sub(
+        r"\\(documentclass|usepackage)(\[[^\]]*\])?\{[^}]*\}", " ", normalized
+    )
+    normalized = normalized.replace("\\[", " ").replace("\\]", " ")
+    normalized = normalized.replace("$$", " ")
+    normalized = re.sub(r"\$([^$]+)\$", r"\1", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def extract_core_latex_statements(
+    text: str,
+    *,
+    max_items: int = 6,
+    max_chars_per_item: int = 420,
+) -> List[str]:
+    """Extract core theorem statements from original LaTeX-ish input."""
+    core_items: List[str] = []
+
+    theorem_blocks = re.findall(
+        r"\\begin\{theorem\}(?:\[[^\]]*\])?(.*?)\\end\{theorem\}",
+        text,
+        flags=re.DOTALL,
+    )
+    for block in theorem_blocks:
+        normalized = normalize_informal_statement(block)
+        if not normalized:
+            continue
+        compact = re.sub(r"\s+", " ", normalized).strip()
+        if len(compact) > max_chars_per_item:
+            compact = compact[: max_chars_per_item - 3].rstrip() + "..."
+        core_items.append(compact)
+        if len(core_items) >= max_items:
+            return core_items
+
+    if core_items:
+        return core_items[:max_items]
+
+    # Fallback for non-environment inputs: keep a few leading sentence-like chunks.
+    fallback_text = re.sub(r"\\begin\{[^}]+\}(?:\[[^\]]*\])?", " ", text)
+    fallback_text = re.sub(r"\\end\{[^}]+\}", " ", fallback_text)
+    fallback = normalize_informal_statement(fallback_text)
+    if fallback:
+        chunks = [c.strip() for c in re.split(r"(?<=[.;:])\s+", fallback) if c.strip()]
+        for chunk in chunks:
+            if len(chunk) > max_chars_per_item:
+                chunk = chunk[: max_chars_per_item - 3].rstrip() + "..."
+            core_items.append(chunk)
+            if len(core_items) >= max_items:
+                break
+
+    return core_items[:max_items]
+
+
+def format_core_statement_annotations(
+    core_statements: Sequence[str],
+) -> Optional[str]:
+    """Render prompt context that must be preserved in source-aware Lean comments."""
+    items = [s.strip() for s in core_statements if s and s.strip()]
+    if not items:
+        return None
+    lines = [
+        "Core statement alignment annotations from the original LaTeX "
+        "(preserve these in source-aware module/declaration comments or theorem names):"
+    ]
+    for idx, item in enumerate(items, start=1):
+        lines.append(f"{idx}. {item}")
+    return "\n".join(lines)
+
+
+@dataclass
+class RecursiveDependencyInput:
+    """Document the responsibility of ``RecursiveDependencyInput``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    informal_statement: str
+    label: Optional[str] = None
+    dependencies: List["RecursiveDependencyInput"] = field(default_factory=list)
+
+
+def coerce_recursive_dependency_input(
+    data: str | Dict[str, Any] | RecursiveDependencyInput,
+) -> RecursiveDependencyInput:
+    """Normalize supported dependency input forms into one recursive schema."""
+    if isinstance(data, RecursiveDependencyInput):
+        return data
+    if isinstance(data, str):
+        return RecursiveDependencyInput(informal_statement=data.strip())
+    if isinstance(data, dict):
+        raw_statement = (
+            data.get("informal_statement")
+            or data.get("statement")
+            or data.get("text")
+            or ""
+        )
+        statement = str(raw_statement).strip()
+        if not statement:
+            raise ValueError(
+                "Dependency dictionary must provide a non-empty `informal_statement` "
+                "(or `statement` / `text`)."
+            )
+        raw_label = data.get("label") or data.get("name")
+        label = None if raw_label is None else str(raw_label).strip() or None
+        raw_children = data.get("dependencies") or data.get("deps") or []
+        children = [coerce_recursive_dependency_input(item) for item in raw_children]
+        return RecursiveDependencyInput(
+            informal_statement=statement,
+            label=label,
+            dependencies=children,
+        )
+    raise TypeError(
+        "Unsupported dependency input type. Expected str, dict, or RecursiveDependencyInput."
+    )
+
+
+def format_mathlib_alignment_hints(
+    concept_map: Optional[Dict[str, Any]],
+    *,
+    max_concepts: int = 6,
+    max_candidates: int = 3,
+    max_modules: int = 3,
+) -> str:
+    """Render concise prompt hints from concept-to-mathlib mapping output."""
+    if not concept_map:
+        return ""
+
+    lines: List[str] = []
+    for concept, payload in list(concept_map.items())[:max_concepts]:
+        candidates = payload.get("candidates", []) if isinstance(payload, dict) else []
+        modules = (
+            payload.get("relevant_modules", []) if isinstance(payload, dict) else []
+        )
+
+        verified_candidates: List[Dict[str, Any]] = []
+        fallback_candidates: List[Dict[str, Any]] = []
+        for row in candidates:
+            if not isinstance(row, dict):
+                continue
+            if row.get("check_ok") is True:
+                verified_candidates.append(row)
+            else:
+                fallback_candidates.append(row)
+
+        chosen_candidates = (
+            verified_candidates[:max_candidates]
+            if verified_candidates
+            else fallback_candidates[:max_candidates]
+        )
+
+        decl_hints: List[str] = []
+        for row in chosen_candidates:
+            name = row.get("qualified_name") or row.get("name")
+            if not name:
+                continue
+            hint = f"`{name}`"
+            import_name = row.get("import") or row.get("module")
+            source_reference = row.get("source_ref")
+            suffixes: List[str] = []
+            if import_name:
+                suffixes.append(f"import `{import_name}`")
+            if source_reference:
+                suffixes.append(f"source `{source_reference}`")
+            if row.get("check_ok") is True:
+                suffixes.append("verified")
+            if suffixes:
+                hint += f" ({'; '.join(suffixes)})"
+            decl_hints.append(hint)
+
+        module_names: List[str] = []
+        for row in modules[:max_modules]:
+            module = row.get("module") if isinstance(row, dict) else None
+            if module:
+                module_names.append(f"`{module}`")
+
+        concept_line = f"- concept `{concept}`"
+        if decl_hints:
+            concept_line += f"; likely declarations: {', '.join(decl_hints)}"
+        if module_names:
+            concept_line += f"; relevant modules: {', '.join(module_names)}"
+        lines.append(concept_line)
+
+    return "\n".join(lines)
+
+
+def summarize_mathlib_concept_coverage(
+    concept_map: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Summarize how many mapped concepts have verified mathlib declarations."""
+    rows: List[Dict[str, Any]] = []
+    if not concept_map:
+        return {
+            "total_concepts": 0,
+            "verified_concepts": 0,
+            "candidate_concepts": 0,
+            "unverified_concepts": 0,
+            "verified_ratio": None,
+            "coverage_score": 0,
+            "all_concepts_verified": False,
+            "concepts": rows,
+            "gaps": [],
+        }
+
+    for concept, payload in concept_map.items():
+        candidates = payload.get("candidates", []) if isinstance(payload, dict) else []
+        modules = (
+            payload.get("relevant_modules", []) if isinstance(payload, dict) else []
+        )
+        candidate_rows = [row for row in candidates if isinstance(row, dict)]
+        module_rows = [row for row in modules if isinstance(row, dict)]
+        verified_candidates = [
+            row for row in candidate_rows if row.get("check_ok") is True
+        ]
+        checked_candidates = [row for row in candidate_rows if "check_ok" in row]
+        failed_checked_candidates = [
+            row for row in checked_candidates if row.get("check_ok") is not True
+        ]
+        if verified_candidates:
+            status = "verified"
+        elif checked_candidates:
+            status = "checked_without_verified_candidate"
+        elif candidate_rows:
+            status = "candidate_unverified"
+        elif module_rows:
+            status = "module_only"
+        else:
+            status = "unmapped"
+
+        rows.append(
+            {
+                "concept": concept,
+                "status": status,
+                "candidate_count": len(candidate_rows),
+                "checked_candidate_count": len(checked_candidates),
+                "verified_candidate_count": len(verified_candidates),
+                "failed_checked_candidate_count": len(failed_checked_candidates),
+                "module_count": len(module_rows),
+                "verified_candidates": [
+                    row.get("qualified_name") or row.get("name")
+                    for row in verified_candidates
+                    if row.get("qualified_name") or row.get("name")
+                ],
+                "top_candidates": [
+                    row.get("qualified_name") or row.get("name")
+                    for row in candidate_rows[:5]
+                    if row.get("qualified_name") or row.get("name")
+                ],
+                "top_imports": [
+                    row.get("import") or row.get("module")
+                    for row in module_rows[:5]
+                    if row.get("import") or row.get("module")
+                ],
+            }
+        )
+
+    total = len(rows)
+    verified = sum(1 for row in rows if row["status"] == "verified")
+    candidate_concepts = sum(1 for row in rows if row["candidate_count"] > 0)
+    gaps = [row for row in rows if row["status"] != "verified"]
+    verified_ratio = None if total == 0 else verified / total
+    return {
+        "total_concepts": total,
+        "verified_concepts": verified,
+        "candidate_concepts": candidate_concepts,
+        "unverified_concepts": len(gaps),
+        "verified_ratio": None if verified_ratio is None else round(verified_ratio, 4),
+        "coverage_score": 0 if total == 0 else round(100 * verified / total),
+        "all_concepts_verified": total > 0 and verified == total,
+        "concepts": rows,
+        "gaps": gaps,
+    }
+
+
+def format_mathlib_concept_coverage_hints(
+    coverage_report: Optional[Dict[str, Any]],
+    *,
+    max_gaps: int = 6,
+) -> str:
+    """Render concept-coverage pressure into drafting hints."""
+    if not coverage_report:
+        return ""
+    total = coverage_report.get("total_concepts")
+    if not isinstance(total, int) or total <= 0:
+        return ""
+    verified = coverage_report.get("verified_concepts")
+    score = coverage_report.get("coverage_score")
+    lines = [f"- Verified mathlib coverage: {verified}/{total} concepts ({score}/100)."]
+    gaps = coverage_report.get("gaps")
+    if isinstance(gaps, list) and gaps:
+        lines.append(
+            "- For concepts without verified declarations, prefer the closest verified "
+            "native interface where possible; otherwise isolate the missing notion behind "
+            "one explicit abstraction boundary."
+        )
+        for row in gaps[:max_gaps]:
+            if not isinstance(row, dict):
+                continue
+            concept = row.get("concept")
+            status = row.get("status")
+            top_candidates = row.get("top_candidates") or []
+            top_imports = row.get("top_imports") or []
+            detail = f"- gap `{concept}`: {status}"
+            if top_candidates:
+                detail += f"; candidate names: {', '.join(f'`{x}`' for x in top_candidates[:3])}"
+            if top_imports:
+                detail += (
+                    f"; likely imports: {', '.join(f'`{x}`' for x in top_imports[:3])}"
+                )
+            lines.append(detail)
+    return "\n".join(lines)
+
+
+def format_dependency_context(
+    dependency_reports: Sequence["SystematicAutoformalizationReport"],
+    *,
+    max_code_lines_per_dependency: int = 32,
+) -> str:
+    """Build prompt context containing recursively formalized prerequisite statements."""
+    if not dependency_reports:
+        return ""
+
+    blocks: List[str] = []
+    for idx, rep in enumerate(dependency_reports, start=1):
+        label = rep.dependency_label or f"dependency_{idx}"
+        statement = rep.normalized_statement or rep.informal_statement
+        code_lines = rep.final_code.strip().splitlines()
+        if len(code_lines) > max_code_lines_per_dependency:
+            code_lines = code_lines[:max_code_lines_per_dependency] + [
+                "-- ... truncated ..."
+            ]
+        code_block = "\n".join(code_lines)
+        blocks.append(
+            f"[{label}]\n" f"Statement: {statement}\n" f"Formalization:\n{code_block}"
+        )
+    return "\n\n".join(blocks)
+
+
+def statement_slug(statement: str, *, max_words: int = 8) -> str:
+    """Build a short deterministic slug from a normalized statement."""
+    if max_words <= 0:
+        raise ValueError("max_words must be positive.")
+
+    tokens = re.findall(r"[A-Za-z0-9]+", statement.lower())
+    if not tokens:
+        return "input"
+    return "_".join(tokens[:max_words])
+
+
+def statement_hash(statement: str, *, length: int = 10) -> str:
+    """Build a stable short hash for artifact naming."""
+    if length <= 0:
+        raise ValueError("length must be positive.")
+    digest = hashlib.sha256(statement.encode("utf-8")).hexdigest()
+    return digest[:length]
+
+
+def default_artifact_paths(
+    normalized_statement: str,
+    *,
+    artifacts_dir: str | os.PathLike[str] = "artifacts/autoformalization",
+    max_slug_words: int = 8,
+    hash_length: int = 10,
+) -> Dict[str, str]:
+    """Return default output/history/report paths keyed by artifact role."""
+    slug = statement_slug(normalized_statement, max_words=max_slug_words)
+    digest = statement_hash(normalized_statement, length=hash_length)
+    stem = f"{slug}_{digest}"
+    base = Path(artifacts_dir)
+    return {
+        "output_file": str(base / f"{stem}.lean"),
+        "history_file": str(base / f"{stem}.history.json"),
+        "report_file": str(base / f"{stem}.report.json"),
+        "reasoning_log_file": str(base / f"{stem}.reasoning.jsonl"),
+    }
+
+
+def _default_hooks_file() -> Path:
+    """Document the responsibility of ``_default_hooks_file``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_default_hooks_file`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return Path(__file__).resolve().parents[3] / "SKILL_HOOKS.yaml"
+
+
+def _load_hook_contract() -> Dict[str, Dict[str, str]]:
+    """Load minimal hook metadata used for automatic agent instrumentation."""
+    global _HOOK_CONTRACT_CACHE
+    if _HOOK_CONTRACT_CACHE is not None:
+        return _HOOK_CONTRACT_CACHE
+
+    hooks_file = _default_hooks_file()
+    hooks: Dict[str, Dict[str, str]] = {}
+    if not hooks_file.exists():
+        _HOOK_CONTRACT_CACHE = hooks
+        return hooks
+
+    current_hook: Optional[str] = None
+    in_hooks = False
+    for raw_line in hooks_file.read_text(encoding="utf-8").splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped == "hooks:":
+            in_hooks = True
+            current_hook = None
+            continue
+        if stripped in {"loop_contracts:", "direct_request_routing:"}:
+            in_hooks = False
+            current_hook = None
+            continue
+        if not in_hooks:
+            continue
+        if stripped.startswith("- id: "):
+            current_hook = stripped.removeprefix("- id: ").strip()
+            hooks[current_hook] = {}
+            continue
+        if current_hook is None or ":" not in stripped:
+            continue
+        key, value = stripped.split(":", 1)
+        if key in {"phase", "trigger", "owner_skill", "gate"}:
+            hooks[current_hook][key] = value.strip().strip('"')
+
+    _HOOK_CONTRACT_CACHE = hooks
+    return hooks
+
+
+def _infer_convergence_evidence(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Document the responsibility of ``_infer_convergence_evidence``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_infer_convergence_evidence`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    keys = (
+        "ok",
+        "status",
+        "passed",
+        "judgement",
+        "target_met",
+        "compatibility_target_met",
+        "consistency_target_met",
+        "final_correctness",
+        "correctness",
+        "blocking_findings",
+        "blocking_finding_count",
+        "finding_count",
+        "score",
+        "compatibility_score",
+        "reference_free_confidence_score",
+        "target_verified_ratio",
+        "verified_ratio",
+        "max_rounds",
+        "round_index",
+    )
+    return {key: payload[key] for key in keys if key in payload}
+
+
+def _instrument_reasoning_payload(
+    *,
+    step: str,
+    payload: Dict[str, Any],
+    statement_hash_value: Optional[str],
+    file_prefix: Optional[str],
+    dependency_label: Optional[str],
+) -> Dict[str, Any]:
+    """Attach agent usage and convergence criteria to an AgentC log payload."""
+    enriched = dict(payload)
+    hook_id = enriched.get("hook_id")
+    hook_meta = (
+        _load_hook_contract().get(hook_id, {}) if isinstance(hook_id, str) else {}
+    )
+    if not isinstance(enriched.get("agent_usage"), dict):
+        enriched["agent_usage"] = {
+            "agent_or_skill": enriched.get("skill"),
+            "step": step,
+            "hook_id": hook_id,
+            "hook_phase": hook_meta.get("phase"),
+            "hook_owner_skill": hook_meta.get("owner_skill"),
+            "trigger": hook_meta.get("trigger"),
+            "usage_site": {
+                "file_prefix": file_prefix,
+                "dependency_label": dependency_label,
+                "statement_hash": statement_hash_value,
+            },
+        }
+    if not isinstance(enriched.get("convergence_criteria"), dict):
+        hook_gate = hook_meta.get("gate")
+        enriched["convergence_criteria"] = {
+            "source": "hook_contract" if hook_gate else "payload_inference",
+            "criteria": hook_gate
+            or "event-specific evidence decides convergence; inspect current_evidence",
+            "current_evidence": _infer_convergence_evidence(enriched),
+        }
+    return enriched
+
+
+def _jsonable(value: Any) -> Any:
+    """Convert values to JSON-serializable representations."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, Path):
+        return str(value)
+    if is_dataclass(value) and not isinstance(value, type):
+        return _jsonable(asdict(value))
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_jsonable(v) for v in value]
+    return repr(value)
+
+
+def append_reasoning_log_entry(
+    output_file: str | os.PathLike[str],
+    *,
+    statement: str,
+    file_prefix: str,
+    step: str,
+    payload: Dict[str, Any],
+    dependency_label: Optional[str] = None,
+) -> Path:
+    """Append one structured event entry to the reasoning log JSONL file."""
+    path = Path(output_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    log_key = str(path.resolve())
+
+    if path.exists():
+        seed_index = 0
+        seed_first_mono_ns: Optional[int] = None
+        seed_last_mono_ns: Optional[int] = None
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                parsed = json.loads(raw_line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(parsed, dict):
+                continue
+            event_index = parsed.get("event_index")
+            if isinstance(event_index, int):
+                seed_index = max(seed_index, event_index)
+            mono_ns = parsed.get("monotonic_ns")
+            if isinstance(mono_ns, int):
+                if seed_first_mono_ns is None:
+                    seed_first_mono_ns = mono_ns
+                seed_last_mono_ns = mono_ns
+        if seed_index > _REASONING_LOG_EVENT_COUNTER.get(log_key, 0):
+            _REASONING_LOG_EVENT_COUNTER[log_key] = seed_index
+            if seed_first_mono_ns is not None:
+                _REASONING_LOG_FIRST_MONO_NS.setdefault(log_key, seed_first_mono_ns)
+            if seed_last_mono_ns is not None:
+                _REASONING_LOG_LAST_MONO_NS[log_key] = seed_last_mono_ns
+
+    now_utc = datetime.now(timezone.utc)
+    now_unix_ms = int(now_utc.timestamp() * 1000)
+    mono_ns = time.perf_counter_ns()
+
+    event_index = _REASONING_LOG_EVENT_COUNTER.get(log_key, 0) + 1
+    _REASONING_LOG_EVENT_COUNTER[log_key] = event_index
+
+    first_mono_ns = _REASONING_LOG_FIRST_MONO_NS.setdefault(log_key, mono_ns)
+    last_mono_ns = _REASONING_LOG_LAST_MONO_NS.get(log_key)
+    elapsed_ms_since_start = (mono_ns - first_mono_ns) / 1_000_000
+    elapsed_ms_since_prev = (
+        None if last_mono_ns is None else (mono_ns - last_mono_ns) / 1_000_000
+    )
+    _REASONING_LOG_LAST_MONO_NS[log_key] = mono_ns
+
+    entry = {
+        "event_index": event_index,
+        "timestamp_utc": now_utc.isoformat(),
+        "timestamp_unix_ms": now_unix_ms,
+        "monotonic_ns": mono_ns,
+        "elapsed_ms_since_log_start": round(elapsed_ms_since_start, 3),
+        "elapsed_ms_since_prev_event": (
+            None if elapsed_ms_since_prev is None else round(elapsed_ms_since_prev, 3)
+        ),
+        "statement_hash": statement_hash(statement, length=12),
+        "file_prefix": file_prefix,
+        "dependency_label": dependency_label,
+        "step": step,
+        "payload": _jsonable(
+            _instrument_reasoning_payload(
+                step=step,
+                payload=payload,
+                statement_hash_value=statement_hash(statement, length=12),
+                file_prefix=file_prefix,
+                dependency_label=dependency_label,
+            )
+        ),
+    }
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return path
+
+
+def reset_reasoning_log_state(output_file: str | os.PathLike[str]) -> None:
+    """Reset in-memory timing/index state for a reasoning log path."""
+    key = str(Path(output_file).resolve())
+    _REASONING_LOG_EVENT_COUNTER.pop(key, None)
+    _REASONING_LOG_FIRST_MONO_NS.pop(key, None)
+    _REASONING_LOG_LAST_MONO_NS.pop(key, None)
+
+
+def map_statement_to_mathlib_concepts(
+    statement: str,
+    *,
+    lean_workdir: str | os.PathLike[str] = ".",
+    top_k: int = 8,
+    top_modules: int = 12,
+    verify_checks: bool = False,
+    verify_timeout_sec: int = 60,
+    verify_max_concepts: int = 6,
+    verify_max_candidates: int = 3,
+    reasoning_log_file: Optional[str | os.PathLike[str]] = None,
+) -> Dict[str, Any]:
+    """Run the local concept-mapping skill and return JSON output."""
+    mapper_script = (
+        Path(__file__).resolve().parents[3]
+        / "mathlib"
+        / "informal-proof-mathlib-concepts"
+        / "scripts"
+        / "map_mathlib_concepts.py"
+    )
+    if not mapper_script.exists():
+        raise FileNotFoundError(f"Concept mapper script not found: {mapper_script}")
+
+    cmd = [
+        sys.executable,
+        str(mapper_script),
+        "--proof-text",
+        statement,
+        "--top-k",
+        str(top_k),
+        "--top-modules",
+        str(top_modules),
+        "--json",
+    ]
+    if verify_checks:
+        cmd.extend(
+            [
+                "--verify-checks",
+                "--lean-workdir",
+                str(lean_workdir),
+                "--verify-timeout-sec",
+                str(verify_timeout_sec),
+                "--verify-max-concepts",
+                str(verify_max_concepts),
+                "--verify-max-candidates",
+                str(verify_max_candidates),
+            ]
+        )
+    if reasoning_log_file is not None:
+        cmd.extend(["--reasoning-log-file", str(reasoning_log_file)])
+
+    proc = subprocess.run(
+        cmd,
+        cwd=str(lean_workdir),
+        env=_augment_env_with_lean_path(),
+        text=True,
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            "Concept mapper failed with exit code "
+            f"{proc.returncode}: {(proc.stderr or proc.stdout).strip()}"
+        )
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Concept mapper returned invalid JSON output.") from exc
+
+
+def run_mathlib_concept_compatibility_loop(
+    statement: str,
+    *,
+    lean_workdir: str | os.PathLike[str] = ".",
+    top_k: int = 8,
+    top_modules: int = 12,
+    verify_checks: bool = True,
+    verify_timeout_sec: int = 60,
+    verify_max_concepts: int = 6,
+    verify_max_candidates: int = 3,
+    max_rounds: int = 3,
+    target_verified_ratio: float = 1.0,
+    reasoning_log_file: Optional[str | os.PathLike[str]] = None,
+    trace_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+) -> Tuple[
+    Optional[Dict[str, Any]], Dict[str, Any], List[Dict[str, Any]], Optional[str]
+]:
+    """Widen concept discovery/verification using the shared native steps."""
+    request = dict(
+        statement=statement,
+        lean_workdir=lean_workdir,
+        top_k=top_k,
+        top_modules=top_modules,
+        verify_checks=verify_checks,
+        verify_timeout_sec=verify_timeout_sec,
+        verify_max_concepts=verify_max_concepts,
+        verify_max_candidates=verify_max_candidates,
+        max_rounds=max_rounds,
+        target_verified_ratio=target_verified_ratio,
+        reasoning_log_file=reasoning_log_file,
+    )
+    iterator = iter_mathlib_concept_compatibility_steps(request, trace_event)
+    while True:
+        try:
+            next(iterator)
+        except StopIteration as completed:
+            return completed.value
+
+
+def iter_mathlib_concept_compatibility_steps(request, trace_event=None):
+    """Yield native concept boundaries and return the unchanged loop result."""
+    loop = MathlibConceptCompatibilityLoop(request, trace_event=trace_event)
+    request["_initialized"] = False
+    try:
+        loop.initialize()
+    except Exception as exc:
+        yield "profile:initialize_concepts", {
+            "concept_loop": loop,
+            "iterate": False,
+            "initialization_error": str(exc),
+        }
+        raise
+    request["_initialized"] = True
+    yield "profile:initialize_concepts", {"concept_loop": loop, "iterate": True}
+    for _ in range(request["max_rounds"]):
+        status = loop.attempt_round()
+        guards = loop.compute_guards(status)
+        loop.pack_transition(not guards["early_stop"])
+        yield "profile:concept_round_and_pack", {
+            "concept_loop": loop,
+            "done": guards["done"],
+        }
+        if guards["done"]:
+            break
+    return loop.finish()
+
+
+class MathlibConceptCompatibilityLoop:
+    """Serializable source steps shared by the native entrypoint and MCP tools.
+
+    The callback's exception scope, timing, report append order and final-round
+    widening are retained here. Candidate mapping remains the native subprocess.
+    """
+
+    def __init__(self, request, state=None, trace_event=None):
+        self.request = request
+        self.state = {} if state is None else state
+        self.trace_event = trace_event
+
+    def emit(self, event, payload):
+        if self.trace_event is not None:
+            self.trace_event(event, payload)
+
+    def initialize(self):
+        if self.request["max_rounds"] <= 0:
+            raise ValueError("`max_rounds` must be positive.")
+        if self.request["top_k"] <= 0 or self.request["top_modules"] <= 0:
+            raise ValueError("`top_k` and `top_modules` must be positive.")
+        self.state["target_verified_ratio"] = max(
+            0.0, min(1.0, self.request["target_verified_ratio"])
+        )
+        self.emit(
+            "mathlib_concept_compatibility_loop_start",
+            {
+                "skill": "mathlib-compatibility-loop-orchestrator",
+                "hook_id": "mathlib.compatibility_loop",
+                "top_k": self.request["top_k"],
+                "top_modules": self.request["top_modules"],
+                "verify_checks": self.request["verify_checks"],
+                "verify_max_concepts": self.request["verify_max_concepts"],
+                "verify_max_candidates": self.request["verify_max_candidates"],
+                "max_rounds": self.request["max_rounds"],
+                "target_verified_ratio": self.state["target_verified_ratio"],
+            },
+        )
+        self.state["best_map"] = None
+        self.state["best_coverage"] = summarize_mathlib_concept_coverage(None)
+        self.state["rounds"] = []
+        self.state["last_error"] = None
+        self.state["current_top_k"] = self.request["top_k"]
+        self.state["current_top_modules"] = self.request["top_modules"]
+        self.state["current_verify_max_concepts"] = self.request["verify_max_concepts"]
+        self.state["current_verify_max_candidates"] = self.request[
+            "verify_max_candidates"
+        ]
+        self.state["round_index"] = 1
+        self.state["max_rounds"] = self.request["max_rounds"]
+        return self.state
+
+    def attempt_round(self):
+        self.emit(
+            "mathlib_concept_compatibility_loop_iteration_start",
+            {
+                "skill": "mathlib-compatibility-loop-orchestrator",
+                "hook_id": "mathlib.compatibility_loop",
+                "round_index": self.state["round_index"],
+                "top_k": self.state["current_top_k"],
+                "top_modules": self.state["current_top_modules"],
+                "verify_checks": self.request["verify_checks"],
+                "verify_max_concepts": self.state["current_verify_max_concepts"],
+                "verify_max_candidates": self.state["current_verify_max_candidates"],
+            },
+        )
+        start_ns = time.perf_counter_ns()
+        try:
+            concept_map = map_statement_to_mathlib_concepts(
+                self.request["statement"],
+                lean_workdir=self.request["lean_workdir"],
+                top_k=self.state["current_top_k"],
+                top_modules=self.state["current_top_modules"],
+                verify_checks=self.request["verify_checks"],
+                verify_timeout_sec=self.request["verify_timeout_sec"],
+                verify_max_concepts=self.state["current_verify_max_concepts"],
+                verify_max_candidates=self.state["current_verify_max_candidates"],
+                reasoning_log_file=self.request["reasoning_log_file"],
+            )
+            duration_ms = round((time.perf_counter_ns() - start_ns) / 1000000, 3)
+            coverage = summarize_mathlib_concept_coverage(concept_map)
+            round_report = {
+                "round_index": self.state["round_index"],
+                "top_k": self.state["current_top_k"],
+                "top_modules": self.state["current_top_modules"],
+                "verify_checks": self.request["verify_checks"],
+                "verify_max_concepts": self.state["current_verify_max_concepts"],
+                "verify_max_candidates": self.state["current_verify_max_candidates"],
+                "duration_ms": duration_ms,
+                "coverage": coverage,
+                "error": None,
+            }
+            self.state["rounds"].append(round_report)
+            if coverage.get("coverage_score", 0) >= self.state["best_coverage"].get(
+                "coverage_score", 0
+            ):
+                self.state["best_map"] = concept_map
+                self.state["best_coverage"] = coverage
+            self.emit(
+                "mathlib_concept_coverage_review_complete",
+                {
+                    "skill": "mathlib-concept-coverage-reviewer",
+                    "hook_id": "mathlib.coverage",
+                    "round_index": self.state["round_index"],
+                    "coverage": coverage,
+                    "duration_ms": duration_ms,
+                },
+            )
+            verified_ratio = coverage.get("verified_ratio")
+            target_met = (
+                isinstance(verified_ratio, (int, float))
+                and verified_ratio >= self.state["target_verified_ratio"]
+            )
+        except Exception as exc:
+            duration_ms = round((time.perf_counter_ns() - start_ns) / 1000000, 3)
+            self.state["last_error"] = str(exc)
+            self.state["rounds"].append(
+                {
+                    "round_index": self.state["round_index"],
+                    "top_k": self.state["current_top_k"],
+                    "top_modules": self.state["current_top_modules"],
+                    "verify_checks": self.request["verify_checks"],
+                    "verify_max_concepts": self.state["current_verify_max_concepts"],
+                    "verify_max_candidates": self.state[
+                        "current_verify_max_candidates"
+                    ],
+                    "duration_ms": duration_ms,
+                    "coverage": None,
+                    "error": self.state["last_error"],
+                }
+            )
+            self.emit(
+                "mathlib_concept_compatibility_loop_iteration_error",
+                {
+                    "skill": "mathlib-compatibility-loop-orchestrator",
+                    "hook_id": "mathlib.compatibility_loop",
+                    "round_index": self.state["round_index"],
+                    "error": self.state["last_error"],
+                    "duration_ms": duration_ms,
+                },
+            )
+            return {"failed": True, "verified_ratio": None, "target_met": False}
+        return {
+            "failed": False,
+            "verified_ratio": verified_ratio,
+            "target_met": target_met,
+        }
+
+    def compute_guards(self, status):
+        early_stop = (not status["failed"] and status["target_met"]) or (
+            status["failed"] and self.state["best_map"] is None
+        )
+        return {
+            "early_stop": early_stop,
+            "done": early_stop or self.state["round_index"] >= self.state["max_rounds"],
+        }
+
+    def pack_transition(self, widen):
+        if widen:
+            self.state["current_top_k"] += max(2, self.request["top_k"] // 2)
+            self.state["current_top_modules"] += max(
+                2, self.request["top_modules"] // 3
+            )
+            self.state["current_verify_max_concepts"] += max(
+                2, self.request["verify_max_concepts"] // 2
+            )
+            self.state["current_verify_max_candidates"] += max(
+                1, self.request["verify_max_candidates"] // 2
+            )
+            self.state["round_index"] += 1
+        return self.state
+
+    def finish(self):
+        self.emit(
+            "mathlib_concept_compatibility_loop_complete",
+            {
+                "skill": "mathlib-compatibility-loop-orchestrator",
+                "hook_id": "mathlib.compatibility_loop",
+                "round_count": len(self.state["rounds"]),
+                "coverage": self.state["best_coverage"],
+                "target_verified_ratio": self.state["target_verified_ratio"],
+                "target_met": isinstance(
+                    self.state["best_coverage"].get("verified_ratio"), (int, float)
+                )
+                and self.state["best_coverage"]["verified_ratio"]
+                >= self.state["target_verified_ratio"],
+                "last_error": self.state["last_error"],
+            },
+        )
+        return (
+            self.state["best_map"],
+            self.state["best_coverage"],
+            self.state["rounds"],
+            self.state["last_error"],
+        )
+
+
+def save_formalization_output(
+    output_file: str | os.PathLike[str],
+    formal_code: str,
+) -> Path:
+    """Persist formalized code to a text/Lean file."""
+    path = Path(output_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(formal_code.rstrip() + "\n", encoding="utf-8")
+    return path
+
+
+def save_refinement_round_versions(
+    output_file: str | os.PathLike[str],
+    history: Sequence["IterativeRefinementState"],
+    *,
+    version_dir: Optional[str | os.PathLike[str]] = None,
+    cycle_index: Optional[int] = None,
+) -> List[Path]:
+    """Persist one Lean file per refinement round for traceability."""
+    if not history:
+        return []
+
+    output_path = Path(output_file)
+    versions_root = (
+        Path(version_dir)
+        if version_dir is not None
+        else output_path.parent / f"{output_path.stem}.versions"
+    )
+    versions_root.mkdir(parents=True, exist_ok=True)
+
+    saved_paths: List[Path] = []
+    cycle_suffix = "" if cycle_index is None else f".cycle_{cycle_index:02d}"
+    for state in history:
+        version_name = (
+            f"{output_path.stem}{cycle_suffix}.round_{state.round_index:02d}.lean"
+        )
+        version_path = versions_root / version_name
+        version_path.write_text(state.code.rstrip() + "\n", encoding="utf-8")
+        saved_paths.append(version_path)
+
+    return saved_paths
+
+
+def save_multi_cycle_manifest(
+    output_file: str | os.PathLike[str],
+    *,
+    cycle_summaries: Sequence[Dict[str, Any]],
+) -> Path:
+    """Persist multi-cycle summary metadata for version tracking."""
+    path = Path(output_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"cycles": _jsonable(list(cycle_summaries))}
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return path
+
+
+class LatexExpansionAgent(BaseAgent):
+    """Document the responsibility of ``LatexExpansionAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = "LLM Agent that expands prerequisite definitions/theorems into explicit LaTeX before formalization."
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        name: str = "LatexExpansionAgent",
+    ):
+        """Document the responsibility of ``LatexExpansionAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(name=name)
+
+        system_prompt = (
+            "You are an expert mathematician preparing pre-formalization expansions.\n"
+            "You will be given a mathematical statement in natural language and LaTeX symbols.\n"
+            "Your task is to expand all necessary definitions, theorem prerequisites, and implicit "
+            "assumptions into an explicit LaTeX-ready statement before formalization.\n"
+            "Instructions:\n"
+            "1. Keep the expansion mathematically equivalent to the original statement.\n"
+            "2. Expand prerequisite notions in LaTeX-style mathematical language.\n"
+            "3. Do not produce Lean code.\n"
+            "4. Output only the expanded statement wrapped as:\n"
+            "%%%%%%%%%%\n"
+            "Your Expanded Statement\n"
+            "%%%%%%%%%%\n"
+        )
+        user_prompt = (
+            "Original statement:\n"
+            "{{informal_statement}}\n"
+            "Return the expanded LaTeX-ready statement.\n"
+        )
+        placeholder = {"informal": "{informal_statement}"}
+
+        self.llm = llm
+        self.system_prompt = system_prompt
+        self.user_prompt = user_prompt
+        self.placeholder = placeholder
+
+    def get_messages(self, informal_statement: str = ""):
+        """Document the responsibility of ``LatexExpansionAgent.get_messages``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``LatexExpansionAgent.get_messages`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = [{"role": "system", "content": self.system_prompt}]
+        user_content = self.user_prompt.replace(
+            self.placeholder["informal"], informal_statement
+        )
+        messages.append({"role": "user", "content": user_content})
+        return messages
+
+    def _agent_function(self, informal_statement: str = ""):
+        """Document the responsibility of ``LatexExpansionAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``LatexExpansionAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = self.get_messages(informal_statement=informal_statement)
+        response = self.llm.generate(messages)
+        return extract_formal_code(response), response
+
+
+class LatexExpansionReviewAgent(BaseAgent):
+    """Document the responsibility of ``LatexExpansionReviewAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = (
+        "LLM Agent that reviews LaTeX prerequisite expansions before formalization."
+    )
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        name: str = "LatexExpansionReviewAgent",
+        aspect_name: str = "latex_expansion_review",
+        aspect_description: str = "",
+        checklist: Optional[Sequence[str]] = None,
+    ):
+        """Document the responsibility of ``LatexExpansionReviewAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(name=name)
+
+        checklist_text = (
+            "\n".join(f"- {item}" for item in (checklist or [])).strip()
+            or "- Check the named aspect precisely."
+        )
+        system_prompt = (
+            "You are an expert mathematician reviewing a LaTeX prerequisite expansion "
+            "before Lean autoformalization.\n"
+            "You will be given the original mathematical statement and an expanded "
+            "LaTeX-ready version produced by another agent.\n"
+            f"Aspect name: {aspect_name}\n"
+            f"Aspect description: {aspect_description}\n"
+            "Checklist:\n"
+            f"{checklist_text}\n"
+            "Instructions:\n"
+            "1. Judge only whether the expanded statement is safe for this aspect.\n"
+            "2. Return True only when the expansion is complete enough, source-faithful, "
+            "and unambiguous for the aspect under review.\n"
+            "3. Return False for missing prerequisites, changed theorem meaning, dangling "
+            "identifiers, ambiguous binders, or material uncertainty.\n"
+            "4. Do not produce Lean code and do not rewrite the full statement.\n"
+            "5. Ground the explanation in concrete variables, assumptions, definitions, "
+            "or theorem components from the input.\n"
+            "You should wrap your final results in a way illustrated as the following:\n"
+            "%%%%%%%%%%\n"
+            "Explanation: Your Detailed Explanation\n"
+            "Judgement: Your Binary Judgement\n"
+            "%%%%%%%%%%\n"
+            "Strictly follow the instructions that have been claimed.\n"
+        )
+        user_prompt = (
+            "Original statement:\n"
+            "{{informal_statement}}\n\n"
+            "Expanded LaTeX-ready statement:\n"
+            "{{expanded_statement}}\n"
+        )
+        placeholder = {
+            "informal": "{informal_statement}",
+            "expanded": "{expanded_statement}",
+        }
+
+        self.llm = llm
+        self.aspect_name = aspect_name
+        self.aspect_description = aspect_description
+        self.system_prompt = system_prompt
+        self.user_prompt = user_prompt
+        self.placeholder = placeholder
+
+    def get_messages(
+        self,
+        informal_statement: str = "",
+        expanded_statement: str = "",
+    ):
+        """Document the responsibility of ``LatexExpansionReviewAgent.get_messages``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``LatexExpansionReviewAgent.get_messages`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = [{"role": "system", "content": self.system_prompt}]
+        user_content = self.user_prompt.replace(
+            self.placeholder["informal"], informal_statement
+        )
+        user_content = user_content.replace(
+            self.placeholder["expanded"], expanded_statement
+        )
+        messages.append({"role": "user", "content": user_content})
+        return messages
+
+    def _agent_function(
+        self,
+        informal_statement: str = "",
+        expanded_statement: str = "",
+    ):
+        """Document the responsibility of ``LatexExpansionReviewAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``LatexExpansionReviewAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = self.get_messages(
+            informal_statement=informal_statement,
+            expanded_statement=expanded_statement,
+        )
+        response = self.llm.generate(messages)
+        return extract_judgement(response), response
+
+
+class LatexExpansionCompletenessReviewAgent(LatexExpansionReviewAgent):
+    """Document the responsibility of ``LatexExpansionCompletenessReviewAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = (
+        "LLM Agent that checks whether a LaTeX expansion includes all formalization-relevant "
+        "definitions, hypotheses, prerequisites, and conclusions."
+    )
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        name: str = "LatexExpansionCompletenessReviewAgent",
+    ):
+        """Document the responsibility of ``LatexExpansionCompletenessReviewAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(
+            llm=llm,
+            name=name,
+            aspect_name="latex_expansion_completeness",
+            aspect_description=(
+                "Check whether the expanded statement makes all source-relevant "
+                "definitions, theorem prerequisites, domain assumptions, side conditions, "
+                "and target conclusions explicit without weakening or strengthening the original."
+            ),
+            checklist=[
+                "Every named concept used by the theorem is expanded or explicitly preserved as a named prerequisite.",
+                "All hypotheses, domains, regularity/size/order assumptions, and side conditions from the original are present.",
+                "The theorem direction, conclusion, and scope are unchanged.",
+                "No extra assumptions are introduced unless they are logically required definitions already implicit in the source.",
+                "The expansion is detailed enough that a Lean drafter can identify declarations, hypotheses, and goals.",
+            ],
+        )
+
+
+class LatexExpansionBindingReviewAgent(LatexExpansionReviewAgent):
+    """Document the responsibility of ``LatexExpansionBindingReviewAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = (
+        "LLM Agent that checks binders, quantifiers, free variables, domains, indices, "
+        "and notation in a LaTeX expansion before formalization."
+    )
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        name: str = "LatexExpansionBindingReviewAgent",
+    ):
+        """Document the responsibility of ``LatexExpansionBindingReviewAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(
+            llm=llm,
+            name=name,
+            aspect_name="latex_expansion_bindings",
+            aspect_description=(
+                "Check whether variables, binders, quantifiers, domains, indices, "
+                "function arities, references, and notation in the expanded statement "
+                "are explicit, consistently scoped, and free of dangling identifiers."
+            ),
+            checklist=[
+                "Every symbol introduced in the expansion has a clear binder, domain, or dependency.",
+                "Free variables in the conclusion are bound or declared in the hypotheses.",
+                "Quantifier order matches the original theorem's dependency structure.",
+                "Indices, subscripts, parameters, and overloaded notation remain consistent across assumptions and conclusion.",
+                "Definitions expanded from the source do not silently reuse variables with changed meaning.",
+            ],
+        )
+
+
+class AutoformalizationAgent(BaseAgent):
+    """Document the responsibility of ``AutoformalizationAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = "LLM Agent for zero-shot and few-shot autoformalization."
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        name: str = "AutoformalizationAgent",
+        formal_language: str = "Isabelle/HOL",
+    ):
+        """Document the responsibility of ``AutoformalizationAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(name=name)
+
+        basic_system_prompt = (
+            "You are an expert in formal language {formal_language}.\n"
+            "You will be given a mathematical statement written in natural language and LaTeX symbols.\n"
+            "Your task is to provide the formal code of the given natural language mathematical "
+            "statement in {formal_language} with the following instructions:\n"
+            "1. You should give the formal code directly without any additional explanation. "
+            "If the given mathematical statement is a theorem or lemma, complete the proof when "
+            "the proof is elementary and available from the context. Use `sorry` only as an explicit "
+            "draft proof obligation when the current workflow permits a scaffold; such output is not "
+            "a final autoformalization.\n"
+            "2. For Lean4, use the planned verified import block when one is provided. "
+            "Do not import fake modules, and do not use broad `import Mathlib` as a substitute "
+            "for verified narrower imports unless the artifact is explicitly draft/waived.\n"
+            "3. You should wrap the formal code in a way illustrated as the following:\n"
+            "%%%%%%%%%%\n"
+            "Your Formal Code\n"
+            "%%%%%%%%%%\n"
+            "4. For Lean4 output, use normal readable Lean formatting. Blank lines between imports, "
+            "namespaces, sections, declarations, and proof blocks are encouraged.\n"
+            "5. Use module and declaration comments to preserve mathematical source alignment. "
+            "If a declaration corresponds to source material, include `Original source (NL): ...` "
+            "and `Original source (LaTeX): ...` when available. If a declaration is generated support "
+            "infrastructure, include `Generated note (NL): ...` and, when helpful, "
+            "`Generated equivalent (LaTeX): ...`.\n"
+            "6. Do not repeat `NL/LaTeX:` on every line.\n"
+            "7. Do not comment purely syntactic Lean lines such as `import`, `open`, `namespace`, "
+            "`section`, `end`, `set_option`, `universe`, or simple `variable` declarations unless "
+            "there is a non-obvious mathematical alignment issue.\n"
+            '8. If the user message provides "Core statement alignment annotations", preserve each '
+            "core statement's assumptions and conclusion in nearby module/declaration comments or theorem names. "
+            "If those annotations contain `src_L####` literal source anchors, cite the relevant anchors "
+            "with a compact `Source anchors: ...` line in the corresponding source-aware declaration comment.\n"
+            "9. Follow a systematic interface policy: keep mathlib-native notions concrete; isolate only "
+            "the truly missing analytic notion behind one clearly named abstract boundary; use an explicit "
+            "assumption package for theorem-level equivalences; and include at least one operational lemma "
+            "that turns key interface assumptions into usable downstream API.\n"
+            "10. Avoid parallel abstraction routes for the same semantic property; keep one operational path.\n"
+            "11. Before any final-result claim, the output must pass import-context, source-comment, and "
+            "result realness gates: expected declarations should work under the stated imports, declaration "
+            "comments should preserve original/generative semantic alignment, and no `sorry`, `admit`, "
+            "target `axiom`, mock/stub marker, planned/unexecuted status, legacy per-line `NL/LaTeX:` "
+            "comments, missing semantic declaration comments, or scaffold-only claim may remain in a "
+            "completed artifact.\n"
+            "Strictly follow the instructions that have been claimed.\n"
+        )
+
+        user_prompt = (
+            "Natural language statement: {{informal_statement}}\n"
+            "Give me the {formal_language} formal code of the statement:\n"
+        )
+        assistant_prompt = "%%%%%%%%%%\n" "{formal_statement}\n" "%%%%%%%%%%\n"
+
+        placeholder = {
+            "informal": "{informal_statement}",
+            "formal": "{formal_statement}",
+        }
+
+        self.llm = llm
+
+        self.formal_language = formal_language
+        self.system_prompt = basic_system_prompt
+        self.system_prompt = self.system_prompt.replace(
+            "{formal_language}", self.formal_language
+        )
+        self.user_prompt = user_prompt.replace(
+            "{formal_language}", self.formal_language
+        )
+        self.assistant_prompt = assistant_prompt
+        self.placeholder = placeholder
+
+    def get_messages(
+        self,
+        informal_statement: str = "",
+        informal_formal_pairs: Optional[List[List[str]]] = None,
+        dependency_context: Optional[str] = None,
+        alignment_hints: Optional[str] = None,
+        core_statement_annotations: Optional[str] = None,
+    ):
+        """Document the responsibility of ``AutoformalizationAgent.get_messages``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``AutoformalizationAgent.get_messages`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = [{"role": "system", "content": self.system_prompt}]
+        if informal_formal_pairs is not None:
+            for informal, formal in informal_formal_pairs:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": self.user_prompt.replace(
+                            self.placeholder["informal"], informal
+                        ),
+                    }
+                )
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": self.assistant_prompt.replace(
+                            self.placeholder["formal"], formal
+                        ),
+                    }
+                )
+        user_content = self.user_prompt.replace(
+            self.placeholder["informal"], informal_statement
+        )
+        if dependency_context:
+            user_content += (
+                "\nPreviously formalized dependency statements "
+                "(use these when resolving prerequisites):\n"
+                f"{dependency_context}\n"
+            )
+        if alignment_hints:
+            user_content += (
+                "\nMathlib alignment hints "
+                "(prefer these existing declarations/modules when appropriate):\n"
+                f"{alignment_hints}\n"
+            )
+        if core_statement_annotations:
+            user_content += (
+                "\nCore statement alignment annotations (preserve in source-aware module/declaration comments; "
+                "when `src_L####` anchors are present, cite them as `Source anchors: ...`):\n"
+                f"{core_statement_annotations}\n"
+            )
+        messages.append({"role": "user", "content": user_content})
+        return messages
+
+    def _agent_function(
+        self,
+        informal_statement,
+        informal_formal_pairs: Optional[List[List[str]]] = None,
+        dependency_context: Optional[str] = None,
+        alignment_hints: Optional[str] = None,
+        core_statement_annotations: Optional[str] = None,
+    ):
+        """Document the responsibility of ``AutoformalizationAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``AutoformalizationAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = self.get_messages(
+            informal_statement=informal_statement,
+            informal_formal_pairs=informal_formal_pairs,
+            dependency_context=dependency_context,
+            alignment_hints=alignment_hints,
+            core_statement_annotations=core_statement_annotations,
+        )
+        response = self.llm.generate(messages)
+        return extract_formal_code(response), response
+
+    def formalize_and_save(
+        self,
+        informal_statement: str,
+        output_file: str | os.PathLike[str],
+        informal_formal_pairs: Optional[List[List[str]]] = None,
+        dependency_context: Optional[str] = None,
+        alignment_hints: Optional[str] = None,
+        core_statement_annotations: Optional[str] = None,
+    ) -> Tuple[str, str, Path]:
+        """Run autoformalization once and save extracted code to disk."""
+        formal_code, raw_response = self(
+            informal_statement=informal_statement,
+            informal_formal_pairs=informal_formal_pairs,
+            dependency_context=dependency_context,
+            alignment_hints=alignment_hints,
+            core_statement_annotations=core_statement_annotations,
+        )
+        output_path = save_formalization_output(output_file, formal_code)
+        return formal_code, raw_response, output_path
+
+
+class FormalRefinementAgent(BaseAgent):
+    """Document the responsibility of ``FormalRefinementAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = "LLM Agent for refining autoformalization codes with error feedback from theorem prover."
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        name: str = "FormalRefinementAgent",
+        formal_language: str = "Isabelle/HOL",
+        category: str = "none",
+    ):
+        """Document the responsibility of ``FormalRefinementAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(name=name)
+
+        basic_system_prompt = (
+            "You are an expert in formal language {formal_language}.\n"
+            "You will be given a mathematical statement written in natural language and LaTeX symbols.\n"
+            "You will also be given a formal code which attempted to describe the given mathematical "
+            "statement in {formal_language}.\n"
+            "Your task is to refine the given formal code to make it syntactically correct while "
+            "maintaining the alignment with the given natural language mathematical statement.\n"
+            "Here are some instructions for your task:\n"
+            "1. You should give the formal code directly without any additional explanation. Complete proofs when "
+            "they are elementary or when diagnostics identify a local repair; use unresolved proof obligations only "
+            "for explicitly draft artifacts.\n"
+            "2. For Lean4, preserve or repair the planned verified import block when one is provided. "
+            "Do not import fake modules, and do not use broad `import Mathlib` as a substitute "
+            "for verified narrower imports unless the artifact is explicitly draft/waived.\n"
+            "3. You should wrap the formal code in a way illustrated as the following:\n"
+            "%%%%%%%%%%\n"
+            "Your Formal Code\n"
+            "%%%%%%%%%%\n"
+            "4. Do not repair code by postulating the target theorem as a new axiom over unconstrained predicates.\n"
+            "5. If you introduce abstract predicates/interfaces, also introduce explicit assumptions/laws that constrain "
+            "their intended meaning; otherwise clearly keep the result as a placeholder interface and avoid claiming "
+            "a full theorem-level equivalence.\n"
+            "6. Preserve logical soundness: avoid refinements that make the theorem vacuous, contradictory, or true "
+            "for arbitrary predicate instantiations.\n"
+            "7. Prefer mathematically faithful encodings of core objects from the statement. If a core notion is not "
+            "available in the library, isolate that gap explicitly rather than hiding all semantics in opaque binary predicates.\n"
+            "8. When working with Gaussian measures in mathlib, prefer native notions such as "
+            "`ProbabilityTheory.IsGaussian` and `MeasureTheory.ProbabilityMeasure` over custom predicates.\n"
+            "9. If a hard analytic component remains abstract, label the result as an interface scaffold and avoid "
+            "presenting it as a complete formalization.\n"
+            "10. Choose assumptions strong enough for downstream mathlib lemmas; for Gaussian APIs this often means "
+            "using natural measurable/topological assumptions (for example `BorelSpace` and related structure when needed).\n"
+            "11. Use names for abstract fields that reflect proposition-level meaning (for example `Has...Extension`) "
+            "instead of names that suggest a concrete constructed object when none is provided.\n"
+            "12. Avoid floating interface predicates: either connect them to operational lemmas/API use, or omit them "
+            "until they are used.\n"
+            "13. For Lean4 output, preserve or improve source-aware module/declaration comments. Keep "
+            "`Original source (NL)` / `Original source (LaTeX)` content when it came from the source, "
+            "and add `Generated note` / `Generated equivalent` comments for support declarations "
+            "introduced by formalization.\n"
+            "14. Use normal blank lines for separation instead of separator comments.\n"
+            "15. Keep declaration-level doc comments when they state mathematical intent, source alignment, "
+            "or a non-obvious abstraction boundary; remove only noisy legacy per-line `NL/LaTeX:` comments.\n"
+            '16. If "Core statement alignment annotations" are provided, preserve those assumptions/conclusions '
+            "in nearby module/declaration comments or theorem names.\n"
+            "17. Optimize for fast convergence in few refinement cycles: prioritize high-leverage structural fixes "
+            "(single abstraction boundary, theorem-layer assumption alignment, operational API lemmas) before "
+            "cosmetic rewrites.\n"
+            "18. A result marked complete must pass import-context, source-comment, and realness gates: "
+            "expected declarations should work under the stated imports, source-aware declaration comments "
+            "should be present, and no `sorry`, `admit`, target `axiom`, mock/stub marker, planned/unexecuted "
+            "status, legacy per-line `NL/LaTeX:` comments, or scaffold-only claim may remain.\n"
+            "{additional_instructions}"
+            "Strictly follow the instructions that have been claimed.\n"
+        )
+
+        if category == "syn":
+            additional_instructions = (
+                "19. You should make sure that every symbol you use is a valid {formal_language} symbol.\n"
+                "20. Some words are reserves as keywords in {formal_language}. You should be careful with "
+                "this and avoid to use them to define new names.\n"
+                "21. You should make sure that the usage of symbols and operators is correct in your final output as "
+                "the incorrect usage will lead to syntax errors.\n"
+            )
+        elif category == "udf":
+            additional_instructions = (
+                "19. You should make sure that every item you mentioned in your code has a clear reference either "
+                "in the local context or the dependency files that you decide to import.\n"
+            )
+        elif category == "tuf":
+            additional_instructions = (
+                "19. You should make sure that in your code, the types of operands of operators or the types of "
+                "parameters of functions match the types in their definitions exactly. Failure to maintain such "
+                "compatibility will lead to type mismatch errors.\n"
+            )
+        elif category == "none":
+            additional_instructions = ""
+        else:
+            raise ValueError(
+                'The value of "category" argument is incorrect. Please choose from: '
+                '["none", "syn", "udf", "tuf"]'
+            )
+
+        basic_user_prompt = (
+            "Natural language statement: {{informal_statement}}\n"
+            "There are some {formal_language} formal codes describing the given mathematical "
+            "statement: {{formalization}}\n"
+        )
+
+        simple_refinement = "You should refine this piece of formal code for your task."
+
+        binary_refinement = (
+            "You should refine this piece of formal code for your task."
+            "The syntactic correctness for this piece of code is: {{correctness}}.\n"
+        )
+
+        detailed_refinement = (
+            "You should refine this piece of formal code for your task."
+            "The provided code might have some errors according to the relevant theorem prover. "
+            "The error details and where the error part is located in the code are: {{error_details}}\n"
+        )
+
+        placeholder = {
+            "informal": "{informal_statement}",
+            "formalization": "{formalization}",
+            "correctness": "{correctness}",
+            "error_details": "{error_details}",
+        }
+
+        self.llm = llm
+
+        self.formal_language = formal_language
+        self.system_prompt = basic_system_prompt.replace(
+            "{additional_instructions}", additional_instructions
+        )
+        self.system_prompt = self.system_prompt.replace(
+            "{formal_language}", self.formal_language
+        )
+        self.basic_user_prompt = basic_user_prompt.replace(
+            "{formal_language}", self.formal_language
+        )
+        self.refinement_prompt = {
+            "simple": simple_refinement,
+            "binary": binary_refinement,
+            "detailed": detailed_refinement,
+        }
+        self.placeholder = placeholder
+
+    def get_messages(
+        self,
+        informal_statement: str = "",
+        refinement_mode: str = "simple",
+        formalization: str = "",
+        correctness: Optional[str] = None,
+        error_details: Optional[str] = None,
+        dependency_context: Optional[str] = None,
+        alignment_hints: Optional[str] = None,
+        core_statement_annotations: Optional[str] = None,
+    ):
+        """Document the responsibility of ``FormalRefinementAgent.get_messages``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``FormalRefinementAgent.get_messages`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = [{"role": "system", "content": self.system_prompt}]
+        basic_user_content = self.basic_user_prompt.replace(
+            self.placeholder["informal"], informal_statement
+        )
+        basic_user_content = basic_user_content.replace(
+            self.placeholder["formalization"], formalization
+        )
+
+        refinement_content = self.refinement_prompt[refinement_mode]
+        if correctness is not None:
+            refinement_content = refinement_content.replace(
+                self.placeholder["correctness"], correctness
+            )
+        if error_details is not None:
+            refinement_content = refinement_content.replace(
+                self.placeholder["error_details"], error_details
+            )
+
+        user_content = basic_user_content + refinement_content
+        if dependency_context:
+            user_content += (
+                "\nDependency context (already formalized):\n" f"{dependency_context}\n"
+            )
+        if alignment_hints:
+            user_content += (
+                "\nMathlib alignment hints (reuse existing declarations/modules if possible):\n"
+                f"{alignment_hints}\n"
+            )
+        if core_statement_annotations:
+            user_content += (
+                "\nCore statement alignment annotations (preserve in source-aware module/declaration comments):\n"
+                f"{core_statement_annotations}\n"
+            )
+        messages.append({"role": "user", "content": user_content})
+        return messages
+
+    def _agent_function(
+        self,
+        informal_statement: str = "",
+        refinement_mode: str = "simple",
+        formalization: str = "",
+        correctness: Optional[str] = None,
+        error_details: Optional[str] = None,
+        dependency_context: Optional[str] = None,
+        alignment_hints: Optional[str] = None,
+        core_statement_annotations: Optional[str] = None,
+    ):
+        """Document the responsibility of ``FormalRefinementAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``FormalRefinementAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = self.get_messages(
+            informal_statement=informal_statement,
+            refinement_mode=refinement_mode,
+            formalization=formalization,
+            correctness=correctness,
+            error_details=error_details,
+            dependency_context=dependency_context,
+            alignment_hints=alignment_hints,
+            core_statement_annotations=core_statement_annotations,
+        )
+        response = self.llm.generate(messages)
+        return extract_formal_code(response), response
+
+
+class InformalRefinementAgent(BaseAgent):
+    """Document the responsibility of ``InformalRefinementAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = (
+        "LLM Agent for refining autoformalization codes with feedback from LLMs."
+    )
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        name: str = "FormalRefinementAgent",
+        formal_language: str = "Isabelle/HOL",
+    ):
+        """Document the responsibility of ``InformalRefinementAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(name=name)
+
+        basic_system_prompt = (
+            "You are an expert in formal language {formal_language}.\n"
+            "You will be given a mathematical statement written in natural language and LaTeX symbols.\n"
+            "You will also be given a formal code which attempted to describe the given mathematical "
+            "statement in {formal_language}.\n"
+            "Your task is to refine the given formal code to make it satisfy a specific aspect while "
+            "maintaining the alignment with the given natural language mathematical statement.\n"
+            "Here are some instructions for your task:\n"
+            "1. You should give the formal code directly without any additional explanation. Complete proofs when "
+            "the aspect critique can be repaired locally; keep unresolved proof obligations only for explicitly "
+            "draft artifacts.\n"
+            "2. For Lean4, preserve or repair the planned verified import block when one is provided. "
+            "Do not import fake modules, and do not use broad `import Mathlib` as a substitute "
+            "for verified narrower imports unless the artifact is explicitly draft/waived.\n"
+            "3. You should wrap the formal code in a way illustrated as the following:\n"
+            "%%%%%%%%%%\n"
+            "Your Formal Code\n"
+            "%%%%%%%%%%\n"
+            "4. Do not improve semantic alignment by asserting unconstrained axioms that directly force the target claim.\n"
+            "5. If abstract interfaces are used, add explicit assumptions/laws required for the intended meaning "
+            "instead of leaving predicates unconstrained.\n"
+            "6. Preserve logical soundness: avoid vacuous or contradictory formulations caused by arbitrary predicate choices.\n"
+            "7. Keep missing hard notions explicit as placeholders and avoid presenting the result as a faithful full theorem "
+            "when core semantics are not yet formalized.\n"
+            "8. Prefer mathlib-native Gaussian/probability interfaces (for example `ProbabilityTheory.IsGaussian` and "
+            "`MeasureTheory.ProbabilityMeasure`) over ad hoc replacements.\n"
+            "9. If only part of the theorem is formalized and the rest is abstract, keep that boundary explicit in names "
+            "and comments.\n"
+            "10. Strengthen assumptions when necessary so the code can interoperate with expected mathlib lemmas "
+            "(for example add `BorelSpace`/topological assumptions when Gaussian lemmas require them).\n"
+            "11. Prefer property-style names for abstract witness predicates (for example `Has...Extension`) "
+            "when the field describes existence/extension rather than a concrete map.\n"
+            "12. If you include basis-independence interfaces, connect them to a usable lemma/API step or remove them "
+            "to avoid dead abstractions.\n"
+            "13. For Lean4 output, preserve or improve source-aware module/declaration comments. Keep "
+            "`Original source (NL)` / `Original source (LaTeX)` content when it came from the source, "
+            "and add `Generated note` / `Generated equivalent` comments for support declarations "
+            "introduced by formalization.\n"
+            "14. Use normal blank lines for separation instead of separator comments.\n"
+            "15. Keep declaration-level doc comments when they state mathematical intent, source alignment, "
+            "or a non-obvious abstraction boundary; remove only noisy legacy per-line `NL/LaTeX:` comments.\n"
+            '16. If "Core statement alignment annotations" are provided, preserve those assumptions/conclusions '
+            "in nearby module/declaration comments or theorem names.\n"
+            "17. Optimize for fast convergence in few refinement cycles: prioritize high-leverage structural fixes "
+            "before local stylistic edits.\n"
+            "18. A result marked complete must pass import-context, source-comment, and realness gates: "
+            "expected declarations should work under the stated imports, source-aware declaration comments "
+            "should be present, and no `sorry`, `admit`, target `axiom`, mock/stub marker, planned/unexecuted "
+            "status, legacy per-line `NL/LaTeX:` comments, or scaffold-only claim may remain.\n"
+            "Strictly follow the instructions that have been claimed.\n"
+        )
+
+        user_prompt = (
+            "Natural language statement: {{informal_statement}}\n"
+            "There are some {formal_language} formal codes describing the given mathematical "
+            "statement: {{formalization}}\n"
+            "You should refine this piece of code for your task.\n"
+            "The description of the aspect which you should focus on is: {{aspect_description}}\n"
+            "The result of the evaluation of this aspect is: {{aspect_evaluation}}\n"
+        )
+
+        placeholder = {
+            "informal": "{informal_statement}",
+            "formalization": "{formalization}",
+            "aspect_description": "{aspect_description}",
+            "aspect_evaluation": "{aspect_evaluation}",
+        }
+
+        self.llm = llm
+
+        self.formal_language = formal_language
+        self.system_prompt = basic_system_prompt.replace(
+            "{formal_language}", self.formal_language
+        )
+        self.user_prompt = user_prompt.replace(
+            "{formal_language}", self.formal_language
+        )
+        self.placeholder = placeholder
+
+    def get_messages(
+        self,
+        informal_statement: str = "",
+        formalization: str = "",
+        aspect_description: str = "",
+        aspect_evaluation: str = "",
+        dependency_context: Optional[str] = None,
+        alignment_hints: Optional[str] = None,
+        core_statement_annotations: Optional[str] = None,
+    ):
+        """Document the responsibility of ``InformalRefinementAgent.get_messages``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``InformalRefinementAgent.get_messages`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = [{"role": "system", "content": self.system_prompt}]
+        user_content = self.user_prompt.replace(
+            self.placeholder["informal"], informal_statement
+        )
+        user_content = user_content.replace(
+            self.placeholder["formalization"], formalization
+        )
+        user_content = user_content.replace(
+            self.placeholder["aspect_description"], aspect_description
+        )
+        user_content = user_content.replace(
+            self.placeholder["aspect_evaluation"], aspect_evaluation
+        )
+        if dependency_context:
+            user_content += (
+                "\nDependency context (already formalized):\n" f"{dependency_context}\n"
+            )
+        if alignment_hints:
+            user_content += (
+                "\nMathlib alignment hints (reuse existing declarations/modules if possible):\n"
+                f"{alignment_hints}\n"
+            )
+        if core_statement_annotations:
+            user_content += (
+                "\nCore statement alignment annotations (preserve in source-aware module/declaration comments):\n"
+                f"{core_statement_annotations}\n"
+            )
+        messages.append({"role": "user", "content": user_content})
+        return messages
+
+    def _agent_function(
+        self,
+        informal_statement: str = "",
+        formalization: str = "",
+        aspect_description: str = "",
+        aspect_evaluation: str = "",
+        dependency_context: Optional[str] = None,
+        alignment_hints: Optional[str] = None,
+        core_statement_annotations: Optional[str] = None,
+    ):
+        """Document the responsibility of ``InformalRefinementAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``InformalRefinementAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = self.get_messages(
+            informal_statement=informal_statement,
+            formalization=formalization,
+            aspect_description=aspect_description,
+            aspect_evaluation=aspect_evaluation,
+            dependency_context=dependency_context,
+            alignment_hints=alignment_hints,
+            core_statement_annotations=core_statement_annotations,
+        )
+        response = self.llm.generate(messages)
+        return extract_formal_code(response), response
+
+
+class SoftCritiqueAgent(BaseAgent):
+    """Document the responsibility of ``SoftCritiqueAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = "Soft critique of autoformalization from LLMs."
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        name: str = "SoftCritiqueAgent",
+        formal_language: str = "Isabelle/HOL",
+        aspect_description: str = "",
+    ):
+        """Document the responsibility of ``SoftCritiqueAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(name=name)
+
+        basic_system_prompt = (
+            "You are an expert in formal language {formal_language}.\n"
+            "You will be given a mathematical statement written in natural language and LaTeX symbols.\n"
+            "You will also be given a formal code which attempted to describe the given mathematical "
+            "statement in {formal_language}.\n"
+            "Your task is to evaluate a specific aspect of the formal code.\n"
+            "The description of the aspect is: {{aspect_description}}\n"
+            "Your need to give two things about your evaluation:\n"
+            "1. the judgement of whether the formalization meets this aspect. "
+            'This should be a binary value in "True" or "False".\n'
+            "2. the detailed explanation of your judgement.\n"
+            "You should wrap your final results in a way illustrated as the following:\n"
+            "%%%%%%%%%%\n"
+            "Explanation: Your Detailed Explanation\n"
+            "Judgement: Your Binary Judgement\n"
+            "%%%%%%%%%%\n"
+            "Strictly follow the instructions that have been claimed.\n"
+        )
+
+        user_prompt = (
+            "Natural language statement: {{informal_statement}}\n"
+            "{formal_language} formal code of the statement: {{formalization}}\n"
+        )
+
+        placeholder = {
+            "informal": "{informal_statement}",
+            "formalization": "{formalization}",
+        }
+
+        self.llm = llm
+
+        self.formal_language = formal_language
+        self.system_prompt = basic_system_prompt
+        self.system_prompt = self.system_prompt.replace(
+            "{formal_language}", self.formal_language
+        )
+        self.system_prompt = self.system_prompt.replace(
+            "{aspect_description}", aspect_description
+        )
+        self.user_prompt = user_prompt.replace(
+            "{formal_language}", self.formal_language
+        )
+        self.placeholder = placeholder
+
+    def get_messages(self, informal_statement: str = "", formalization: str = ""):
+        """Document the responsibility of ``SoftCritiqueAgent.get_messages``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``SoftCritiqueAgent.get_messages`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = [{"role": "system", "content": self.system_prompt}]
+        user_content = self.user_prompt.replace(
+            self.placeholder["informal"], informal_statement
+        )
+        user_content = user_content.replace(
+            self.placeholder["formalization"], formalization
+        )
+        messages.append({"role": "user", "content": user_content})
+        return messages
+
+    def _agent_function(self, informal_statement: str = "", formalization: str = ""):
+        """Document the responsibility of ``SoftCritiqueAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``SoftCritiqueAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = self.get_messages(
+            informal_statement=informal_statement, formalization=formalization
+        )
+        response = self.llm.generate(messages)
+        return extract_judgement(response), response
+
+
+class DenoisingAgent(BaseAgent):
+    """Document the responsibility of ``DenoisingAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = (
+        "LLM Agent for cleaning output of LLMs to get autoformalization codes."
+    )
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        name: str = "DenoisingAgent",
+        formal_language: str = "Isabelle/HOL",
+    ):
+        """Document the responsibility of ``DenoisingAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(name=name)
+
+        basic_system_prompt = (
+            "You are an expert in formal language {formal_language}.\n"
+            "You will be given a piece of text containing {formal_language} code.\n"
+            "Your task is to obtain cleaned {formal_language} code from the given text with "
+            "the following instructions:\n"
+            "1. You should obtain the cleaned code only from the given text. "
+            "Do not attempt to rewrite or improve the cleaned code.\n"
+            "2. You should only output the cleaned code directly. Remove prose outside the formal code. "
+            "Do not remove Lean comments that are part of the code.\n"
+            "3. For Lean4, preserve meaningful module/declaration comments that explain mathematical "
+            "source alignment. Convert useful legacy line-comment content into `Original source (NL)`, "
+            "`Original source (LaTeX)`, or `Generated note` declaration comments; do not preserve repeated "
+            "`NL/LaTeX:` line comments as required artifact content.\n"
+            "4. If a Lean4 candidate is cluttered with comments on every line or comments on purely syntactic "
+            "lines, keep the best candidate but do not pretend the source-comment hygiene contract is satisfied; "
+            "the downstream guard must reject or repair it.\n"
+            "5. The given text might contain several repeated or similar formal statements. "
+            "The cleaned code must only keep the best one among them.\n"
+            "6. Do not have any proof in the cleaned code unless the workflow explicitly requests "
+            "proof-complete Lean. If proof bodies must be removed in draft mode, preserve meaningful "
+            "declaration/module comments.\n"
+            "7. You should wrap the cleaned formal code in a way that is illustrated as the following:\n"
+            "%%%%%%%%%%\n"
+            "Your Formal Code\n"
+            "%%%%%%%%%%\n"
+            "Strictly follow the instructions that have been claimed.\n"
+        )
+
+        user_prompt = (
+            "There are some texts containing autoformalized {formal_language} codes: {{formalization}}\n"
+            "Clean them to obtain the cleaned {formal_language} code.\n"
+        )
+
+        placeholder = {"formalization": "{formalization}"}
+
+        self.llm = llm
+
+        self.formal_language = formal_language
+        self.system_prompt = basic_system_prompt
+        self.system_prompt = self.system_prompt.replace(
+            "{formal_language}", self.formal_language
+        )
+        self.user_prompt = user_prompt.replace(
+            "{formal_language}", self.formal_language
+        )
+        self.placeholder = placeholder
+
+    def get_messages(self, formalization: str = ""):
+        """Document the responsibility of ``DenoisingAgent.get_messages``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``DenoisingAgent.get_messages`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = [{"role": "system", "content": self.system_prompt}]
+        user_content = self.user_prompt.replace(
+            self.placeholder["formalization"], formalization
+        )
+        messages.append({"role": "user", "content": user_content})
+        return messages
+
+    def _agent_function(self, formalization: str = ""):
+        """Document the responsibility of ``DenoisingAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``DenoisingAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = self.get_messages(formalization=formalization)
+        response = self.llm.generate(messages)
+        return extract_formal_code(response), response
+
+
+class LeanLineAnnotationAgent(BaseAgent):
+    """Document the responsibility of ``LeanLineAnnotationAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = "LLM Agent for producing line-by-line annotations of Lean4 code."
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        name: str = "LeanLineAnnotationAgent",
+    ):
+        """Document the responsibility of ``LeanLineAnnotationAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(name=name)
+
+        system_prompt = (
+            "You are an expert in Lean4 and mathematical formalization.\n"
+            "You will be given Lean4 source code.\n"
+            "Your task is to produce a line-by-line annotation of the file.\n"
+            "Follow these instructions exactly:\n"
+            "1. Output one annotation row for every input line, including blank lines.\n"
+            "2. Keep exact 1-based line numbers from the input.\n"
+            "3. Do not rewrite, reorder, or correct the Lean code.\n"
+            "4. Use this exact output format wrapped in fences:\n"
+            "%%%%%%%%%%\n"
+            "| line | code | annotation |\n"
+            "| --- | --- | --- |\n"
+            "| 1 | `...` | ... |\n"
+            "%%%%%%%%%%\n"
+            "5. For blank input lines, set `code` to `<blank>`.\n"
+            "6. Keep annotations concise and technically precise.\n"
+        )
+
+        user_prompt = (
+            "Lean4 source file content:\n"
+            "{{lean_code}}\n"
+            "Generate the line-by-line annotation table.\n"
+        )
+
+        placeholder = {"lean_code": "{lean_code}"}
+
+        self.llm = llm
+        self.system_prompt = system_prompt
+        self.user_prompt = user_prompt
+        self.placeholder = placeholder
+
+    def get_messages(self, lean_code: str = ""):
+        """Document the responsibility of ``LeanLineAnnotationAgent.get_messages``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``LeanLineAnnotationAgent.get_messages`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = [{"role": "system", "content": self.system_prompt}]
+        user_content = self.user_prompt.replace(
+            self.placeholder["lean_code"], lean_code
+        )
+        messages.append({"role": "user", "content": user_content})
+        return messages
+
+    def _agent_function(self, lean_code: str = ""):
+        """Document the responsibility of ``LeanLineAnnotationAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``LeanLineAnnotationAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = self.get_messages(lean_code=lean_code)
+        response = self.llm.generate(messages)
+        return extract_formal_code(response), response
+
+    def annotate_file(
+        self,
+        input_file: str | os.PathLike[str],
+        output_file: str | os.PathLike[str],
+    ) -> Tuple[str, str, Path]:
+        """Generate and persist line-by-line annotations for a Lean source file."""
+        input_path = Path(input_file)
+        lean_code = input_path.read_text(encoding="utf-8")
+        annotation, raw_response = self(lean_code=lean_code)
+        output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(annotation.rstrip() + "\n", encoding="utf-8")
+        return annotation, raw_response, output_path
+
+
+try:
+    from theorem_prover import (  # pyright: ignore[reportMissingImports] - optional external checker
+        Isabelle,
+        Lean,
+        isabelle_get_error_details,
+        lean_get_error_details,
+    )
+except ImportError:
+    Isabelle = None
+    Lean = None
+    isabelle_get_error_details = None
+    lean_get_error_details = None
+
+
+class HardCritiqueAgent(BaseAgent):
+    """Document the responsibility of ``HardCritiqueAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = "Hard critique of autoformalization from the relevant theorem prover."
+
+    def __init__(
+        self,
+        name: str = "HardCritiqueAgent",
+        formal_language: str = "Isabelle/HOL",
+        file_dir: Optional[str] = None,
+        external_checker: Optional[Callable[[str, str], Tuple[str, str]]] = None,
+        lean_backend: str = "lake_env",
+        lean_workdir: Optional[str] = None,
+        lean_timeout_seconds: Optional[float] = None,
+        lake_bin: Optional[str] = None,
+    ):
+        """Document the responsibility of ``HardCritiqueAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(name=name)
+
+        self.formal_language = formal_language
+        self.file_dir = file_dir or tempfile.mkdtemp()
+        self.external_checker = external_checker
+        self.lean_timeout_seconds = lean_timeout_seconds
+        self.lake_bin = lake_bin
+        self.lean_backend = lean_backend
+        self.lean_workdir = os.path.abspath(lean_workdir or os.getcwd())
+
+        self.theorem_prover: Any = None
+        if self.external_checker is None:
+            if self.formal_language[:8] == "Isabelle":
+                if Isabelle is None:
+                    raise ImportError(
+                        "theorem_prover.Isabelle is unavailable. Provide external_checker "
+                        "or install theorem_prover dependencies."
+                    )
+                self.theorem_prover = Isabelle(
+                    default_session=formal_language.split("/")[-1],
+                    log_file=os.path.join(self.file_dir, "isabelle.log"),
+                )
+            elif self.formal_language == "Lean4":
+                if self.lean_backend not in {"lake_env", "theorem_prover"}:
+                    raise ValueError(
+                        f"Unsupported lean_backend='{self.lean_backend}'. "
+                        "Expected 'lake_env' or 'theorem_prover'."
+                    )
+                if self.lean_backend == "theorem_prover" and Lean is None:
+                    raise ImportError(
+                        "theorem_prover.Lean is unavailable. Provide external_checker "
+                        "or install theorem_prover dependencies."
+                    )
+                if self.lean_backend == "theorem_prover":
+                    assert Lean is not None
+                    self.theorem_prover = Lean(
+                        log_file=os.path.join(self.file_dir, "lean.log")
+                    )
+            else:
+                raise ValueError(f"{formal_language} is not supported.")
+
+    def write_error_log(
+        self,
+        file_prefix: str,
+        is_valid: str,
+        error_lines: Sequence[int],
+        error_details: Sequence[str],
+        inference_time: float,
+    ) -> Path:
+        """Document the responsibility of ``HardCritiqueAgent.write_error_log``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Persist or emit computed data in the format expected by later workflow stages.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        error_log_path = os.path.join(self.file_dir, file_prefix + ".error.log")
+        with open(error_log_path, "w", encoding="utf-8") as file:
+            file.write(f"logical validity: {is_valid}\n")
+            file.write(f"error lines: {error_lines}\n")
+            file.write(f"errors details: {error_details}\n")
+            file.write(f"inference time: {inference_time:.2f}s")
+        return Path(error_log_path)
+
+    def get_error_log_path(self, file_prefix: str) -> Path:
+        """Return the filesystem path of the per-run theorem-prover error log."""
+        return Path(self.file_dir) / f"{file_prefix}.error.log"
+
+    def read_error_log(self, file_prefix: str) -> Optional[str]:
+        """Read the theorem-prover error log for a given run prefix, if available."""
+        path = self.get_error_log_path(file_prefix)
+        if not path.exists():
+            return None
+        return path.read_text(encoding="utf-8")
+
+    def get_syntax_error_messages(
+        self,
+        error_lines: Sequence[int],
+        error_details: Sequence[str],
+    ) -> str:
+        """Document the responsibility of ``HardCritiqueAgent.get_syntax_error_messages``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``HardCritiqueAgent.get_syntax_error_messages`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        all_syntax_error = ""
+        for i, detail in enumerate(error_details):
+            line = error_lines[i] if i < len(error_lines) else None
+            col = None
+            message = detail.strip()
+
+            lean_match = re.match(
+                r"^.*:(?P<line>\d+):(?P<col>\d+):\s*error(?:\([^)]+\))?:\s*(?P<msg>.*)$",
+                detail.strip(),
+            )
+            if lean_match is not None:
+                line = int(lean_match.group("line"))
+                col = int(lean_match.group("col"))
+                message = lean_match.group("msg").strip()
+            elif ": " in detail:
+                message = detail.split(": ", 1)[1].strip()
+
+            if line is not None and col is not None:
+                syntax_error = (
+                    f"Identified error on line: {line}, column: {col}\n"
+                    f"Error message: {message}\n"
+                )
+            elif line is not None:
+                syntax_error = (
+                    f"Identified error on line: {line}\n" f"Error message: {message}\n"
+                )
+            else:
+                syntax_error = f"Error message: {message}\n"
+            all_syntax_error += f"{syntax_error}\n"
+        return all_syntax_error
+
+    def parse_lake_lean_errors(self, output: str) -> Tuple[List[int], List[str]]:
+        """Document the responsibility of ``HardCritiqueAgent.parse_lake_lean_errors``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Parse caller-provided input into the structured representation expected by downstream code.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        error_lines: List[int] = []
+        error_details: List[str] = []
+        for line in output.splitlines():
+            match = re.match(
+                r"^.*:(?P<line>\d+):(?P<col>\d+):\s*(?P<severity>error|warning)(?:\([^)]+\))?:\s*(?P<msg>.*)$",
+                line.strip(),
+            )
+            if match is None:
+                continue
+            if match.group("severity") != "error":
+                continue
+            line_no = int(match.group("line"))
+            col_no = int(match.group("col"))
+            message = match.group("msg").strip()
+            error_lines.append(line_no)
+            error_details.append(f"{line_no}:{col_no}: error: {message}")
+        return error_lines, error_details
+
+    def isabelle_process(self, formalization: str = "", file_prefix: str = "test"):
+        """Document the responsibility of ``HardCritiqueAgent.isabelle_process``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``HardCritiqueAgent.isabelle_process`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        code = re.findall("imports.*end", formalization, flags=re.DOTALL)
+        if code:
+            code = code[0]
+        else:
+            code = "imports Main\nbegin\n" + formalization + "\nend"
+
+        file_path = os.path.join(self.file_dir, file_prefix + ".thy")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(f"theory {file_prefix}\n{code}")
+        finished_response, inference_time = self.theorem_prover.use_theories(
+            theories=[file_prefix], master_dir=self.file_dir
+        )
+        assert isabelle_get_error_details is not None
+        is_valid, error_lines, error_details = isabelle_get_error_details(
+            finished_response=finished_response
+        )
+        self.write_error_log(
+            file_prefix, is_valid, error_lines, error_details, inference_time
+        )
+        return str(is_valid), self.get_syntax_error_messages(error_lines, error_details)
+
+    def lean_process(self, formalization: str = "", file_prefix: str = "test"):
+        """Document the responsibility of ``HardCritiqueAgent.lean_process``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``HardCritiqueAgent.lean_process`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        code = re.findall("import.*", formalization, flags=re.DOTALL)
+        if code:
+            code = code[0]
+        else:
+            code = "import Mathlib\n" + formalization
+
+        file_path = os.path.join(self.file_dir, file_prefix + ".lean")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(code)
+        messages, inference_time = self.theorem_prover.file_mode(file_path)
+        assert lean_get_error_details is not None
+        is_valid, error_lines, error_details = lean_get_error_details(messages=messages)
+        self.write_error_log(
+            file_prefix, is_valid, error_lines, error_details, inference_time
+        )
+        return str(is_valid), self.get_syntax_error_messages(error_lines, error_details)
+
+    def lean_lake_process(self, formalization: str = "", file_prefix: str = "test"):
+        """Document the responsibility of ``HardCritiqueAgent.lean_lake_process``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``HardCritiqueAgent.lean_lake_process`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        code = re.findall("import.*", formalization, flags=re.DOTALL)
+        if code:
+            code = code[0]
+        else:
+            code = "import Mathlib\n" + formalization
+
+        file_path = os.path.join(self.file_dir, file_prefix + ".lean")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(code)
+
+        start = time.perf_counter()
+        lean_env = _augment_env_with_lean_path()
+        lake_executable = self.lake_bin or _resolve_lake_executable(lean_env)
+        proc = subprocess.run(
+            [lake_executable, "env", "lean", file_path],
+            cwd=self.lean_workdir,
+            env=lean_env,
+            text=True,
+            capture_output=True,
+            timeout=self.lean_timeout_seconds,
+        )
+        inference_time = time.perf_counter() - start
+
+        combined_output = "\n".join(
+            part.strip() for part in (proc.stdout, proc.stderr) if part and part.strip()
+        )
+
+        if proc.returncode == 0:
+            is_valid = "True"
+            error_lines: List[int] = []
+            error_details: List[str] = []
+        else:
+            is_valid = "False"
+            error_lines, error_details = self.parse_lake_lean_errors(combined_output)
+            if not error_details:
+                message = (
+                    combined_output
+                    or f"lake env lean failed with exit code {proc.returncode}"
+                )
+                error_lines = [0]
+                error_details = [message]
+
+        self.write_error_log(
+            file_prefix, is_valid, error_lines, error_details, inference_time
+        )
+        return is_valid, self.get_syntax_error_messages(error_lines, error_details)
+
+    def _agent_function(self, formalization: str = "", file_prefix: str = "test"):
+        """Document the responsibility of ``HardCritiqueAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``HardCritiqueAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        if self.external_checker is not None:
+            return self.external_checker(formalization, file_prefix)
+
+        if self.formal_language[:8] == "Isabelle":
+            correctness, error_details = self.isabelle_process(
+                formalization, file_prefix
+            )
+            return correctness, error_details
+        if self.formal_language == "Lean4":
+            if self.lean_backend == "theorem_prover":
+                correctness, error_details = self.lean_process(
+                    formalization, file_prefix
+                )
+            else:
+                correctness, error_details = self.lean_lake_process(
+                    formalization, file_prefix
+                )
+            return correctness, error_details
+        return None, None
+
+
+class ImportRetrievalAgent(BaseAgent):
+    """Document the responsibility of ``ImportRetrievalAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = "An Agent for retrieving imports for formalization codes."
+
+    def __init__(
+        self,
+        name: str = "ImportRetrievalAgent",
+        formal_language: str = "Isabelle/HOL",
+        retriever=None,
+        knowledge_base: Optional[Sequence[dict]] = None,
+    ):
+        """Document the responsibility of ``ImportRetrievalAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(name=name)
+
+        self.formal_language = formal_language
+        if self.formal_language != "Isabelle/HOL":
+            raise ValueError(f"{formal_language} is not supported.")
+
+        self.retriever = retriever
+        self.knowledge_base = list(knowledge_base or [])
+
+    def _agent_function(self, formalization: str = "", top_n: int = 3):
+        """Document the responsibility of ``ImportRetrievalAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``ImportRetrievalAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        imports = re.findall("imports.*begin", formalization, flags=re.DOTALL)
+        if imports:
+            imports = imports[0][7:-5].split()
+        else:
+            imports = ["Main"]
+
+        if self.retriever is not None and self.knowledge_base:
+            ids = self.retriever.retrieve(query=formalization, top_n=top_n)
+            imports += [
+                '"' + self.knowledge_base[i]["source"] + '"'
+                for i in ids
+                if "source" in self.knowledge_base[i]
+            ]
+
+        imports = "\n".join(list(set(imports)))
+
+        code = re.findall("begin.*end", formalization, flags=re.DOTALL)
+        if code:
+            code = code[0]
+        else:
+            code = "begin\n" + formalization + "\nend"
+
+        return f"imports\n{imports}\n{code}"
+
+
+class RefinementTaxonomyAgent(BaseAgent):
+    """Document the responsibility of ``RefinementTaxonomyAgent``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    description = (
+        "LLM Agent for classifying the nature of a Lean refinement transition."
+    )
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        name: str = "RefinementTaxonomyAgent",
+        formal_language: str = "Lean4",
+    ):
+        """Document the responsibility of ``RefinementTaxonomyAgent.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        super().__init__(name=name)
+
+        system_prompt = (
+            "You are an expert in formal artifact analysis for {formal_language}.\n"
+            "You will be given a previous version and a current version of a formal artifact, plus "
+            "critique context and a fixed taxonomy.\n"
+            "Your task is to classify the refinement transition.\n"
+            "Instructions:\n"
+            "1. Output only one JSON object.\n"
+            "2. Use only labels that appear in the provided taxonomy lists.\n"
+            "3. The field `primary_refinement_type` must be a single label drawn from the provided "
+            "primary-type list.\n"
+            "4. The list fields must contain no duplicates.\n"
+            "5. If there is no evidence for a list field, return an empty list except use "
+            "`no_syntactic_change` or `no_semantic_change` when appropriate.\n"
+            "6. Keep `summary` to at most two sentences.\n"
+            "7. Set `confidence` to a number between 0 and 1.\n"
+        ).replace("{formal_language}", formal_language)
+
+        self.llm = llm
+        self.system_prompt = system_prompt
+
+    def get_messages(
+        self,
+        *,
+        informal_statement: str,
+        previous_code: str,
+        current_code: str,
+        agent_name: str,
+        trigger_family: str,
+        trigger_reason: str,
+        previous_hard_feedback: str,
+        current_hard_feedback: str,
+        previous_soft_feedback: str,
+        current_soft_feedback: str,
+        diff_metrics: Dict[str, Any],
+        heuristic_analysis: Dict[str, Any],
+    ) -> List[Dict[str, str]]:
+        """Document the responsibility of ``RefinementTaxonomyAgent.get_messages``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``RefinementTaxonomyAgent.get_messages`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        taxonomy_payload = {
+            "trigger_families": list(REFINEMENT_TRIGGER_FAMILIES),
+            "reasoning_types": list(REFINEMENT_REASONING_TYPES),
+            "syntactic_refinement_types": list(REFINEMENT_SYNTACTIC_TYPES),
+            "semantic_refinement_types": list(REFINEMENT_SEMANTIC_TYPES),
+            "artifact_effect_types": list(REFINEMENT_ARTIFACT_EFFECT_TYPES),
+            "primary_refinement_types": list(REFINEMENT_PRIMARY_TYPES),
+            "preservation_risk_values": ["low", "medium", "high"],
+        }
+        user_content = (
+            "Classify this refinement transition.\n"
+            f"Informal statement:\n{informal_statement}\n\n"
+            f"Originating agent: {agent_name}\n"
+            f"Trigger family: {trigger_family}\n"
+            f"Trigger reason: {trigger_reason}\n\n"
+            "Allowed taxonomy labels:\n"
+            f"{json.dumps(taxonomy_payload, ensure_ascii=False, indent=2)}\n\n"
+            "Deterministic diff metrics:\n"
+            f"{json.dumps(diff_metrics, ensure_ascii=False, indent=2)}\n\n"
+            "Heuristic baseline analysis:\n"
+            f"{json.dumps(heuristic_analysis, ensure_ascii=False, indent=2)}\n\n"
+            f"Previous hard feedback:\n{previous_hard_feedback}\n\n"
+            f"Current hard feedback:\n{current_hard_feedback}\n\n"
+            f"Previous soft feedback:\n{previous_soft_feedback}\n\n"
+            f"Current soft feedback:\n{current_soft_feedback}\n\n"
+            "Previous code:\n"
+            "%%%%%%%%%%\n"
+            f"{previous_code}\n"
+            "%%%%%%%%%%\n\n"
+            "Current code:\n"
+            "%%%%%%%%%%\n"
+            f"{current_code}\n"
+            "%%%%%%%%%%\n\n"
+            "Return a JSON object with exactly these keys:\n"
+            "{\n"
+            '  "trigger_family": "...",\n'
+            '  "primary_refinement_type": "...",\n'
+            '  "reasoning_types": ["..."],\n'
+            '  "syntactic_refinement_types": ["..."],\n'
+            '  "semantic_refinement_types": ["..."],\n'
+            '  "artifact_effect_types": ["..."],\n'
+            '  "preservation_risk": "low|medium|high",\n'
+            '  "summary": "...",\n'
+            '  "confidence": 0.0\n'
+            "}\n"
+        )
+        return [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": user_content},
+        ]
+
+    def _agent_function(self, **kwargs) -> Tuple[Optional[Dict[str, Any]], str]:
+        """Document the responsibility of ``RefinementTaxonomyAgent._agent_function``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``RefinementTaxonomyAgent._agent_function`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        messages = self.get_messages(**kwargs)
+        response = self.llm.generate(messages)
+        return extract_json_object(response), response
+
+
+def judge_value(text: str) -> Optional[bool]:
+    """Document the responsibility of ``judge_value``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``judge_value`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    judgement = re.findall("Judgement: (True|False)", text, flags=re.DOTALL)
+    if judgement:
+        correctness = judgement[-1].split()[-1]
+        if correctness == "True":
+            return True
+        return False
+    return None
+
+
+def parse_judge_explanation(text: str) -> str:
+    """Extract explanation text from a SoftCritique-style response."""
+    match = re.search(
+        r"Explanation:\s*(.*?)(?:\nJudgement:\s*(?:True|False)\b|$)",
+        text,
+        flags=re.DOTALL,
+    )
+    if match is not None:
+        return match.group(1).strip()
+    return text.strip()
+
+
+def parse_judge_label(text: str) -> str:
+    """Extract True/False/Unknown judgement label from judge text."""
+    match = re.search(r"Judgement:\s*(True|False)\b", text)
+    if match is not None:
+        return match.group(1)
+    return "Unknown"
+
+
+@dataclass
+class IterativeRefinementState:
+    """Document the responsibility of ``IterativeRefinementState``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    round_index: int
+    code: str
+    hard_feedback: str
+    soft_feedback: str
+    agent_name: Optional[str] = None
+    trigger_reason: Optional[str] = None
+    step_timings_ms: Optional[Dict[str, float]] = None
+    refinement_analysis: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class LLMJudgeCritique:
+    """Document the responsibility of ``LLMJudgeCritique``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    name: str
+    aspect_description: str
+    judgement: str
+    passed: Optional[bool]
+    explanation: str
+    extracted_feedback: str
+    raw_response: Optional[str] = None
+
+
+@dataclass
+class LatexExpansionReview:
+    """Document the responsibility of ``LatexExpansionReview``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    name: str
+    aspect_description: str
+    judgement: str
+    passed: Optional[bool]
+    explanation: str
+    extracted_feedback: str
+    raw_response: Optional[str] = None
+
+
+@dataclass
+class SystematicAutoformalizationReport:
+    """Document the responsibility of ``SystematicAutoformalizationReport``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Group related state and behavior so callers can use this part of the skills/autoformalization/autoformalization-agentc/scripts workflow through a clear object boundary.
+
+    Function:
+        Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+
+    Maintenance:
+        Keep the class contract explicit when adding fields, constructor requirements, or externally visible methods.
+    """
+
+    informal_statement: str
+    normalized_statement: str
+    expanded_statement: Optional[str]
+    core_statement_annotations: Optional[str]
+    initial_code: str
+    final_code: str
+    initial_correctness: str
+    final_correctness: str
+    initial_hard_feedback: str
+    final_hard_feedback: str
+    used_iterative_refinement: bool
+    latex_expansion_reviews: Optional[List[LatexExpansionReview]] = None
+    latex_expansion_review_passed: Optional[bool] = None
+    concept_map: Optional[Dict[str, Any]] = None
+    concept_map_error: Optional[str] = None
+    mathlib_concept_coverage: Optional[Dict[str, Any]] = None
+    mathlib_concept_compatibility_rounds: Optional[List[Dict[str, Any]]] = None
+    mathlib_alignment_hints: Optional[str] = None
+    output_file: Optional[str] = None
+    history_file: Optional[str] = None
+    report_file: Optional[str] = None
+    reasoning_log_file: Optional[str] = None
+    final_saved_file_correctness: Optional[str] = None
+    final_saved_file_hard_feedback: Optional[str] = None
+    compatibility_report: Optional[Dict[str, Any]] = None
+    compatibility_score: Optional[int] = None
+    compatibility_band: Optional[str] = None
+    critical_review_score: Optional[int] = None
+    critical_review_band: Optional[str] = None
+    compatibility_score_field: Optional[str] = None
+    compatibility_target_score: Optional[int] = None
+    compatibility_target_met: Optional[bool] = None
+    consistency_report: Optional[Dict[str, Any]] = None
+    consistency_report_file: Optional[str] = None
+    consistency_informalization_report_file: Optional[str] = None
+    consistency_score: Optional[float] = None
+    consistency_min_layer_score: Optional[float] = None
+    consistency_blocking_layers: Optional[List[str]] = None
+    consistency_target_met: Optional[bool] = None
+    llm_judges: Optional[List[LLMJudgeCritique]] = None
+    dependency_label: Optional[str] = None
+    dependency_reports: Optional[List["SystematicAutoformalizationReport"]] = None
+    round_version_files: Optional[List[str]] = None
+    cycle_index: Optional[int] = None
+    cycle_count: Optional[int] = None
+    cycle_manifest_file: Optional[str] = None
+    statistics_file: Optional[str] = None
+    statistics_tex_file: Optional[str] = None
+
+
+def save_refinement_history(
+    output_file: str | os.PathLike[str],
+    history: Sequence[IterativeRefinementState],
+) -> Path:
+    """Persist iterative refinement trace as JSON."""
+    path = Path(output_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = [asdict(item) for item in history]
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return path
+
+
+def save_systematic_report(
+    output_file: str | os.PathLike[str],
+    report: SystematicAutoformalizationReport,
+) -> Path:
+    """Persist systematic workflow report as JSON."""
+    path = Path(output_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(asdict(report), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _read_json_file(path: Optional[str | os.PathLike[str]]) -> Optional[Any]:
+    """Document the responsibility of ``_read_json_file``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Load data from the declared source while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if path is None:
+        return None
+    file_path = Path(path)
+    if not file_path.exists():
+        return None
+    try:
+        return json.loads(file_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _read_reasoning_entries(
+    path: Optional[str | os.PathLike[str]],
+) -> List[Dict[str, Any]]:
+    """Document the responsibility of ``_read_reasoning_entries``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Load data from the declared source while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if path is None:
+        return []
+    file_path = Path(path)
+    if not file_path.exists():
+        return []
+    entries: List[Dict[str, Any]] = []
+    for raw_line in file_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            parsed = json.loads(line)
+            if isinstance(parsed, dict):
+                entries.append(parsed)
+        except Exception:
+            continue
+    return entries
+
+
+def _augment_env_with_lean_path(
+    env: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
+    """Document the responsibility of ``_augment_env_with_lean_path``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_augment_env_with_lean_path`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    updated = dict(os.environ if env is None else env)
+    elan_bin = Path.home() / ".elan" / "bin"
+    current_path = updated.get("PATH", "")
+    if elan_bin.exists():
+        parts = current_path.split(os.pathsep) if current_path else []
+        if str(elan_bin) not in parts:
+            updated["PATH"] = str(elan_bin) + (
+                os.pathsep + current_path if current_path else ""
+            )
+    return updated
+
+
+def _resolve_lake_executable(env: Optional[Dict[str, str]] = None) -> str:
+    """Document the responsibility of ``_resolve_lake_executable``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_resolve_lake_executable`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    updated = _augment_env_with_lean_path(env)
+    found = shutil.which("lake", path=updated.get("PATH"))
+    if found:
+        return found
+    elan_bin = Path.home() / ".elan" / "bin"
+    for candidate in (elan_bin / "lake.exe", elan_bin / "lake"):
+        if candidate.exists():
+            return str(candidate)
+    return "lake"
+
+
+def _resolve_repo_root_from_agentc_script() -> Path:
+    """Document the responsibility of ``_resolve_repo_root_from_agentc_script``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_resolve_repo_root_from_agentc_script`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return Path(__file__).resolve().parents[4]
+
+
+def _resolve_mathlib_compatibility_auditor_script() -> Optional[Path]:
+    """Document the responsibility of ``_resolve_mathlib_compatibility_auditor_script``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_resolve_mathlib_compatibility_auditor_script`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    repo_root = _resolve_repo_root_from_agentc_script()
+    candidate = (
+        repo_root
+        / "skills"
+        / "mathlib"
+        / "mathlib-compatibility-auditor"
+        / "scripts"
+        / "check_mathlib_compat.py"
+    )
+    return candidate if candidate.exists() else None
+
+
+def _resolve_lean_consistency_report_script() -> Optional[Path]:
+    """Document the responsibility of ``_resolve_lean_consistency_report_script``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_resolve_lean_consistency_report_script`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    repo_root = _resolve_repo_root_from_agentc_script()
+    candidate = (
+        repo_root
+        / "skills"
+        / "lean"
+        / "lean-consistency-report-orchestrator"
+        / "scripts"
+        / "run_lean_consistency_report.py"
+    )
+    return candidate if candidate.exists() else None
+
+
+def default_lean_consistency_artifact_paths(
+    lean_file: str | os.PathLike[str],
+) -> Dict[str, str]:
+    """Return per-artifact consistency report paths beside a saved Lean file."""
+    path = Path(lean_file)
+    return {
+        "consistency_report_file": str(path.with_suffix(".consistency.json")),
+        "consistency_informalization_report_file": str(
+            path.with_suffix(".informalization.json")
+        ),
+    }
+
+
+def run_mathlib_compatibility_audit(
+    lean_file: str | os.PathLike[str],
+    *,
+    lake_workdir: str | os.PathLike[str] = ".",
+    reasoning_log_file: Optional[str | os.PathLike[str]] = None,
+) -> Dict[str, Any]:
+    """Document the responsibility of ``run_mathlib_compatibility_audit``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    script_path = _resolve_mathlib_compatibility_auditor_script()
+    if script_path is None:
+        raise FileNotFoundError(
+            "Could not locate skills/mathlib/mathlib-compatibility-auditor/scripts/check_mathlib_compat.py"
+        )
+
+    repo_root = _resolve_repo_root_from_agentc_script()
+    command = [
+        sys.executable,
+        str(script_path),
+        "--lean-file",
+        str(Path(lean_file)),
+        "--json",
+        "--run-lake-check",
+        "--lake-workdir",
+        str(lake_workdir),
+    ]
+    if reasoning_log_file is not None:
+        command.extend(["--reasoning-log-file", str(reasoning_log_file)])
+
+    proc = subprocess.run(
+        command,
+        cwd=str(repo_root),
+        env=_augment_env_with_lean_path(),
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            "Mathlib compatibility audit failed with exit code "
+            f"{proc.returncode}: {proc.stderr.strip() or proc.stdout.strip()}"
+        )
+
+    parsed = extract_json_object(proc.stdout)
+    if parsed is None:
+        raise RuntimeError(
+            "Failed to parse JSON output from mathlib compatibility audit."
+        )
+    return parsed
+
+
+def run_lean_consistency_report(
+    lean_files: Sequence[str | os.PathLike[str]],
+    *,
+    run_lean_check: bool = True,
+    output_file: Optional[str | os.PathLike[str]] = None,
+    informalization_report: Optional[str | os.PathLike[str]] = None,
+    reasoning_log_file: Optional[str | os.PathLike[str]] = None,
+    target_mathlib_compatibility: int = 80,
+    target_reference_free_score: int = 80,
+) -> Dict[str, Any]:
+    """Document the responsibility of ``run_lean_consistency_report``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    script_path = _resolve_lean_consistency_report_script()
+    if script_path is None:
+        raise FileNotFoundError(
+            "Could not locate "
+            "skills/lean/lean-consistency-report-orchestrator/scripts/run_lean_consistency_report.py"
+        )
+
+    repo_root = _resolve_repo_root_from_agentc_script()
+    command = [
+        sys.executable,
+        str(script_path),
+        "--json",
+        "--target-mathlib-compatibility",
+        str(target_mathlib_compatibility),
+        "--target-reference-free-score",
+        str(target_reference_free_score),
+    ]
+    for lean_file in lean_files:
+        command.extend(["--lean-file", str(Path(lean_file))])
+    if run_lean_check:
+        command.append("--run-lean-check")
+    if output_file is not None:
+        command.extend(["--output-file", str(output_file)])
+    if informalization_report is not None:
+        command.extend(["--informalization-report", str(informalization_report)])
+    if reasoning_log_file is not None:
+        command.extend(["--reasoning-log-file", str(reasoning_log_file)])
+
+    proc = subprocess.run(
+        command,
+        cwd=str(repo_root),
+        env=_augment_env_with_lean_path(),
+        capture_output=True,
+        text=True,
+    )
+    parsed = extract_json_object(proc.stdout)
+    if parsed is None:
+        raise RuntimeError(
+            "Failed to parse JSON output from Lean consistency report: "
+            f"{proc.stderr.strip() or proc.stdout.strip()}"
+        )
+    parsed["_returncode"] = proc.returncode
+    if proc.stderr:
+        parsed["_stderr_tail"] = proc.stderr[-3000:]
+    return parsed
+
+
+def _entry_timestamp_ms(entry: Dict[str, Any]) -> Optional[int]:
+    """Document the responsibility of ``_entry_timestamp_ms``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_entry_timestamp_ms`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    raw_ms = entry.get("timestamp_unix_ms")
+    if isinstance(raw_ms, (int, float)):
+        return int(raw_ms)
+    raw_iso = entry.get("timestamp_utc")
+    if isinstance(raw_iso, str) and raw_iso.strip():
+        try:
+            return int(
+                datetime.fromisoformat(raw_iso.replace("Z", "+00:00")).timestamp()
+                * 1000
+            )
+        except Exception:
+            return None
+    return None
+
+
+def _infer_skill_name(step: str, payload: Dict[str, Any]) -> str:
+    """Document the responsibility of ``_infer_skill_name``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_infer_skill_name`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    skill = payload.get("skill")
+    if isinstance(skill, str) and skill.strip():
+        return skill.strip()
+
+    s = step.lower()
+    if "latex_expansion_review_suite" in s:
+        return "LatexExpansionReviewSuite"
+    if "latex_expansion_completeness_review" in s:
+        return "LatexExpansionCompletenessReviewAgent"
+    if "latex_expansion_binding_review" in s:
+        return "LatexExpansionBindingReviewAgent"
+    if "latex_expansion" in s:
+        return "LatexExpansionAgent"
+    if "concept_mapping" in s:
+        return "mathlib-concept-candidate-mapper"
+    if "compatibility_audit" in s:
+        return "mathlib-abstraction-auditor"
+    if "autoformalizer" in s:
+        return "AutoformalizationAgent"
+    if "formal_refiner" in s:
+        return "FormalRefinementAgent"
+    if "informal_refiner" in s:
+        return "InformalRefinementAgent"
+    if "hard_critique" in s:
+        return "HardCritiqueAgent"
+    if "soft_critique" in s:
+        return "SoftCritiqueAgent"
+    if "llm_judges" in s:
+        return "LLMJudgeSuite"
+    if "dependency_" in s:
+        return "DependencyOrchestrator"
+    if s.startswith("iterative."):
+        return "IterativeOrchestrator"
+    return "WorkflowOrchestrator"
+
+
+def _classify_lean_error_line(line: str) -> str:
+    """Document the responsibility of ``_classify_lean_error_line``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_classify_lean_error_line`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    normalized = line.lower()
+    rules: List[Tuple[str, Tuple[str, ...]]] = [
+        ("unknown_identifier", ("unknown identifier", "unknown constant")),
+        ("type_mismatch", ("type mismatch", "application type mismatch")),
+        ("failed_to_synthesize", ("failed to synthesize",)),
+        ("unsolved_goals", ("unsolved goals", "goals remaining")),
+        ("invalid_field", ("invalid field", "invalid projection")),
+        ("unexpected_token", ("unexpected token", "expected token")),
+        ("termination", ("termination", "decreasing argument")),
+        (
+            "rewrite_failure",
+            ("rewrite", "simp made no progress", "did not find instance"),
+        ),
+    ]
+    for label, needles in rules:
+        if any(needle in normalized for needle in needles):
+            return label
+    return "other"
+
+
+def _analyze_lean_file(path: str | os.PathLike[str]) -> Optional[Dict[str, Any]]:
+    """Document the responsibility of ``_analyze_lean_file``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_analyze_lean_file`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    file_path = Path(path)
+    if not file_path.exists():
+        return None
+    text = file_path.read_text(encoding="utf-8")
+    structure = _analyze_lean_text_structure(text)
+    declaration_count = int(structure["declaration_count"])
+    doc_comment_count = int(structure["doc_comment_count"])
+    return {
+        "path": str(file_path),
+        "name": file_path.name,
+        "line_count": int(structure["line_count"]),
+        "nonempty_line_count": int(structure["nonempty_line_count"]),
+        "import_count": int(structure["import_count"]),
+        "declaration_count": declaration_count,
+        "declaration_by_kind": dict(structure["declaration_by_kind"]),
+        "doc_comment_count": doc_comment_count,
+        "doc_comment_coverage": (
+            None
+            if declaration_count == 0
+            else round(doc_comment_count / declaration_count, 4)
+        ),
+        "sorry_count": int(structure["sorry_count"]),
+        "admit_count": int(structure["admit_count"]),
+    }
+
+
+def _iter_dependency_reports(
+    dependency_reports: Optional[Sequence["SystematicAutoformalizationReport"]],
+) -> List[Any]:
+    """Document the responsibility of ``_iter_dependency_reports``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_iter_dependency_reports`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if not dependency_reports:
+        return []
+    flat: List[Any] = []
+    stack = list(dependency_reports)
+    while stack:
+        rep = stack.pop(0)
+        flat.append(rep)
+        if isinstance(rep, dict):
+            children = rep.get("dependency_reports") or []
+        else:
+            children = getattr(rep, "dependency_reports", None) or []
+        if isinstance(children, list):
+            stack.extend(children)
+    return flat
+
+
+def _latex_escape(text: Any) -> str:
+    """Document the responsibility of ``_latex_escape``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Provide the local operation named ``_latex_escape`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    raw = str(text)
+    replacements = [
+        ("\\", r"\textbackslash{}"),
+        ("&", r"\&"),
+        ("%", r"\%"),
+        ("$", r"\$"),
+        ("#", r"\#"),
+        ("_", r"\_"),
+        ("{", r"\{"),
+        ("}", r"\}"),
+        ("~", r"\textasciitilde{}"),
+        ("^", r"\textasciicircum{}"),
+    ]
+    escaped = raw
+    for old, new in replacements:
+        escaped = escaped.replace(old, new)
+    return escaped
+
+
+def _format_float(value: Optional[float], digits: int = 2) -> str:
+    """Document the responsibility of ``_format_float``.
+
+    Motivation:
+        Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if value is None:
+        return "n/a"
+    return f"{value:.{digits}f}"
+
+
+def build_autoformalization_statistics(
+    report: SystematicAutoformalizationReport,
+) -> Dict[str, Any]:
+    """Build statistics over reasoning logs and intermediate Lean artifacts."""
+    reasoning_entries = _read_reasoning_entries(report.reasoning_log_file)
+    history_payload = _read_json_file(report.history_file)
+    cycle_manifest_payload = _read_json_file(report.cycle_manifest_file)
+
+    if reasoning_entries:
+        if all(isinstance(e.get("event_index"), int) for e in reasoning_entries):
+            reasoning_entries.sort(key=lambda e: int(e.get("event_index", 0)))
+        else:
+            reasoning_entries.sort(
+                key=lambda e: (
+                    _entry_timestamp_ms(e) or 0,
+                    str(e.get("step", "")),
+                )
+            )
+
+    step_counter: Counter[str] = Counter()
+    skill_counter: Counter[str] = Counter()
+    skill_timing_ms: Dict[str, List[float]] = defaultdict(list)
+    process_timing_ms: Dict[str, List[float]] = defaultdict(list)
+    hard_checks = 0
+    hard_checks_true = 0
+    hard_checks_false = 0
+    error_counter: Counter[str] = Counter()
+    error_counter_by_skill: Dict[str, Counter[str]] = defaultdict(Counter)
+    error_line_counter: Counter[str] = Counter()
+    open_starts: Dict[str, List[int]] = defaultdict(list)
+
+    first_ts = _entry_timestamp_ms(reasoning_entries[0]) if reasoning_entries else None
+    last_ts = _entry_timestamp_ms(reasoning_entries[-1]) if reasoning_entries else None
+
+    for entry in reasoning_entries:
+        step = str(entry.get("step", ""))
+        payload = entry.get("payload")
+        if not isinstance(payload, dict):
+            payload = {}
+
+        step_counter[step] += 1
+        skill_name = _infer_skill_name(step, payload)
+        skill_counter[skill_name] += 1
+
+        ts_ms = _entry_timestamp_ms(entry)
+        if ts_ms is not None and step.endswith("_start"):
+            base = step[: -len("_start")]
+            open_starts[base].append(ts_ms)
+        elif ts_ms is not None:
+            for suffix in ("_complete", "_success", "_error", "_output"):
+                if step.endswith(suffix):
+                    base = step[: -len(suffix)]
+                    if open_starts[base]:
+                        start_ts = open_starts[base].pop(0)
+                        duration = max(0.0, float(ts_ms - start_ts))
+                        process_timing_ms[base].append(duration)
+                        skill_timing_ms[skill_name].append(duration)
+                    break
+
+        if "hard_critique" in step and "correctness" in payload:
+            hard_checks += 1
+            correctness = str(payload.get("correctness"))
+            if correctness == "True":
+                hard_checks_true += 1
+            elif correctness == "False":
+                hard_checks_false += 1
+
+        error_log = payload.get("lean_error_log")
+        if isinstance(error_log, str) and error_log.strip():
+            for raw_line in error_log.splitlines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+                if "error:" in line.lower():
+                    error_line = (
+                        line.split("error:", 1)[-1].strip()
+                        if "error:" in line
+                        else line
+                    )
+                    error_line_counter[error_line] += 1
+                    category = _classify_lean_error_line(error_line)
+                    error_counter[category] += 1
+                    error_counter_by_skill[skill_name][category] += 1
+
+    elapsed_deltas = [
+        float(entry["elapsed_ms_since_prev_event"])
+        for entry in reasoning_entries
+        if isinstance(entry.get("elapsed_ms_since_prev_event"), (int, float))
+    ]
+    mean_delta_ms = (
+        None if not elapsed_deltas else sum(elapsed_deltas) / len(elapsed_deltas)
+    )
+
+    manifest_cycles = []
+    if isinstance(cycle_manifest_payload, dict):
+        raw_cycles = cycle_manifest_payload.get("cycles")
+        if isinstance(raw_cycles, list):
+            manifest_cycles = [c for c in raw_cycles if isinstance(c, dict)]
+
+    cycle_count = (
+        report.cycle_count
+        if report.cycle_count is not None
+        else (len(manifest_cycles) if manifest_cycles else 1)
+    )
+
+    candidate_files: List[str] = []
+    if report.output_file is not None:
+        candidate_files.append(report.output_file)
+    candidate_files.extend(report.round_version_files or [])
+    for cycle in manifest_cycles:
+        output_candidate = cycle.get("output_file")
+        if isinstance(output_candidate, str):
+            candidate_files.append(output_candidate)
+        round_candidates = cycle.get("round_version_files")
+        if isinstance(round_candidates, list):
+            candidate_files.extend(
+                str(item) for item in round_candidates if isinstance(item, str)
+            )
+
+    flattened_dependencies = _iter_dependency_reports(report.dependency_reports)
+    for dep in flattened_dependencies:
+        if isinstance(dep, dict):
+            dep_output = dep.get("output_file")
+            dep_rounds = dep.get("round_version_files") or []
+        else:
+            dep_output = getattr(dep, "output_file", None)
+            dep_rounds = getattr(dep, "round_version_files", None) or []
+        if isinstance(dep_output, str):
+            candidate_files.append(dep_output)
+        if isinstance(dep_rounds, list):
+            candidate_files.extend(
+                str(item) for item in dep_rounds if isinstance(item, str)
+            )
+
+    seen_paths: set[str] = set()
+    unique_files: List[str] = []
+    for file_path in candidate_files:
+        norm = str(Path(file_path))
+        if norm in seen_paths:
+            continue
+        seen_paths.add(norm)
+        unique_files.append(norm)
+
+    file_stats: List[Dict[str, Any]] = []
+    for file_path in unique_files:
+        stats = _analyze_lean_file(file_path)
+        if stats is not None:
+            file_stats.append(stats)
+
+    version_file_stats = [
+        row
+        for row in file_stats
+        if row["path"] in {str(Path(p)) for p in (report.round_version_files or [])}
+    ]
+    version_file_stats_sorted = sorted(version_file_stats, key=lambda row: row["name"])
+    evolution = None
+    if len(version_file_stats_sorted) >= 2:
+        first = version_file_stats_sorted[0]
+        last = version_file_stats_sorted[-1]
+        evolution = {
+            "from": first["name"],
+            "to": last["name"],
+            "delta_line_count": last["line_count"] - first["line_count"],
+            "delta_declaration_count": last["declaration_count"]
+            - first["declaration_count"],
+            "delta_sorry_count": last["sorry_count"] - first["sorry_count"],
+        }
+    total_declaration_count = sum(
+        int(row.get("declaration_count", 0)) for row in file_stats
+    )
+    total_sorry_count = sum(int(row.get("sorry_count", 0)) for row in file_stats)
+
+    refinement_primary_counter: Counter[str] = Counter()
+    refinement_trigger_counter: Counter[str] = Counter()
+    refinement_reasoning_counter: Counter[str] = Counter()
+    refinement_syntactic_counter: Counter[str] = Counter()
+    refinement_semantic_counter: Counter[str] = Counter()
+    refinement_effect_counter: Counter[str] = Counter()
+    refinement_risk_counter: Counter[str] = Counter()
+    refinement_agent_counter: Counter[str] = Counter()
+    refinement_duration_by_agent: Dict[str, List[float]] = defaultdict(list)
+    round_duration_ms: List[float] = []
+    per_round_refinement: List[Dict[str, Any]] = []
+
+    history_rows = history_payload if isinstance(history_payload, list) else []
+    for row in history_rows:
+        if not isinstance(row, dict):
+            continue
+        round_index = row.get("round_index")
+        agent_name = row.get("agent_name")
+        if isinstance(agent_name, str) and agent_name.strip():
+            refinement_agent_counter[agent_name.strip()] += 1
+
+        timings = row.get("step_timings_ms")
+        total_round_ms = None
+        if isinstance(timings, dict):
+            total_val = timings.get("total_round_ms")
+            if isinstance(total_val, (int, float)):
+                total_round_ms = float(total_val)
+                round_duration_ms.append(total_round_ms)
+            if isinstance(agent_name, str) and agent_name.strip():
+                agent_timing = timings.get(agent_name)
+                if isinstance(agent_timing, (int, float)):
+                    refinement_duration_by_agent[agent_name.strip()].append(
+                        float(agent_timing)
+                    )
+
+        analysis = row.get("refinement_analysis")
+        if not isinstance(analysis, dict):
+            continue
+
+        trigger_family = analysis.get("trigger_family")
+        if isinstance(trigger_family, str) and trigger_family.strip():
+            refinement_trigger_counter[trigger_family.strip()] += 1
+
+        primary_type = analysis.get("primary_refinement_type")
+        if isinstance(primary_type, str) and primary_type.strip():
+            refinement_primary_counter[primary_type.strip()] += 1
+
+        preservation_risk = analysis.get("preservation_risk")
+        if isinstance(preservation_risk, str) and preservation_risk.strip():
+            refinement_risk_counter[preservation_risk.strip()] += 1
+
+        for label in _sanitize_label_list(
+            analysis.get("reasoning_types"),
+            REFINEMENT_REASONING_TYPES,
+        ):
+            refinement_reasoning_counter[label] += 1
+        for label in _sanitize_label_list(
+            analysis.get("syntactic_refinement_types"),
+            REFINEMENT_SYNTACTIC_TYPES,
+        ):
+            refinement_syntactic_counter[label] += 1
+        for label in _sanitize_label_list(
+            analysis.get("semantic_refinement_types"),
+            REFINEMENT_SEMANTIC_TYPES,
+        ):
+            refinement_semantic_counter[label] += 1
+        for label in _sanitize_label_list(
+            analysis.get("artifact_effect_types"),
+            REFINEMENT_ARTIFACT_EFFECT_TYPES,
+        ):
+            refinement_effect_counter[label] += 1
+
+        per_round_refinement.append(
+            {
+                "round_index": round_index,
+                "agent_name": agent_name,
+                "trigger_reason": row.get("trigger_reason"),
+                "trigger_family": trigger_family,
+                "primary_refinement_type": primary_type,
+                "reasoning_types": analysis.get("reasoning_types") or [],
+                "syntactic_refinement_types": analysis.get("syntactic_refinement_types")
+                or [],
+                "semantic_refinement_types": analysis.get("semantic_refinement_types")
+                or [],
+                "artifact_effect_types": analysis.get("artifact_effect_types") or [],
+                "preservation_risk": preservation_risk,
+                "analysis_method": analysis.get("analysis_method"),
+                "confidence": analysis.get("confidence"),
+                "summary": analysis.get("summary"),
+                "duration_ms": total_round_ms,
+            }
+        )
+
+    return {
+        "metadata": {
+            "statement_hash": statement_hash(report.normalized_statement, length=12),
+            "normalized_statement": report.normalized_statement,
+            "dependency_label": report.dependency_label,
+            "cycle_index": report.cycle_index,
+            "cycle_count": cycle_count,
+            "dependency_report_count": len(flattened_dependencies),
+            "refinement_taxonomy_version": REFINEMENT_TAXONOMY_VERSION,
+        },
+        "compatibility": {
+            "compatibility_score": report.compatibility_score,
+            "compatibility_band": report.compatibility_band,
+            "critical_review_score": report.critical_review_score,
+            "critical_review_band": report.critical_review_band,
+            "compatibility_score_field": report.compatibility_score_field,
+            "compatibility_target_score": report.compatibility_target_score,
+            "compatibility_target_met": report.compatibility_target_met,
+            "mathlib_concept_coverage": report.mathlib_concept_coverage,
+            "mathlib_concept_loop_round_count": len(
+                report.mathlib_concept_compatibility_rounds or []
+            ),
+        },
+        "consistency": {
+            "consistency_report_file": report.consistency_report_file,
+            "consistency_informalization_report_file": (
+                report.consistency_informalization_report_file
+            ),
+            "consistency_score": report.consistency_score,
+            "consistency_min_layer_score": report.consistency_min_layer_score,
+            "consistency_blocking_layers": report.consistency_blocking_layers or [],
+            "consistency_target_met": report.consistency_target_met,
+            "layer_count": (
+                None
+                if not isinstance(report.consistency_report, dict)
+                else report.consistency_report.get("summary", {}).get("layer_count")
+            ),
+            "finding_count": (
+                None
+                if not isinstance(report.consistency_report, dict)
+                else report.consistency_report.get("summary", {}).get("finding_count")
+            ),
+            "blocking_finding_count": (
+                None
+                if not isinstance(report.consistency_report, dict)
+                else report.consistency_report.get("summary", {}).get(
+                    "blocking_finding_count"
+                )
+            ),
+        },
+        "timing": {
+            "reasoning_event_count": len(reasoning_entries),
+            "start_timestamp_unix_ms": first_ts,
+            "end_timestamp_unix_ms": last_ts,
+            "log_duration_ms": (
+                None
+                if first_ts is None or last_ts is None
+                else max(0, last_ts - first_ts)
+            ),
+            "mean_inter_event_ms": (
+                None if mean_delta_ms is None else round(mean_delta_ms, 3)
+            ),
+        },
+        "workflow_counts": {
+            "history_round_count": (
+                len(history_payload)
+                if isinstance(history_payload, list)
+                else (len(report.round_version_files or []))
+            ),
+            "step_event_counts": dict(step_counter.most_common()),
+            "skill_event_counts": dict(skill_counter.most_common()),
+            "process_duration_ms": {
+                proc: {
+                    "count": len(vals),
+                    "total_ms": round(sum(vals), 3),
+                    "avg_ms": round(sum(vals) / len(vals), 3) if vals else None,
+                }
+                for proc, vals in sorted(process_timing_ms.items())
+            },
+            "skill_duration_ms": {
+                skill: {
+                    "count": len(vals),
+                    "total_ms": round(sum(vals), 3),
+                    "avg_ms": round(sum(vals) / len(vals), 3) if vals else None,
+                }
+                for skill, vals in sorted(skill_timing_ms.items())
+            },
+        },
+        "hard_critique": {
+            "checks": hard_checks,
+            "checks_true": hard_checks_true,
+            "checks_false": hard_checks_false,
+        },
+        "errors": {
+            "total_error_lines": int(sum(error_counter.values())),
+            "error_category_counts": dict(error_counter.most_common()),
+            "error_category_by_skill": {
+                skill: dict(counter.most_common())
+                for skill, counter in sorted(error_counter_by_skill.items())
+            },
+            "top_error_lines": [
+                {"line": line, "count": count}
+                for line, count in error_line_counter.most_common(20)
+            ],
+        },
+        "files": {
+            "analyzed_file_count": len(file_stats),
+            "total_declaration_count": total_declaration_count,
+            "total_sorry_count": total_sorry_count,
+            "file_stats": file_stats,
+            "round_version_file_stats": version_file_stats_sorted,
+            "round_evolution": evolution,
+        },
+        "refinement_dynamics": {
+            "rounds_with_analysis": len(per_round_refinement),
+            "agent_counts": dict(refinement_agent_counter.most_common()),
+            "trigger_family_counts": dict(refinement_trigger_counter.most_common()),
+            "primary_refinement_counts": dict(refinement_primary_counter.most_common()),
+            "reasoning_type_counts": dict(refinement_reasoning_counter.most_common()),
+            "syntactic_refinement_counts": dict(
+                refinement_syntactic_counter.most_common()
+            ),
+            "semantic_refinement_counts": dict(
+                refinement_semantic_counter.most_common()
+            ),
+            "artifact_effect_counts": dict(refinement_effect_counter.most_common()),
+            "preservation_risk_counts": dict(refinement_risk_counter.most_common()),
+            "round_duration_ms": {
+                "count": len(round_duration_ms),
+                "total_ms": (
+                    round(sum(round_duration_ms), 3) if round_duration_ms else 0.0
+                ),
+                "avg_ms": (
+                    round(sum(round_duration_ms) / len(round_duration_ms), 3)
+                    if round_duration_ms
+                    else None
+                ),
+            },
+            "agent_duration_ms": {
+                agent: {
+                    "count": len(values),
+                    "total_ms": round(sum(values), 3),
+                    "avg_ms": round(sum(values) / len(values), 3) if values else None,
+                }
+                for agent, values in sorted(refinement_duration_by_agent.items())
+            },
+            "per_round": per_round_refinement,
+        },
+    }
+
+
+def render_autoformalization_statistics_latex(stats: Dict[str, Any]) -> str:
+    """Render a compact LaTeX report for autoformalization statistics."""
+    metadata = stats.get("metadata", {})
+    compatibility = stats.get("compatibility", {})
+    consistency = stats.get("consistency", {})
+    timing = stats.get("timing", {})
+    workflow_counts = stats.get("workflow_counts", {})
+    errors = stats.get("errors", {})
+    hard = stats.get("hard_critique", {})
+    files = stats.get("files", {})
+    refinement = stats.get("refinement_dynamics", {})
+
+    summary_rows = [
+        ("Statement hash", metadata.get("statement_hash", "n/a")),
+        ("Dependency reports", metadata.get("dependency_report_count", 0)),
+        ("Cycle count", metadata.get("cycle_count", "n/a")),
+        ("Compatibility score", compatibility.get("compatibility_score", "n/a")),
+        ("Compatibility band", compatibility.get("compatibility_band", "n/a")),
+        ("Critical review score", compatibility.get("critical_review_score", "n/a")),
+        ("Critical review band", compatibility.get("critical_review_band", "n/a")),
+        (
+            "Compatibility target",
+            compatibility.get("compatibility_target_score", "n/a"),
+        ),
+        (
+            "Compatibility target met",
+            compatibility.get("compatibility_target_met", "n/a"),
+        ),
+        (
+            "Mathlib concept coverage",
+            (
+                "n/a"
+                if not isinstance(compatibility.get("mathlib_concept_coverage"), dict)
+                else compatibility["mathlib_concept_coverage"].get(
+                    "coverage_score", "n/a"
+                )
+            ),
+        ),
+        (
+            "Mathlib concept loop rounds",
+            compatibility.get("mathlib_concept_loop_round_count", "n/a"),
+        ),
+        ("Consistency score", consistency.get("consistency_score", "n/a")),
+        ("Consistency target met", consistency.get("consistency_target_met", "n/a")),
+        (
+            "Consistency blockers",
+            len(consistency.get("consistency_blocking_layers") or []),
+        ),
+        ("Reasoning events", timing.get("reasoning_event_count", 0)),
+        (
+            "Log duration (ms)",
+            (
+                "n/a"
+                if timing.get("log_duration_ms") is None
+                else _format_float(float(timing.get("log_duration_ms")), digits=3)
+            ),
+        ),
+        (
+            "Mean inter-event (ms)",
+            _format_float(timing.get("mean_inter_event_ms"), digits=3),
+        ),
+        ("Hard checks", hard.get("checks", 0)),
+        ("Hard checks true", hard.get("checks_true", 0)),
+        ("Hard checks false", hard.get("checks_false", 0)),
+        ("Analyzed Lean files", files.get("analyzed_file_count", 0)),
+        ("Total declarations", files.get("total_declaration_count", 0)),
+        ("Total sorry", files.get("total_sorry_count", 0)),
+        ("Refinement rounds", refinement.get("rounds_with_analysis", 0)),
+    ]
+
+    skill_rows = list((workflow_counts.get("skill_event_counts") or {}).items())[:20]
+    error_rows = list((errors.get("error_category_counts") or {}).items())[:20]
+    error_by_skill_rows: List[Tuple[str, str, Any]] = []
+    raw_error_by_skill = errors.get("error_category_by_skill") or {}
+    if isinstance(raw_error_by_skill, dict):
+        for skill, categories in raw_error_by_skill.items():
+            if not isinstance(categories, dict):
+                continue
+            for category, count in categories.items():
+                error_by_skill_rows.append((str(skill), str(category), count))
+    error_by_skill_rows = error_by_skill_rows[:30]
+    version_rows = (files.get("round_version_file_stats") or [])[:30]
+    refinement_primary_rows = list(
+        (refinement.get("primary_refinement_counts") or {}).items()
+    )[:20]
+    refinement_reasoning_rows = list(
+        (refinement.get("reasoning_type_counts") or {}).items()
+    )[:20]
+    refinement_round_rows = (refinement.get("per_round") or [])[:30]
+
+    lines: List[str] = [
+        r"\documentclass[11pt]{article}",
+        r"\usepackage[T1]{fontenc}",
+        r"\usepackage[utf8]{inputenc}",
+        r"\usepackage{lmodern}",
+        r"\usepackage{booktabs}",
+        r"\usepackage{longtable}",
+        r"\usepackage{geometry}",
+        r"\geometry{margin=1in}",
+        r"\title{Autoformalization Log Statistics}",
+        r"\author{}",
+        r"\date{}",
+        r"\begin{document}",
+        r"\maketitle",
+        r"\section*{Summary}",
+        r"\begin{tabular}{ll}",
+        r"\toprule",
+        r"Metric & Value \\",
+        r"\midrule",
+    ]
+    for metric, value in summary_rows:
+        lines.append(f"{_latex_escape(metric)} & {_latex_escape(value)} \\\\")
+    lines.extend([r"\bottomrule", r"\end{tabular}"])
+
+    lines.extend(
+        [
+            r"\section*{Skill Event Counts}",
+            r"\begin{longtable}{lr}",
+            r"\toprule",
+            r"Skill & Events \\",
+            r"\midrule",
+            r"\endfirsthead",
+            r"\toprule",
+            r"Skill & Events \\",
+            r"\midrule",
+            r"\endhead",
+        ]
+    )
+    if skill_rows:
+        for skill, count in skill_rows:
+            lines.append(f"{_latex_escape(skill)} & {_latex_escape(count)} \\\\")
+    else:
+        lines.append(r"n/a & 0 \\")
+    lines.extend([r"\bottomrule", r"\end{longtable}"])
+
+    lines.extend(
+        [
+            r"\section*{Lean Error Categories by Skill}",
+            r"\begin{longtable}{llr}",
+            r"\toprule",
+            r"Skill & Error category & Count \\",
+            r"\midrule",
+            r"\endfirsthead",
+            r"\toprule",
+            r"Skill & Error category & Count \\",
+            r"\midrule",
+            r"\endhead",
+        ]
+    )
+    if error_by_skill_rows:
+        for skill, category, count in error_by_skill_rows:
+            lines.append(
+                f"{_latex_escape(skill)} & {_latex_escape(category)} & {_latex_escape(count)} \\\\"
+            )
+    else:
+        lines.append(r"n/a & n/a & 0 \\")
+    lines.extend([r"\bottomrule", r"\end{longtable}"])
+
+    lines.extend(
+        [
+            r"\section*{Lean Error Categories}",
+            r"\begin{longtable}{lr}",
+            r"\toprule",
+            r"Error category & Count \\",
+            r"\midrule",
+            r"\endfirsthead",
+            r"\toprule",
+            r"Error category & Count \\",
+            r"\midrule",
+            r"\endhead",
+        ]
+    )
+    if error_rows:
+        for category, count in error_rows:
+            lines.append(f"{_latex_escape(category)} & {_latex_escape(count)} \\\\")
+    else:
+        lines.append(r"n/a & 0 \\")
+    lines.extend([r"\bottomrule", r"\end{longtable}"])
+
+    lines.extend(
+        [
+            r"\section*{Refinement Primary Types}",
+            r"\begin{longtable}{lr}",
+            r"\toprule",
+            r"Primary type & Count \\",
+            r"\midrule",
+            r"\endfirsthead",
+            r"\toprule",
+            r"Primary type & Count \\",
+            r"\midrule",
+            r"\endhead",
+        ]
+    )
+    if refinement_primary_rows:
+        for label, count in refinement_primary_rows:
+            lines.append(f"{_latex_escape(label)} & {_latex_escape(count)} \\\\")
+    else:
+        lines.append(r"n/a & 0 \\")
+    lines.extend([r"\bottomrule", r"\end{longtable}"])
+
+    lines.extend(
+        [
+            r"\section*{Refinement Reasoning Types}",
+            r"\begin{longtable}{lr}",
+            r"\toprule",
+            r"Reasoning type & Count \\",
+            r"\midrule",
+            r"\endfirsthead",
+            r"\toprule",
+            r"Reasoning type & Count \\",
+            r"\midrule",
+            r"\endhead",
+        ]
+    )
+    if refinement_reasoning_rows:
+        for label, count in refinement_reasoning_rows:
+            lines.append(f"{_latex_escape(label)} & {_latex_escape(count)} \\\\")
+    else:
+        lines.append(r"n/a & 0 \\")
+    lines.extend([r"\bottomrule", r"\end{longtable}"])
+
+    lines.extend(
+        [
+            r"\section*{Round-Version Lean File Evolution}",
+            r"\begin{longtable}{lrrrr}",
+            r"\toprule",
+            r"File & Lines & Decls & Doc comments & Sorry \\",
+            r"\midrule",
+            r"\endfirsthead",
+            r"\toprule",
+            r"File & Lines & Decls & Doc comments & Sorry \\",
+            r"\midrule",
+            r"\endhead",
+        ]
+    )
+    if version_rows:
+        for row in version_rows:
+            lines.append(
+                f"{_latex_escape(row.get('name', 'n/a'))} & "
+                f"{_latex_escape(row.get('line_count', 0))} & "
+                f"{_latex_escape(row.get('declaration_count', 0))} & "
+                f"{_latex_escape(row.get('doc_comment_count', 0))} & "
+                f"{_latex_escape(row.get('sorry_count', 0))} \\\\"
+            )
+    else:
+        lines.append(r"n/a & 0 & 0 & 0 & 0 \\")
+    lines.extend([r"\bottomrule", r"\end{longtable}"])
+
+    lines.extend(
+        [
+            r"\section*{Per-Round Refinement Dynamics}",
+            r"\begin{longtable}{rlllp{7cm}}",
+            r"\toprule",
+            r"Round & Agent & Trigger & Duration (ms) & Summary \\",
+            r"\midrule",
+            r"\endfirsthead",
+            r"\toprule",
+            r"Round & Agent & Trigger & Duration (ms) & Summary \\",
+            r"\midrule",
+            r"\endhead",
+        ]
+    )
+    if refinement_round_rows:
+        for row in refinement_round_rows:
+            lines.append(
+                f"{_latex_escape(row.get('round_index', 'n/a'))} & "
+                f"{_latex_escape(row.get('agent_name', 'n/a'))} & "
+                f"{_latex_escape(row.get('primary_refinement_type', 'n/a'))} & "
+                f"{_latex_escape(_format_float(row.get('duration_ms'), digits=3))} & "
+                f"{_latex_escape(row.get('summary', ''))} \\\\"
+            )
+    else:
+        lines.append(r"n/a & n/a & n/a & n/a & n/a \\")
+    lines.extend([r"\bottomrule", r"\end{longtable}"])
+
+    evolution = files.get("round_evolution")
+    if isinstance(evolution, dict):
+        lines.extend(
+            [
+                r"\section*{Round Delta}",
+                r"\begin{tabular}{ll}",
+                r"\toprule",
+                r"Metric & Value \\",
+                r"\midrule",
+                f"From & {_latex_escape(evolution.get('from', 'n/a'))} \\\\",
+                f"To & {_latex_escape(evolution.get('to', 'n/a'))} \\\\",
+                f"$\\Delta$ lines & {_latex_escape(evolution.get('delta_line_count', 0))} \\\\",
+                f"$\\Delta$ declarations & {_latex_escape(evolution.get('delta_declaration_count', 0))} \\\\",
+                f"$\\Delta$ sorry count & {_latex_escape(evolution.get('delta_sorry_count', 0))} \\\\",
+                r"\bottomrule",
+                r"\end{tabular}",
+            ]
+        )
+
+    lines.append(r"\end{document}")
+    return "\n".join(lines) + "\n"
+
+
+def save_autoformalization_statistics(
+    report: SystematicAutoformalizationReport,
+    *,
+    statistics_file: Optional[str | os.PathLike[str]] = None,
+    statistics_tex_file: Optional[str | os.PathLike[str]] = None,
+) -> Tuple[Path, Path, Dict[str, Any]]:
+    """Compute and save JSON + LaTeX statistics artifacts for one workflow run."""
+    stats = build_autoformalization_statistics(report)
+
+    if statistics_file is None or statistics_tex_file is None:
+        base_candidate = report.report_file or report.output_file
+        if base_candidate is None:
+            base = Path("artifacts/autoformalization/autoformalization")
+        else:
+            base = Path(base_candidate)
+        stem = base.with_suffix("")
+        if statistics_file is None:
+            statistics_file = stem.parent / f"{stem.name}.stats.json"
+        if statistics_tex_file is None:
+            statistics_tex_file = stem.parent / f"{stem.name}.stats.tex"
+
+    statistics_json_path = Path(statistics_file)
+    statistics_tex_path = Path(statistics_tex_file)
+    statistics_json_path.parent.mkdir(parents=True, exist_ok=True)
+    statistics_tex_path.parent.mkdir(parents=True, exist_ok=True)
+    statistics_json_path.write_text(
+        json.dumps(_jsonable(stats), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    statistics_tex_path.write_text(
+        render_autoformalization_statistics_latex(stats),
+        encoding="utf-8",
+    )
+    return statistics_json_path, statistics_tex_path, stats
+
+
+class IterativeSelfRefinementAgentC:
+    """Mirror of MASA iterative self-refinement orchestration."""
+
+    def __init__(
+        self,
+        autoformalizer: AutoformalizationAgent,
+        hard_critique: HardCritiqueAgent,
+        soft_critique: SoftCritiqueAgent,
+        formal_refiner: FormalRefinementAgent,
+        informal_refiner: InformalRefinementAgent,
+        aspect_description: str,
+        max_iterations: int = 4,
+        latex_expander: Optional[LatexExpansionAgent] = None,
+        latex_expansion_completeness_reviewer: Optional[
+            LatexExpansionCompletenessReviewAgent
+        ] = None,
+        latex_expansion_binding_reviewer: Optional[
+            LatexExpansionBindingReviewAgent
+        ] = None,
+        default_first_formalization_cycles: int = 2,
+        default_target_compatibility_score: Optional[int] = 100,
+        default_max_score_gated_cycles: int = 20,
+        default_compatibility_score_field: str = "compatibility_score",
+        refinement_taxonomy_agent: Optional[RefinementTaxonomyAgent] = None,
+        enable_llm_refinement_taxonomy: bool = True,
+    ):
+        """Document the responsibility of ``IterativeSelfRefinementAgentC.__init__``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Initialize instance state while keeping constructor assumptions explicit for future maintainers.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        self.autoformalizer = autoformalizer
+        self.hard_critique = hard_critique
+        self.soft_critique = soft_critique
+        self.formal_refiner = formal_refiner
+        self.informal_refiner = informal_refiner
+        self.aspect_description = aspect_description
+        self.max_iterations = max_iterations
+        self.latex_expander = latex_expander
+        self.latex_expansion_completeness_reviewer = (
+            latex_expansion_completeness_reviewer
+        )
+        self.latex_expansion_binding_reviewer = latex_expansion_binding_reviewer
+        self.refinement_taxonomy_agent = refinement_taxonomy_agent
+        self.enable_llm_refinement_taxonomy = enable_llm_refinement_taxonomy
+        if default_first_formalization_cycles <= 0:
+            raise ValueError("`default_first_formalization_cycles` must be positive.")
+        if default_max_score_gated_cycles <= 0:
+            raise ValueError("`default_max_score_gated_cycles` must be positive.")
+        self.default_first_formalization_cycles = default_first_formalization_cycles
+        self.default_target_compatibility_score = default_target_compatibility_score
+        self.default_max_score_gated_cycles = default_max_score_gated_cycles
+        self.default_compatibility_score_field = (
+            default_compatibility_score_field.strip() or "compatibility_score"
+        )
+
+    def run(
+        self,
+        informal_statement: str,
+        informal_formal_pairs: Optional[List[List[str]]] = None,
+        file_prefix: str = "sample",
+        dependency_context: Optional[str] = None,
+        alignment_hints: Optional[str] = None,
+        core_statement_annotations: Optional[str] = None,
+        initial_formalization: Optional[str] = None,
+        initial_formalization_raw: Optional[str] = None,
+        trace_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+    ) -> List[IterativeRefinementState]:
+        """Run the native refinement steps and return their final history."""
+        iterator = self.iter_refinement_history(
+            informal_statement=informal_statement,
+            informal_formal_pairs=informal_formal_pairs,
+            file_prefix=file_prefix,
+            dependency_context=dependency_context,
+            alignment_hints=alignment_hints,
+            core_statement_annotations=core_statement_annotations,
+            initial_formalization=initial_formalization,
+            initial_formalization_raw=initial_formalization_raw,
+            trace_event=trace_event,
+        )
+        while True:
+            try:
+                next(iterator)
+            except StopIteration as completed:
+                return completed.value
+
+    def iter_refinement_history(self, **arguments):
+        """Shared consumption of refinement snapshots with workflow boundaries."""
+        final_state = None
+        for final_state in self.iter_refinement_steps(**arguments):
+            event = (
+                "initialize_refinement"
+                if final_state["round_index"] == 0
+                else "refinement_round_and_pack"
+            )
+            done = (
+                final_state["round_index"] >= self.max_iterations
+                or final_state["history"][-1]["agent_name"] == "EarlyStop"
+            )
+            yield "profile:" + event, {"refinement": final_state, "done": done}
+        return [IterativeRefinementState(**item) for item in final_state["history"]]
+
+    def iter_refinement_steps(
+        self,
+        informal_statement: str,
+        informal_formal_pairs: Optional[List[List[str]]] = None,
+        file_prefix: str = "sample",
+        dependency_context: Optional[str] = None,
+        alignment_hints: Optional[str] = None,
+        core_statement_annotations: Optional[str] = None,
+        initial_formalization: Optional[str] = None,
+        initial_formalization_raw: Optional[str] = None,
+        trace_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        _resume_state: Optional[Dict[str, Any]] = None,
+    ):
+        """Document the responsibility of ``IterativeSelfRefinementAgentC.run``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        history: List[IterativeRefinementState] = []
+
+        def emit(event: str, payload: Dict[str, Any]) -> None:
+            """Document the responsibility of ``IterativeSelfRefinementAgentC.run.emit``.
+
+            Motivation:
+                Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+            Intent:
+                Persist or emit computed data in the format expected by later workflow stages.
+
+            Inputs:
+                Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+            Outputs:
+                Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+            """
+            if trace_event is not None:
+                trace_event(event, payload)
+
+        has_dependency_context = dependency_context is not None
+        has_alignment_hints = alignment_hints is not None
+        has_core_statement_annotations = core_statement_annotations is not None
+
+        def snapshot(round_index, prior_hard, prior_soft):
+            return {
+                "round_index": round_index,
+                "code": formal,
+                "correctness": correctness,
+                "error_details": error_details,
+                "semantic_judgement": judgement,
+                "prior_hard_feedback": prior_hard,
+                "prior_soft_feedback": prior_soft,
+                "history": [asdict(item) for item in history],
+            }
+
+        if _resume_state is None:
+            emit(
+                "iterative_run_start",
+                {
+                    "file_prefix": file_prefix,
+                    "max_iterations": self.max_iterations,
+                    "has_dependency_context": has_dependency_context,
+                    "has_alignment_hints": has_alignment_hints,
+                    "has_core_statement_annotations": has_core_statement_annotations,
+                    "has_initial_formalization": initial_formalization is not None,
+                },
+            )
+
+            if initial_formalization is not None:
+                formal = initial_formalization
+                formal_raw = initial_formalization_raw
+                initial_agent_name = "InitialFormalizationSeed"
+                initial_timings = {"InitialFormalizationSeed": 0.0}
+                emit(
+                    "initial_formalization_used",
+                    {
+                        "skill": initial_agent_name,
+                        "round_index": 0,
+                        "formal_code": formal,
+                        "raw_response": formal_raw,
+                        "duration_ms": 0.0,
+                    },
+                )
+            else:
+                emit(
+                    "autoformalizer_start",
+                    {
+                        "skill": "AutoformalizationAgent",
+                        "round_index": 0,
+                    },
+                )
+                start_ns = time.perf_counter_ns()
+                formal, formal_raw = self.autoformalizer(
+                    informal_statement=informal_statement,
+                    informal_formal_pairs=informal_formal_pairs,
+                    dependency_context=dependency_context,
+                    alignment_hints=alignment_hints,
+                    core_statement_annotations=core_statement_annotations,
+                )
+                auto_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+                initial_agent_name = "AutoformalizationAgent"
+                initial_timings = {"AutoformalizationAgent": auto_ms}
+                emit(
+                    "autoformalizer_output",
+                    {
+                        "skill": "AutoformalizationAgent",
+                        "round_index": 0,
+                        "formal_code": formal,
+                        "raw_response": formal_raw,
+                        "duration_ms": auto_ms,
+                    },
+                )
+            emit(
+                "hard_critique_start",
+                {
+                    "skill": "HardCritiqueAgent",
+                    "hook_id": "check.compile",
+                    "round_index": 0,
+                    "file_prefix": f"{file_prefix}_0",
+                },
+            )
+            start_ns = time.perf_counter_ns()
+            correctness, error_details = self.hard_critique(
+                formalization=formal,
+                file_prefix=f"{file_prefix}_0",
+            )
+            hard_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+            initial_timings["HardCritiqueAgent"] = hard_ms
+            hard_log_payload = self._collect_hard_critique_log(f"{file_prefix}_0")
+            emit(
+                "hard_critique_output",
+                {
+                    "skill": "HardCritiqueAgent",
+                    "hook_id": "check.compile",
+                    "round_index": 0,
+                    "file_prefix": f"{file_prefix}_0",
+                    "correctness": correctness,
+                    "error_details": error_details,
+                    "duration_ms": hard_ms,
+                    **hard_log_payload,
+                },
+            )
+            emit(
+                "soft_critique_start",
+                {
+                    "skill": "SoftCritiqueAgent",
+                    "hook_id": "critique.semantic",
+                    "round_index": 0,
+                },
+            )
+            start_ns = time.perf_counter_ns()
+            judgement, judgement_raw = self.soft_critique(
+                informal_statement=informal_statement,
+                formalization=formal,
+            )
+            soft_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+            initial_timings["SoftCritiqueAgent"] = soft_ms
+            initial_hard_feedback = f"{correctness}\n{error_details}"
+            emit(
+                "refinement_taxonomy_start",
+                {
+                    "skill": "RefinementTaxonomyAgent",
+                    "hook_id": "transition.taxonomy",
+                    "round_index": 0,
+                },
+            )
+            start_ns = time.perf_counter_ns()
+            initial_analysis = self._analyze_refinement_transition(
+                informal_statement=informal_statement,
+                previous_code="",
+                current_code=formal,
+                agent_name=initial_agent_name,
+                trigger_family=(
+                    "seed_replay"
+                    if initial_formalization is not None
+                    else "initial_generation"
+                ),
+                trigger_reason=(
+                    "provided_seed_formalization"
+                    if initial_formalization is not None
+                    else "initial_autoformalization"
+                ),
+                previous_hard_feedback="",
+                current_hard_feedback=initial_hard_feedback,
+                previous_soft_feedback="",
+                current_soft_feedback=judgement,
+                has_dependency_context=has_dependency_context,
+                has_alignment_hints=has_alignment_hints,
+                has_core_statement_annotations=has_core_statement_annotations,
+            )
+            taxonomy_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+            initial_timings["RefinementTaxonomyAgent"] = taxonomy_ms
+            initial_timings["total_round_ms"] = round(sum(initial_timings.values()), 3)
+            emit(
+                "soft_critique_output",
+                {
+                    "skill": "SoftCritiqueAgent",
+                    "hook_id": "critique.semantic",
+                    "round_index": 0,
+                    "judgement_extracted": judgement,
+                    "raw_response": judgement_raw,
+                    "duration_ms": soft_ms,
+                },
+            )
+            emit(
+                "refinement_transition_analysis",
+                {
+                    "skill": "RefinementTaxonomyAgent",
+                    "hook_id": "transition.taxonomy",
+                    "round_index": 0,
+                    "agent_name": initial_agent_name,
+                    "analysis": initial_analysis,
+                    "duration_ms": taxonomy_ms,
+                },
+            )
+            history.append(
+                IterativeRefinementState(
+                    round_index=0,
+                    code=formal,
+                    hard_feedback=initial_hard_feedback,
+                    soft_feedback=judgement,
+                    agent_name=initial_agent_name,
+                    trigger_reason=(
+                        "provided_seed_formalization"
+                        if initial_formalization is not None
+                        else "initial_autoformalization"
+                    ),
+                    step_timings_ms=initial_timings,
+                    refinement_analysis=initial_analysis,
+                )
+            )
+            emit(
+                "history_state_recorded",
+                {
+                    "round_index": 0,
+                    "state": history[-1],
+                },
+            )
+
+            yield snapshot(0, initial_hard_feedback, judgement)
+        else:
+            formal = _resume_state["code"]
+            correctness = _resume_state["correctness"]
+            error_details = _resume_state["error_details"]
+            judgement = _resume_state["semantic_judgement"]
+            history = [
+                IterativeRefinementState(**item) for item in _resume_state["history"]
+            ]
+
+        start_round = (
+            _resume_state["round_index"] + 1 if _resume_state is not None else 1
+        )
+        for i in range(start_round, self.max_iterations + 1):
+            previous_code = formal
+            previous_hard_feedback = f"{correctness}\n{error_details}"
+            previous_soft_feedback = judgement
+            round_timings: Dict[str, float] = {}
+            if correctness != "True":
+                emit(
+                    "formal_refiner_start",
+                    {
+                        "skill": "FormalRefinementAgent",
+                        "hook_id": "refine.formal",
+                        "round_index": i,
+                        "mode": "detailed",
+                        "input_correctness": correctness,
+                    },
+                )
+                start_ns = time.perf_counter_ns()
+                formal, refined_raw = self.formal_refiner(
+                    informal_statement=informal_statement,
+                    refinement_mode="detailed",
+                    formalization=formal,
+                    correctness=correctness,
+                    error_details=error_details,
+                    dependency_context=dependency_context,
+                    alignment_hints=alignment_hints,
+                    core_statement_annotations=core_statement_annotations,
+                )
+                refine_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+                round_timings["FormalRefinementAgent"] = refine_ms
+                round_agent_name = "FormalRefinementAgent"
+                round_trigger_family = "syntax_repair"
+                round_trigger_reason = "hard_critique_failed"
+                emit(
+                    "formal_refiner_output",
+                    {
+                        "skill": "FormalRefinementAgent",
+                        "hook_id": "refine.formal",
+                        "round_index": i,
+                        "mode": "detailed",
+                        "input_correctness": correctness,
+                        "input_error_details": error_details,
+                        "formal_code": formal,
+                        "raw_response": refined_raw,
+                        "duration_ms": refine_ms,
+                    },
+                )
+            else:
+                if judge_value(judgement):
+                    emit(
+                        "refinement_taxonomy_start",
+                        {
+                            "skill": "RefinementTaxonomyAgent",
+                            "hook_id": "transition.taxonomy",
+                            "round_index": i,
+                        },
+                    )
+                    start_ns = time.perf_counter_ns()
+                    stop_analysis = self._analyze_refinement_transition(
+                        informal_statement=informal_statement,
+                        previous_code=formal,
+                        current_code=formal,
+                        agent_name="EarlyStop",
+                        trigger_family="early_stop",
+                        trigger_reason="hard_critique_true_and_soft_critique_true",
+                        previous_hard_feedback=previous_hard_feedback,
+                        current_hard_feedback=previous_hard_feedback,
+                        previous_soft_feedback=previous_soft_feedback,
+                        current_soft_feedback=previous_soft_feedback,
+                        has_dependency_context=has_dependency_context,
+                        has_alignment_hints=has_alignment_hints,
+                        has_core_statement_annotations=has_core_statement_annotations,
+                    )
+                    stop_taxonomy_ms = round(
+                        (time.perf_counter_ns() - start_ns) / 1_000_000, 3
+                    )
+                    history.append(
+                        IterativeRefinementState(
+                            round_index=i,
+                            code=formal,
+                            hard_feedback=previous_hard_feedback,
+                            soft_feedback=judgement,
+                            agent_name="EarlyStop",
+                            trigger_reason="hard_critique_true_and_soft_critique_true",
+                            step_timings_ms={
+                                "RefinementTaxonomyAgent": stop_taxonomy_ms,
+                                "total_round_ms": stop_taxonomy_ms,
+                            },
+                            refinement_analysis=stop_analysis,
+                        )
+                    )
+                    emit(
+                        "refinement_transition_analysis",
+                        {
+                            "skill": "RefinementTaxonomyAgent",
+                            "hook_id": "transition.taxonomy",
+                            "round_index": i,
+                            "agent_name": "EarlyStop",
+                            "analysis": stop_analysis,
+                            "duration_ms": stop_taxonomy_ms,
+                        },
+                    )
+                    emit(
+                        "iterative_early_stop",
+                        {
+                            "round_index": i,
+                            "reason": "hard_critique_true_and_soft_critique_true",
+                            "code": formal,
+                            "hard_feedback": previous_hard_feedback,
+                            "soft_feedback": judgement,
+                            "analysis": stop_analysis,
+                        },
+                    )
+                    yield snapshot(i, previous_hard_feedback, previous_soft_feedback)
+                    break
+                emit(
+                    "informal_refiner_start",
+                    {
+                        "skill": "InformalRefinementAgent",
+                        "hook_id": "refine.semantic",
+                        "round_index": i,
+                        "aspect_description": self.aspect_description,
+                    },
+                )
+                start_ns = time.perf_counter_ns()
+                formal, refined_raw = self.informal_refiner(
+                    informal_statement=informal_statement,
+                    formalization=formal,
+                    aspect_description=self.aspect_description,
+                    aspect_evaluation=judgement,
+                    dependency_context=dependency_context,
+                    alignment_hints=alignment_hints,
+                    core_statement_annotations=core_statement_annotations,
+                )
+                refine_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+                round_timings["InformalRefinementAgent"] = refine_ms
+                round_agent_name = "InformalRefinementAgent"
+                round_trigger_family = "semantic_realignment"
+                round_trigger_reason = "soft_critique_failed_after_hard_success"
+                emit(
+                    "informal_refiner_output",
+                    {
+                        "skill": "InformalRefinementAgent",
+                        "hook_id": "refine.semantic",
+                        "round_index": i,
+                        "aspect_description": self.aspect_description,
+                        "aspect_evaluation": judgement,
+                        "formal_code": formal,
+                        "raw_response": refined_raw,
+                        "duration_ms": refine_ms,
+                    },
+                )
+
+            emit(
+                "hard_critique_start",
+                {
+                    "skill": "HardCritiqueAgent",
+                    "hook_id": "check.compile",
+                    "round_index": i,
+                    "file_prefix": f"{file_prefix}_{i}",
+                },
+            )
+            start_ns = time.perf_counter_ns()
+            correctness, error_details = self.hard_critique(
+                formalization=formal,
+                file_prefix=f"{file_prefix}_{i}",
+            )
+            hard_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+            round_timings["HardCritiqueAgent"] = hard_ms
+            hard_log_payload = self._collect_hard_critique_log(f"{file_prefix}_{i}")
+            emit(
+                "hard_critique_output",
+                {
+                    "skill": "HardCritiqueAgent",
+                    "hook_id": "check.compile",
+                    "round_index": i,
+                    "file_prefix": f"{file_prefix}_{i}",
+                    "correctness": correctness,
+                    "error_details": error_details,
+                    "duration_ms": hard_ms,
+                    **hard_log_payload,
+                },
+            )
+            emit(
+                "soft_critique_start",
+                {
+                    "skill": "SoftCritiqueAgent",
+                    "hook_id": "critique.semantic",
+                    "round_index": i,
+                },
+            )
+            start_ns = time.perf_counter_ns()
+            judgement, judgement_raw = self.soft_critique(
+                informal_statement=informal_statement,
+                formalization=formal,
+            )
+            soft_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+            round_timings["SoftCritiqueAgent"] = soft_ms
+            current_hard_feedback = f"{correctness}\n{error_details}"
+            emit(
+                "refinement_taxonomy_start",
+                {
+                    "skill": "RefinementTaxonomyAgent",
+                    "hook_id": "transition.taxonomy",
+                    "round_index": i,
+                },
+            )
+            start_ns = time.perf_counter_ns()
+            round_analysis = self._analyze_refinement_transition(
+                informal_statement=informal_statement,
+                previous_code=previous_code,
+                current_code=formal,
+                agent_name=round_agent_name,
+                trigger_family=round_trigger_family,
+                trigger_reason=round_trigger_reason,
+                previous_hard_feedback=previous_hard_feedback,
+                current_hard_feedback=current_hard_feedback,
+                previous_soft_feedback=previous_soft_feedback,
+                current_soft_feedback=judgement,
+                has_dependency_context=has_dependency_context,
+                has_alignment_hints=has_alignment_hints,
+                has_core_statement_annotations=has_core_statement_annotations,
+            )
+            taxonomy_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+            round_timings["RefinementTaxonomyAgent"] = taxonomy_ms
+            round_timings["total_round_ms"] = round(sum(round_timings.values()), 3)
+            emit(
+                "soft_critique_output",
+                {
+                    "skill": "SoftCritiqueAgent",
+                    "hook_id": "critique.semantic",
+                    "round_index": i,
+                    "judgement_extracted": judgement,
+                    "raw_response": judgement_raw,
+                    "duration_ms": soft_ms,
+                },
+            )
+            emit(
+                "refinement_transition_analysis",
+                {
+                    "skill": "RefinementTaxonomyAgent",
+                    "hook_id": "transition.taxonomy",
+                    "round_index": i,
+                    "agent_name": round_agent_name,
+                    "analysis": round_analysis,
+                    "duration_ms": taxonomy_ms,
+                },
+            )
+            history.append(
+                IterativeRefinementState(
+                    round_index=i,
+                    code=formal,
+                    hard_feedback=current_hard_feedback,
+                    soft_feedback=judgement,
+                    agent_name=round_agent_name,
+                    trigger_reason=round_trigger_reason,
+                    step_timings_ms=round_timings,
+                    refinement_analysis=round_analysis,
+                )
+            )
+            emit(
+                "history_state_recorded",
+                {
+                    "round_index": i,
+                    "state": history[-1],
+                },
+            )
+
+            yield snapshot(i, previous_hard_feedback, previous_soft_feedback)
+
+        emit(
+            "iterative_run_complete",
+            {
+                "history_length": len(history),
+                "final_round_index": history[-1].round_index if history else None,
+                "final_code": history[-1].code if history else "",
+                "final_hard_feedback": history[-1].hard_feedback if history else "",
+                "final_soft_feedback": history[-1].soft_feedback if history else "",
+            },
+        )
+
+        return history
+
+    def run_and_save(
+        self,
+        informal_statement: str,
+        output_file: str | os.PathLike[str],
+        informal_formal_pairs: Optional[List[List[str]]] = None,
+        file_prefix: str = "sample",
+        history_file: Optional[str | os.PathLike[str]] = None,
+        dependency_context: Optional[str] = None,
+        alignment_hints: Optional[str] = None,
+        core_statement_annotations: Optional[str] = None,
+        trace_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+    ) -> List[IterativeRefinementState]:
+        """Run iterative refinement and save the final formalization to disk."""
+        history = self.run(
+            informal_statement=informal_statement,
+            informal_formal_pairs=informal_formal_pairs,
+            file_prefix=file_prefix,
+            dependency_context=dependency_context,
+            alignment_hints=alignment_hints,
+            core_statement_annotations=core_statement_annotations,
+            trace_event=trace_event,
+        )
+        if not history:
+            raise RuntimeError("Iterative refinement produced an empty history.")
+
+        save_formalization_output(output_file, history[-1].code)
+        if history_file is not None:
+            save_refinement_history(history_file, history)
+        return history
+
+    @staticmethod
+    def _parse_correctness(hard_feedback: str) -> str:
+        """Document the responsibility of ``IterativeSelfRefinementAgentC._parse_correctness``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Parse caller-provided input into the structured representation expected by downstream code.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        for line in hard_feedback.splitlines():
+            text = line.strip()
+            if text in {"True", "False"}:
+                return text
+        return "Unknown"
+
+    def _resolve_judge_llm(self) -> Optional[BaseLLM]:
+        """Document the responsibility of ``IterativeSelfRefinementAgentC._resolve_judge_llm``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``IterativeSelfRefinementAgentC._resolve_judge_llm`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        if self.soft_critique is not None and hasattr(self.soft_critique, "llm"):
+            return self.soft_critique.llm
+        if hasattr(self.autoformalizer, "llm"):
+            return self.autoformalizer.llm
+        return None
+
+    def _resolve_refinement_taxonomy_agent(self) -> Optional[RefinementTaxonomyAgent]:
+        """Document the responsibility of ``IterativeSelfRefinementAgentC._resolve_refinement_taxonomy_agent``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``IterativeSelfRefinementAgentC._resolve_refinement_taxonomy_agent`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        if not self.enable_llm_refinement_taxonomy:
+            return None
+        if self.refinement_taxonomy_agent is not None:
+            return self.refinement_taxonomy_agent
+        llm = self._resolve_judge_llm()
+        if llm is None:
+            return None
+        formal_language = getattr(self.autoformalizer, "formal_language", "Lean4")
+        self.refinement_taxonomy_agent = RefinementTaxonomyAgent(
+            llm=llm,
+            formal_language=formal_language,
+        )
+        return self.refinement_taxonomy_agent
+
+    def _analyze_refinement_transition(
+        self,
+        *,
+        informal_statement: str,
+        previous_code: str,
+        current_code: str,
+        agent_name: str,
+        trigger_family: str,
+        trigger_reason: str,
+        previous_hard_feedback: str,
+        current_hard_feedback: str,
+        previous_soft_feedback: str,
+        current_soft_feedback: str,
+        has_dependency_context: bool,
+        has_alignment_hints: bool,
+        has_core_statement_annotations: bool,
+    ) -> Dict[str, Any]:
+        """Document the responsibility of ``IterativeSelfRefinementAgentC._analyze_refinement_transition``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Provide the local operation named ``IterativeSelfRefinementAgentC._analyze_refinement_transition`` while preserving the surrounding module contract.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        analysis = _heuristic_refinement_analysis(
+            previous_code=previous_code,
+            current_code=current_code,
+            agent_name=agent_name,
+            trigger_family=trigger_family,
+            trigger_reason=trigger_reason,
+            previous_hard_feedback=previous_hard_feedback,
+            current_hard_feedback=current_hard_feedback,
+            previous_soft_feedback=previous_soft_feedback,
+            current_soft_feedback=current_soft_feedback,
+            has_dependency_context=has_dependency_context,
+            has_alignment_hints=has_alignment_hints,
+            has_core_statement_annotations=has_core_statement_annotations,
+        )
+
+        taxonomy_agent = self._resolve_refinement_taxonomy_agent()
+        if taxonomy_agent is None:
+            return analysis
+
+        try:
+            parsed, raw_response = taxonomy_agent(
+                informal_statement=informal_statement,
+                previous_code=previous_code,
+                current_code=current_code,
+                agent_name=agent_name,
+                trigger_family=trigger_family,
+                trigger_reason=trigger_reason,
+                previous_hard_feedback=previous_hard_feedback,
+                current_hard_feedback=current_hard_feedback,
+                previous_soft_feedback=previous_soft_feedback,
+                current_soft_feedback=current_soft_feedback,
+                diff_metrics=analysis["diff_metrics"],
+                heuristic_analysis=analysis,
+            )
+        except Exception as exc:
+            analysis["analysis_method"] = "heuristic_fallback"
+            analysis["llm_summary"] = (
+                "Refinement taxonomy LLM classification failed and heuristic analysis was retained."
+            )
+            analysis["llm_json"] = None
+            analysis["llm_raw_response"] = repr(exc)
+            return analysis
+
+        analysis["llm_raw_response"] = raw_response
+        analysis["llm_json"] = parsed
+        if not isinstance(parsed, dict):
+            analysis["analysis_method"] = "heuristic_fallback"
+            return analysis
+
+        merged_trigger = _sanitize_single_label(
+            parsed.get("trigger_family"),
+            REFINEMENT_TRIGGER_FAMILIES,
+        )
+        if merged_trigger is not None:
+            analysis["trigger_family"] = merged_trigger
+
+        merged_primary = _sanitize_single_label(
+            parsed.get("primary_refinement_type"),
+            REFINEMENT_PRIMARY_TYPES,
+        )
+        if merged_primary is not None:
+            analysis["primary_refinement_type"] = merged_primary
+
+        merged_reasoning = _sanitize_label_list(
+            parsed.get("reasoning_types"),
+            REFINEMENT_REASONING_TYPES,
+        )
+        if merged_reasoning:
+            analysis["reasoning_types"] = merged_reasoning
+
+        merged_syntactic = _sanitize_label_list(
+            parsed.get("syntactic_refinement_types"),
+            REFINEMENT_SYNTACTIC_TYPES,
+        )
+        if merged_syntactic:
+            analysis["syntactic_refinement_types"] = merged_syntactic
+
+        merged_semantic = _sanitize_label_list(
+            parsed.get("semantic_refinement_types"),
+            REFINEMENT_SEMANTIC_TYPES,
+        )
+        if merged_semantic:
+            analysis["semantic_refinement_types"] = merged_semantic
+
+        merged_effects = _sanitize_label_list(
+            parsed.get("artifact_effect_types"),
+            REFINEMENT_ARTIFACT_EFFECT_TYPES,
+        )
+        if merged_effects:
+            analysis["artifact_effect_types"] = merged_effects
+
+        merged_risk = _sanitize_single_label(
+            parsed.get("preservation_risk"),
+            ("low", "medium", "high"),
+        )
+        if merged_risk is not None:
+            analysis["preservation_risk"] = merged_risk
+
+        llm_summary = parsed.get("summary")
+        if isinstance(llm_summary, str) and llm_summary.strip():
+            analysis["summary"] = llm_summary.strip()
+            analysis["llm_summary"] = llm_summary.strip()
+
+        confidence = parsed.get("confidence")
+        if isinstance(confidence, (int, float)):
+            analysis["confidence"] = max(0.0, min(1.0, float(confidence)))
+
+        analysis["analysis_method"] = "heuristic+llm"
+        return analysis
+
+    def _collect_hard_critique_log(self, file_prefix: str) -> Dict[str, Optional[str]]:
+        """Collect Lean/theorem-prover `.error.log` path and contents when available."""
+        error_log_file: Optional[str] = None
+        error_log_text: Optional[str] = None
+
+        get_path = getattr(self.hard_critique, "get_error_log_path", None)
+        if callable(get_path):
+            try:
+                maybe_path = get_path(file_prefix)
+                if maybe_path is not None:
+                    error_log_file = str(maybe_path)
+            except Exception:
+                pass
+
+        read_log = getattr(self.hard_critique, "read_error_log", None)
+        if callable(read_log):
+            try:
+                error_log_text = cast(str, read_log(file_prefix))
+            except Exception:
+                error_log_text = None
+
+        if error_log_file is None:
+            file_dir = getattr(self.hard_critique, "file_dir", None)
+            if file_dir is not None:
+                candidate = Path(file_dir) / f"{file_prefix}.error.log"
+                if candidate.exists():
+                    error_log_file = str(candidate)
+                    if error_log_text is None:
+                        try:
+                            error_log_text = candidate.read_text(encoding="utf-8")
+                        except Exception:
+                            error_log_text = None
+
+        return {
+            "lean_error_log_file": error_log_file,
+            "lean_error_log": error_log_text,
+        }
+
+    def _run_latex_expansion_review_suite(
+        self,
+        *,
+        original_statement: str,
+        expanded_statement: Optional[str],
+        trace_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+    ) -> Tuple[List[LatexExpansionReview], Optional[bool]]:
+        """Document the responsibility of ``IterativeSelfRefinementAgentC._run_latex_expansion_review_suite``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+
+        def emit(event: str, payload: Dict[str, Any]) -> None:
+            """Document the responsibility of ``IterativeSelfRefinementAgentC._run_latex_expansion_review_suite.emit``.
+
+            Motivation:
+                Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+            Intent:
+                Persist or emit computed data in the format expected by later workflow stages.
+
+            Inputs:
+                Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+            Outputs:
+                Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+            """
+            if trace_event is not None:
+                trace_event(event, payload)
+
+        if not expanded_statement:
+            emit(
+                "latex_expansion_review_suite_skipped",
+                {
+                    "skill": "LatexExpansionReviewSuite",
+                    "hook_id": "preformalization.review.suite",
+                    "reason": "no expanded statement available",
+                },
+            )
+            return [], None
+
+        emit(
+            "latex_expansion_review_suite_start",
+            {
+                "skill": "LatexExpansionReviewSuite",
+                "hook_id": "preformalization.review.suite",
+                "original_statement": original_statement,
+                "expanded_statement": expanded_statement,
+            },
+        )
+
+        reviewer_specs: List[
+            Tuple[str, str, str, str, Optional[LatexExpansionReviewAgent]]
+        ] = [
+            (
+                "completeness",
+                "LatexExpansionCompletenessReviewAgent",
+                "latex_expansion_completeness_review",
+                "preformalization.review.completeness",
+                self.latex_expansion_completeness_reviewer,
+            ),
+            (
+                "bindings",
+                "LatexExpansionBindingReviewAgent",
+                "latex_expansion_binding_review",
+                "preformalization.review.bindings",
+                self.latex_expansion_binding_reviewer,
+            ),
+        ]
+
+        reviews: List[LatexExpansionReview] = []
+        review_error_count = 0
+        for review_name, default_skill, event_base, hook_id, reviewer in reviewer_specs:
+            if reviewer is None:
+                emit(
+                    f"{event_base}_skipped",
+                    {
+                        "skill": default_skill,
+                        "hook_id": hook_id,
+                        "reason": "reviewer is not configured",
+                    },
+                )
+                continue
+
+            emit(
+                f"{event_base}_start",
+                {
+                    "skill": reviewer.name,
+                    "hook_id": hook_id,
+                    "original_statement": original_statement,
+                    "expanded_statement": expanded_statement,
+                },
+            )
+            start_ns = time.perf_counter_ns()
+            try:
+                extracted_feedback, raw_response = reviewer(
+                    informal_statement=original_statement,
+                    expanded_statement=expanded_statement,
+                )
+                duration_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+                review = LatexExpansionReview(
+                    name=review_name,
+                    aspect_description=reviewer.aspect_description,
+                    judgement=parse_judge_label(extracted_feedback),
+                    passed=judge_value(extracted_feedback),
+                    explanation=parse_judge_explanation(extracted_feedback),
+                    extracted_feedback=extracted_feedback,
+                    raw_response=raw_response,
+                )
+                reviews.append(review)
+                emit(
+                    f"{event_base}_complete",
+                    {
+                        "skill": reviewer.name,
+                        "hook_id": hook_id,
+                        "review": review,
+                        "duration_ms": duration_ms,
+                    },
+                )
+            except Exception as exc:
+                review_error_count += 1
+                duration_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+                emit(
+                    f"{event_base}_error",
+                    {
+                        "skill": reviewer.name,
+                        "hook_id": hook_id,
+                        "error": repr(exc),
+                        "duration_ms": duration_ms,
+                    },
+                )
+
+        review_passed: Optional[bool]
+        if not reviews and review_error_count == 0:
+            review_passed = None
+        else:
+            review_passed = review_error_count == 0 and all(
+                review.passed is True for review in reviews
+            )
+
+        emit(
+            "latex_expansion_review_suite_complete",
+            {
+                "skill": "LatexExpansionReviewSuite",
+                "hook_id": "preformalization.review.suite",
+                "reviews": reviews,
+                "review_count": len(reviews),
+                "review_passed": review_passed,
+                "blocking_failure_count": sum(
+                    1 for review in reviews if review.passed is not True
+                )
+                + review_error_count,
+                "review_error_count": review_error_count,
+            },
+        )
+        return reviews, review_passed
+
+    def _run_llm_judge_suite(
+        self,
+        *,
+        informal_statement: str,
+        formalization: str,
+        judge_aspects: Optional[Sequence[Tuple[str, str]]] = None,
+    ) -> List[LLMJudgeCritique]:
+        """Document the responsibility of ``IterativeSelfRefinementAgentC._run_llm_judge_suite``.
+
+        Motivation:
+            Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+        Intent:
+            Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+        Inputs:
+            Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+        Outputs:
+            Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+        """
+        llm = self._resolve_judge_llm()
+        if llm is None:
+            return []
+
+        formal_language = getattr(self.autoformalizer, "formal_language", "Lean4")
+        aspects = list(
+            judge_aspects
+            if judge_aspects is not None
+            else [
+                (
+                    "conceptual_mathematical_consistency",
+                    "Check whether the Lean formalization is mathematically coherent and conceptually "
+                    "consistent with the intended theorem and proof strategy.",
+                ),
+                (
+                    "formal_consistency",
+                    "Check whether the Lean code is formally consistent in structure, definitions, type "
+                    "usage, and theorem statement organization.",
+                ),
+                (
+                    "semantic_preservation",
+                    "Check whether the Lean formalization preserves the semantic meaning of the original "
+                    "informal proof and statement.",
+                ),
+            ]
+        )
+
+        critiques: List[LLMJudgeCritique] = []
+        for name, aspect_description in aspects:
+            judge_agent = SoftCritiqueAgent(
+                llm=llm,
+                formal_language=formal_language,
+                aspect_description=aspect_description,
+            )
+            extracted_feedback, raw_response = judge_agent(
+                informal_statement=informal_statement,
+                formalization=formalization,
+            )
+            critiques.append(
+                LLMJudgeCritique(
+                    name=name,
+                    aspect_description=aspect_description,
+                    judgement=parse_judge_label(extracted_feedback),
+                    passed=judge_value(extracted_feedback),
+                    explanation=parse_judge_explanation(extracted_feedback),
+                    extracted_feedback=extracted_feedback,
+                    raw_response=raw_response,
+                )
+            )
+        return critiques
+
+    def run_multi_cycle_systematic_workflow(
+        self,
+        informal_statement: str,
+        *,
+        cycles: Optional[int] = None,
+        carry_forward_formalization: bool = True,
+        output_file: Optional[str | os.PathLike[str]] = None,
+        report_file: Optional[str | os.PathLike[str]] = None,
+        history_file: Optional[str | os.PathLike[str]] = None,
+        reasoning_log_file: Optional[str | os.PathLike[str]] = None,
+        cycle_artifacts_dir: Optional[str | os.PathLike[str]] = None,
+        version_dir: Optional[str | os.PathLike[str]] = None,
+        informal_formal_pairs: Optional[List[List[str]]] = None,
+        file_prefix: str = "systematic",
+        normalize_input: bool = True,
+        enable_concept_mapping: bool = False,
+        concept_map_lean_workdir: str | os.PathLike[str] = ".",
+        concept_map_top_k: int = 8,
+        concept_map_top_modules: int = 12,
+        concept_map_verify_checks: bool = True,
+        concept_map_verify_max_concepts: int = 6,
+        concept_map_verify_max_candidates: int = 3,
+        enable_mathlib_concept_compatibility_loop: bool = True,
+        mathlib_concept_loop_max_rounds: int = 3,
+        mathlib_concept_loop_target_verified_ratio: float = 1.0,
+        enable_llm_judges: bool = True,
+        llm_judge_aspects: Optional[Sequence[Tuple[str, str]]] = None,
+        dependency_statements: Optional[
+            Sequence[str | Dict[str, Any] | RecursiveDependencyInput]
+        ] = None,
+        dependency_label: Optional[str] = None,
+        include_dependency_context: bool = True,
+        enforce_mathlib_alignment: bool = True,
+        enable_latex_expansion: bool = True,
+        enable_compatibility_audit: bool = True,
+        compatibility_target_score: Optional[int] = None,
+        compatibility_score_field: Optional[str] = None,
+        compatibility_audit_lake_workdir: str | os.PathLike[str] = ".",
+        compatibility_gate_requires_hard_success: bool = True,
+        enable_lean_consistency_report: bool = True,
+        lean_consistency_run_lean_check: bool = True,
+        lean_consistency_target_mathlib_compatibility: int = 80,
+        lean_consistency_target_reference_free_score: int = 80,
+        enable_reasoning_log: bool = True,
+    ) -> SystematicAutoformalizationReport:
+        """Consume the shared native readiness steps and return the native report."""
+        arguments = dict(locals())
+        arguments.pop("self")
+        iterator = self.iter_multi_cycle_systematic_workflow(**arguments)
+        try:
+            while True:
+                next(iterator)
+        except StopIteration as completed:
+            return completed.value
+        finally:
+            iterator.close()
+
+    def iter_multi_cycle_systematic_workflow(
+        self,
+        informal_statement: str,
+        *,
+        cycles: Optional[int] = None,
+        carry_forward_formalization: bool = True,
+        output_file: Optional[str | os.PathLike[str]] = None,
+        report_file: Optional[str | os.PathLike[str]] = None,
+        history_file: Optional[str | os.PathLike[str]] = None,
+        reasoning_log_file: Optional[str | os.PathLike[str]] = None,
+        cycle_artifacts_dir: Optional[str | os.PathLike[str]] = None,
+        version_dir: Optional[str | os.PathLike[str]] = None,
+        informal_formal_pairs: Optional[List[List[str]]] = None,
+        file_prefix: str = "systematic",
+        normalize_input: bool = True,
+        enable_concept_mapping: bool = False,
+        concept_map_lean_workdir: str | os.PathLike[str] = ".",
+        concept_map_top_k: int = 8,
+        concept_map_top_modules: int = 12,
+        concept_map_verify_checks: bool = True,
+        concept_map_verify_max_concepts: int = 6,
+        concept_map_verify_max_candidates: int = 3,
+        enable_mathlib_concept_compatibility_loop: bool = True,
+        mathlib_concept_loop_max_rounds: int = 3,
+        mathlib_concept_loop_target_verified_ratio: float = 1.0,
+        enable_llm_judges: bool = True,
+        llm_judge_aspects: Optional[Sequence[Tuple[str, str]]] = None,
+        dependency_statements: Optional[
+            Sequence[str | Dict[str, Any] | RecursiveDependencyInput]
+        ] = None,
+        dependency_label: Optional[str] = None,
+        include_dependency_context: bool = True,
+        enforce_mathlib_alignment: bool = True,
+        enable_latex_expansion: bool = True,
+        enable_compatibility_audit: bool = True,
+        compatibility_target_score: Optional[int] = None,
+        compatibility_score_field: Optional[str] = None,
+        compatibility_audit_lake_workdir: str | os.PathLike[str] = ".",
+        compatibility_gate_requires_hard_success: bool = True,
+        enable_lean_consistency_report: bool = True,
+        lean_consistency_run_lean_check: bool = True,
+        lean_consistency_target_mathlib_compatibility: int = 80,
+        lean_consistency_target_reference_free_score: int = 80,
+        enable_reasoning_log: bool = True,
+    ) -> SystematicAutoformalizationReport:
+        """Run several outer refinement cycles and preserve per-cycle Lean artifacts."""
+        effective_compatibility_target = (
+            self.default_target_compatibility_score
+            if compatibility_target_score is None
+            else compatibility_target_score
+        )
+        effective_compatibility_score_field = (
+            self.default_compatibility_score_field
+            if compatibility_score_field is None
+            else compatibility_score_field
+        )
+        if cycles is None:
+            if (
+                enable_compatibility_audit
+                and effective_compatibility_target is not None
+            ):
+                cycles = max(
+                    self.default_first_formalization_cycles,
+                    self.default_max_score_gated_cycles,
+                )
+            else:
+                cycles = self.default_first_formalization_cycles
+        if cycles <= 0:
+            raise ValueError("`cycles` must be a positive integer.")
+
+        statement = (
+            normalize_informal_statement(informal_statement)
+            if normalize_input
+            else informal_statement.strip()
+        )
+        if not statement:
+            raise ValueError("`informal_statement` must be non-empty.")
+
+        default_paths = default_artifact_paths(statement)
+        base_output_file = (
+            default_paths["output_file"] if output_file is None else str(output_file)
+        )
+        base_report_file = (
+            default_paths["report_file"] if report_file is None else str(report_file)
+        )
+        base_history_file = (
+            default_paths["history_file"] if history_file is None else str(history_file)
+        )
+        shared_reasoning_log = (
+            default_paths["reasoning_log_file"]
+            if reasoning_log_file is None
+            else str(reasoning_log_file)
+        )
+
+        cycle_root = (
+            Path(cycle_artifacts_dir)
+            if cycle_artifacts_dir is not None
+            else Path(base_output_file).parent / f"{Path(base_output_file).stem}.cycles"
+        )
+        cycle_root.mkdir(parents=True, exist_ok=True)
+
+        if enable_reasoning_log and shared_reasoning_log:
+            log_path = Path(shared_reasoning_log)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text("", encoding="utf-8")
+            reset_reasoning_log_state(shared_reasoning_log)
+            append_reasoning_log_entry(
+                shared_reasoning_log,
+                statement=statement,
+                file_prefix=file_prefix,
+                step="multi_cycle_workflow_start",
+                payload={
+                    "cycles": cycles,
+                    "carry_forward_formalization": carry_forward_formalization,
+                    "base_output_file": base_output_file,
+                    "cycle_artifacts_dir": str(cycle_root),
+                    "enable_latex_expansion": enable_latex_expansion,
+                    "enable_compatibility_audit": enable_compatibility_audit,
+                    "enable_lean_consistency_report": enable_lean_consistency_report,
+                    "enable_mathlib_concept_compatibility_loop": (
+                        enable_mathlib_concept_compatibility_loop
+                    ),
+                    "compatibility_target_score": effective_compatibility_target,
+                    "compatibility_score_field": effective_compatibility_score_field,
+                },
+                dependency_label=dependency_label,
+            )
+
+        dependency_cache: Dict[str, SystematicAutoformalizationReport] = {}
+        dependency_stack: set[str] = set()
+        cycle_summaries: List[Dict[str, Any]] = []
+        previous_final_code: Optional[str] = None
+        final_report: Optional[SystematicAutoformalizationReport] = None
+
+        yield "initialize", locals()
+
+        for cycle_idx in range(1, cycles + 1):
+            cycle_tag = f"cycle_{cycle_idx:02d}"
+            cycle_prefix = f"{file_prefix}_{cycle_tag}"
+            cycle_output_file = (
+                cycle_root / f"{Path(base_output_file).stem}.{cycle_tag}.lean"
+            )
+            cycle_history_file = (
+                cycle_root / f"{Path(base_history_file).stem}.{cycle_tag}.json"
+            )
+            cycle_report_file = (
+                cycle_root / f"{Path(base_report_file).stem}.{cycle_tag}.json"
+            )
+
+            cycle_seed = (
+                previous_final_code
+                if carry_forward_formalization and previous_final_code is not None
+                else None
+            )
+
+            cycle_report = yield from self.iter_systematic_workflow(
+                _workflow_nested=True,
+                informal_statement=informal_statement,
+                output_file=str(cycle_output_file),
+                report_file=str(cycle_report_file),
+                history_file=str(cycle_history_file),
+                reasoning_log_file=shared_reasoning_log,
+                informal_formal_pairs=informal_formal_pairs,
+                file_prefix=cycle_prefix,
+                normalize_input=normalize_input,
+                enable_concept_mapping=enable_concept_mapping,
+                concept_map_lean_workdir=concept_map_lean_workdir,
+                concept_map_top_k=concept_map_top_k,
+                concept_map_top_modules=concept_map_top_modules,
+                concept_map_verify_checks=concept_map_verify_checks,
+                concept_map_verify_max_concepts=concept_map_verify_max_concepts,
+                concept_map_verify_max_candidates=concept_map_verify_max_candidates,
+                enable_mathlib_concept_compatibility_loop=(
+                    enable_mathlib_concept_compatibility_loop
+                ),
+                mathlib_concept_loop_max_rounds=mathlib_concept_loop_max_rounds,
+                mathlib_concept_loop_target_verified_ratio=(
+                    mathlib_concept_loop_target_verified_ratio
+                ),
+                enable_llm_judges=enable_llm_judges,
+                llm_judge_aspects=llm_judge_aspects,
+                dependency_statements=dependency_statements,
+                dependency_label=dependency_label,
+                include_dependency_context=include_dependency_context,
+                enforce_mathlib_alignment=enforce_mathlib_alignment,
+                enable_latex_expansion=enable_latex_expansion,
+                enable_compatibility_audit=enable_compatibility_audit,
+                compatibility_target_score=effective_compatibility_target,
+                compatibility_score_field=effective_compatibility_score_field,
+                compatibility_audit_lake_workdir=compatibility_audit_lake_workdir,
+                compatibility_gate_requires_hard_success=compatibility_gate_requires_hard_success,
+                enable_lean_consistency_report=enable_lean_consistency_report,
+                lean_consistency_run_lean_check=lean_consistency_run_lean_check,
+                lean_consistency_target_mathlib_compatibility=(
+                    lean_consistency_target_mathlib_compatibility
+                ),
+                lean_consistency_target_reference_free_score=(
+                    lean_consistency_target_reference_free_score
+                ),
+                enable_reasoning_log=enable_reasoning_log,
+                _dependency_cache=dependency_cache,
+                _dependency_stack=dependency_stack,
+                _shared_reasoning_log_file=shared_reasoning_log,
+                seed_formalization=cycle_seed,
+                record_round_versions=True,
+                version_dir=version_dir,
+                cycle_index=cycle_idx,
+                cycle_count=cycles,
+            )
+
+            previous_final_code = cycle_report.final_code
+            final_report = cycle_report
+            cycle_summaries.append(
+                {
+                    "cycle_index": cycle_idx,
+                    "cycle_count": cycles,
+                    "file_prefix": cycle_prefix,
+                    "seeded_from_previous_cycle": cycle_seed is not None,
+                    "output_file": cycle_report.output_file,
+                    "history_file": cycle_report.history_file,
+                    "report_file": cycle_report.report_file,
+                    "final_correctness": cycle_report.final_correctness,
+                    "final_saved_file_correctness": cycle_report.final_saved_file_correctness,
+                    "compatibility_score": cycle_report.compatibility_score,
+                    "compatibility_band": cycle_report.compatibility_band,
+                    "critical_review_score": cycle_report.critical_review_score,
+                    "critical_review_band": cycle_report.critical_review_band,
+                    "compatibility_target_score": cycle_report.compatibility_target_score,
+                    "compatibility_target_met": cycle_report.compatibility_target_met,
+                    "consistency_score": cycle_report.consistency_score,
+                    "consistency_target_met": cycle_report.consistency_target_met,
+                    "consistency_blocking_layers": (
+                        cycle_report.consistency_blocking_layers or []
+                    ),
+                    "mathlib_concept_coverage": cycle_report.mathlib_concept_coverage,
+                    "expanded_statement": cycle_report.expanded_statement,
+                    "latex_expansion_review_passed": (
+                        cycle_report.latex_expansion_review_passed
+                    ),
+                    "round_version_files": cycle_report.round_version_files or [],
+                }
+            )
+
+            if enable_reasoning_log and shared_reasoning_log:
+                append_reasoning_log_entry(
+                    shared_reasoning_log,
+                    statement=statement,
+                    file_prefix=cycle_prefix,
+                    step="multi_cycle_iteration_complete",
+                    payload=cycle_summaries[-1],
+                    dependency_label=dependency_label,
+                )
+
+            consistency_allows_stop = (
+                not enable_lean_consistency_report
+                or cycle_report.consistency_target_met is True
+            )
+            if cycle_report.compatibility_target_met and consistency_allows_stop:
+                if enable_reasoning_log and shared_reasoning_log:
+                    append_reasoning_log_entry(
+                        shared_reasoning_log,
+                        statement=statement,
+                        file_prefix=cycle_prefix,
+                        step="multi_cycle_target_reached",
+                        payload={
+                            "cycle_index": cycle_idx,
+                            "compatibility_score": cycle_report.compatibility_score,
+                            "compatibility_target_score": cycle_report.compatibility_target_score,
+                            "compatibility_score_field": cycle_report.compatibility_score_field,
+                            "consistency_score": cycle_report.consistency_score,
+                            "consistency_target_met": cycle_report.consistency_target_met,
+                        },
+                        dependency_label=dependency_label,
+                    )
+            yield "advance", locals()
+            if cycle_report.compatibility_target_met and consistency_allows_stop:
+                break
+
+        if final_report is None:
+            raise RuntimeError("Multi-cycle workflow produced no report.")
+
+        if (
+            enable_reasoning_log
+            and shared_reasoning_log
+            and (
+                (
+                    enable_compatibility_audit
+                    and effective_compatibility_target is not None
+                    and not final_report.compatibility_target_met
+                )
+                or (
+                    enable_lean_consistency_report
+                    and final_report.consistency_target_met is not True
+                )
+            )
+        ):
+            append_reasoning_log_entry(
+                shared_reasoning_log,
+                statement=statement,
+                file_prefix=file_prefix,
+                step="multi_cycle_target_unmet",
+                payload={
+                    "requested_cycles": cycles,
+                    "executed_cycles": len(cycle_summaries),
+                    "compatibility_target_score": effective_compatibility_target,
+                    "compatibility_score_field": effective_compatibility_score_field,
+                    "final_compatibility_score": final_report.compatibility_score,
+                    "final_consistency_score": final_report.consistency_score,
+                    "final_consistency_target_met": final_report.consistency_target_met,
+                    "final_consistency_blocking_layers": (
+                        final_report.consistency_blocking_layers or []
+                    ),
+                },
+                dependency_label=dependency_label,
+            )
+
+        # Promote final cycle artifact to requested output/history/report paths.
+        promoted_output = save_formalization_output(
+            base_output_file, final_report.final_code
+        )
+
+        promoted_history: Optional[str] = None
+        if final_report.history_file is not None:
+            source_history = Path(final_report.history_file)
+            if source_history.exists():
+                history_path = Path(base_history_file)
+                history_path.parent.mkdir(parents=True, exist_ok=True)
+                history_path.write_text(
+                    source_history.read_text(encoding="utf-8"), encoding="utf-8"
+                )
+                promoted_history = str(history_path)
+
+        manifest_path = (
+            cycle_root / f"{Path(base_output_file).stem}.cycles.manifest.json"
+        )
+        saved_manifest = save_multi_cycle_manifest(
+            manifest_path,
+            cycle_summaries=cycle_summaries,
+        )
+
+        final_report.output_file = str(promoted_output)
+        final_report.history_file = promoted_history
+        executed_cycles = len(cycle_summaries)
+        final_report.cycle_index = executed_cycles
+        final_report.cycle_count = executed_cycles
+        final_report.cycle_manifest_file = str(saved_manifest)
+        final_report.report_file = str(base_report_file)
+
+        if enable_lean_consistency_report:
+            consistency_paths = default_lean_consistency_artifact_paths(promoted_output)
+            try:
+                final_consistency_report = run_lean_consistency_report(
+                    [promoted_output],
+                    run_lean_check=lean_consistency_run_lean_check,
+                    output_file=consistency_paths["consistency_report_file"],
+                    informalization_report=(
+                        consistency_paths["consistency_informalization_report_file"]
+                    ),
+                    reasoning_log_file=(
+                        shared_reasoning_log if enable_reasoning_log else None
+                    ),
+                    target_mathlib_compatibility=(
+                        lean_consistency_target_mathlib_compatibility
+                    ),
+                    target_reference_free_score=(
+                        lean_consistency_target_reference_free_score
+                    ),
+                )
+                final_report.consistency_report = final_consistency_report
+                final_report.consistency_report_file = consistency_paths[
+                    "consistency_report_file"
+                ]
+                final_report.consistency_informalization_report_file = (
+                    consistency_paths["consistency_informalization_report_file"]
+                )
+                final_summary = final_consistency_report.get("summary", {})
+                if isinstance(final_summary, dict):
+                    raw_score = final_summary.get("consistency_score")
+                    if isinstance(raw_score, (int, float)):
+                        final_report.consistency_score = float(raw_score)
+                    raw_min_score = final_summary.get("min_layer_score")
+                    if isinstance(raw_min_score, (int, float)):
+                        final_report.consistency_min_layer_score = float(raw_min_score)
+                raw_blocking_layers = final_consistency_report.get("blocking_layers")
+                if isinstance(raw_blocking_layers, list):
+                    final_report.consistency_blocking_layers = [
+                        str(item) for item in raw_blocking_layers
+                    ]
+                final_report.consistency_target_met = bool(
+                    final_consistency_report.get("ok")
+                )
+            except Exception as consistency_exc:
+                final_report.consistency_report = {
+                    "ok": False,
+                    "error": repr(consistency_exc),
+                }
+                final_report.consistency_target_met = False
+                if enable_reasoning_log and shared_reasoning_log:
+                    append_reasoning_log_entry(
+                        shared_reasoning_log,
+                        statement=statement,
+                        file_prefix=file_prefix,
+                        step="lean_consistency_report_error",
+                        payload={
+                            "skill": LEAN_CONSISTENCY_REPORT_ORCHESTRATOR_SKILL,
+                            "hook_id": "consistency.unified_report",
+                            "error": repr(consistency_exc),
+                            "lean_file": str(promoted_output),
+                        },
+                        dependency_label=dependency_label,
+                    )
+
+        try:
+            saved_stats_json, saved_stats_tex, _stats_payload = (
+                save_autoformalization_statistics(final_report)
+            )
+            final_report.statistics_file = str(saved_stats_json)
+            final_report.statistics_tex_file = str(saved_stats_tex)
+        except Exception:
+            final_report.statistics_file = None
+            final_report.statistics_tex_file = None
+
+        save_systematic_report(base_report_file, final_report)
+
+        if enable_reasoning_log and shared_reasoning_log:
+            append_reasoning_log_entry(
+                shared_reasoning_log,
+                statement=statement,
+                file_prefix=file_prefix,
+                step="multi_cycle_workflow_complete",
+                payload={
+                    "cycles": cycles,
+                    "executed_cycles": executed_cycles,
+                    "final_output_file": str(promoted_output),
+                    "final_history_file": promoted_history,
+                    "final_report_file": str(base_report_file),
+                    "cycle_manifest_file": str(saved_manifest),
+                    "statistics_file": final_report.statistics_file,
+                    "statistics_tex_file": final_report.statistics_tex_file,
+                    "final_correctness": final_report.final_correctness,
+                    "final_saved_file_correctness": final_report.final_saved_file_correctness,
+                    "compatibility_score": final_report.compatibility_score,
+                    "compatibility_target_score": final_report.compatibility_target_score,
+                    "compatibility_target_met": final_report.compatibility_target_met,
+                    "consistency_report_file": final_report.consistency_report_file,
+                    "consistency_score": final_report.consistency_score,
+                    "consistency_target_met": final_report.consistency_target_met,
+                    "consistency_blocking_layers": (
+                        final_report.consistency_blocking_layers or []
+                    ),
+                },
+                dependency_label=dependency_label,
+            )
+
+        yield "finish", locals()
+        return final_report
+
+    def run_systematic_workflow(
+        self,
+        informal_statement: str,
+        *,
+        output_file: Optional[str | os.PathLike[str]] = None,
+        report_file: Optional[str | os.PathLike[str]] = None,
+        history_file: Optional[str | os.PathLike[str]] = None,
+        reasoning_log_file: Optional[str | os.PathLike[str]] = None,
+        informal_formal_pairs: Optional[List[List[str]]] = None,
+        file_prefix: str = "systematic",
+        normalize_input: bool = True,
+        enable_concept_mapping: bool = False,
+        concept_map_lean_workdir: str | os.PathLike[str] = ".",
+        concept_map_top_k: int = 8,
+        concept_map_top_modules: int = 12,
+        concept_map_verify_checks: bool = True,
+        concept_map_verify_max_concepts: int = 6,
+        concept_map_verify_max_candidates: int = 3,
+        enable_mathlib_concept_compatibility_loop: bool = True,
+        mathlib_concept_loop_max_rounds: int = 3,
+        mathlib_concept_loop_target_verified_ratio: float = 1.0,
+        enable_llm_judges: bool = True,
+        llm_judge_aspects: Optional[Sequence[Tuple[str, str]]] = None,
+        dependency_statements: Optional[
+            Sequence[str | Dict[str, Any] | RecursiveDependencyInput]
+        ] = None,
+        dependency_label: Optional[str] = None,
+        include_dependency_context: bool = True,
+        enforce_mathlib_alignment: bool = True,
+        enable_latex_expansion: bool = True,
+        enable_compatibility_audit: bool = True,
+        compatibility_target_score: Optional[int] = None,
+        compatibility_score_field: Optional[str] = None,
+        compatibility_audit_lake_workdir: str | os.PathLike[str] = ".",
+        compatibility_gate_requires_hard_success: bool = True,
+        enable_lean_consistency_report: bool = True,
+        lean_consistency_run_lean_check: bool = True,
+        lean_consistency_target_mathlib_compatibility: int = 80,
+        lean_consistency_target_reference_free_score: int = 80,
+        enable_default_multi_cycle: bool = True,
+        default_first_formalization_cycles: Optional[int] = None,
+        seed_formalization: Optional[str] = None,
+        record_round_versions: bool = True,
+        version_dir: Optional[str | os.PathLike[str]] = None,
+        cycle_index: Optional[int] = None,
+        cycle_count: Optional[int] = None,
+        enable_reasoning_log: bool = True,
+        _dependency_cache: Optional[
+            Dict[str, SystematicAutoformalizationReport]
+        ] = None,
+        _dependency_stack: Optional[set[str]] = None,
+        _shared_reasoning_log_file: Optional[str | os.PathLike[str]] = None,
+    ) -> SystematicAutoformalizationReport:
+        """Consume the shared native readiness steps and return the native report."""
+        arguments = dict(locals())
+        arguments.pop("self")
+        iterator = self.iter_systematic_workflow(**arguments)
+        try:
+            while True:
+                next(iterator)
+        except StopIteration as completed:
+            return completed.value
+        finally:
+            iterator.close()
+
+    def iter_systematic_workflow(
+        self,
+        informal_statement: str,
+        *,
+        output_file: Optional[str | os.PathLike[str]] = None,
+        report_file: Optional[str | os.PathLike[str]] = None,
+        history_file: Optional[str | os.PathLike[str]] = None,
+        reasoning_log_file: Optional[str | os.PathLike[str]] = None,
+        informal_formal_pairs: Optional[List[List[str]]] = None,
+        file_prefix: str = "systematic",
+        normalize_input: bool = True,
+        enable_concept_mapping: bool = False,
+        concept_map_lean_workdir: str | os.PathLike[str] = ".",
+        concept_map_top_k: int = 8,
+        concept_map_top_modules: int = 12,
+        concept_map_verify_checks: bool = True,
+        concept_map_verify_max_concepts: int = 6,
+        concept_map_verify_max_candidates: int = 3,
+        enable_mathlib_concept_compatibility_loop: bool = True,
+        mathlib_concept_loop_max_rounds: int = 3,
+        mathlib_concept_loop_target_verified_ratio: float = 1.0,
+        enable_llm_judges: bool = True,
+        llm_judge_aspects: Optional[Sequence[Tuple[str, str]]] = None,
+        dependency_statements: Optional[
+            Sequence[str | Dict[str, Any] | RecursiveDependencyInput]
+        ] = None,
+        dependency_label: Optional[str] = None,
+        include_dependency_context: bool = True,
+        enforce_mathlib_alignment: bool = True,
+        enable_latex_expansion: bool = True,
+        enable_compatibility_audit: bool = True,
+        compatibility_target_score: Optional[int] = None,
+        compatibility_score_field: Optional[str] = None,
+        compatibility_audit_lake_workdir: str | os.PathLike[str] = ".",
+        compatibility_gate_requires_hard_success: bool = True,
+        enable_lean_consistency_report: bool = True,
+        lean_consistency_run_lean_check: bool = True,
+        lean_consistency_target_mathlib_compatibility: int = 80,
+        lean_consistency_target_reference_free_score: int = 80,
+        enable_default_multi_cycle: bool = True,
+        default_first_formalization_cycles: Optional[int] = None,
+        seed_formalization: Optional[str] = None,
+        record_round_versions: bool = True,
+        version_dir: Optional[str | os.PathLike[str]] = None,
+        cycle_index: Optional[int] = None,
+        cycle_count: Optional[int] = None,
+        enable_reasoning_log: bool = True,
+        _workflow_nested: bool = False,
+        _dependency_cache: Optional[
+            Dict[str, SystematicAutoformalizationReport]
+        ] = None,
+        _dependency_stack: Optional[set[str]] = None,
+        _shared_reasoning_log_file: Optional[str | os.PathLike[str]] = None,
+    ) -> SystematicAutoformalizationReport:
+        """Run recursive autoformalization with concept mapping, judges, and final Lean check.
+
+        Optional `seed_formalization` starts the workflow from provided Lean code instead of
+        generating a fresh draft via `AutoformalizationAgent`.
+        By default, first/top-level calls delegate to multi-cycle mode (2 cycles unless overridden).
+        """
+        statement = (
+            normalize_informal_statement(informal_statement)
+            if normalize_input
+            else informal_statement.strip()
+        )
+        if not statement:
+            raise ValueError("`informal_statement` must be non-empty.")
+
+        effective_default_cycles = (
+            self.default_first_formalization_cycles
+            if default_first_formalization_cycles is None
+            else default_first_formalization_cycles
+        )
+        if effective_default_cycles <= 0:
+            raise ValueError("`default_first_formalization_cycles` must be positive.")
+        effective_compatibility_target = (
+            self.default_target_compatibility_score
+            if compatibility_target_score is None
+            else compatibility_target_score
+        )
+        effective_compatibility_score_field = (
+            self.default_compatibility_score_field
+            if compatibility_score_field is None
+            else compatibility_score_field
+        )
+
+        is_top_level_first_formalization = (
+            _shared_reasoning_log_file is None
+            and _dependency_stack is None
+            and cycle_index is None
+            and cycle_count is None
+            and seed_formalization is None
+        )
+        if (
+            enable_default_multi_cycle
+            and is_top_level_first_formalization
+            and (
+                effective_default_cycles > 1
+                or (
+                    enable_compatibility_audit
+                    and effective_compatibility_target is not None
+                    and self.default_max_score_gated_cycles > 1
+                )
+            )
+        ):
+            return (
+                yield from self.iter_multi_cycle_systematic_workflow(
+                    informal_statement=informal_statement,
+                    cycles=(
+                        effective_default_cycles
+                        if not (
+                            enable_compatibility_audit
+                            and effective_compatibility_target is not None
+                        )
+                        else max(
+                            effective_default_cycles,
+                            self.default_max_score_gated_cycles,
+                        )
+                    ),
+                    carry_forward_formalization=True,
+                    output_file=output_file,
+                    report_file=report_file,
+                    history_file=history_file,
+                    reasoning_log_file=reasoning_log_file,
+                    cycle_artifacts_dir=None,
+                    version_dir=version_dir,
+                    informal_formal_pairs=informal_formal_pairs,
+                    file_prefix=file_prefix,
+                    normalize_input=normalize_input,
+                    enable_concept_mapping=enable_concept_mapping,
+                    concept_map_lean_workdir=concept_map_lean_workdir,
+                    concept_map_top_k=concept_map_top_k,
+                    concept_map_top_modules=concept_map_top_modules,
+                    concept_map_verify_checks=concept_map_verify_checks,
+                    concept_map_verify_max_concepts=concept_map_verify_max_concepts,
+                    concept_map_verify_max_candidates=concept_map_verify_max_candidates,
+                    enable_mathlib_concept_compatibility_loop=(
+                        enable_mathlib_concept_compatibility_loop
+                    ),
+                    mathlib_concept_loop_max_rounds=mathlib_concept_loop_max_rounds,
+                    mathlib_concept_loop_target_verified_ratio=(
+                        mathlib_concept_loop_target_verified_ratio
+                    ),
+                    enable_llm_judges=enable_llm_judges,
+                    llm_judge_aspects=llm_judge_aspects,
+                    dependency_statements=dependency_statements,
+                    dependency_label=dependency_label,
+                    include_dependency_context=include_dependency_context,
+                    enforce_mathlib_alignment=enforce_mathlib_alignment,
+                    enable_latex_expansion=enable_latex_expansion,
+                    enable_compatibility_audit=enable_compatibility_audit,
+                    compatibility_target_score=effective_compatibility_target,
+                    compatibility_score_field=effective_compatibility_score_field,
+                    compatibility_audit_lake_workdir=compatibility_audit_lake_workdir,
+                    compatibility_gate_requires_hard_success=compatibility_gate_requires_hard_success,
+                    enable_lean_consistency_report=enable_lean_consistency_report,
+                    lean_consistency_run_lean_check=lean_consistency_run_lean_check,
+                    lean_consistency_target_mathlib_compatibility=(
+                        lean_consistency_target_mathlib_compatibility
+                    ),
+                    lean_consistency_target_reference_free_score=(
+                        lean_consistency_target_reference_free_score
+                    ),
+                    enable_reasoning_log=enable_reasoning_log,
+                )
+            )
+
+        dependency_cache = {} if _dependency_cache is None else _dependency_cache
+        dependency_stack = set() if _dependency_stack is None else _dependency_stack
+        default_paths = default_artifact_paths(statement)
+        if _shared_reasoning_log_file is not None:
+            reasoning_log_file = _shared_reasoning_log_file
+        elif reasoning_log_file is None:
+            reasoning_log_file = default_paths["reasoning_log_file"]
+
+        if (
+            enable_reasoning_log
+            and reasoning_log_file is not None
+            and _shared_reasoning_log_file is None
+        ):
+            log_path = Path(reasoning_log_file)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text("", encoding="utf-8")
+            reset_reasoning_log_state(reasoning_log_file)
+
+        def log_step(step: str, payload: Dict[str, Any]) -> None:
+            """Document the responsibility of ``IterativeSelfRefinementAgentC.run_systematic_workflow.log_step``.
+
+            Motivation:
+                Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+
+            Intent:
+                Run the local workflow step and surface success, failure, and evidence in a predictable form.
+
+            Inputs:
+                Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+            Outputs:
+                Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+            """
+            if not enable_reasoning_log or reasoning_log_file is None:
+                return
+            append_reasoning_log_entry(
+                reasoning_log_file,
+                statement=statement,
+                file_prefix=file_prefix,
+                step=step,
+                payload=payload,
+                dependency_label=dependency_label,
+            )
+
+        if not _workflow_nested:
+            yield "initialize", locals()
+
+        if statement in dependency_stack:
+            log_step(
+                "cycle_detected",
+                {"statement": statement},
+            )
+            raise ValueError(
+                "Cyclic dependency detected while autoformalizing recursive prerequisites: "
+                f"{statement}"
+            )
+
+        log_step(
+            "workflow_start",
+            {
+                "informal_statement": informal_statement,
+                "normalized_statement": statement,
+                "file_prefix": file_prefix,
+                "dependency_label": dependency_label,
+                "enable_concept_mapping": enable_concept_mapping,
+                "enable_llm_judges": enable_llm_judges,
+                "include_dependency_context": include_dependency_context,
+                "enforce_mathlib_alignment": enforce_mathlib_alignment,
+                "enable_latex_expansion": enable_latex_expansion,
+                "enable_compatibility_audit": enable_compatibility_audit,
+                "enable_lean_consistency_report": enable_lean_consistency_report,
+                "enable_mathlib_concept_compatibility_loop": (
+                    enable_mathlib_concept_compatibility_loop
+                ),
+                "mathlib_concept_loop_max_rounds": mathlib_concept_loop_max_rounds,
+                "mathlib_concept_loop_target_verified_ratio": (
+                    mathlib_concept_loop_target_verified_ratio
+                ),
+                "compatibility_target_score": effective_compatibility_target,
+                "compatibility_score_field": effective_compatibility_score_field,
+                "compatibility_audit_lake_workdir": str(
+                    compatibility_audit_lake_workdir
+                ),
+                "compatibility_gate_requires_hard_success": compatibility_gate_requires_hard_success,
+                "enable_default_multi_cycle": enable_default_multi_cycle,
+                "effective_default_cycles": effective_default_cycles,
+                "seed_formalization_provided": seed_formalization is not None,
+                "record_round_versions": record_round_versions,
+                "version_dir": None if version_dir is None else str(version_dir),
+                "cycle_index": cycle_index,
+                "cycle_count": cycle_count,
+            },
+        )
+        dependency_stack.add(statement)
+        try:
+            if output_file is None:
+                output_file = default_paths["output_file"]
+            if history_file is None:
+                history_file = default_paths["history_file"]
+            if report_file is None:
+                report_file = default_paths["report_file"]
+            log_step(
+                "artifact_paths_resolved",
+                {
+                    "output_file": output_file,
+                    "history_file": history_file,
+                    "report_file": report_file,
+                    "reasoning_log_file": reasoning_log_file,
+                    "version_dir": None if version_dir is None else str(version_dir),
+                    "cycle_index": cycle_index,
+                    "cycle_count": cycle_count,
+                },
+            )
+
+            resolved_dependency_inputs = [
+                coerce_recursive_dependency_input(item)
+                for item in (dependency_statements or [])
+            ]
+            log_step(
+                "dependency_inputs_resolved",
+                {
+                    "count": len(resolved_dependency_inputs),
+                    "dependencies": [
+                        {
+                            "index": idx,
+                            "label": dep.label,
+                            "normalized_statement": (
+                                normalize_informal_statement(dep.informal_statement)
+                                if normalize_input
+                                else dep.informal_statement.strip()
+                            ),
+                            "child_count": len(dep.dependencies),
+                        }
+                        for idx, dep in enumerate(resolved_dependency_inputs, start=1)
+                    ],
+                },
+            )
+            dependency_reports: List[SystematicAutoformalizationReport] = []
+            for idx, dep in enumerate(resolved_dependency_inputs, start=1):
+                dep_statement = (
+                    normalize_informal_statement(dep.informal_statement)
+                    if normalize_input
+                    else dep.informal_statement.strip()
+                )
+                dep_label = dep.label or f"{dependency_label or file_prefix}_dep_{idx}"
+                dep_prefix = (
+                    f"{file_prefix}_dep_{idx}_{statement_hash(dep_statement, length=8)}"
+                )
+                log_step(
+                    "dependency_processing_start",
+                    {
+                        "index": idx,
+                        "dependency_label": dep_label,
+                        "dependency_file_prefix": dep_prefix,
+                        "normalized_statement": dep_statement,
+                        "child_count": len(dep.dependencies),
+                    },
+                )
+
+                cached = dependency_cache.get(dep_statement)
+                if cached is not None:
+                    dependency_reports.append(cached)
+                    log_step(
+                        "dependency_cache_hit",
+                        {
+                            "index": idx,
+                            "dependency_label": dep_label,
+                            "normalized_statement": dep_statement,
+                            "cached_output_file": cached.output_file,
+                            "cached_report_file": cached.report_file,
+                            "cached_final_correctness": cached.final_correctness,
+                        },
+                    )
+                    continue
+
+                log_step(
+                    "dependency_recursive_call",
+                    {
+                        "index": idx,
+                        "dependency_label": dep_label,
+                        "dependency_file_prefix": dep_prefix,
+                        "normalized_statement": dep_statement,
+                    },
+                )
+                dep_report = self.run_systematic_workflow(
+                    informal_statement=dep.informal_statement,
+                    output_file=None,
+                    report_file=None,
+                    history_file=None,
+                    reasoning_log_file=reasoning_log_file,
+                    informal_formal_pairs=None,
+                    file_prefix=dep_prefix,
+                    normalize_input=normalize_input,
+                    enable_concept_mapping=enable_concept_mapping,
+                    concept_map_lean_workdir=concept_map_lean_workdir,
+                    concept_map_top_k=concept_map_top_k,
+                    concept_map_top_modules=concept_map_top_modules,
+                    concept_map_verify_checks=concept_map_verify_checks,
+                    enable_llm_judges=enable_llm_judges,
+                    llm_judge_aspects=llm_judge_aspects,
+                    dependency_statements=dep.dependencies,
+                    dependency_label=dep_label,
+                    include_dependency_context=include_dependency_context,
+                    enforce_mathlib_alignment=enforce_mathlib_alignment,
+                    enable_latex_expansion=enable_latex_expansion,
+                    enable_default_multi_cycle=enable_default_multi_cycle,
+                    default_first_formalization_cycles=effective_default_cycles,
+                    enable_compatibility_audit=enable_compatibility_audit,
+                    compatibility_target_score=effective_compatibility_target,
+                    compatibility_score_field=effective_compatibility_score_field,
+                    compatibility_audit_lake_workdir=compatibility_audit_lake_workdir,
+                    compatibility_gate_requires_hard_success=compatibility_gate_requires_hard_success,
+                    enable_lean_consistency_report=enable_lean_consistency_report,
+                    lean_consistency_run_lean_check=lean_consistency_run_lean_check,
+                    lean_consistency_target_mathlib_compatibility=(
+                        lean_consistency_target_mathlib_compatibility
+                    ),
+                    lean_consistency_target_reference_free_score=(
+                        lean_consistency_target_reference_free_score
+                    ),
+                    seed_formalization=None,
+                    record_round_versions=record_round_versions,
+                    version_dir=version_dir,
+                    cycle_index=cycle_index,
+                    cycle_count=cycle_count,
+                    enable_reasoning_log=enable_reasoning_log,
+                    _dependency_cache=dependency_cache,
+                    _dependency_stack=dependency_stack,
+                    _shared_reasoning_log_file=reasoning_log_file,
+                )
+                dependency_cache[dep_statement] = dep_report
+                dependency_reports.append(dep_report)
+                log_step(
+                    "dependency_recursive_result",
+                    {
+                        "index": idx,
+                        "dependency_label": dep_label,
+                        "dependency_file_prefix": dep_prefix,
+                        "normalized_statement": dep_statement,
+                        "output_file": dep_report.output_file,
+                        "history_file": dep_report.history_file,
+                        "report_file": dep_report.report_file,
+                        "final_correctness": dep_report.final_correctness,
+                    },
+                )
+            log_step(
+                "dependency_resolution_complete",
+                {
+                    "resolved_count": len(dependency_reports),
+                    "resolved_labels": [
+                        rep.dependency_label or rep.normalized_statement
+                        for rep in dependency_reports
+                    ],
+                },
+            )
+
+            statement_for_formalization = statement
+            expanded_statement: Optional[str] = None
+            latex_expansion_reviews: List[LatexExpansionReview] = []
+            latex_expansion_review_passed: Optional[bool] = None
+            yield "dependencies", locals()
+            if enable_latex_expansion:
+                if self.latex_expander is not None:
+                    log_step(
+                        "latex_expansion_start",
+                        {
+                            "skill": "LatexExpansionAgent",
+                            "hook_id": "preformalization.expand",
+                            "input_statement": statement,
+                        },
+                    )
+                    try:
+                        expanded_raw, expanded_response = self.latex_expander(
+                            informal_statement=statement
+                        )
+                        expanded_candidate = expanded_raw.strip()
+                        if expanded_candidate:
+                            expanded_statement = expanded_candidate
+                            normalized_expanded = (
+                                normalize_informal_statement(expanded_candidate)
+                                if normalize_input
+                                else expanded_candidate
+                            )
+                            if normalized_expanded.strip():
+                                statement_for_formalization = (
+                                    normalized_expanded.strip()
+                                )
+                        log_step(
+                            "latex_expansion_complete",
+                            {
+                                "skill": "LatexExpansionAgent",
+                                "hook_id": "preformalization.expand",
+                                "expanded_statement": expanded_statement,
+                                "effective_statement": statement_for_formalization,
+                                "raw_response": expanded_response,
+                            },
+                        )
+                    except Exception as exc:
+                        log_step(
+                            "latex_expansion_error",
+                            {
+                                "skill": "LatexExpansionAgent",
+                                "hook_id": "preformalization.expand",
+                                "error": repr(exc),
+                                "fallback_statement": statement,
+                            },
+                        )
+                else:
+                    log_step(
+                        "latex_expansion_skipped",
+                        {
+                            "reason": "latex_expander is not configured",
+                        },
+                    )
+            else:
+                log_step(
+                    "latex_expansion_skipped",
+                    {
+                        "reason": "disabled",
+                    },
+                )
+
+            yield (
+                "expand"
+                if enable_latex_expansion and self.latex_expander is not None
+                else "retain_statement"
+            ), locals()
+
+            (
+                latex_expansion_reviews,
+                latex_expansion_review_passed,
+            ) = self._run_latex_expansion_review_suite(
+                original_statement=statement,
+                expanded_statement=expanded_statement,
+                trace_event=log_step,
+            )
+
+            yield "review", locals()
+
+            core_statement_items = extract_core_latex_statements(informal_statement)
+            if not core_statement_items and expanded_statement:
+                core_statement_items = extract_core_latex_statements(expanded_statement)
+            core_statement_annotations = format_core_statement_annotations(
+                core_statement_items
+            )
+            log_step(
+                "core_statement_annotations_prepared",
+                {
+                    "core_statement_items": core_statement_items,
+                    "core_statement_annotations": core_statement_annotations,
+                },
+            )
+
+            dependency_pairs = [
+                [rep.normalized_statement or rep.informal_statement, rep.final_code]
+                for rep in dependency_reports
+            ]
+            combined_pairs = dependency_pairs + (informal_formal_pairs or [])
+            effective_pairs = combined_pairs if combined_pairs else None
+            log_step(
+                "fewshot_pairs_prepared",
+                {
+                    "dependency_pair_count": len(dependency_pairs),
+                    "user_pair_count": len(informal_formal_pairs or []),
+                    "effective_pair_count": len(effective_pairs or []),
+                    "dependency_pairs": dependency_pairs,
+                    "user_pairs": informal_formal_pairs or [],
+                },
+            )
+
+            yield "profile:dependencies_expand_annotate", locals()
+
+            should_map_concepts = enable_concept_mapping or enforce_mathlib_alignment
+            concept_map: Optional[Dict[str, Any]] = None
+            concept_map_error: Optional[str] = None
+            mathlib_concept_coverage: Optional[Dict[str, Any]] = None
+            mathlib_concept_compatibility_rounds: Optional[List[Dict[str, Any]]] = None
+            if should_map_concepts:
+                effective_concept_map_verify_checks = (
+                    concept_map_verify_checks
+                    or enable_mathlib_concept_compatibility_loop
+                )
+                concept_mapping_skill = (
+                    MATHLIB_CANDIDATE_VERIFIER_SKILL
+                    if effective_concept_map_verify_checks
+                    else MATHLIB_CONCEPT_MAPPER_SKILL
+                )
+                concept_mapping_hook_id = (
+                    "mathlib.verify"
+                    if effective_concept_map_verify_checks
+                    else "mathlib.discovery"
+                )
+                log_step(
+                    "concept_mapping_start",
+                    {
+                        "skill": concept_mapping_skill,
+                        "hook_id": concept_mapping_hook_id,
+                        "lean_workdir": concept_map_lean_workdir,
+                        "top_k": concept_map_top_k,
+                        "top_modules": concept_map_top_modules,
+                        "verify_checks": effective_concept_map_verify_checks,
+                        "verify_max_concepts": concept_map_verify_max_concepts,
+                        "verify_max_candidates": concept_map_verify_max_candidates,
+                        "compatibility_loop_enabled": (
+                            enable_mathlib_concept_compatibility_loop
+                        ),
+                    },
+                )
+                try:
+                    if enable_mathlib_concept_compatibility_loop:
+                        concept_request = dict(
+                            statement=statement_for_formalization,
+                            lean_workdir=concept_map_lean_workdir,
+                            top_k=concept_map_top_k,
+                            top_modules=concept_map_top_modules,
+                            verify_checks=effective_concept_map_verify_checks,
+                            verify_timeout_sec=60,
+                            verify_max_concepts=concept_map_verify_max_concepts,
+                            verify_max_candidates=concept_map_verify_max_candidates,
+                            max_rounds=mathlib_concept_loop_max_rounds,
+                            target_verified_ratio=mathlib_concept_loop_target_verified_ratio,
+                            reasoning_log_file=(
+                                reasoning_log_file if enable_reasoning_log else None
+                            ),
+                        )
+                        concept_initialized = True
+                        (
+                            concept_map,
+                            mathlib_concept_coverage,
+                            mathlib_concept_compatibility_rounds,
+                            concept_map_error,
+                        ) = yield from iter_mathlib_concept_compatibility_steps(
+                            concept_request, log_step
+                        )
+                    else:
+                        yield "profile:initialize_concepts", {
+                            **locals(),
+                            "iterate": False,
+                        }
+                        concept_map = map_statement_to_mathlib_concepts(
+                            statement_for_formalization,
+                            lean_workdir=concept_map_lean_workdir,
+                            top_k=concept_map_top_k,
+                            top_modules=concept_map_top_modules,
+                            verify_checks=effective_concept_map_verify_checks,
+                            verify_max_concepts=concept_map_verify_max_concepts,
+                            verify_max_candidates=concept_map_verify_max_candidates,
+                            reasoning_log_file=(
+                                reasoning_log_file if enable_reasoning_log else None
+                            ),
+                        )
+                        mathlib_concept_coverage = summarize_mathlib_concept_coverage(
+                            concept_map
+                        )
+                        mathlib_concept_compatibility_rounds = [
+                            {
+                                "round_index": 1,
+                                "top_k": concept_map_top_k,
+                                "top_modules": concept_map_top_modules,
+                                "verify_checks": effective_concept_map_verify_checks,
+                                "verify_max_concepts": concept_map_verify_max_concepts,
+                                "verify_max_candidates": concept_map_verify_max_candidates,
+                                "coverage": mathlib_concept_coverage,
+                                "error": None,
+                            }
+                        ]
+                        log_step(
+                            "mathlib_concept_coverage_review_complete",
+                            {
+                                "skill": "mathlib-concept-coverage-reviewer",
+                                "hook_id": "mathlib.coverage",
+                                "coverage": mathlib_concept_coverage,
+                            },
+                        )
+                    log_step(
+                        "concept_mapping_success",
+                        {
+                            "skill": concept_mapping_skill,
+                            "hook_id": concept_mapping_hook_id,
+                            "concept_map": concept_map,
+                            "concept_count": len(concept_map or {}),
+                            "mathlib_concept_coverage": mathlib_concept_coverage,
+                        },
+                    )
+                except Exception as exc:
+                    concept_map_error = str(exc)
+                    mathlib_concept_coverage = summarize_mathlib_concept_coverage(None)
+                    log_step(
+                        "concept_mapping_error",
+                        {
+                            "skill": concept_mapping_skill,
+                            "hook_id": concept_mapping_hook_id,
+                            "error": concept_map_error,
+                        },
+                    )
+            else:
+                log_step(
+                    "concept_mapping_skipped",
+                    {
+                        "reason": (
+                            "both enable_concept_mapping and enforce_mathlib_alignment are false"
+                        )
+                    },
+                )
+
+            if not should_map_concepts:
+                yield "profile:initialize_concepts", {**locals(), "iterate": False}
+            if (
+                not should_map_concepts
+                or not enable_mathlib_concept_compatibility_loop
+                or not concept_request.get("_initialized", False)
+            ):
+                yield "profile:concepts_once_or_skip", locals()
+
+            alignment_sections: List[str] = []
+            current_alignment = format_mathlib_alignment_hints(concept_map)
+            if current_alignment:
+                alignment_sections.append("Current statement:\n" + current_alignment)
+            current_coverage_hints = format_mathlib_concept_coverage_hints(
+                mathlib_concept_coverage
+            )
+            if current_coverage_hints:
+                alignment_sections.append(
+                    "Mathlib concept coverage:\n" + current_coverage_hints
+                )
+
+            for rep in dependency_reports[:4]:
+                dep_alignment = format_mathlib_alignment_hints(
+                    rep.concept_map,
+                    max_concepts=3,
+                    max_candidates=3,
+                    max_modules=2,
+                )
+                if dep_alignment:
+                    dep_name = rep.dependency_label or rep.normalized_statement
+                    alignment_sections.append(
+                        f"Dependency `{dep_name}`:\n{dep_alignment}"
+                    )
+            alignment_hints = "\n\n".join(alignment_sections).strip() or None
+            log_step(
+                "alignment_hints_prepared",
+                {
+                    "skill": "mathlib-api-compatibility-planner",
+                    "hook_id": "mathlib.api_plan",
+                    "alignment_hints": alignment_hints,
+                    "alignment_section_count": len(alignment_sections),
+                    "mathlib_concept_coverage": mathlib_concept_coverage,
+                },
+            )
+
+            dependency_context = (
+                format_dependency_context(dependency_reports)
+                if include_dependency_context
+                else None
+            )
+            log_step(
+                "dependency_context_prepared",
+                {
+                    "include_dependency_context": include_dependency_context,
+                    "dependency_context": dependency_context,
+                },
+            )
+
+            yield "prepare", locals()
+
+            initial_step_timings: Dict[str, float] = {}
+            if seed_formalization is not None:
+                initial_code = seed_formalization
+                initial_raw_response = None
+                initial_step_timings["InitialFormalizationSeed"] = 0.0
+                log_step(
+                    "seed_formalization_used",
+                    {
+                        "skill": "InitialFormalizationSeed",
+                        "hook_id": "draft.seed",
+                        "seed_length": len(seed_formalization),
+                        "formal_code": initial_code,
+                        "duration_ms": 0.0,
+                    },
+                )
+            else:
+                log_step(
+                    "autoformalizer_initial_start",
+                    {
+                        "skill": "AutoformalizationAgent",
+                        "hook_id": "draft.initial",
+                    },
+                )
+                start_ns = time.perf_counter_ns()
+                initial_code, initial_raw_response = self.autoformalizer(
+                    informal_statement=statement_for_formalization,
+                    informal_formal_pairs=effective_pairs,
+                    dependency_context=dependency_context,
+                    alignment_hints=alignment_hints,
+                    core_statement_annotations=core_statement_annotations,
+                )
+                initial_auto_ms = round(
+                    (time.perf_counter_ns() - start_ns) / 1_000_000, 3
+                )
+                initial_step_timings["AutoformalizationAgent"] = initial_auto_ms
+                log_step(
+                    "autoformalizer_initial_output",
+                    {
+                        "skill": "AutoformalizationAgent",
+                        "hook_id": "draft.initial",
+                        "formal_code": initial_code,
+                        "raw_response": initial_raw_response,
+                        "duration_ms": initial_auto_ms,
+                    },
+                )
+            yield "draft", locals()
+            log_step(
+                "lean_execution_initial_start",
+                {
+                    "skill": LEAN_EXECUTION_RUNNER_SKILL,
+                    "hook_id": "execute.initial",
+                    "file_prefix": f"{file_prefix}_initial",
+                },
+            )
+            log_step(
+                "hard_critique_initial_start",
+                {
+                    "skill": "HardCritiqueAgent",
+                    "hook_id": "check.compile",
+                    "file_prefix": f"{file_prefix}_initial",
+                },
+            )
+            start_ns = time.perf_counter_ns()
+            initial_correctness, initial_details = self.hard_critique(
+                formalization=initial_code,
+                file_prefix=f"{file_prefix}_initial",
+            )
+            initial_hard_ms = round((time.perf_counter_ns() - start_ns) / 1_000_000, 3)
+            initial_step_timings["HardCritiqueAgent"] = initial_hard_ms
+            initial_hard_feedback = f"{initial_correctness}\n{initial_details}"
+            initial_hard_log_payload = self._collect_hard_critique_log(
+                f"{file_prefix}_initial"
+            )
+            log_step(
+                "lean_execution_initial_output",
+                {
+                    "skill": LEAN_EXECUTION_RUNNER_SKILL,
+                    "hook_id": "execute.initial",
+                    "file_prefix": f"{file_prefix}_initial",
+                    "correctness": initial_correctness,
+                    "details": initial_details,
+                    "hard_feedback": initial_hard_feedback,
+                    "duration_ms": initial_hard_ms,
+                    **initial_hard_log_payload,
+                },
+            )
+            log_step(
+                "hard_critique_initial_output",
+                {
+                    "skill": "HardCritiqueAgent",
+                    "hook_id": "check.compile",
+                    "file_prefix": f"{file_prefix}_initial",
+                    "correctness": initial_correctness,
+                    "details": initial_details,
+                    "hard_feedback": initial_hard_feedback,
+                    "duration_ms": initial_hard_ms,
+                    **initial_hard_log_payload,
+                },
+            )
+
+            used_iterative_refinement = False
+            final_code = initial_code
+            final_hard_feedback = initial_hard_feedback
+            history: List[IterativeRefinementState] = []
+            round_version_files: List[str] = []
+
+            eligible = (
+                initial_correctness != "True"
+                and self.max_iterations > 0
+                and self.soft_critique is not None
+                and self.formal_refiner is not None
+                and self.informal_refiner is not None
+            )
+            yield "profile:context_draft_and_hard_check", locals()
+
+            if (
+                initial_correctness != "True"
+                and self.max_iterations > 0
+                and self.soft_critique is not None
+                and self.formal_refiner is not None
+                and self.informal_refiner is not None
+            ):
+                used_iterative_refinement = True
+                log_step(
+                    "iterative_refinement_triggered",
+                    {
+                        "reason": "initial_hard_critique_failed",
+                        "initial_correctness": initial_correctness,
+                        "max_iterations": self.max_iterations,
+                    },
+                )
+                history = yield from self.iter_refinement_history(
+                    informal_statement=statement_for_formalization,
+                    informal_formal_pairs=effective_pairs,
+                    file_prefix=file_prefix,
+                    dependency_context=dependency_context,
+                    alignment_hints=alignment_hints,
+                    core_statement_annotations=core_statement_annotations,
+                    initial_formalization=initial_code,
+                    initial_formalization_raw=initial_raw_response,
+                    trace_event=lambda event, payload: log_step(
+                        f"iterative.{event}", payload
+                    ),
+                )
+                log_step(
+                    "iterative_refinement_history",
+                    {
+                        "history": history,
+                        "round_count": len(history),
+                    },
+                )
+                if history:
+                    final_code = history[-1].code
+                    final_hard_feedback = history[-1].hard_feedback
+            else:
+                log_step(
+                    "iterative_refinement_skipped",
+                    {
+                        "initial_correctness": initial_correctness,
+                        "max_iterations": self.max_iterations,
+                        "has_soft_critique": self.soft_critique is not None,
+                        "has_formal_refiner": self.formal_refiner is not None,
+                        "has_informal_refiner": self.informal_refiner is not None,
+                    },
+                )
+
+            if not used_iterative_refinement:
+                log_step(
+                    "hard_critique_final_start",
+                    {
+                        "skill": "HardCritiqueAgent",
+                        "hook_id": "check.compile",
+                        "file_prefix": f"{file_prefix}_final",
+                    },
+                )
+                start_ns = time.perf_counter_ns()
+                final_correctness, final_details = self.hard_critique(
+                    formalization=final_code,
+                    file_prefix=f"{file_prefix}_final",
+                )
+                final_hard_ms = round(
+                    (time.perf_counter_ns() - start_ns) / 1_000_000, 3
+                )
+                initial_step_timings["FinalHardCritiqueAgent"] = final_hard_ms
+                final_hard_feedback = f"{final_correctness}\n{final_details}"
+                final_hard_log_payload = self._collect_hard_critique_log(
+                    f"{file_prefix}_final"
+                )
+                log_step(
+                    "hard_critique_final_output",
+                    {
+                        "skill": "HardCritiqueAgent",
+                        "hook_id": "check.compile",
+                        "file_prefix": f"{file_prefix}_final",
+                        "correctness": final_correctness,
+                        "details": final_details,
+                        "hard_feedback": final_hard_feedback,
+                        "duration_ms": final_hard_ms,
+                        **final_hard_log_payload,
+                    },
+                )
+                log_step(
+                    "refinement_taxonomy_start",
+                    {
+                        "skill": "RefinementTaxonomyAgent",
+                        "hook_id": "transition.taxonomy",
+                        "round_index": 0,
+                    },
+                )
+                start_ns = time.perf_counter_ns()
+                initial_analysis = self._analyze_refinement_transition(
+                    informal_statement=statement_for_formalization,
+                    previous_code="",
+                    current_code=final_code,
+                    agent_name=(
+                        "InitialFormalizationSeed"
+                        if seed_formalization is not None
+                        else "AutoformalizationAgent"
+                    ),
+                    trigger_family=(
+                        "seed_replay"
+                        if seed_formalization is not None
+                        else "initial_generation"
+                    ),
+                    trigger_reason=(
+                        "seed_formalization_without_iterative_refinement"
+                        if seed_formalization is not None
+                        else "initial_autoformalization_without_iterative_refinement"
+                    ),
+                    previous_hard_feedback="",
+                    current_hard_feedback=final_hard_feedback,
+                    previous_soft_feedback="",
+                    current_soft_feedback="",
+                    has_dependency_context=dependency_context is not None,
+                    has_alignment_hints=alignment_hints is not None,
+                    has_core_statement_annotations=core_statement_annotations
+                    is not None,
+                )
+                initial_taxonomy_ms = round(
+                    (time.perf_counter_ns() - start_ns) / 1_000_000, 3
+                )
+                initial_step_timings["RefinementTaxonomyAgent"] = initial_taxonomy_ms
+                initial_step_timings["total_round_ms"] = round(
+                    sum(initial_step_timings.values()),
+                    3,
+                )
+                history = [
+                    IterativeRefinementState(
+                        round_index=0,
+                        code=final_code,
+                        hard_feedback=final_hard_feedback,
+                        soft_feedback="",
+                        agent_name=(
+                            "InitialFormalizationSeed"
+                            if seed_formalization is not None
+                            else "AutoformalizationAgent"
+                        ),
+                        trigger_reason=(
+                            "seed_formalization_without_iterative_refinement"
+                            if seed_formalization is not None
+                            else "initial_autoformalization_without_iterative_refinement"
+                        ),
+                        step_timings_ms=initial_step_timings,
+                        refinement_analysis=initial_analysis,
+                    )
+                ]
+                log_step(
+                    "refinement_transition_analysis",
+                    {
+                        "round_index": 0,
+                        "agent_name": history[0].agent_name,
+                        "analysis": initial_analysis,
+                        "duration_ms": initial_taxonomy_ms,
+                    },
+                )
+                log_step(
+                    "history_state_recorded",
+                    {
+                        "history": history,
+                    },
+                )
+            else:
+                final_correctness = self._parse_correctness(final_hard_feedback)
+                log_step(
+                    "iterative_final_correctness_parsed",
+                    {
+                        "final_correctness": final_correctness,
+                        "final_hard_feedback": final_hard_feedback,
+                    },
+                )
+
+            if not used_iterative_refinement:
+                yield "profile:finalize_without_refinement", locals()
+
+            log_step(
+                "final_code_selected",
+                {
+                    "used_iterative_refinement": used_iterative_refinement,
+                    "final_correctness": final_correctness,
+                    "final_code": final_code,
+                    "history_length": len(history),
+                },
+            )
+
+            if record_round_versions and history:
+                saved_round_versions = save_refinement_round_versions(
+                    output_file=output_file,
+                    history=history,
+                    version_dir=version_dir,
+                    cycle_index=cycle_index,
+                )
+                round_version_files = [str(path) for path in saved_round_versions]
+                log_step(
+                    "round_versions_saved",
+                    {
+                        "skill": "save_refinement_round_versions",
+                        "version_dir": (
+                            None if version_dir is None else str(version_dir)
+                        ),
+                        "cycle_index": cycle_index,
+                        "round_version_files": round_version_files,
+                    },
+                )
+            else:
+                log_step(
+                    "round_versions_skipped",
+                    {
+                        "record_round_versions": record_round_versions,
+                        "history_available": bool(history),
+                    },
+                )
+
+            saved_output_file = save_formalization_output(output_file, final_code)
+            saved_output_text = Path(saved_output_file).read_text(encoding="utf-8")
+            log_step(
+                "output_saved",
+                {
+                    "skill": "save_formalization_output",
+                    "output_file": str(saved_output_file),
+                    "saved_output_text": saved_output_text,
+                },
+            )
+            log_step(
+                "saved_output_hard_check_start",
+                {
+                    "skill": "HardCritiqueAgent",
+                    "hook_id": "check.compile",
+                    "file_prefix": f"{file_prefix}_saved_output",
+                },
+            )
+            start_ns = time.perf_counter_ns()
+            final_saved_file_correctness, final_saved_file_details = self.hard_critique(
+                formalization=saved_output_text,
+                file_prefix=f"{file_prefix}_saved_output",
+            )
+            saved_output_hard_ms = round(
+                (time.perf_counter_ns() - start_ns) / 1_000_000, 3
+            )
+            final_saved_file_hard_feedback = (
+                f"{final_saved_file_correctness}\n{final_saved_file_details}"
+            )
+            saved_hard_log_payload = self._collect_hard_critique_log(
+                f"{file_prefix}_saved_output"
+            )
+            log_step(
+                "saved_output_hard_check",
+                {
+                    "skill": "HardCritiqueAgent",
+                    "hook_id": "check.compile",
+                    "file_prefix": f"{file_prefix}_saved_output",
+                    "correctness": final_saved_file_correctness,
+                    "details": final_saved_file_details,
+                    "hard_feedback": final_saved_file_hard_feedback,
+                    "duration_ms": saved_output_hard_ms,
+                    **saved_hard_log_payload,
+                },
+            )
+
+            compatibility_report: Optional[Dict[str, Any]] = None
+            compatibility_score: Optional[int] = None
+            compatibility_band: Optional[str] = None
+            critical_review_score: Optional[int] = None
+            critical_review_band: Optional[str] = None
+            compatibility_target_met: Optional[bool] = None
+            if enable_compatibility_audit:
+                log_step(
+                    "compatibility_audit_start",
+                    {
+                        "skill": MATHLIB_ABSTRACTION_AUDITOR_SKILL,
+                        "hook_id": "audit.compatibility",
+                        "lean_file": str(saved_output_file),
+                        "lake_workdir": str(compatibility_audit_lake_workdir),
+                        "compatibility_target_score": effective_compatibility_target,
+                        "compatibility_score_field": effective_compatibility_score_field,
+                    },
+                )
+                start_ns = time.perf_counter_ns()
+                try:
+                    compatibility_report = run_mathlib_compatibility_audit(
+                        saved_output_file,
+                        lake_workdir=compatibility_audit_lake_workdir,
+                        reasoning_log_file=(
+                            reasoning_log_file if enable_reasoning_log else None
+                        ),
+                    )
+                    compatibility_ms = round(
+                        (time.perf_counter_ns() - start_ns) / 1_000_000, 3
+                    )
+                    raw_score = compatibility_report.get(
+                        effective_compatibility_score_field
+                    )
+                    if isinstance(raw_score, (int, float)):
+                        compatibility_score = int(raw_score)
+                    compatibility_band_raw = compatibility_report.get(
+                        "compatibility_band"
+                    )
+                    if isinstance(compatibility_band_raw, str):
+                        compatibility_band = compatibility_band_raw
+                    critical_raw = compatibility_report.get("critical_review_score")
+                    if isinstance(critical_raw, (int, float)):
+                        critical_review_score = int(critical_raw)
+                    critical_band_raw = compatibility_report.get("critical_review_band")
+                    if isinstance(critical_band_raw, str):
+                        critical_review_band = critical_band_raw
+                    compatibility_target_met = (
+                        compatibility_score is not None
+                        and effective_compatibility_target is not None
+                        and compatibility_score >= effective_compatibility_target
+                        and (
+                            not compatibility_gate_requires_hard_success
+                            or final_saved_file_correctness == "True"
+                        )
+                    )
+                    log_step(
+                        "compatibility_audit_complete",
+                        {
+                            "skill": MATHLIB_ABSTRACTION_AUDITOR_SKILL,
+                            "hook_id": "audit.compatibility",
+                            "duration_ms": compatibility_ms,
+                            "compatibility_score": compatibility_score,
+                            "compatibility_band": compatibility_band,
+                            "critical_review_score": critical_review_score,
+                            "critical_review_band": critical_review_band,
+                            "compatibility_target_score": effective_compatibility_target,
+                            "compatibility_target_met": compatibility_target_met,
+                            "compatibility_report": compatibility_report,
+                        },
+                    )
+                except Exception as compat_exc:
+                    compatibility_target_met = False
+                    log_step(
+                        "compatibility_audit_error",
+                        {
+                            "skill": MATHLIB_ABSTRACTION_AUDITOR_SKILL,
+                            "hook_id": "audit.compatibility",
+                            "error": repr(compat_exc),
+                            "compatibility_target_score": effective_compatibility_target,
+                            "compatibility_score_field": effective_compatibility_score_field,
+                        },
+                    )
+            else:
+                compatibility_target_met = None
+                log_step(
+                    "compatibility_audit_skipped",
+                    {
+                        "reason": "disabled",
+                    },
+                )
+
+            consistency_report: Optional[Dict[str, Any]] = None
+            consistency_report_file: Optional[str] = None
+            consistency_informalization_report_file: Optional[str] = None
+            consistency_score: Optional[float] = None
+            consistency_min_layer_score: Optional[float] = None
+            consistency_blocking_layers: Optional[List[str]] = None
+            consistency_target_met: Optional[bool] = None
+            if enable_lean_consistency_report:
+                consistency_paths = default_lean_consistency_artifact_paths(
+                    saved_output_file
+                )
+                try:
+                    consistency_report = run_lean_consistency_report(
+                        [saved_output_file],
+                        run_lean_check=lean_consistency_run_lean_check,
+                        output_file=consistency_paths["consistency_report_file"],
+                        informalization_report=(
+                            consistency_paths["consistency_informalization_report_file"]
+                        ),
+                        reasoning_log_file=(
+                            reasoning_log_file if enable_reasoning_log else None
+                        ),
+                        target_mathlib_compatibility=(
+                            lean_consistency_target_mathlib_compatibility
+                        ),
+                        target_reference_free_score=(
+                            lean_consistency_target_reference_free_score
+                        ),
+                    )
+                    consistency_report_file = consistency_paths[
+                        "consistency_report_file"
+                    ]
+                    consistency_informalization_report_file = consistency_paths[
+                        "consistency_informalization_report_file"
+                    ]
+                    consistency_summary = consistency_report.get("summary", {})
+                    if isinstance(consistency_summary, dict):
+                        raw_score = consistency_summary.get("consistency_score")
+                        if isinstance(raw_score, (int, float)):
+                            consistency_score = float(raw_score)
+                        raw_min_score = consistency_summary.get("min_layer_score")
+                        if isinstance(raw_min_score, (int, float)):
+                            consistency_min_layer_score = float(raw_min_score)
+                    raw_blocking_layers = consistency_report.get("blocking_layers")
+                    if isinstance(raw_blocking_layers, list):
+                        consistency_blocking_layers = [
+                            str(item) for item in raw_blocking_layers
+                        ]
+                    consistency_target_met = bool(consistency_report.get("ok"))
+                    log_step(
+                        "lean_consistency_report_recorded",
+                        {
+                            "skill": LEAN_CONSISTENCY_REPORT_ORCHESTRATOR_SKILL,
+                            "hook_id": "consistency.unified_report",
+                            "consistency_report_file": consistency_report_file,
+                            "consistency_informalization_report_file": (
+                                consistency_informalization_report_file
+                            ),
+                            "consistency_score": consistency_score,
+                            "consistency_min_layer_score": consistency_min_layer_score,
+                            "consistency_blocking_layers": (
+                                consistency_blocking_layers or []
+                            ),
+                            "consistency_target_met": consistency_target_met,
+                        },
+                    )
+                except Exception as consistency_exc:
+                    consistency_report = {
+                        "ok": False,
+                        "error": repr(consistency_exc),
+                    }
+                    consistency_target_met = False
+                    log_step(
+                        "lean_consistency_report_error",
+                        {
+                            "skill": LEAN_CONSISTENCY_REPORT_ORCHESTRATOR_SKILL,
+                            "hook_id": "consistency.unified_report",
+                            "error": repr(consistency_exc),
+                            "lean_file": str(saved_output_file),
+                        },
+                    )
+            else:
+                consistency_target_met = None
+                log_step(
+                    "lean_consistency_report_skipped",
+                    {
+                        "reason": "disabled",
+                    },
+                )
+
+            saved_history_file: Optional[Path] = None
+            if history_file is not None and history:
+                saved_history_file = save_refinement_history(history_file, history)
+                log_step(
+                    "history_saved",
+                    {
+                        "skill": "save_refinement_history",
+                        "history_file": str(saved_history_file),
+                        "history": history,
+                    },
+                )
+            else:
+                log_step(
+                    "history_save_skipped",
+                    {
+                        "history_file": history_file,
+                        "history_available": bool(history),
+                    },
+                )
+
+            llm_judges: Optional[List[LLMJudgeCritique]] = None
+            if enable_llm_judges:
+                log_step(
+                    "llm_judges_start",
+                    {
+                        "skill": "LLMJudgeSuite(SoftCritiqueAgent)",
+                        "hook_id": "critique.semantic",
+                        "judge_aspects": llm_judge_aspects,
+                    },
+                )
+                llm_judges = self._run_llm_judge_suite(
+                    informal_statement=(
+                        informal_statement if informal_statement.strip() else statement
+                    ),
+                    formalization=saved_output_text,
+                    judge_aspects=llm_judge_aspects,
+                )
+                log_step(
+                    "llm_judges_complete",
+                    {
+                        "skill": "LLMJudgeSuite(SoftCritiqueAgent)",
+                        "hook_id": "critique.semantic",
+                        "llm_judges": llm_judges,
+                    },
+                )
+            else:
+                log_step(
+                    "llm_judges_skipped",
+                    {
+                        "reason": "disabled",
+                    },
+                )
+
+            report = SystematicAutoformalizationReport(
+                informal_statement=informal_statement,
+                normalized_statement=statement,
+                expanded_statement=expanded_statement,
+                core_statement_annotations=core_statement_annotations,
+                initial_code=initial_code,
+                final_code=final_code,
+                initial_correctness=initial_correctness,
+                final_correctness=final_correctness,
+                initial_hard_feedback=initial_hard_feedback,
+                final_hard_feedback=final_hard_feedback,
+                used_iterative_refinement=used_iterative_refinement,
+                latex_expansion_reviews=latex_expansion_reviews or None,
+                latex_expansion_review_passed=latex_expansion_review_passed,
+                concept_map=concept_map,
+                concept_map_error=concept_map_error,
+                mathlib_concept_coverage=mathlib_concept_coverage,
+                mathlib_concept_compatibility_rounds=(
+                    mathlib_concept_compatibility_rounds
+                ),
+                mathlib_alignment_hints=alignment_hints,
+                output_file=str(saved_output_file),
+                history_file=(
+                    None if saved_history_file is None else str(saved_history_file)
+                ),
+                report_file=None if report_file is None else str(report_file),
+                reasoning_log_file=(
+                    None if reasoning_log_file is None else str(reasoning_log_file)
+                ),
+                final_saved_file_correctness=final_saved_file_correctness,
+                final_saved_file_hard_feedback=final_saved_file_hard_feedback,
+                compatibility_report=compatibility_report,
+                compatibility_score=compatibility_score,
+                compatibility_band=compatibility_band,
+                critical_review_score=critical_review_score,
+                critical_review_band=critical_review_band,
+                compatibility_score_field=effective_compatibility_score_field,
+                compatibility_target_score=effective_compatibility_target,
+                compatibility_target_met=compatibility_target_met,
+                consistency_report=consistency_report,
+                consistency_report_file=consistency_report_file,
+                consistency_informalization_report_file=(
+                    consistency_informalization_report_file
+                ),
+                consistency_score=consistency_score,
+                consistency_min_layer_score=consistency_min_layer_score,
+                consistency_blocking_layers=consistency_blocking_layers,
+                consistency_target_met=consistency_target_met,
+                llm_judges=llm_judges,
+                dependency_label=dependency_label,
+                dependency_reports=dependency_reports or None,
+                round_version_files=round_version_files or None,
+                cycle_index=cycle_index,
+                cycle_count=cycle_count,
+            )
+            log_step(
+                "report_compiled",
+                {
+                    "report": report,
+                },
+            )
+
+            try:
+                saved_stats_json, saved_stats_tex, stats_payload = (
+                    save_autoformalization_statistics(report)
+                )
+                report.statistics_file = str(saved_stats_json)
+                report.statistics_tex_file = str(saved_stats_tex)
+                log_step(
+                    "statistics_saved",
+                    {
+                        "skill": "save_autoformalization_statistics",
+                        "statistics_file": str(saved_stats_json),
+                        "statistics_tex_file": str(saved_stats_tex),
+                        "statistics": stats_payload,
+                    },
+                )
+            except Exception as stats_exc:
+                log_step(
+                    "statistics_error",
+                    {
+                        "skill": "save_autoformalization_statistics",
+                        "error": repr(stats_exc),
+                    },
+                )
+
+            if report_file is not None:
+                saved_report_file = save_systematic_report(report_file, report)
+                log_step(
+                    "report_saved",
+                    {
+                        "skill": "save_systematic_report",
+                        "report_file": str(saved_report_file),
+                    },
+                )
+            else:
+                log_step(
+                    "report_save_skipped",
+                    {
+                        "reason": "report_file is None",
+                    },
+                )
+            log_step(
+                "workflow_complete",
+                {
+                    "output_file": str(saved_output_file),
+                    "history_file": (
+                        None if saved_history_file is None else str(saved_history_file)
+                    ),
+                    "report_file": report_file,
+                    "reasoning_log_file": reasoning_log_file,
+                    "final_correctness": final_correctness,
+                    "final_saved_file_correctness": final_saved_file_correctness,
+                    "compatibility_score": compatibility_score,
+                    "compatibility_band": compatibility_band,
+                    "critical_review_score": critical_review_score,
+                    "critical_review_band": critical_review_band,
+                    "compatibility_target_score": effective_compatibility_target,
+                    "compatibility_target_met": compatibility_target_met,
+                    "consistency_report_file": consistency_report_file,
+                    "consistency_score": consistency_score,
+                    "consistency_min_layer_score": consistency_min_layer_score,
+                    "consistency_blocking_layers": (consistency_blocking_layers or []),
+                    "consistency_target_met": consistency_target_met,
+                    "mathlib_concept_coverage": mathlib_concept_coverage,
+                    "round_version_files": round_version_files,
+                    "statistics_file": report.statistics_file,
+                    "statistics_tex_file": report.statistics_tex_file,
+                    "expanded_statement": expanded_statement,
+                    "latex_expansion_review_passed": latex_expansion_review_passed,
+                    "latex_expansion_reviews": latex_expansion_reviews,
+                    "effective_statement": statement_for_formalization,
+                    "cycle_index": cycle_index,
+                    "cycle_count": cycle_count,
+                },
+            )
+        except Exception as exc:
+            log_step(
+                "workflow_error",
+                {
+                    "error": repr(exc),
+                },
+            )
+            raise
+        finally:
+            dependency_stack.discard(statement)
+
+        yield "check_report_save", locals()
+        if not _workflow_nested:
+            yield "advance", locals()
+            yield "finish", locals()
+        return report

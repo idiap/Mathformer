@@ -1,0 +1,585 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_sympy_design_guard_review_0004_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Review one SymPy artifact through the native design-guard branches and return localized recommendations.",
+  "aliases": [
+    "physics-sympy:design-guard-review-0004"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Request": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "case_id",
+          "path",
+          "reasoning_log"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "reasoning_log": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "findings",
+          "evidence"
+        ],
+        "properties": {
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "evidence": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Artifact": {
+      "schema": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Null on import failure; otherwise the existing MCP wrapper's process-local module handle.",
+        "required": [
+          "handle"
+        ],
+        "properties": {
+          "handle": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "style",
+          "backend",
+          "case_id",
+          "status",
+          "high_severity_finding_count",
+          "repair_surfaces",
+          "localized_actions",
+          "semantic_preservation_contract",
+          "evidence",
+          "findings",
+          "next_action"
+        ],
+        "properties": {
+          "style": {
+            "const": "physics_sympy_design_guard_review"
+          },
+          "backend": {
+            "const": "sympy"
+          },
+          "case_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail"
+            ]
+          },
+          "high_severity_finding_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "repair_surfaces": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "localized_actions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "semantic_preservation_contract": {
+            "type": "object"
+          },
+          "evidence": {
+            "type": "object"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "next_action": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "request": {
+      "type": "Request"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "artifact_present": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_design_guard_initialize",
+          "operation": "mathformer_design_guard_initialize"
+        }
+      }
+    },
+    "missing_artifact": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_design_guard_missing_artifact",
+          "operation": "mathformer_design_guard_missing_artifact"
+        }
+      }
+    },
+    "read_and_import": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "artifact": {
+          "type": "Artifact"
+        },
+        "module_loaded": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_design_guard_read_and_import",
+          "operation": "mathformer_design_guard_read_and_import"
+        }
+      }
+    },
+    "failed_import": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_design_guard_failed_import",
+          "operation": "mathformer_design_guard_failed_import"
+        }
+      }
+    },
+    "inspect_module": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "artifact": {
+          "type": "Artifact"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_design_guard_inspect_module",
+          "operation": "mathformer_design_guard_inspect_module"
+        }
+      }
+    },
+    "finish_review": {
+      "inputs": {
+        "request": {
+          "type": "Request"
+        },
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_design_guard_finish_review",
+          "operation": "mathformer_design_guard_finish_review"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {
+          "request": {
+            "ref": "inputs.request"
+          }
+        }
+      },
+      {
+        "id": "artifact_branch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "absent",
+            "when": {
+              "not": {
+                "ref": "steps.initialize.outputs.artifact_present"
+              }
+            },
+            "body": {
+              "kind": "call",
+              "operation": "missing_artifact",
+              "arguments": {
+                "request": {
+                  "ref": "inputs.request"
+                },
+                "state": {
+                  "ref": "steps.initialize.outputs.state"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "read",
+              "kind": "call",
+              "operation": "read_and_import",
+              "arguments": {
+                "request": {
+                  "ref": "inputs.request"
+                },
+                "state": {
+                  "ref": "steps.initialize.outputs.state"
+                }
+              }
+            },
+            {
+              "id": "import_branch",
+              "kind": "switch",
+              "cases": [
+                {
+                  "id": "import_failed",
+                  "when": {
+                    "not": {
+                      "ref": "steps.read.outputs.module_loaded"
+                    }
+                  },
+                  "body": {
+                    "kind": "call",
+                    "operation": "failed_import",
+                    "arguments": {
+                      "state": {
+                        "ref": "steps.read.outputs.state"
+                      }
+                    }
+                  }
+                }
+              ],
+              "default": {
+                "kind": "call",
+                "operation": "inspect_module",
+                "arguments": {
+                  "state": {
+                    "ref": "steps.read.outputs.state"
+                  },
+                  "artifact": {
+                    "ref": "steps.read.outputs.artifact"
+                  }
+                }
+              },
+              "outputs": {
+                "state": {
+                  "type": "State",
+                  "value": {
+                    "ref": "selected.outputs.state"
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.import_branch.outputs.state"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "selected.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish_review",
+        "arguments": {
+          "request": {
+            "ref": "inputs.request"
+          },
+          "state": {
+            "ref": "steps.artifact_branch.outputs.state"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.finish.outputs.report"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion",
+        "execute_recommended_repairs"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 4
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked review description only; no scientific truth, promotion, or runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/physics-sympy/physics-sympy-review-refinement-router/scripts/plan_physics_sympy_review_refinement.py",
+        "selector": "build_design_guard_review; initialize_design_guard_review; missing_design_guard_artifact; read_design_guard_artifact; failed_design_guard_import; inspect_design_guard_module; finish_design_guard_review",
+        "digest": "sha256:4a323d615204b9c2cc6326c2f047a2e88b070644c23d7a31bd5fe7fe55ce52d2"
+      },
+      {
+        "path": "scripts/design_guard_review_tools.py",
+        "selector": "register_design_guard_review_tools",
+        "digest": "sha256:7b17561fc958f56e8b2b432c8cb464eda99df80f27ee263c646c2b26eda18886"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:physics-sympy:design-guard-review-0004; prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_design_guard_review_tools; FastMCP lifespan",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory: physics-sympy:design-guard-review-0004 authored descriptor",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_design_guard_review_workflow_tests.py",
+        "selector": "DesignGuardTests",
+        "digest": "sha256:179d7b9e376e70f1fcc278a695f7ff8e410470b2b4eac152a562abd9fa426572"
+      },
+      {
+        "path": "tests/mcp/fixtures/design_guard_review_original.py.txt",
+        "selector": "frozen original build_design_guard_review",
+        "digest": "sha256:68c4ce3a235f856d1ef7844efb66a7cfb00913c82fb6eff17de047e74f1a3004"
+      }
+    ],
+    "gaps": [
+      "Helper-internal commentary-marker, assumption, bridge, derivation and finalization scans preserve native order and accumulating findings/evidence. They have no item cap, truncation, repair iteration, convergence test or exhaustion signal; no bounded graph loop is invented.",
+      "Imported artifacts and callbacks execute Python. Their filesystem, network and external effects require service qualification; descriptor capability labels are not grants or a Python sandbox. The existing service read-only policy rejects import and inspection.",
+      "Module handles belong to one live MCP process, carry the original imported instance and text, require matching state, and are consumed once even on inspection failure. Abandoned handles are reclaimed at server shutdown. They do not support portable artifacts or persistent resume; schemas do not fully validate Python callback results.",
+      "Lunar supplies required receipts, artifact digests and execution provenance. Optional CLI output/logging, hub preflight/dry-run and write auditing remain native boundary responsibilities outside the selected reviewer graph.",
+      "The retained 3600-second ceiling and four-call budget are descriptor limits enforced by Lunar. The registered hub subprocess timeout is 300 seconds; the selected native function has no timeout. No native collection-exhaustion signal is added."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-sympy:design-guard-review-0004",
+      "owner_skill": "skills/physics-sympy/physics-sympy-review-refinement-router/SKILL.md",
+      "contract": {
+        "id": "physics-sympy:design-guard-review-0004",
+        "family": "physics_sympy",
+        "kind": "validation",
+        "safety": "read_only",
+        "depends_on": [],
+        "allows_extra_args": true,
+        "writes": [],
+        "timeout_seconds": 300
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Hub preflight and dry-run precede the leaf subprocess; write auditing follows it. These controls remain external to the selected reviewer graph.",
+      "input_resolution": "main normalizes --case (hub default formalphysics_0004); case_path honors --sympy-file, otherwise uses MathformerPhysicsLib/SymPy/<case>/MathformerPhysics.py. request carries resolved paths and nullable reasoning_log.",
+      "default_path_discrepancy": "The default formalphysics_0004 artifact path is absent; registry preflight checks libraries/MathformerPhysicsLib/SymPy/formalphysics_0004/MathformerPhysics.py. Without --sympy-file the reviewer therefore takes the missing-artifact branch after successful preflight.",
+      "output_behavior": "The graph exports the reviewer report, not HubResult. main serializes JSON to stdout or --output, appends a requested optional log event, and returns zero even when report.status is fail; uncaught errors abort. Optional writes remain subject to hub write auditing.",
+      "failure_policy": "Report fail is data and does not stop accumulation; uncaught errors stop execution. There is no retry, repair dispatch, convergence test, or persistent checkpoint.",
+      "module_transport": "read_and_import retains the imported module and source text under a single-use opaque handle. inspect_module consumes it with matching state without reimporting. Inspection errors consume the handle; abandoned handles are reclaimed at service shutdown."
+    }
+  }
+}

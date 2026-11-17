@@ -1,0 +1,560 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "profile_physics_derivation_reconstruction_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Recover and validate a physically meaningful derivation. This graph projects epistemic dependencies, not a runtime schedule.",
+  "aliases": [
+    "physics_derivation_reconstruction"
+  ],
+  "lifecycle": "draft",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Context": {
+      "schema": {
+        "description": "Opaque ERFL Context; the source does not define a payload schema."
+      }
+    },
+    "Evidence": {
+      "schema": {
+        "description": "Opaque ERFL Evidence; the source does not define a payload schema."
+      }
+    },
+    "Model": {
+      "schema": {
+        "description": "Opaque ERFL Model; the source does not define a payload schema."
+      }
+    },
+    "Claim": {
+      "schema": {
+        "description": "Opaque ERFL Claim; the source does not define a payload schema."
+      }
+    },
+    "Assessment": {
+      "schema": {
+        "description": "Opaque ERFL Assessment; the source does not define a payload schema."
+      }
+    },
+    "Decision": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "accepted_for_scope",
+          "reconstruction_gap",
+          "refuted"
+        ]
+      }
+    }
+  },
+  "inputs": {
+    "source": {
+      "type": "Context",
+      "required": true
+    }
+  },
+  "outputs": {
+    "physics_status": {
+      "type": "Decision",
+      "value": {
+        "ref": "flow.outputs.physics_status"
+      }
+    }
+  },
+  "operations": {
+    "observe_source": {
+      "inputs": {
+        "source": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "observations": {
+          "type": "Evidence"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/physics_derivation_reconstruction.rflow o:O declares epistemic dependencies; no executable adapter exists."
+      }
+    },
+    "decompose_equations": {
+      "inputs": {
+        "observations": {
+          "type": "Evidence"
+        }
+      },
+      "outputs": {
+        "equation_structure": {
+          "type": "Model"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/physics_derivation_reconstruction.rflow s:S declares epistemic dependencies; no executable adapter exists."
+      }
+    },
+    "model_context": {
+      "inputs": {
+        "equation_structure": {
+          "type": "Model"
+        }
+      },
+      "outputs": {
+        "physics_context": {
+          "type": "Model"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/physics_derivation_reconstruction.rflow m:M declares epistemic dependencies; no executable adapter exists."
+      }
+    },
+    "complete_hypothesis": {
+      "inputs": {
+        "physics_context": {
+          "type": "Model"
+        }
+      },
+      "outputs": {
+        "hypothesis": {
+          "type": "Claim"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/physics_derivation_reconstruction.rflow a:A declares epistemic dependencies; no executable adapter exists."
+      }
+    },
+    "ground_hypothesis": {
+      "inputs": {
+        "hypothesis": {
+          "type": "Claim"
+        },
+        "physics_context": {
+          "type": "Model"
+        }
+      },
+      "outputs": {
+        "alignment": {
+          "type": "Evidence"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/physics_derivation_reconstruction.rflow g:G declares epistemic dependencies; no executable adapter exists."
+      }
+    },
+    "derive_claim": {
+      "inputs": {
+        "hypothesis": {
+          "type": "Claim"
+        },
+        "alignment": {
+          "type": "Evidence"
+        }
+      },
+      "outputs": {
+        "derived_claim": {
+          "type": "Claim"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/physics_derivation_reconstruction.rflow d:D declares epistemic dependencies; no executable adapter exists."
+      }
+    },
+    "probe_claim": {
+      "inputs": {
+        "derived_claim": {
+          "type": "Claim"
+        },
+        "physics_context": {
+          "type": "Model"
+        }
+      },
+      "outputs": {
+        "probe_evidence": {
+          "type": "Evidence"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/physics_derivation_reconstruction.rflow p:P declares epistemic dependencies; no executable adapter exists."
+      }
+    },
+    "assess_claim": {
+      "inputs": {
+        "derived_claim": {
+          "type": "Claim"
+        },
+        "probe_evidence": {
+          "type": "Evidence"
+        }
+      },
+      "outputs": {
+        "assessment": {
+          "type": "Assessment"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/physics_derivation_reconstruction.rflow r:R declares epistemic dependencies; no executable adapter exists."
+      }
+    },
+    "calibrate_status": {
+      "inputs": {
+        "derived_claim": {
+          "type": "Claim"
+        },
+        "assessment": {
+          "type": "Assessment"
+        }
+      },
+      "outputs": {
+        "physics_status": {
+          "type": "Decision"
+        }
+      },
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/physics_derivation_reconstruction.rflow e:E declares epistemic dependencies; no executable adapter exists."
+      }
+    },
+    "accept": {
+      "inputs": {
+        "physics_status": {
+          "type": "Decision"
+        }
+      },
+      "outputs": {},
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/physics_derivation_reconstruction.rflow: e.accepted_for_scope => accept; terminal profile disposition only, with no executable adapter."
+      }
+    },
+    "stop": {
+      "inputs": {
+        "physics_status": {
+          "type": "Decision"
+        }
+      },
+      "outputs": {},
+      "execution": {
+        "mode": "specification_only",
+        "reason": "examples/reasoning_flows/physics_derivation_reconstruction.rflow: e.reconstruction_gap or e.refuted => stop; terminal profile disposition only, with no executable adapter."
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "description": "Declared epistemic progression only; no runtime scheduling or repeat behavior is established.",
+    "steps": [
+      {
+        "id": "o",
+        "kind": "call",
+        "operation": "observe_source",
+        "arguments": {
+          "source": {
+            "ref": "inputs.source"
+          }
+        }
+      },
+      {
+        "id": "s",
+        "kind": "call",
+        "operation": "decompose_equations",
+        "arguments": {
+          "observations": {
+            "ref": "steps.o.outputs.observations"
+          }
+        }
+      },
+      {
+        "id": "m",
+        "kind": "call",
+        "operation": "model_context",
+        "arguments": {
+          "equation_structure": {
+            "ref": "steps.s.outputs.equation_structure"
+          }
+        }
+      },
+      {
+        "id": "a",
+        "kind": "call",
+        "operation": "complete_hypothesis",
+        "arguments": {
+          "physics_context": {
+            "ref": "steps.m.outputs.physics_context"
+          }
+        }
+      },
+      {
+        "id": "g",
+        "kind": "call",
+        "operation": "ground_hypothesis",
+        "arguments": {
+          "hypothesis": {
+            "ref": "steps.a.outputs.hypothesis"
+          },
+          "physics_context": {
+            "ref": "steps.m.outputs.physics_context"
+          }
+        }
+      },
+      {
+        "id": "d",
+        "kind": "call",
+        "operation": "derive_claim",
+        "arguments": {
+          "hypothesis": {
+            "ref": "steps.a.outputs.hypothesis"
+          },
+          "alignment": {
+            "ref": "steps.g.outputs.alignment"
+          }
+        }
+      },
+      {
+        "id": "p",
+        "kind": "call",
+        "operation": "probe_claim",
+        "arguments": {
+          "derived_claim": {
+            "ref": "steps.d.outputs.derived_claim"
+          },
+          "physics_context": {
+            "ref": "steps.m.outputs.physics_context"
+          }
+        }
+      },
+      {
+        "id": "r",
+        "kind": "call",
+        "operation": "assess_claim",
+        "arguments": {
+          "derived_claim": {
+            "ref": "steps.d.outputs.derived_claim"
+          },
+          "probe_evidence": {
+            "ref": "steps.p.outputs.probe_evidence"
+          }
+        }
+      },
+      {
+        "id": "e",
+        "kind": "call",
+        "operation": "calibrate_status",
+        "arguments": {
+          "derived_claim": {
+            "ref": "steps.d.outputs.derived_claim"
+          },
+          "assessment": {
+            "ref": "steps.r.outputs.assessment"
+          }
+        }
+      },
+      {
+        "id": "terminal",
+        "kind": "switch",
+        "description": "e.accepted_for_scope accepts; e.reconstruction_gap and e.refuted stop. No subsequent stages.",
+        "cases": [
+          {
+            "id": "accepted_for_scope",
+            "when": {
+              "eq": [
+                {
+                  "ref": "steps.e.outputs.physics_status"
+                },
+                {
+                  "literal": "accepted_for_scope"
+                }
+              ]
+            },
+            "body": {
+              "kind": "call",
+              "operation": "accept",
+              "arguments": {
+                "physics_status": {
+                  "ref": "steps.e.outputs.physics_status"
+                }
+              }
+            }
+          },
+          {
+            "id": "reconstruction_gap",
+            "when": {
+              "eq": [
+                {
+                  "ref": "steps.e.outputs.physics_status"
+                },
+                {
+                  "literal": "reconstruction_gap"
+                }
+              ]
+            },
+            "body": {
+              "kind": "call",
+              "operation": "stop",
+              "arguments": {
+                "physics_status": {
+                  "ref": "steps.e.outputs.physics_status"
+                }
+              }
+            }
+          },
+          {
+            "id": "refuted",
+            "when": {
+              "eq": [
+                {
+                  "ref": "steps.e.outputs.physics_status"
+                },
+                {
+                  "literal": "refuted"
+                }
+              ]
+            },
+            "body": {
+              "kind": "call",
+              "operation": "stop",
+              "arguments": {
+                "physics_status": {
+                  "ref": "steps.e.outputs.physics_status"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "stop",
+          "arguments": {
+            "physics_status": {
+              "ref": "steps.e.outputs.physics_status"
+            }
+          },
+          "description": "Unreachable for the closed Decision enum; required structural default adds no epistemic outcome."
+        },
+        "outputs": {
+          "physics_status": {
+            "type": "Decision",
+            "value": {
+              "ref": "steps.e.outputs.physics_status"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "physics_status": {
+        "type": "Decision",
+        "value": {
+          "ref": "steps.terminal.outputs.physics_status"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository"
+        ],
+        "write": []
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "inspect_declared_contract"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 10
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked epistemic description only; scoped acceptance establishes no scientific truth, runtime qualification or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "examples/reasoning_flows/physics_derivation_reconstruction.rflow",
+        "selector": "reasoning physics_derivation_reconstruction",
+        "digest": "sha256:b0eee92345e288dc0261ebd26de7ba3e0d413d5e53e94438af06b893f89d7d2d"
+      },
+      {
+        "path": "skills/REASONING_TYPES.yaml",
+        "selector": "reasoning_styles/physics_derivation_reconstruction",
+        "digest": "sha256:dcc2048dd94666d792aa70655e8ddcbe92feb420ef6a06c7ce8b4ce1617160a5"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "physics_derivation_reconstruction_descriptor; inventory profile routing",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "control:physics-reconstruction-profile-fixtures test registration",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      }
+    ],
+    "gaps": [
+      "No authoritative executable implementation or normalized binding exists for this profile; every operation is specification_only.",
+      "Sequence order expresses the declared epistemic progression only. There are no source repeats, intermediate branches, retries, carried state, iteration bounds or checkpoint semantics.",
+      "ERFL supplies nominal port kinds, not concrete payload schemas. Decision uses terminal event labels as an abstract descriptive encoding.",
+      "Accept and stop preserve terminal dispositions only; runtime return, exception and cancellation semantics are unspecified.",
+      "The retained 3600-second ceiling and expanded 10-call ceiling are descriptor budgets, not scientific timing or iteration behavior; the original one-call budget covered an opaque specification.",
+      "Separate SymPy, Lean and Isabelle projections use this profile as profile_basis; their execution and repair loops do not implement this identity."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "profile",
+      "native_id": "physics_derivation_reconstruction",
+      "owner_skill": "skills/control/reasoning-flow-language/SKILL.md",
+      "contract": {
+        "id": "physics_derivation_reconstruction",
+        "goal": "Recover and validate a physically meaningful derivation, not only scalar algebra.",
+        "trust_transition": {
+          "from": "terse_physics_source",
+          "to": "explicit_physically_checked_derivation_or_gap_ledger"
+        }
+      },
+      "erfl_source": "examples/reasoning_flows/physics_derivation_reconstruction.rflow"
+    }
+  }
+}

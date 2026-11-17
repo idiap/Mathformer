@@ -1,0 +1,618 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Capture the research-paper production workflow as auditable agent skills and helper scripts.
+#
+# Intent:
+#   Separate scientific writing, evidence mapping, figure generation, and theory-evolution modeling roles.
+#
+# Function:
+#   Provides structured guidance and automation for paper-oriented artifacts.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Render Mathformer mechanistic diagram models to SVG and TikZ/PDF."""
+
+from __future__ import annotations
+
+import argparse
+import html
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+ROLE_COLORS = {
+    "state": ("#E8F1FF", "#2F5D9E"),
+    "event_stream": ("#F0F9FF", "#0369A1"),
+    "criterion": ("#FFF1E6", "#B45309"),
+    "gate": ("#FFF1E6", "#B45309"),
+    "critic": ("#F3E8FF", "#7E22CE"),
+    "metric": ("#E8FFF3", "#047857"),
+    "observation": ("#ECFEFF", "#0E7490"),
+    "dashboard": ("#F0FDFA", "#0F766E"),
+    "monitor": ("#EEF2FF", "#4338CA"),
+    "inspection": ("#FDF2F8", "#BE185D"),
+    "feedback": ("#FFF7ED", "#C2410C"),
+}
+
+EDGE_COLORS = {
+    "forward": "#334155",
+    "generative": "#7C3AED",
+    "constraint": "#047857",
+    "deterministic": "#B45309",
+    "observation": "#0E7490",
+    "feedback": "#DC2626",
+}
+
+NODE_W = 200
+NODE_H = 92
+CANVAS_W = 1200
+CANVAS_H = 630
+
+
+def esc(value: object) -> str:
+    """Document the responsibility of ``esc``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``esc`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return html.escape(str(value), quote=True)
+
+
+def node_by_id(model: dict) -> dict:
+    """Document the responsibility of ``node_by_id``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``node_by_id`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return {node["id"]: node for node in model["nodes"]}
+
+
+def validation_criteria(model: dict) -> list[dict]:
+    """Return validation criteria, accepting the older model key as fallback."""
+
+    return model.get("validation_criteria", model.get("gates", []))
+
+
+def split_label(text: str, width: int = 24) -> list[str]:
+    """Document the responsibility of ``split_label``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``split_label`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    words = text.split()
+    lines: list[str] = []
+    current: list[str] = []
+    for word in words:
+        trial = " ".join(current + [word])
+        if len(trial) > width and current:
+            lines.append(" ".join(current))
+            current = [word]
+        else:
+            current.append(word)
+    if current:
+        lines.append(" ".join(current))
+    return lines[:3]
+
+
+def svg_math_tspans(text: str) -> str:
+    """Render a tiny TeX-like subset with SVG tspans for _ and ^ markers."""
+
+    pieces: list[str] = []
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch in {"_", "^"} and i + 1 < len(text):
+            mode = ch
+            i += 1
+            if text[i] == "{":
+                end = text.find("}", i + 1)
+                if end != -1:
+                    value = text[i + 1 : end]
+                    i = end + 1
+                else:
+                    value = text[i]
+                    i += 1
+            else:
+                value = text[i]
+                i += 1
+            if mode == "_":
+                pieces.append(
+                    f'<tspan baseline-shift="sub" font-size="70%">{esc(value)}</tspan>'
+                )
+            else:
+                pieces.append(
+                    f'<tspan baseline-shift="super" font-size="70%">{esc(value)}</tspan>'
+                )
+            continue
+        pieces.append(esc(ch))
+        i += 1
+    return "".join(pieces)
+
+
+def svg_text(
+    x: float, y: float, text: str, *, family: str, size: float, weight: str, fill: str
+) -> str:
+    """Document the responsibility of ``svg_text``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``svg_text`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return (
+        f'<text x="{x}" y="{y}" text-anchor="middle" '
+        f'font-family="{family}" font-size="{size}" font-weight="{weight}" fill="{fill}">'
+        f"{svg_math_tspans(text)}</text>"
+    )
+
+
+def edge_points(source: dict, target: dict) -> tuple[float, float, float, float, str]:
+    """Document the responsibility of ``edge_points``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``edge_points`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    same_column = abs(source["x"] - target["x"]) < 12
+    if same_column:
+        sx = source["x"] + NODE_W / 2
+        tx = target["x"] + NODE_W / 2
+        if target["y"] >= source["y"]:
+            return sx, source["y"] + NODE_H, tx, target["y"], "vertical"
+        return sx, source["y"], tx, target["y"] + NODE_H, "vertical"
+    if target["x"] < source["x"]:
+        return (
+            source["x"],
+            source["y"] + NODE_H / 2,
+            target["x"] + NODE_W,
+            target["y"] + NODE_H / 2,
+            "left",
+        )
+    return (
+        source["x"] + NODE_W,
+        source["y"] + NODE_H / 2,
+        target["x"],
+        target["y"] + NODE_H / 2,
+        "right",
+    )
+
+
+def edge_path(
+    sx: float, sy: float, tx: float, ty: float, route: str, feedback: bool
+) -> str:
+    """Document the responsibility of ``edge_path``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``edge_path`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    if route == "vertical":
+        mid_y = (sy + ty) / 2
+        return f"M {sx} {sy} C {sx} {mid_y}, {tx} {mid_y}, {tx} {ty}"
+    mx = (sx + tx) / 2
+    if feedback:
+        lift = 52 if ty >= sy else -52
+        return f"M {sx} {sy} C {mx} {sy + lift}, {mx} {ty + lift}, {tx} {ty}"
+    return f"M {sx} {sy} C {mx} {sy}, {mx} {ty}, {tx} {ty}"
+
+
+def render_svg(model: dict) -> str:
+    """Document the responsibility of ``render_svg``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    nodes = node_by_id(model)
+    width, height = CANVAS_W, CANVAS_H
+    parts = [
+        "<!--",
+        "# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>",
+        "#",
+        "# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>",
+        "# Neuro-symbolic AI Group",
+        "#",
+        # REUSE-IgnoreStart
+        "# SPDX-License-Identifier: MIT",
+        # REUSE-IgnoreEnd
+        "-->",
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        "<defs>",
+        '<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/></marker>',
+        '<marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#DC2626"/></marker>',
+        "</defs>",
+        f'<rect x="0" y="0" width="{width}" height="{height}" fill="#ffffff"/>',
+        f'<text x="40" y="33" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="#0f172a">{esc(model.get("title", "Mechanistic diagram"))}</text>',
+    ]
+
+    for layer in model.get("layers", []):
+        x = layer["x"] - 20
+        parts.append(
+            f'<rect x="{x}" y="52" width="{NODE_W + 40}" height="530" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.2"/>'
+        )
+        parts.append(
+            f'<text x="{layer["x"]}" y="84" font-family="Arial, sans-serif" font-size="14.5" font-weight="800" fill="#334155">{esc(layer["label"])}</text>'
+        )
+
+    edge_labels: list[str] = []
+    for edge in model["edges"]:
+        source = nodes[edge["source"]]
+        target = nodes[edge["target"]]
+        sx, sy, tx, ty, route = edge_points(source, target)
+        color = EDGE_COLORS.get(edge.get("kind"), "#334155")
+        marker = "arrow-red" if edge.get("kind") == "feedback" else "arrow"
+        dash = (
+            ' stroke-dasharray="7 5"'
+            if edge.get("kind") in {"feedback", "generative"}
+            else ""
+        )
+        path = edge_path(sx, sy, tx, ty, route, edge.get("kind") == "feedback")
+        parts.append(
+            f'<path d="{path}" fill="none" stroke="{color}" stroke-width="2.2"{dash} marker-end="url(#{marker})"/>'
+        )
+        lx = (sx + tx) / 2 + float(edge.get("label_dx", 0))
+        ly = (sy + ty) / 2 - 8 + float(edge.get("label_dy", 0))
+        label_w = max(76, min(172, len(edge["label"]) * 7 + 18))
+        edge_labels.append(
+            f'<rect x="{lx - label_w / 2:.1f}" y="{ly - 14:.1f}" width="{label_w}" height="22" rx="6" fill="#ffffff" fill-opacity="0.96"/>'
+        )
+        edge_labels.append(
+            f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="middle" font-family="Arial, sans-serif" font-size="12.5" font-weight="800" fill="{color}">{esc(edge["label"])}</text>'
+        )
+
+    for node in model["nodes"]:
+        fill, stroke = ROLE_COLORS.get(node.get("role"), ("#F8FAFC", "#475569"))
+        x, y = node["x"], node["y"]
+        parts.append(
+            f'<rect x="{x}" y="{y}" width="{NODE_W}" height="{NODE_H}" rx="10" fill="{fill}" stroke="{stroke}" stroke-width="2"/>'
+        )
+        label = node.get("label_svg", node["label"])
+        equation = node.get("equation_svg", node.get("equation", ""))
+        for idx, line in enumerate(split_label(label, 22)):
+            parts.append(
+                svg_text(
+                    x + NODE_W / 2,
+                    y + 26 + idx * 16,
+                    line,
+                    family="Arial, sans-serif",
+                    size=14.5,
+                    weight="800",
+                    fill="#0f172a",
+                )
+            )
+        parts.append(
+            svg_text(
+                x + NODE_W / 2,
+                y + 76,
+                equation,
+                family="Times New Roman, STIX Two Math, serif",
+                size=13,
+                weight="700",
+                fill=stroke,
+            )
+        )
+
+    parts.extend(edge_labels)
+
+    criterion_labels = " | ".join(
+        criterion["label"] for criterion in validation_criteria(model)
+    )
+    parts.append(
+        '<rect x="720" y="34" width="430" height="28" rx="8" fill="#FFF7ED" stroke="#FED7AA"/>'
+    )
+    parts.append(
+        f'<text x="935" y="53" text-anchor="middle" font-family="Arial, sans-serif" font-size="12.5" font-weight="700" fill="#9A3412">Validation criteria: {esc(criterion_labels)}</text>'
+    )
+    parts.append("</svg>")
+    return "\n".join(parts) + "\n"
+
+
+def tikz_escape(text: object) -> str:
+    """Document the responsibility of ``tikz_escape``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``tikz_escape`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "_": r"\_",
+        "&": r"\&",
+        "%": r"\%",
+        "#": r"\#",
+        "{": r"\{",
+        "}": r"\}",
+        "^": r"\textasciicircum{}",
+        "~": r"\textasciitilde{}",
+    }
+    return "".join(replacements.get(ch, ch) for ch in str(text))
+
+
+def tikz_text_or_raw(value: str, raw: bool = False) -> str:
+    """Document the responsibility of ``tikz_text_or_raw``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``tikz_text_or_raw`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return value if raw else tikz_escape(value)
+
+
+def render_tikz(model: dict) -> str:
+    """Document the responsibility of ``render_tikz``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    nodes = node_by_id(model)
+    lines = [
+        r"% SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>",
+        r"%",
+        r"% SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>",
+        r"% Neuro-symbolic AI Group",
+        r"%",
+        # REUSE-IgnoreStart
+        r"% SPDX-License-Identifier: MIT",
+        # REUSE-IgnoreEnd
+        r"",
+        r"% File Documentation",
+        r"%",
+        r"% Motivation:",
+        r"%   Provide a reproducible TikZ rendering for a Mathformer paper figure.",
+        r"%",
+        r"% Intent:",
+        r"%   Preserve generated diagram source with licensing and provenance.",
+        r"%",
+        r"% Function:",
+        r"%   Renders a structured mechanistic model into TikZ.",
+        r"%",
+        r"% Maintenance Notes:",
+        r"%   Regenerate with the mechanistic figure renderer when the JSON model changes.",
+        r"",
+        r"\documentclass[tikz,border=8pt]{standalone}",
+        r"\usepackage{amsmath,amssymb}",
+        r"\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}",
+        r"\begin{document}",
+        r"\begin{tikzpicture}[x=1pt,y=-1pt,",
+        r"  nodebox/.style={draw, rounded corners=6pt, align=center, minimum width=126pt, minimum height=54pt, font=\sffamily\small},",
+        r"  edge/.style={-{Latex[length=3mm]}, line width=0.8pt},",
+        r"  feedback/.style={-{Latex[length=3mm]}, dashed, line width=0.9pt, red!75!black}",
+        r"]",
+        rf"\node[anchor=west,font=\sffamily\bfseries\Large] at (40,28) {{{tikz_escape(model.get('title', 'Mechanistic diagram'))}}};",
+    ]
+    color_map = {
+        "state": "blue!10",
+        "criterion": "orange!15",
+        "gate": "orange!15",
+        "critic": "purple!12",
+        "metric": "green!12",
+        "observation": "cyan!12",
+        "event_stream": "cyan!10",
+        "dashboard": "teal!10",
+        "monitor": "blue!12",
+        "inspection": "magenta!10",
+        "feedback": "orange!10",
+    }
+    for node in model["nodes"]:
+        fill = color_map.get(node.get("role"), "gray!10")
+        label = tikz_text_or_raw(
+            node.get("label_tex", node["label"]), "label_tex" in node
+        )
+        if "equation_tex" in node:
+            equation = rf"\(\displaystyle {node['equation_tex']}\)"
+        else:
+            equation = rf"\texttt{{{tikz_escape(node.get('equation', ''))}}}"
+        lines.append(
+            rf"\node[nodebox, fill={fill}] ({node['id']}) at ({node['x'] + NODE_W / 2},{node['y'] + NODE_H / 2}) "
+            rf"{{\textbf{{{label}}}\\[-1pt]\scriptsize {equation}}};"
+        )
+    for edge in model["edges"]:
+        style = "feedback" if edge.get("kind") == "feedback" else "edge"
+        label = tikz_escape(edge["label"])
+        source = nodes[edge["source"]]
+        target = nodes[edge["target"]]
+        bend = "bend left=18" if edge.get("kind") == "feedback" else ""
+        if abs(source["x"] - target["x"]) < 12:
+            if target["y"] >= source["y"]:
+                lines.append(
+                    rf"\draw[{style}] ({edge['source']}.south) to node[fill=white, font=\scriptsize, inner sep=1pt] {{{label}}} ({edge['target']}.north);"
+                )
+            else:
+                lines.append(
+                    rf"\draw[{style}] ({edge['source']}.north) to node[fill=white, font=\scriptsize, inner sep=1pt] {{{label}}} ({edge['target']}.south);"
+                )
+        elif target["x"] < source["x"]:
+            lines.append(
+                rf"\draw[{style}, {bend}] ({edge['source']}.west) to node[fill=white, font=\scriptsize, inner sep=1pt] {{{label}}} ({edge['target']}.east);"
+            )
+        else:
+            lines.append(
+                rf"\draw[{style}, {bend}] ({edge['source']}.east) to node[fill=white, font=\scriptsize, inner sep=1pt] {{{label}}} ({edge['target']}.west);"
+            )
+    criterion_labels = tikz_escape(
+        " | ".join(criterion["label"] for criterion in validation_criteria(model))
+    )
+    lines.append(
+        rf"\node[draw=orange!35, fill=orange!10, rounded corners=5pt, font=\sffamily\scriptsize] at (1035,48) {{Validation criteria: {criterion_labels}}};"
+    )
+    lines.append(r"\end{tikzpicture}")
+    lines.append(r"\end{document}")
+    return "\n".join(lines) + "\n"
+
+
+def compile_pdf(tex_path: Path) -> Path:
+    """Document the responsibility of ``compile_pdf``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Provide the local operation named ``compile_pdf`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    tectonic = shutil.which("tectonic")
+    if not tectonic:
+        raise RuntimeError("tectonic not found on PATH")
+    subprocess.run(
+        [tectonic, str(tex_path), "--outdir", str(tex_path.parent)], check=True
+    )
+    return tex_path.with_suffix(".pdf")
+
+
+def main() -> int:
+    """Document the responsibility of ``main``.
+
+    Motivation:
+        Capture the research-paper production workflow as auditable agent skills and helper scripts.
+
+    Intent:
+        Serve as the command-line entry point and coordinate argument parsing, execution, and reporting.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--svg")
+    parser.add_argument("--tex")
+    parser.add_argument("--compile-pdf", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+
+    model_path = Path(args.model)
+    model = json.loads(model_path.read_text())
+    outputs: dict[str, str] = {}
+
+    if args.svg:
+        svg_path = Path(args.svg)
+        svg_path.parent.mkdir(parents=True, exist_ok=True)
+        svg_path.write_text(render_svg(model))
+        outputs["svg"] = str(svg_path)
+
+    tex_path = None
+    if args.tex or args.compile_pdf:
+        tex_path = Path(args.tex or Path(args.model).with_suffix(".tex"))
+        tex_path.parent.mkdir(parents=True, exist_ok=True)
+        tex_path.write_text(render_tikz(model))
+        outputs["tex"] = str(tex_path)
+
+    if args.compile_pdf:
+        assert tex_path is not None
+        pdf_path = compile_pdf(tex_path)
+        outputs["pdf"] = str(pdf_path)
+
+    result = {
+        "ok": True,
+        "model": str(model_path),
+        "node_count": len(model.get("nodes", [])),
+        "edge_count": len(model.get("edges", [])),
+        "outputs": outputs,
+    }
+    if args.json:
+        print(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        print(result)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

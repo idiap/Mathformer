@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+{
+  "schema_version": "mathformer.meta_skills.skill_quality_card.v0.1",
+  "card_id": "physics-lean-generative-repair-orchestrator",
+  "subject": "physics-lean-generative-repair-orchestrator",
+  "subject_type": "skill",
+  "skill_path": "skills/physics-lean/physics-lean-generative-repair-orchestrator/SKILL.md",
+  "deterministic_boundary": [
+    "Consumes deterministic pathology, object, workbench, and repair-loop packets.",
+    "Writes guarded repair prompts and acceptance criteria."
+  ],
+  "generative_boundary": [
+    "May generate Codex-exec repair instructions and candidate patch constraints.",
+    "May not directly apply target theorem edits or mark repair complete."
+  ],
+  "epistemic_risks": [
+    "Repair plan changes theorem meaning instead of correcting representation.",
+    "Generative patch bypasses library-first blockers."
+  ],
+  "necessary_conditions": [
+    "Repair loop packet exists.",
+    "Expansion map records all active pathology branches.",
+    "Generative repair plan names deterministic rerun gates."
+  ],
+  "sufficiency_claim": "Sufficient for proposing guarded repair work; not sufficient for code modification without deterministic validators and user-controlled execution.",
+  "representation_contract": [
+    "Every repair probe includes pathology category, object class, allowed edits, forbidden edits, and rerun gates.",
+    "Every suggested target edit preserves source anchors and theorem conclusion."
+  ],
+  "validation_oracles": [
+    "python skills/physics-lean/physics-lean-generative-repair-orchestrator/scripts/build_physics_lean_generative_repair_plan.py --self-test --json",
+    "python tests/physics_lean/run_lean_physics_backend_suite.py --json"
+  ],
+  "failure_modes": [
+    "Generated repair edits accepted code directly.",
+    "Repair probe omits support dependency blocker.",
+    "Prompt allows theorem-conclusion weakening."
+  ],
+  "promotion_gate": {
+    "state": "task_local_validated",
+    "required_evidence": [
+      "backend suite evidence",
+      "recursive controller evidence",
+      "quality card validation"
+    ],
+    "blocking_conditions": [
+      "library_first_required is false",
+      "rerun gates are missing"
+    ]
+  }
+}

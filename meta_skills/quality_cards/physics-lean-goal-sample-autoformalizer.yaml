@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+{
+  "schema_version": "mathformer.meta_skills.skill_quality_card.v0.1",
+  "card_id": "physics-lean-goal-sample-autoformalizer",
+  "subject": "physics-lean-goal-sample-autoformalizer",
+  "subject_type": "skill",
+  "skill_path": "skills/physics-lean/physics-lean-goal-sample-autoformalizer/SKILL.md",
+  "deterministic_boundary": [
+    "Locks the workflow to one formalphysics_#### Lean file at a time.",
+    "Emits deterministic compile, thoroughness, open-marker, and recursive workflow commands without applying edits."
+  ],
+  "generative_boundary": [
+    "May request generative repair plans only as advisory evidence.",
+    "May not mark a sample complete unless deterministic gates pass and open markers are absent."
+  ],
+  "epistemic_risks": [
+    "A compiling Lean file is mistaken for a complete autoformalization.",
+    "Batch pressure causes hidden carryover from one sample to another.",
+    "Target theorem edits bypass missing MathformerPhysicsLib object grounding."
+  ],
+  "necessary_conditions": [
+    "A single case id or Lean file is selected.",
+    "MathformerPhysicsLib object work is planned before target theorem repair.",
+    "Recursive controller status is complete, recurse, or blocked."
+  ],
+  "sufficiency_claim": "Sufficient for planning and controlling one-sample recursive autoformalization; not sufficient for accepting edits without the listed deterministic gates.",
+  "representation_contract": [
+    "The plan records case_id, lean_path, goal scope, current evidence, recursive policy, workflow steps, commands, next action, and blockers.",
+    "Every generated repair route includes a deterministic rerun gate and preserves MathformerPhysicsLib-first grounding."
+  ],
+  "validation_oracles": [
+    "python skills/physics-lean/physics-lean-goal-sample-autoformalizer/scripts/plan_goal_sample_autoformalization.py --case formalphysics_0014 --json",
+    "python tests/meta_skills/run_meta_skill_suite.py --json"
+  ],
+  "failure_modes": [
+    "The planner accepts multiple samples as one goal.",
+    "The planner skips object detection or object workbench stages.",
+    "The planner treats generative repair as accepted proof evidence.",
+    "The planner reports complete while open markers remain."
+  ],
+  "promotion_gate": {
+    "state": "task_local_validated",
+    "required_evidence": [
+      "skill quick validation",
+      "planner self execution",
+      "meta-skill suite evidence",
+      "per-case thoroughness gate when applied to a live sample"
+    ],
+    "blocking_conditions": [
+      "batching_denied is false",
+      "mathformerphysicslib_first is false",
+      "next action cannot distinguish complete, recurse, and blocked"
+    ]
+  }
+}

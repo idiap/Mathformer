@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Gate FormalPhysics Lean outputs against trivial grounding debt."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import subprocess
+import sys
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ARTIFACT_ROOT = (
+    REPO_ROOT / "artifacts" / "physics_lean" / "formal_science_grounding_debt"
+)
+MONITOR = "skills/physics-lean/physics-lean-drift-pathology-monitor/scripts/monitor_physics_lean_drift_pathologies.py"
+CASE_0059 = (
+    REPO_ROOT
+    / "MathformerPhysicsLib"
+    / "Lean"
+    / "formalphysics_0059"
+    / "MathformerPhysics.lean"
+)
+CASE_0191 = (
+    REPO_ROOT
+    / "MathformerPhysicsLib"
+    / "Lean"
+    / "formalphysics_0191"
+    / "MathformerPhysics.lean"
+)
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Write JSON with a stable layout."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def run_json(args: list[str]) -> dict[str, Any]:
+    """Run a repository command and parse JSON stdout."""
+    proc = subprocess.run(
+        [sys.executable, *args],
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"command failed: {' '.join(args)}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+        )
+    return json.loads(proc.stdout)
+
+
+def monitor_text(source: str, lean: str, lean_path: str) -> dict[str, Any]:
+    """Run the drift monitor over inline source and Lean text."""
+    return run_json(
+        [
+            MONITOR,
+            "--source-text",
+            source,
+            "--lean-text",
+            lean,
+            "--lean-file",
+            lean_path,
+        ]
+    )
+
+
+def monitor_case(path: Path, source: str) -> dict[str, Any]:
+    """Run the drift monitor over a FormalPhysics Lean case."""
+    return run_json(
+        [
+            MONITOR,
+            "--source-text",
+            source,
+            "--lean-file",
+            path.relative_to(REPO_ROOT).as_posix(),
+        ]
+    )
+
+
+def debt_codes(report: dict[str, Any]) -> set[str]:
+    """Return grounding-debt finding codes."""
+    return {
+        str(item.get("code"))
+        for item in report.get("grounding_debt_report", {}).get("findings", [])
+        if item.get("code")
+    }
+
+
+def text_has(path: Path, needles: Sequence[str]) -> bool:
+    """Return whether all required fragments appear in a file."""
+    text = path.read_text(encoding="utf-8")
+    return all(needle in text for needle in needles)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the compact FormalScience grounding-debt gate."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+
+    bad = monitor_text(
+        "A Hamiltonian source law and Hilbert-space state imply the result.",
+        (
+            "abbrev Law (_ : Prop) : Prop := True\n"
+            "abbrev UnitDimensionCompatible (_ : Prop) : Prop := True\n"
+            "theorem bad (source_law : True) (psi H : Real) "
+            "(unit_dimension_bridge : UnitDimensionCompatible True) : True := by trivial\n"
+        ),
+        "libraries/MathformerPhysicsLib/Lean/formalphysics_9999/MathformerPhysics.lean",
+    )
+    case_0191 = monitor_case(
+        CASE_0191,
+        "TDSE product differentiation uses Hilbert states, Hamiltonians, adjoint bra law, ket law, and parameter derivatives.",
+    )
+    case_0059 = monitor_case(
+        CASE_0059,
+        "Calculus of variations uses fixed endpoints, differentiation under the integral, and chain-rule integral substitution.",
+    )
+
+    checks = [
+        {
+            "id": "trivial_support_debt_blocks",
+            "ok": {
+                "prop_true_support_definition",
+                "local_law_shim_true",
+                "source_law_typed_true",
+            }
+            <= debt_codes(bad),
+            "detail": {"codes": sorted(debt_codes(bad))},
+        },
+        {
+            "id": "formalphysics_0191_no_true_law_debt",
+            "ok": "source_law_typed_true" not in debt_codes(case_0191)
+            and "local_law_shim_true" not in debt_codes(case_0191),
+            "detail": {"codes": sorted(debt_codes(case_0191))},
+        },
+        {
+            "id": "formalphysics_0059_no_true_law_debt",
+            "ok": "source_law_typed_true" not in debt_codes(case_0059)
+            and "local_law_shim_true" not in debt_codes(case_0059),
+            "detail": {"codes": sorted(debt_codes(case_0059))},
+        },
+        {
+            "id": "formalphysics_0191_uses_hilbert_foundation_support",
+            "ok": text_has(
+                CASE_0191,
+                [
+                    "import MathformerPhysicsLib.Lean.Foundations",
+                    "InnerProductSpace ℂ H",
+                    "HilbertBoundedOperator",
+                    "TimeDependentSchrodingerProductDifferentiationFrontier",
+                ],
+            ),
+            "detail": {"file": CASE_0191.relative_to(REPO_ROOT).as_posix()},
+        },
+        {
+            "id": "formalphysics_0059_exposes_variational_derivative_integral_packet",
+            "ok": text_has(
+                CASE_0059,
+                [
+                    "VariationChainIntegralFrontier",
+                    "differentiate_under_integral",
+                    "chain_rule_integral_substitution",
+                    "fixed_endpoints",
+                ],
+            ),
+            "detail": {"file": CASE_0059.relative_to(REPO_ROOT).as_posix()},
+        },
+    ]
+    report = {
+        "schema_version": 1,
+        "style": "formal_science_grounding_debt_gate",
+        "ok": all(check["ok"] for check in checks),
+        "checks": checks,
+    }
+    write_json(ARTIFACT_ROOT / "report.json", report)
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    else:
+        print("PASS" if report["ok"] else "FAIL", "formal science grounding debt gate")
+    return 0 if report["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

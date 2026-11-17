@@ -1,0 +1,546 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "profile_adversarial_validation_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Probe a target within scope, assess the evidence, and calibrate a verdict; accept only scoped nonrefutation, never proof.",
+  "aliases": [
+    "adversarial_validation"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Claim": {
+      "schema": true,
+      "representation": "value"
+    },
+    "Scope": {
+      "schema": true,
+      "representation": "value"
+    },
+    "Evidence": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "scope": true,
+          "result": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "scope",
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "representation": "value"
+    },
+    "Assessment": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "probe_evidence": {
+            "type": "object",
+            "properties": {
+              "scope": true,
+              "result": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "scope",
+              "result"
+            ],
+            "additionalProperties": false
+          },
+          "result": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "probe_evidence",
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "representation": "value"
+    },
+    "Decision": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "refuted",
+          "not_refuted_within_scope",
+          "blocked"
+        ]
+      },
+      "representation": "value"
+    },
+    "Outcome": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "validation_status": {
+            "type": "string",
+            "enum": [
+              "refuted",
+              "not_refuted_within_scope",
+              "blocked"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "stop",
+              "accept"
+            ]
+          },
+          "scope": true,
+          "establishes_proof": {
+            "const": false
+          }
+        },
+        "required": [
+          "validation_status",
+          "action",
+          "scope",
+          "establishes_proof"
+        ],
+        "additionalProperties": false
+      },
+      "representation": "value"
+    }
+  },
+  "inputs": {
+    "target": {
+      "type": "Claim",
+      "required": true
+    },
+    "scope": {
+      "type": "Scope",
+      "required": true
+    }
+  },
+  "outputs": {
+    "validation_status": {
+      "type": "Decision",
+      "value": {
+        "ref": "flow.outputs.validation_status"
+      }
+    },
+    "outcome": {
+      "type": "Outcome",
+      "value": {
+        "ref": "flow.outputs.outcome"
+      }
+    }
+  },
+  "operations": {
+    "probe": {
+      "inputs": {
+        "target": {
+          "type": "Claim"
+        },
+        "scope": {
+          "type": "Scope"
+        }
+      },
+      "outputs": {
+        "probe_evidence": {
+          "type": "Evidence"
+        }
+      },
+      "execution": {
+        "mode": "generative",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adversarial_probe",
+          "operation": "mathformer_adversarial_probe"
+        }
+      }
+    },
+    "assess": {
+      "inputs": {
+        "target": {
+          "type": "Claim"
+        },
+        "probe_evidence": {
+          "type": "Evidence"
+        }
+      },
+      "outputs": {
+        "assessment": {
+          "type": "Assessment"
+        }
+      },
+      "execution": {
+        "mode": "generative",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adversarial_assess",
+          "operation": "mathformer_adversarial_assess"
+        }
+      }
+    },
+    "calibrate": {
+      "inputs": {
+        "target": {
+          "type": "Claim"
+        },
+        "assessment": {
+          "type": "Assessment"
+        }
+      },
+      "outputs": {
+        "validation_status": {
+          "type": "Decision"
+        }
+      },
+      "execution": {
+        "mode": "generative",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adversarial_calibrate",
+          "operation": "mathformer_adversarial_calibrate"
+        }
+      }
+    },
+    "stop": {
+      "inputs": {
+        "validation_status": {
+          "type": "Decision"
+        },
+        "scope": {
+          "type": "Scope"
+        }
+      },
+      "outputs": {
+        "outcome": {
+          "type": "Outcome"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adversarial_stop",
+          "operation": "mathformer_adversarial_stop"
+        }
+      }
+    },
+    "accept": {
+      "inputs": {
+        "validation_status": {
+          "type": "Decision"
+        },
+        "scope": {
+          "type": "Scope"
+        }
+      },
+      "outputs": {
+        "outcome": {
+          "type": "Outcome"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_adversarial_accept",
+          "operation": "mathformer_adversarial_accept"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "description": "Single-pass P -> R -> E implementation of the declared dependencies; no retries or scientific iteration.",
+    "steps": [
+      {
+        "id": "p",
+        "kind": "call",
+        "operation": "probe",
+        "arguments": {
+          "target": {
+            "ref": "inputs.target"
+          },
+          "scope": {
+            "ref": "inputs.scope"
+          }
+        }
+      },
+      {
+        "id": "r",
+        "kind": "call",
+        "operation": "assess",
+        "arguments": {
+          "target": {
+            "ref": "inputs.target"
+          },
+          "probe_evidence": {
+            "ref": "steps.p.outputs.probe_evidence"
+          }
+        }
+      },
+      {
+        "id": "e",
+        "kind": "call",
+        "operation": "calibrate",
+        "arguments": {
+          "target": {
+            "ref": "inputs.target"
+          },
+          "assessment": {
+            "ref": "steps.r.outputs.assessment"
+          }
+        }
+      },
+      {
+        "id": "terminal",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "refuted",
+            "when": {
+              "eq": [
+                {
+                  "ref": "steps.e.outputs.validation_status"
+                },
+                {
+                  "literal": "refuted"
+                }
+              ]
+            },
+            "body": {
+              "kind": "call",
+              "description": "Stop on refutation.",
+              "operation": "stop",
+              "arguments": {
+                "validation_status": {
+                  "ref": "steps.e.outputs.validation_status"
+                },
+                "scope": {
+                  "ref": "inputs.scope"
+                }
+              }
+            }
+          },
+          {
+            "id": "not_refuted_within_scope",
+            "when": {
+              "eq": [
+                {
+                  "ref": "steps.e.outputs.validation_status"
+                },
+                {
+                  "literal": "not_refuted_within_scope"
+                }
+              ]
+            },
+            "body": {
+              "kind": "call",
+              "description": "Accept scoped nonrefutation without claiming proof.",
+              "operation": "accept",
+              "arguments": {
+                "validation_status": {
+                  "ref": "steps.e.outputs.validation_status"
+                },
+                "scope": {
+                  "ref": "inputs.scope"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "description": "e.blocked => stop; blocked is the only remaining Decision value.",
+          "operation": "stop",
+          "arguments": {
+            "validation_status": {
+              "ref": "steps.e.outputs.validation_status"
+            },
+            "scope": {
+              "ref": "inputs.scope"
+            }
+          }
+        },
+        "outputs": {
+          "outcome": {
+            "type": "Outcome",
+            "value": {
+              "ref": "selected.outputs.outcome"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "validation_status": {
+        "type": "Decision",
+        "value": {
+          "ref": "steps.e.outputs.validation_status"
+        }
+      },
+      "outcome": {
+        "type": "Outcome",
+        "value": {
+          "ref": "steps.terminal.outputs.outcome"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository"
+        ],
+        "write": []
+      },
+      "network": [
+        "configured_llm_provider"
+      ],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "inspect_declared_contract",
+        "request_scoped_adversarial_assessment"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 4
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Provider-generated adversarial evidence only. Acceptance records nonrefutation within the supplied scope; it establishes neither proof nor promotion.",
+    "secret_references": [
+      {
+        "name": "openai_api_key",
+        "source": "Explicit Mathformer service configuration: external_api_keys.openai_api_key"
+      }
+    ]
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "complete",
+    "sources": [
+      {
+        "path": "examples/reasoning_flows/adversarial_validation.rflow",
+        "selector": "reasoning adversarial_validation",
+        "digest": "sha256:6d3804d57bf3e7f61bce8dccf6ff2b45b1061bbfa47b842bdac25efc37aa282c"
+      },
+      {
+        "path": "skills/REASONING_TYPES.yaml",
+        "selector": "reasoning_styles/adversarial_validation",
+        "digest": "sha256:dcc2048dd94666d792aa70655e8ddcbe92feb420ef6a06c7ce8b4ce1617160a5"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory; declarative_interface",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_run_workflow",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/adversarial_validation_tools.py",
+        "selector": "probe; assess; calibrate; terminal; run_validation; register_adversarial_validation_tools",
+        "digest": "sha256:95bf002e737f7887c4f5a6b7da767c904c93ba256edc6760c449f35e156b9e67"
+      },
+      {
+        "path": "scripts/agentc_workflow_tools.py",
+        "selector": "ServiceLLM",
+        "digest": "sha256:64b0c2f05fef91d88d0339175d0758f8aac696a84a8dfcfe22d8d17e95537314"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "audit_pack_sources: adversarial tools are internal helpers",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "mcp.adversarial_validation.workflow",
+        "digest": "sha256:e9f13118917db07c8f7059ef96be209d76d5ca881731656431020e26f22d7600"
+      },
+      {
+        "path": "tests/mcp/run_adversarial_validation_workflow_tests.py",
+        "selector": "AdversarialValidationTests",
+        "digest": "sha256:f8680d84bd91687a3963e62e9c7f7502d43936e8a7b529e43607dea722be261d"
+      },
+      {
+        "path": "tests/mcp/fixtures/adversarial_provider.py",
+        "selector": "FixtureProvider; serve: external provider boundary only",
+        "digest": "sha256:047036277db91a1fc53d5a27020d90a9bfdb61ea4fd8b4b57ae4e3bc0d18ce66"
+      }
+    ],
+    "gaps": []
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "profile",
+      "native_id": "adversarial_validation",
+      "owner_skill": "skills/control/reasoning-flow-language/SKILL.md",
+      "contract": {
+        "id": "adversarial_validation",
+        "goal": "Seek decisive failures across independent validity dimensions.",
+        "stages": [
+          {
+            "primitive": "probing_falsification"
+          },
+          {
+            "primitive": "critical_verification"
+          },
+          {
+            "primitive": "epistemic_governance"
+          }
+        ],
+        "trust_transition": {
+          "from": "apparently_successful_candidate",
+          "to": "dimensioned_evidence_vector_with_blockers"
+        }
+      },
+      "execution_boundary": "scripts/adversarial_validation_tools.py implements and registers the source P/R/E stages and terminal choices. Each generative stage makes one ServiceLLM.generate call using explicit service configuration; no model is selected by the contract. mathformer_run_workflow remains the legacy hub/route-only dispatcher; Lunar executes these concrete MCP tools.",
+      "repetition": "No repeat, loop-carried state, retry schedule, or iteration bound is declared.",
+      "runtime_encoding": "Claim and Scope retain arbitrary JSON payloads. Evidence wraps scope and provider JSON; Assessment wraps exact evidence and provider JSON. Decision is one of the three ERFL labels. Outcome records the terminal choice and explicitly denies proof. These encodings are authored by the new implementation, not claimed to pre-exist in ERFL.",
+      "budgets": "The 3600-second ceiling is enforced by the Lunar host, not an ERFL scientific budget. Four operation calls cover three dependent stages and one terminal. There is no iteration/exhaustion in the source and no retry."
+    }
+  }
+}

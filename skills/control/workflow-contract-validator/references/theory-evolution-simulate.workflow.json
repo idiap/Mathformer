@@ -1,0 +1,823 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_paper_theory_evolution_simulate_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Seeded native theory evolution with ordered trajectory, phase and step loops and native reporting.",
+  "aliases": [
+    "paper:theory-evolution-simulate"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Model": {
+      "representation": "file",
+      "media_type": "application/json",
+      "schema": {
+        "type": "object",
+        "description": "Native JSON payload; load reads context.model_path and verifies it matches this file payload. Contract domain: <=16 phases and duration_steps<=256; empty ranges remain allowed.",
+        "properties": {
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "initial_state": {
+            "type": "object"
+          },
+          "delta_notation": {
+            "type": "object"
+          },
+          "protected_metrics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "phases": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "type": "object",
+              "properties": {
+                "duration_steps": {
+                  "type": "integer",
+                  "maximum": 256
+                }
+              },
+              "required": [
+                "duration_steps"
+              ]
+            }
+          }
+        },
+        "required": [
+          "metrics",
+          "initial_state",
+          "delta_notation",
+          "protected_metrics",
+          "phases"
+        ]
+      }
+    },
+    "Options": {
+      "schema": {
+        "type": "object",
+        "description": "Native CLI values with defaults; model filename comes from context.model_path; runs<=64 specializes the unbounded native domain.",
+        "properties": {
+          "output_dir": {
+            "type": "string",
+            "minLength": 1
+          },
+          "runs": {
+            "type": "integer",
+            "maximum": 64,
+            "default": 64
+          },
+          "seed": {
+            "type": "integer",
+            "default": 7
+          },
+          "json": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "output_dir"
+        ]
+      },
+      "representation": "value"
+    },
+    "Batch": {
+      "schema": {
+        "type": "object",
+        "description": "Loaded model and resolved CLI values, accumulated completed trajectories, and next range(runs) index. pending means run_id < runs.",
+        "properties": {
+          "model": {
+            "type": "object"
+          },
+          "options": {
+            "type": "object"
+          },
+          "runs": {
+            "type": "array"
+          },
+          "run_id": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "context": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "model",
+          "options",
+          "runs",
+          "run_id",
+          "pending",
+          "context"
+        ]
+      },
+      "representation": "value"
+    },
+    "Trajectory": {
+      "schema": {
+        "type": "object",
+        "description": "Complete JSON-serializable native trajectory state, carried across every step and phase.",
+        "properties": {
+          "model": {
+            "type": "object"
+          },
+          "run_id": {
+            "type": "integer"
+          },
+          "seed": {
+            "type": "integer"
+          },
+          "rng": {
+            "type": "array",
+            "description": "random.Random.getstate(): version, internal integer array, Gaussian cache; restored before each native step."
+          },
+          "epsilon": {
+            "type": "number"
+          },
+          "metrics": {
+            "type": "object"
+          },
+          "cumulative_cost": {
+            "type": "number"
+          },
+          "step": {
+            "type": "integer"
+          },
+          "states": {
+            "type": "array"
+          },
+          "transitions": {
+            "type": "array"
+          },
+          "phase_index": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "model",
+          "run_id",
+          "seed",
+          "rng",
+          "epsilon",
+          "metrics",
+          "cumulative_cost",
+          "step",
+          "states",
+          "transitions",
+          "phase_index",
+          "pending"
+        ]
+      },
+      "representation": "value"
+    },
+    "PhaseState": {
+      "schema": {
+        "type": "object",
+        "description": "Carries the complete trajectory plus current phase and zero-based phase_step. pending means phase_step < duration_steps.",
+        "properties": {
+          "trajectory": {
+            "type": "object"
+          },
+          "phase": {
+            "type": "object"
+          },
+          "phase_step": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "trajectory",
+          "phase",
+          "phase_step",
+          "pending"
+        ]
+      },
+      "representation": "value"
+    },
+    "Result": {
+      "schema": {
+        "type": "object",
+        "description": "Native successful main result; stdout formatting and return code zero belong to reporting, independently of scientific status.",
+        "properties": {
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          },
+          "run_count": {
+            "type": "integer"
+          },
+          "seed": {
+            "type": "integer"
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "simulation": {
+                "type": "string"
+              },
+              "parameters": {
+                "type": "string"
+              },
+              "csv": {
+                "type": "string"
+              },
+              "svg": {
+                "type": "string"
+              },
+              "report": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "simulation",
+              "parameters",
+              "csv",
+              "svg",
+              "report"
+            ]
+          },
+          "status_probabilities": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "ok",
+          "model",
+          "run_count",
+          "seed",
+          "outputs",
+          "status_probabilities"
+        ]
+      },
+      "representation": "value"
+    },
+    "Context": {
+      "representation": "value",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "working_directory": {
+            "type": "string"
+          },
+          "model_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "working_directory",
+          "model_path"
+        ]
+      }
+    },
+    "Text": {
+      "representation": "value",
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "model": {
+      "type": "Model"
+    },
+    "options": {
+      "type": "Options"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Result",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    },
+    "stdout": {
+      "type": "Text",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "load": {
+      "inputs": {
+        "model": {
+          "type": "Model"
+        },
+        "options": {
+          "type": "Options"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Batch"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theory_simulate_load",
+          "operation": "mathformer_theory_simulate_load"
+        }
+      }
+    },
+    "initialize_run": {
+      "inputs": {
+        "batch": {
+          "type": "Batch"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Trajectory"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theory_simulate_initialize_run",
+          "operation": "mathformer_theory_simulate_initialize_run"
+        }
+      }
+    },
+    "prepare_phase": {
+      "inputs": {
+        "state": {
+          "type": "Trajectory"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "PhaseState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theory_simulate_prepare_phase",
+          "operation": "mathformer_theory_simulate_prepare_phase"
+        }
+      }
+    },
+    "advance_step": {
+      "inputs": {
+        "state": {
+          "type": "PhaseState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "PhaseState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theory_simulate_advance_step",
+          "operation": "mathformer_theory_simulate_advance_step"
+        }
+      }
+    },
+    "finish_phase": {
+      "inputs": {
+        "state": {
+          "type": "PhaseState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Trajectory"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theory_simulate_finish_phase",
+          "operation": "mathformer_theory_simulate_finish_phase"
+        }
+      }
+    },
+    "finish_run": {
+      "inputs": {
+        "batch": {
+          "type": "Batch"
+        },
+        "trajectory": {
+          "type": "Trajectory"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "Batch"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theory_simulate_finish_run",
+          "operation": "mathformer_theory_simulate_finish_run"
+        }
+      }
+    },
+    "report": {
+      "inputs": {
+        "batch": {
+          "type": "Batch"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        },
+        "stdout": {
+          "type": "Text"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_theory_simulate_report",
+          "operation": "mathformer_theory_simulate_report"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "load",
+        "kind": "call",
+        "operation": "load",
+        "arguments": {
+          "model": {
+            "ref": "inputs.model"
+          },
+          "options": {
+            "ref": "inputs.options"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "trajectories",
+        "kind": "loop",
+        "state_type": "Batch",
+        "initial": {
+          "ref": "steps.load.outputs.state"
+        },
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "initialize",
+              "kind": "call",
+              "operation": "initialize_run",
+              "arguments": {
+                "batch": {
+                  "ref": "loop.state"
+                }
+              }
+            },
+            {
+              "id": "phases",
+              "kind": "loop",
+              "state_type": "Trajectory",
+              "initial": {
+                "ref": "steps.initialize.outputs.state"
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "prepare_phase",
+                    "kind": "call",
+                    "operation": "prepare_phase",
+                    "arguments": {
+                      "state": {
+                        "ref": "loop.state"
+                      }
+                    }
+                  },
+                  {
+                    "id": "steps",
+                    "kind": "loop",
+                    "state_type": "PhaseState",
+                    "initial": {
+                      "ref": "steps.prepare_phase.outputs.state"
+                    },
+                    "body": {
+                      "id": "advance",
+                      "kind": "call",
+                      "operation": "advance_step",
+                      "arguments": {
+                        "state": {
+                          "ref": "loop.state"
+                        }
+                      }
+                    },
+                    "next_state": {
+                      "ref": "body.outputs.state"
+                    },
+                    "until": {
+                      "not": {
+                        "ref": "body.outputs.state.pending"
+                      }
+                    },
+                    "max_iterations": 256,
+                    "on_exhausted": "fail",
+                    "outputs": {
+                      "state": {
+                        "type": "PhaseState",
+                        "value": {
+                          "ref": "loop.state"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "finish_phase",
+                    "kind": "call",
+                    "operation": "finish_phase",
+                    "arguments": {
+                      "state": {
+                        "ref": "steps.steps.outputs.state"
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "state": {
+                    "type": "Trajectory",
+                    "value": {
+                      "ref": "steps.finish_phase.outputs.state"
+                    }
+                  }
+                }
+              },
+              "next_state": {
+                "ref": "body.outputs.state"
+              },
+              "until": {
+                "not": {
+                  "ref": "body.outputs.state.pending"
+                }
+              },
+              "max_iterations": 16,
+              "on_exhausted": "fail",
+              "outputs": {
+                "state": {
+                  "type": "Trajectory",
+                  "value": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            },
+            {
+              "id": "finish_run",
+              "kind": "call",
+              "operation": "finish_run",
+              "arguments": {
+                "batch": {
+                  "ref": "loop.state"
+                },
+                "trajectory": {
+                  "ref": "steps.phases.outputs.state"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "Batch",
+              "value": {
+                "ref": "steps.finish_run.outputs.state"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "not": {
+            "ref": "body.outputs.state.pending"
+          }
+        },
+        "max_iterations": 64,
+        "on_exhausted": "fail",
+        "outputs": {
+          "state": {
+            "type": "Batch",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "report",
+        "kind": "call",
+        "operation": "report",
+        "arguments": {
+          "batch": {
+            "ref": "steps.trajectories.outputs.state"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Result",
+        "value": {
+          "ref": "steps.report.outputs.result"
+        }
+      },
+      "stdout": {
+        "type": "Text",
+        "value": {
+          "ref": "steps.report.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/paper_skills/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 264322
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Simulation-derived plausible priors only; completion establishes no measured performance, scientific truth, promotion, or runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:paper:theory-evolution-simulate; run_action; run_leaf_action; preflight",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "paper_skills/theory-evolution-simulator/scripts/simulate_theory_evolution.py",
+        "selector": "main (entrypoint); simulate_one (trajectory loop)",
+        "digest": "sha256:f44e80b65b7c4111f5a98919a09fee6ac76ab1cc9ef87c4ed0aeaf4e58788de1"
+      },
+      {
+        "path": "scripts/theory_evolution_simulate_tools.py",
+        "digest": "sha256:93c48685bbcc186a986b10be91729964cca40fc712716230b12f7191c5699a88"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Input specialization: runs<=64, phases<=16, duration_steps<=256; native source has no upper caps. Nonpositive runs still fail during aggregation; empty phase ranges skip updates.",
+      "The expanded MCP graph exposes the scientific CLI body. Hub preflight, dry-run, subprocess capture, 1200-second timeout and post-launch write audit remain at the owning hub boundary, not graph operations. MCP uses service write guards and Lunar budgets.",
+      "File payloads are materialized by context.model_path and verified against the supplied model. Relative paths resolve in context.working_directory. Native stdout is emitted to MCP stderr and returned as stdout; failures propagate as rejected calls.",
+      "Empty ranges traverse one identity adapter cycle because v1 loops are post-tested. Adapters inspect pending before invoking native initialization, phase entry, update, phase advancement or classification. No native scientific step executes for an empty range."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "paper:theory-evolution-simulate",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "paper:theory-evolution-simulate",
+        "summary": "Run one theory-evolution simulation; pass model/output arguments after `--`.",
+        "family": "paper",
+        "kind": "generation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "paper_skills/theory-evolution-simulator/scripts/simulate_theory_evolution.py"
+        ],
+        "depends_on": [],
+        "writes": [
+          "artifacts/paper_skills/"
+        ],
+        "allows_extra_args": true,
+        "timeout_seconds": 1200
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Existing hub subprocess remains available; expanded tools execute shared source functions under the MCP service write guard.",
+      "failure_policy": "Nonzero exit or 1200-second subprocess timeout yields hub ok=false; post-launch undeclared writes also set ok=false/status=undeclared_writes. Do not infer scientific acceptance from process or hub completion.",
+      "effects_status": "partial_native_declarations",
+      "context_fields": [
+        "dry_run",
+        "json_output",
+        "keep_going",
+        "allow_mutating",
+        "write_report"
+      ],
+      "scientific_payloads": "Result models main's successful payload, not the native HubResult transport envelope."
+    },
+    "mathformer.bounds": {
+      "semantics": "Ordered post-tested loops; empty ranges traverse guarded identity adapters without native work. pending=false at exact caps; exhaustion fails. Nonpositive runs fail in native summarize.",
+      "budgets": "3600 seconds and 264322 operation calls are descriptor ceilings, not source budgets. The native subprocess timeout is 1200 seconds. No additional scientific stopping rule or checkpoint is implied."
+    }
+  }
+}

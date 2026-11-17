@@ -1,0 +1,399 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_mathformerphysicslib_redefinition_critic_workflow
+version: 1.0.0
+kind: workflow
+description: Native redefinition critic traversal with shared deterministic MCP steps.
+aliases:
+- mathformerphysicslib:redefinition-critic
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  ConceptGraph:
+    schema:
+      type: object
+      properties:
+        concepts:
+          type: array
+          maxItems: 1024
+          items:
+            type: object
+  Grounding:
+    schema:
+      type: object
+      properties:
+        concepts:
+          type: array
+          items:
+            type: object
+            properties:
+              concept_id:
+                type: string
+            required:
+            - concept_id
+  ScanState:
+    schema:
+      type: object
+      properties:
+        concepts:
+          type: array
+          maxItems: 1024
+          items:
+            type: object
+        grounding_by_id:
+          type: object
+        cursor:
+          type: integer
+          minimum: 0
+          maximum: 1024
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                enum:
+                - high
+                - medium
+              kind:
+                enum:
+                - concept_spread_without_foundation_owner
+                - confirmed_competing_concept_owner
+                - unresolved_grounding_blocker
+              concept_id:
+                type: string
+              evidence: {}
+              message:
+                type: string
+            required:
+            - severity
+            - kind
+            - concept_id
+            - evidence
+            - message
+        reuse_metrics:
+          type: object
+          properties:
+            healthy_downstream_uses:
+              type: integer
+              minimum: 0
+            downstream_local_declarations:
+              type: integer
+              minimum: 0
+            confirmed_duplicate_owners:
+              type: integer
+              minimum: 0
+          required:
+          - healthy_downstream_uses
+          - downstream_local_declarations
+          - confirmed_duplicate_owners
+          additionalProperties: false
+      required:
+      - concepts
+      - grounding_by_id
+      - cursor
+      - findings
+      - reuse_metrics
+      additionalProperties: false
+  Boolean:
+    schema:
+      type: boolean
+  Report:
+    schema:
+      type: object
+      properties:
+        style:
+          const: mathformerphysicslib_redefinition_report
+        schema_version:
+          const: 1
+        ok:
+          type: boolean
+        finding_count:
+          type: integer
+          minimum: 0
+        reuse_metrics:
+          type: object
+          properties:
+            healthy_downstream_uses:
+              type: integer
+              minimum: 0
+            downstream_local_declarations:
+              type: integer
+              minimum: 0
+            confirmed_duplicate_owners:
+              type: integer
+              minimum: 0
+          required:
+          - healthy_downstream_uses
+          - downstream_local_declarations
+          - confirmed_duplicate_owners
+          additionalProperties: false
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                enum:
+                - high
+                - medium
+              kind:
+                enum:
+                - concept_spread_without_foundation_owner
+                - confirmed_competing_concept_owner
+                - unresolved_grounding_blocker
+              concept_id:
+                type: string
+              evidence: {}
+              message:
+                type: string
+            required:
+            - severity
+            - kind
+            - concept_id
+            - evidence
+            - message
+      required:
+      - style
+      - schema_version
+      - ok
+      - finding_count
+      - reuse_metrics
+      - findings
+      additionalProperties: false
+inputs:
+  concept_graph:
+    type: ConceptGraph
+  grounding:
+    type: Grounding
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+operations:
+  initialize:
+    inputs:
+      concept_graph:
+        type: ConceptGraph
+      grounding:
+        type: Grounding
+    outputs:
+      state:
+        type: ScanState
+      has_concepts:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_redefinition_critic_initialize
+        operation: mathformer_redefinition_critic_initialize
+  visit_concept:
+    inputs:
+      state:
+        type: ScanState
+    outputs:
+      state:
+        type: ScanState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_redefinition_critic_visit_concept
+        operation: mathformer_redefinition_critic_visit_concept
+  finish_report:
+    inputs:
+      state:
+        type: ScanState
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_redefinition_critic_finish_report
+        operation: mathformer_redefinition_critic_finish_report
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments:
+      concept_graph:
+        ref: inputs.concept_graph
+      grounding:
+        ref: inputs.grounding
+  - id: scan
+    kind: loop
+    state_type: ScanState
+    initial:
+      ref: steps.initialize.outputs.state
+    body:
+      kind: call
+      operation: visit_concept
+      arguments:
+        state:
+          ref: loop.state
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 1024
+    on_exhausted: fail
+    outputs:
+      state:
+        type: ScanState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish_report
+    arguments:
+      state:
+        ref: steps.scan.outputs.state
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finish.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - describe_redefinition_findings
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 1026
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked redefinition findings only; completion does not establish
+    scientific validity or authorize promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/coherence_common.py
+    selector: critic_redefinitions
+    digest: sha256:e1da9d47b82e23be26335e4476ba442aa58aedafe245034709d2868909deb125
+  - path: skills/mathformerphysicslib/mathformerphysicslib-redefinition-critic/scripts/critic_redefinitions.py
+    selector: main
+    digest: sha256:6656d56f1d98052d124faeab60a138f81e638f7659d6b61496f3876f6ba559fb
+  - path: scripts/mathformer.py
+    selector: build_registry/action:mathformerphysicslib:redefinition-critic; preflight;
+      run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/redefinition_critic_tools.py
+    selector: register_redefinition_critic_tools
+    digest: sha256:20508762dfb2c829e7b140be84426ad95e90d7de311fe74cd122add2723b4153
+  - path: scripts/mcp_server.py
+    selector: register_redefinition_critic_tools(mcp)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Specialization accepts at most 1024 concepts; the native entrypoint remains uncapped.
+    Exactly 1024 concepts completes normally without truncation.
+  - Lunar requires root-scoped loop exhaustion. An empty-state adapter pass performs
+    no native inspection; nonempty scans still visit each concept exactly once.
+  - Occurrence and owner iterations remain within the shared visit implementation.
+    Compact payload schemas specialize to JSON concept sequences and grounding with
+    string IDs.
+  - 3600 seconds and 1026 operation calls are descriptor budgets; the native hub action
+    has no timeout. Lunar supplies runtime receipts separately from optional hub logging.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: mathformerphysicslib:redefinition-critic
+    owner_skill: skills/mathformerphysicslib/mathformerphysicslib-redefinition-critic/SKILL.md
+    contract:
+      id: mathformerphysicslib:redefinition-critic
+      summary: Smoke-test MathformerPhysicsLib redefinition critic.
+      family: mathformerphysicslib
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - skills/mathformerphysicslib/mathformerphysicslib-redefinition-critic/scripts/critic_redefinitions.py
+      - --self-test
+      - --json
+      depends_on: []
+      required_paths:
+      - skills/mathformerphysicslib/mathformerphysicslib-redefinition-critic/scripts/critic_redefinitions.py
+      required_tools: []
+      optional_tools: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: Selected critic function executes through shared native initialization,
+      per-concept inspection and report functions, exposed by registered MCP tools.
+      Existing hub wrapper behavior is unchanged.
+    context_fields: []
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    failure_policy: Preflight failure or dry-run prevents launch. Otherwise hub success
+      depends on subprocess exit status and write auditing, not critic report.ok.
+    scientific_payloads: Report is the selected function return, not HubResult.
+    actual_hub_order: Dependency-free one-shot main --self-test --json calls self_test_payload
+      (shared two-concept fixture, critics, advisory plans, assertions), canonicalize
+      on the returned envelope, audit_grounding, then critic_redefinitions. The envelope
+      lacks concept_occurrence_index, so canonicalize yields an empty graph and final
+      critic returns an empty successful report. Successful wrapper execution exits
+      0 regardless of report.ok; exceptions can prevent completion.
+    timeout_seconds: null
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    keep_going_semantics: No dependencies; native failures remain failures.
+    extra_args_for_sequence: native per-action policy
+    modeling: Selected function modeled separately from hub wrapper execution; callers
+      also include coherence gating/planning, calibration tests and coherence-loop
+      runner.
+# REUSE-IgnoreEnd

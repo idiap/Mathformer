@@ -1,0 +1,398 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_sympy_cross_backend_semantic_packet_0004_workflow
+version: 1.0.0
+kind: workflow
+description: Build one source-anchored cross-backend semantic alignment packet.
+aliases:
+- physics-sympy:cross-backend-semantic-packet-0004
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  CaseId:
+    schema:
+      type: string
+  ArtifactRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+  Bool:
+    schema:
+      type: boolean
+  State:
+    representation: value
+    schema:
+      type: object
+      required:
+      - handle
+      - phase
+      properties:
+        handle:
+          type: string
+          minLength: 1
+        phase:
+          enum:
+          - inspected
+          - collected
+          - aligned
+      additionalProperties: false
+      description: Single-use handle to native Python locals retained in this MCP
+        server. Includes imported module, Paths, findings and collected metadata;
+        never reimports or serializes these locals.
+  Packet:
+    representation: value
+    schema:
+      type: object
+      required:
+      - schema_version
+      - ok
+      - case_id
+      - physics_ir
+      - backend_semantic_packets
+      - semantic_parity
+      - findings
+      properties:
+        schema_version:
+          const: 1
+        ok:
+          type: boolean
+        case_id:
+          type: string
+        physics_ir:
+          type:
+          - object
+          - 'null'
+        backend_semantic_packets:
+          type: array
+          maxItems: 3
+          items:
+            type: object
+        semantic_parity:
+          type: object
+        findings:
+          type: array
+          items:
+            type: object
+      additionalProperties: true
+inputs:
+  case_id:
+    type: CaseId
+  artifact_root:
+    type: ArtifactRoot
+    required: false
+outputs:
+  packet:
+    type: Packet
+    value:
+      ref: flow.outputs.packet
+operations:
+  inspect:
+    inputs:
+      case_id:
+        type: CaseId
+      artifact_root:
+        type: ArtifactRoot
+        required: false
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_semantic_packet_inspect
+        operation: mathformer_semantic_packet_inspect
+  collect:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+      ir_ready:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_semantic_packet_collect
+        operation: mathformer_semantic_packet_collect
+  align:
+    inputs:
+      state:
+        type: State
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_semantic_packet_align
+        operation: mathformer_semantic_packet_align
+  assemble:
+    inputs:
+      state:
+        type: State
+    outputs:
+      packet:
+        type: Packet
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_semantic_packet_assemble
+        operation: mathformer_semantic_packet_assemble
+flow:
+  kind: sequence
+  steps:
+  - id: inspect
+    kind: call
+    operation: inspect
+    arguments:
+      case_id:
+        ref: inputs.case_id
+      artifact_root:
+        ref: inputs.artifact_root
+  - id: collect
+    kind: call
+    operation: collect
+    arguments:
+      state:
+        ref: steps.inspect.outputs.state
+  - id: finish
+    kind: switch
+    cases:
+    - id: ir_available
+      when:
+        ref: steps.collect.outputs.ir_ready
+      body:
+        kind: sequence
+        steps:
+        - id: align
+          kind: call
+          operation: align
+          arguments:
+            state:
+              ref: steps.collect.outputs.state
+        - id: assemble_aligned
+          kind: call
+          operation: assemble
+          arguments:
+            state:
+              ref: steps.align.outputs.state
+        outputs:
+          packet:
+            type: Packet
+            value:
+              ref: steps.assemble_aligned.outputs.packet
+    default:
+      kind: call
+      operation: assemble
+      arguments:
+        state:
+          ref: steps.collect.outputs.state
+    outputs:
+      packet:
+        type: Packet
+        value:
+          ref: selected.outputs.packet
+  outputs:
+    packet:
+      type: Packet
+      value:
+        ref: steps.finish.outputs.packet
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 4
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Alignment evidence only; completion establishes neither proof nor
+    promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/physics_sympy/run_cross_backend_semantic_packet.py
+    selector: build_packet; inspect_packet; collect_packet; packet_ir_ready; align_packet;
+      assemble_packet; load_sympy_module; lean_theorem_targets; main
+    digest: sha256:ee1f335e884f514984585f7b5126cf44aa268a8128e8aa22055f2e785b5d6559
+  - path: libraries/MathformerPhysicsLib/physics_ir.py
+    selector: from_case_spec; validate_ir; backend_packet; compare_backend_packets
+    digest: sha256:875d922159c63a2b2c6daa0967deb96dae577854e3f25b0be9fbbe2f703648b4
+  - path: scripts/mathformer.py
+    selector: build_registry/action:physics-sympy:cross-backend-semantic-packet-0004;
+      run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/cross_backend_semantic_packet_tools.py
+    selector: PacketStages; register_cross_backend_semantic_packet_tools; create_server
+    digest: sha256:4f583e3d7bb72ce3eee98cbc9f658600590c9ae3ae224254629925eab75586ed
+  - path: scripts/mcp_server.py
+    selector: register_cross_backend_semantic_packet_tools(mcp)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: 'inventory: authored cross-backend-semantic-packet.workflow.json'
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_cross_backend_semantic_packet_workflow_tests.py
+    selector: SemanticPacketTests
+    digest: sha256:41b60b66617f98395be781f7ef47b87f94807537b634be5f42dd2edcf473d935
+  - path: tests/mcp/fixtures/cross_backend_semantic_packet_original.py.txt
+    selector: frozen original build_packet and main
+    digest: sha256:8a73a2a6dfffc316558641aff4ef29b003c3d56f8b40bb3c6d86eaff90f082e0
+  gaps:
+  - Packet schema remains a compact projection of the native evidence payload.
+  - Artifact imports execute Python with native effects; full effect qualification
+    is outside this builder contract.
+  - Lunar owns workflow receipts and the 3600-second ceiling; the native builder has
+    no internal time budget, and the enclosing hub retains its separate 180-second
+    timeout.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-sympy:cross-backend-semantic-packet-0004
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: physics-sympy:cross-backend-semantic-packet-0004
+      summary: Build the Lean/SymPy semantic alignment packet for FormalPhysics 0004.
+      family: physics_sympy
+      kind: validation
+      safety: read_only
+      command:
+      - .venv/bin/python
+      - tests/physics_sympy/run_cross_backend_semantic_packet.py
+      - --case
+      - formalphysics_0004
+      - --json
+      depends_on: []
+      required_paths:
+      - tests/physics_sympy/run_cross_backend_semantic_packet.py
+      - libraries/MathformerPhysicsLib/SymPy/formalphysics_0004/MathformerPhysics.py
+      - libraries/MathformerPhysicsLib/Lean/formalphysics_0004/MathformerPhysics.lean
+      required_tools: []
+      optional_tools: []
+      writes: []
+      allows_extra_args: true
+      timeout_seconds: 180
+      notes: ''
+  mathformer.native_boundary:
+    scope: build_packet only; main and hub remain enclosing native boundaries.
+    input_semantics: case_id is passed unchanged; omitted or null artifact_root selects
+      repository defaults; otherwise convert the supplied path to Path.
+    cli: main normalizes --case, calls build_packet, serializes JSON to stdout or
+      --output (creating parents), and exits 0 for ok or 3 otherwise.
+    hub: Preflight errors or dry-run return before launch; timeout fails execution;
+      subsequent repository write audit can override success.
+    path_discrepancy: Defaults use root-level MathformerPhysicsLib/, currently only
+      __pycache__; hub preflight checks libraries/MathformerPhysicsLib/. Default artifacts
+      are unavailable.
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    state_transport: Single-use server-local handles retain native locals including
+      the imported module across stages; assembly and native errors release the handle;
+      abandoned handles last until server shutdown. No replay, retry or cross-server
+      resume. Relative artifact_root paths use the MCP process working directory,
+      just as native Path arguments do.
+    observability: Native artifact stdout is mirrored to MCP server stderr to preserve
+      protocol framing. Source findings, packets and exceptions remain native; Lunar
+      records step receipts.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    carried_state: Accumulated findings, imported artifact and extracted metadata,
+      IR, semantic packets and parity; no retry, repair or convergence loop.
+    traversal_bounds: Metadata traversals use input sizes; at most three packets;
+      seven fields for each of at most two nonbaseline packets; three Lean target-name
+      searches, each excerpt capped at 700 characters.
+    stopping: Traversals finish normally at collection end; builder returns one packet
+      without an exhaustion condition or internal time budget.
+    comparison_fields:
+    - case_id
+    - source_digest
+    - ir_digest
+    - quantity_roles
+    - assumption_ids
+    - obligation_ids
+    - target_claim
+    comparison_limit: Backend packets inherit the same SymPy-derived IR; hashes bind
+      artifacts but do not independently extract their semantics.
+    callers: Parity-gate and MCP-adapter case loops are outside this selected workflow.
+  mathformer.step_sources:
+    inspect: 'Source build_packet opening block and load_sympy_module: resolve default
+      or supplied roots, import SymPy, check Lean and Isabelle, read existing Lean
+      text, initialize findings and pack source locals. Add high sympy_artifact_unavailable
+      or lean_artifact_missing findings; Isabelle absence adds none. Missing loader,
+      SymPy dependency failure, and ordinary import exceptions are structured; non-SymPy
+      ModuleNotFoundError propagates. Lean read failures propagate.'
+    collect: 'Source build_packet CLAIM through semantic_parity initialization: preserve
+      state, obtain CLAIM and initialize target and empty reports. If module exists,
+      call derive_target, validate_dimensions, validate_numeric_samples in one try,
+      preserving completed assignments; a caught exception adds high sympy_validation_failed
+      and skips remaining calls. Returned failed reports alone add no high finding.
+      Collect assumptions, Lean mentions/definitions, projections, grounding, and
+      optional review_final_equations in source order; review exceptions propagate.
+      Initialize null IR, empty packets and unavailable parity. Pack updated locals
+      and compute ir_ready as module is not None and isinstance(claim, dict), without
+      requiring successful validation.'
+    align: 'Source build_packet IR conditional and physics_ir.py helpers: filter assumption
+      rows, pack ir_spec, call from_case_spec then validate_ir. Add high physics_ir_invalid
+      for errors but continue. Store IR plus digest; collect shared projection IDs.
+      Append SymPy packet, then Lean if present, then Isabelle if present, using the
+      same IR and each artifact''s SHA-256. Compare packets; extend accumulated findings
+      only when semantic_parity is false. Preserve all prior locals. Helper traversals
+      and exceptions remain native; uncaught errors propagate.'
+    assemble: 'Source build_packet packet literal through return, including lean_theorem_targets:
+      pack source target, IR, backend packets, parity, backend targets, assumptions,
+      semantic deltas, dimension/numeric treatment, projections, support-object statuses
+      and accumulated findings. Set ok to not any finding whose severity equals high;
+      return one packet even when ok is false. Missing finding severity or other uncaught
+      errors propagate. No Lean compilation or independent backend semantic extraction.'
+# REUSE-IgnoreEnd

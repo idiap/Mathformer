@@ -1,0 +1,1147 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Keep a human-readable catalogue of every canonical Mathformer reasoning
+#   flow without creating a second hand-maintained semantic specification.
+#
+# Intent:
+#   Render validated ERFL source and operation-level explanations into one
+#   semantic reference, with skill materializations and operational-loop
+#   affinities in a separate generated reference.
+#
+# Function:
+#   Reads the ERFL registry, reasoning-style registry, skill-hook loop contracts,
+#   and canonical .rflow profiles, then writes or checks both generated documents.
+#
+# Maintenance Notes:
+#   Change canonical flows and registries rather than editing the generated
+#   document. Keep this renderer dependency-free and aligned with the validator.
+
+"""Render the canonical semantic flows and operational mappings references."""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass, field
+import hashlib
+import json
+from pathlib import Path
+import re
+import sys
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import validate_reasoning_flow as erfl  # noqa: E402 - direct-script path setup above
+
+DEFAULT_FLOWS_DIR = REPO_ROOT / "examples" / "reasoning_flows"
+DEFAULT_OUTPUT_FILE = REPO_ROOT / "docs" / "architecture" / "ALL_REASONING_FLOWS.md"
+DEFAULT_MATERIALIZATIONS_FILE = (
+    REPO_ROOT / "docs" / "architecture" / "REASONING_FLOW_MATERIALIZATIONS.md"
+)
+REASONING_TYPES_FILE = REPO_ROOT / "skills" / "REASONING_TYPES.yaml"
+SKILL_HOOKS_FILE = REPO_ROOT / "skills" / "SKILL_HOOKS.yaml"
+ACTION_REGISTRY_FILE = REPO_ROOT / "scripts" / "mathformer.py"
+ERFL_REGISTRY_FILE = (
+    REPO_ROOT
+    / "skills"
+    / "control"
+    / "reasoning-flow-language"
+    / "references"
+    / "erfl-0.3.json"
+)
+
+
+@dataclass
+class Stage:
+    """One reasoning primitive and its candidate skill materializations."""
+
+    primitive: str
+    skill_options: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ReasoningStyle:
+    """The subset of a reasoning-style registry entry used by the catalogue."""
+
+    style_id: str
+    goal: str = ""
+    control_skills: List[str] = field(default_factory=list)
+    infrastructure_skills: List[str] = field(default_factory=list)
+    protected_properties: List[str] = field(default_factory=list)
+    stages: List[Stage] = field(default_factory=list)
+    trust_from: str = ""
+    trust_to: str = ""
+
+    @property
+    def all_skills(self) -> Set[str]:
+        values = set(self.control_skills) | set(self.infrastructure_skills)
+        for stage in self.stages:
+            values.update(stage.skill_options)
+        return values
+
+    def skills_for_primitive(self, primitive: str) -> List[str]:
+        values: List[str] = []
+        for stage in self.stages:
+            if stage.primitive == primitive:
+                values.extend(stage.skill_options)
+        if primitive == "epistemic_governance":
+            values.extend(self.control_skills)
+        return stable_unique(values)
+
+
+@dataclass
+class LoopContract:
+    """The operational subset of one SKILL_HOOKS loop contract."""
+
+    loop_id: str
+    description: str = ""
+    required_hooks: List[str] = field(default_factory=list)
+    recommended_hooks: List[str] = field(default_factory=list)
+    required_owner_skills: List[str] = field(default_factory=list)
+
+
+def stable_unique(values: Iterable[str]) -> List[str]:
+    """Deduplicate strings without changing their registry order."""
+    result: List[str] = []
+    seen: Set[str] = set()
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
+
+
+def relative(path: Path) -> str:
+    """Return a stable repository-relative path for generated prose."""
+    return path.resolve().relative_to(REPO_ROOT).as_posix()
+
+
+def parse_reasoning_styles(path: Path) -> List[ReasoningStyle]:
+    """Parse the deliberately simple reasoning_styles YAML subset."""
+    styles: List[ReasoningStyle] = []
+    active = False
+    current: Optional[ReasoningStyle] = None
+    current_stage: Optional[Stage] = None
+    list_target = ""
+
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw.strip()
+        if not active:
+            if stripped == "reasoning_styles:":
+                active = True
+            continue
+        if raw and not raw.startswith(" "):
+            break
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        style_match = re.match(r"^  - id:\s*([a-z][a-z0-9_]*)\s*$", raw)
+        if style_match:
+            current = ReasoningStyle(style_id=style_match.group(1))
+            styles.append(current)
+            current_stage = None
+            list_target = ""
+            continue
+        if current is None:
+            continue
+
+        goal_match = re.match(r"^    goal:\s*(.*?)\s*$", raw)
+        if goal_match:
+            current.goal = goal_match.group(1)
+            list_target = ""
+            continue
+        if re.match(r"^    control_skills:\s*$", raw):
+            list_target = "control_skills"
+            current_stage = None
+            continue
+        if re.match(r"^    infrastructure_skills:\s*$", raw):
+            list_target = "infrastructure_skills"
+            current_stage = None
+            continue
+        if re.match(r"^    protected_properties:\s*$", raw):
+            list_target = "protected_properties"
+            current_stage = None
+            continue
+        if re.match(r"^    stages:\s*$", raw):
+            list_target = "stages"
+            current_stage = None
+            continue
+        stage_match = re.match(r"^      - primitive:\s*([a-z][a-z0-9_]*)\s*$", raw)
+        if stage_match:
+            current_stage = Stage(primitive=stage_match.group(1))
+            current.stages.append(current_stage)
+            list_target = "stage"
+            continue
+        if re.match(r"^        skill_options:\s*$", raw):
+            list_target = "skill_options"
+            continue
+        trust_from = re.match(r"^      from:\s*(\S+)\s*$", raw)
+        if trust_from:
+            current.trust_from = trust_from.group(1)
+            continue
+        trust_to = re.match(r"^      to:\s*(\S+)\s*$", raw)
+        if trust_to:
+            current.trust_to = trust_to.group(1)
+            continue
+
+        item_match = re.match(r"^\s+-\s+(\S+)\s*$", raw)
+        if not item_match:
+            continue
+        item = item_match.group(1)
+        if list_target == "control_skills":
+            current.control_skills.append(item)
+        elif list_target == "infrastructure_skills":
+            current.infrastructure_skills.append(item)
+        elif list_target == "protected_properties":
+            current.protected_properties.append(item)
+        elif list_target == "skill_options" and current_stage is not None:
+            current_stage.skill_options.append(item)
+
+    if not styles:
+        raise ValueError(f"No reasoning styles found in {relative(path)}")
+    return styles
+
+
+def parse_loop_contracts(path: Path) -> List[LoopContract]:
+    """Parse the loop_contracts YAML subset without a PyYAML dependency."""
+    loops: List[LoopContract] = []
+    active = False
+    current: Optional[LoopContract] = None
+    list_target = ""
+
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw.strip()
+        if stripped == "loop_contracts:":
+            active = True
+            continue
+        if not active:
+            continue
+        if stripped == "direct_request_routing:":
+            break
+        if not stripped or stripped.startswith("#"):
+            continue
+        loop_match = re.match(r"^  - id:\s*(\S+)\s*$", raw)
+        if loop_match:
+            current = LoopContract(loop_id=loop_match.group(1))
+            loops.append(current)
+            list_target = ""
+            continue
+        if current is None:
+            continue
+        description_match = re.match(r"^    description:\s*(.*?)\s*$", raw)
+        if description_match:
+            current.description = description_match.group(1)
+            continue
+        list_match = re.match(
+            r"^    (required_hooks|recommended_hooks|required_owner_skills):\s*$", raw
+        )
+        if list_match:
+            list_target = list_match.group(1)
+            continue
+        item_match = re.match(r"^      -\s+(\S+)\s*$", raw)
+        if item_match and list_target:
+            getattr(current, list_target).append(item_match.group(1))
+
+    if not loops:
+        raise ValueError(f"No loop contracts found in {relative(path)}")
+    return loops
+
+
+def format_port(port: erfl.Port) -> str:
+    """Format one typed ERFL port for prose."""
+    return f"`{port.name}` ({port.kind})" if port.kind else f"`{port.name}`"
+
+
+def join_words(values: Sequence[str]) -> str:
+    """Join prose fragments with a final conjunction."""
+    if not values:
+        return "nothing"
+    if len(values) == 1:
+        return values[0]
+    if len(values) == 2:
+        return f"{values[0]} and {values[1]}"
+    return f"{', '.join(values[:-1])}, and {values[-1]}"
+
+
+def indefinite_article(phrase: str) -> str:
+    """Choose a readable English article for an operation name."""
+    return "an" if phrase[:1].lower() in {"a", "e", "i", "o", "u"} else "a"
+
+
+def operation_description(
+    occurrence: erfl.Occurrence,
+    registry: Mapping[str, Any],
+) -> str:
+    """Explain one occurrence including its authority ceiling."""
+    if occurrence.type_code == "_":
+        operation_name = "an unresolved projection gap"
+        claim_ceiling = "none; the reasoning type remains unknown"
+    else:
+        operation = registry["operation_types"][occurrence.type_code]
+        operation_name = operation["name"]
+        claim_ceiling = operation["claim_ceiling"]
+    inputs = join_words([format_port(port) for port in occurrence.inputs])
+    outputs = join_words([format_port(port) for port in occurrence.outputs])
+    optional = "optional " if occurrence.optional else ""
+    article = indefinite_article(optional + operation_name)
+    return (
+        f"`{occurrence.alias}` is {article} {optional}**{operation_name}** occurrence "
+        f"(`{occurrence.type_code}`): it consumes {inputs} and produces {outputs}. "
+        f"Its authority ceiling is {claim_ceiling}."
+    )
+
+
+def describe_node(node: erfl.Node, registry: Mapping[str, Any]) -> str:
+    """Recursively explain an ERFL route expression."""
+    if isinstance(node, erfl.Occurrence):
+        return operation_description(node, registry)
+    if isinstance(node, erfl.Parallel):
+        branches = [describe_node(child, registry) for child in node.children]
+        return (
+            "All parallel branches are required and must contribute a conserved "
+            "handle at the join: "
+            + " ".join(
+                f"Branch {index}: {description}"
+                for index, description in enumerate(branches, 1)
+            )
+        )
+    if isinstance(node, erfl.Choice):
+        branches = [describe_node(child, registry) for child in node.children]
+        return (
+            "Exactly one alternative branch is selected, and every alternative "
+            "must expose the same interface: "
+            + " ".join(
+                f"Alternative {index}: {description}"
+                for index, description in enumerate(branches, 1)
+            )
+        )
+    if isinstance(node, erfl.SequenceNode):
+        parts = [
+            "The steps expression begins as follows: "
+            + describe_node(node.children[0], registry)
+        ]
+        for relation_name, child in zip(node.relations, node.children[1:]):
+            relation = registry["relations"][relation_name]
+            warrant = relation.get("warrant")
+            warrant_text = (
+                f" Its declared warrant contribution is `{warrant}`."
+                if warrant is not None
+                else ""
+            )
+            parts.append(
+                f"It then crosses `-{relation_name}>`: {relation['description']}"
+                f"{warrant_text} The next expression is: {describe_node(child, registry)}"
+            )
+        return " ".join(parts)
+    raise TypeError(f"Unsupported ERFL node: {type(node).__name__}")
+
+
+def materializations_for_occurrence(
+    occurrence: erfl.Occurrence,
+    style: ReasoningStyle,
+    registry: Mapping[str, Any],
+) -> Tuple[str, List[str]]:
+    """Return the primitive and registered skill options for an occurrence."""
+    if occurrence.type_code == "_":
+        return "unresolved", []
+    primitive = registry["operation_types"][occurrence.type_code]["reasoning_primitive"]
+    return primitive, style.skills_for_primitive(primitive)
+
+
+def compact_skill_examples(values: Sequence[str], limit: int = 3) -> str:
+    """Keep line-level examples readable while the full table remains complete."""
+    if not values:
+        return "no direct skill is assigned at this projection layer"
+    shown = [f"`{value}`" for value in values[:limit]]
+    suffix = f" (+{len(values) - limit} more)" if len(values) > limit else ""
+    return ", ".join(shown) + suffix
+
+
+def route_materialization_summary(
+    flow: erfl.Flow,
+    style: ReasoningStyle,
+    registry: Mapping[str, Any],
+) -> str:
+    """Summarize skill bindings for the route explanation."""
+    fragments: List[str] = []
+    for occurrence in erfl.occurrences(flow.route):
+        _, skills = materializations_for_occurrence(occurrence, style, registry)
+        fragments.append(
+            f"`{occurrence.alias}` maps to {compact_skill_examples(skills)}"
+        )
+    return "; ".join(fragments) + "."
+
+
+def explain_handler(
+    handler: erfl.Handler,
+    aliases: Mapping[str, erfl.Occurrence],
+    registry: Mapping[str, Any],
+) -> str:
+    """Explain a terminal or switch handler without adding authority."""
+    if handler.subject == "reasoning":
+        subject = "the reasoning program as a whole"
+    else:
+        occurrence = aliases.get(handler.subject)
+        if occurrence is None:
+            subject = f"the unknown occurrence `{handler.subject}`"
+        elif occurrence.type_code == "_":
+            subject = f"the unresolved occurrence `{handler.subject}`"
+        else:
+            operation_name = registry["operation_types"][occurrence.type_code]["name"]
+            subject = f"`{handler.subject}` ({operation_name})"
+    status = handler.status.replace("_", " ")
+    if handler.action == "accept":
+        action = (
+            "the profile accepts the calibrated result for workflow purposes. "
+            "Acceptance contributes no new object-level warrant"
+        )
+    elif handler.action == "switch":
+        action = (
+            f"control switches to `{handler.target}` while preserving scope, "
+            "provenance, claim ceiling, taints, and open obligations"
+        )
+    else:
+        action = (
+            "the profile stops. Stopping records a disposition; it does not prove "
+            "the negation or impossibility of the goal"
+        )
+    return f"When {subject} reports **{status}**, {action}."
+
+
+def explain_source_line(
+    raw_line: str,
+    flow: erfl.Flow,
+    style: ReasoningStyle,
+    registry: Mapping[str, Any],
+) -> Tuple[str, str]:
+    """Return semantic and repository-specific explanations for one source line."""
+    line = raw_line.strip()
+    all_occurrences = erfl.occurrences(flow.route)
+    for repeat in flow.repeats:
+        all_occurrences.extend(erfl.occurrences(repeat.expression))
+    aliases = {occurrence.alias: occurrence for occurrence in all_occurrences}
+
+    if line.startswith("#"):
+        return (
+            "Declares the interpretation boundary: this is a canonical epistemic "
+            "projection, not an execution trace or evidence that the goal was achieved.",
+            "The authoritative operational records remain hook executions, digested "
+            "outputs, backend evidence, assessments, and gate decisions.",
+        )
+    if line == "erfl 0.3":
+        return (
+            "Selects Mathformer ERFL version `0.3`, fixing the grammar, operation "
+            "codes, relations, kinds, and coherence checks.",
+            f"The semantics come from `{relative(ERFL_REGISTRY_FILE)}`.",
+        )
+    resource_match = erfl.RESOURCE_DECLARATION_PATTERN.fullmatch(line)
+    if resource_match:
+        resource_class = resource_match.group("resource_class")
+        alias = resource_match.group("alias")
+        connector = resource_match.group("connector")
+        target = resource_match.group("target")
+        return (
+            f"Binds `{alias}` as a {resource_class} resource through the declared "
+            f"`{connector}` connector to `{target}`. The declaration grants no warrant "
+            "and is not evidence that access succeeded.",
+            "Runtime access must still emit a versioned receipt and preserve the "
+            "authority of every returned member.",
+        )
+    if line.startswith("reasoning "):
+        return (
+            f"Begins the canonical reasoning program `{flow.name}`.",
+            f"Its skill composition is registered under the same id in "
+            f"`{relative(REASONING_TYPES_FILE)}`.",
+        )
+    if line.startswith("goal "):
+        return (
+            f"Sets the epistemic objective to “{flow.goal_text}” and requires the "
+            f"terminal calibration occurrence to produce `{flow.goal_handle}`. "
+            "Producing a decision handle does not itself establish the substantive claim.",
+            f"The intended trust transition is `{style.trust_from}` → `{style.trust_to}`.",
+        )
+    if line.startswith("steps "):
+        return (
+            describe_node(flow.route, registry),
+            route_materialization_summary(flow, style, registry),
+        )
+    if line.startswith("repeat "):
+        repeat = next(
+            (
+                candidate
+                for candidate in flow.repeats
+                if f"repeat {candidate.minimum}..{candidate.maximum}" in line
+            ),
+            None,
+        )
+        if repeat is None:
+            raise ValueError(f"Could not associate repeat line in {flow.name}: {line}")
+        return (
+            f"Runs a bounded repair body at least {repeat.minimum} and at most "
+            f"{repeat.maximum} times. It may terminate when "
+            f"`{repeat.predicate_subject}.{repeat.predicate_status}` holds, and it must "
+            f"track the observable progress measure `{repeat.measure}`. "
+            f"{describe_node(repeat.expression, registry)}",
+            "Each revision creates a new artifact identity; prior execution or assessment "
+            "does not automatically transfer to the revised artifact.",
+        )
+    access_match = erfl.RESOURCE_ACCESS_PATTERN.fullmatch(line)
+    if access_match:
+        occurrence = access_match.group("occurrence")
+        mode = access_match.group("mode")
+        resource = access_match.group("resource")
+        return (
+            f"Declares that occurrence `{occurrence}` consumes resource `{resource}` "
+            f"through `{mode}`. The inverted arrow records access, not an epistemic "
+            "transition or warrant contribution.",
+            "The occurrence must name the resource as an input; runtime resolution, "
+            "version, results, and failures belong in an access receipt.",
+        )
+    persist_match = erfl.RESOURCE_PERSIST_PATTERN.fullmatch(line)
+    if persist_match:
+        occurrence = persist_match.group("occurrence")
+        mode = persist_match.group("mode")
+        resource = persist_match.group("resource")
+        return (
+            f"Declares a `{mode}` effect from calibrated occurrence `{occurrence}` to "
+            f"resource `{resource}`. The forward arrow authorizes a possible external "
+            "effect and cannot increase the authority of persisted content.",
+            "Execution must preserve history and emit a persistence receipt identifying "
+            "the exact successor state.",
+        )
+    handler_match = re.match(
+        r"on\s+([A-Za-z_][A-Za-z0-9_.-]*)\.([A-Za-z_][A-Za-z0-9_.-]*)\s*=>",
+        line,
+    )
+    if handler_match:
+        subject, status = handler_match.groups()
+        handler = next(
+            item
+            for item in flow.handlers
+            if item.subject == subject and item.status == status
+        )
+        authority_note = (
+            "The decision is guarded by an `E` calibration occurrence."
+            if subject in aliases and aliases[subject].type_code == "E"
+            else "This branch cannot add warrant beyond its cited occurrence."
+        )
+        return explain_handler(handler, aliases, registry), authority_note
+    if line == "}":
+        return (
+            f"Ends the `{flow.name}` definition.",
+            "All outputs remain limited by their recorded premises, scope, claim ceilings, "
+            "negative findings, and open obligations.",
+        )
+    raise ValueError(f"Unrecognized source line in {flow.name}: {line}")
+
+
+def statement_label(text: str) -> str:
+    """Name a wrapped logical statement without reproducing it on one long line."""
+    if text.startswith("goal "):
+        return "Goal declaration"
+    if text.startswith("steps "):
+        return "Steps expression"
+    if text.startswith("repeat "):
+        return "Bounded repeat"
+    if text.startswith("on "):
+        return "Outcome handler"
+    if text.startswith("@"):
+        return "Resource binding"
+    if "<-" in text:
+        return "Resource access"
+    if "->" in text and re.search(
+        r"-(?:persist|append|put|upsert|checkpoint|invalidate|promote|commit)->",
+        text,
+    ):
+        return "Persistence effect"
+    return "ERFL statement"
+
+
+def interpreted_source_entries(source_text: str) -> List[Tuple[int, int, str, str]]:
+    """Pair logical statements with their original, possibly multiline source."""
+    physical_lines = source_text.splitlines()
+    statements = erfl.scan_document_statements(source_text)
+    covered_lines = {
+        line_no
+        for statement in statements
+        for line_no in range(statement.start_line, statement.end_line + 1)
+    }
+    entries: List[Tuple[int, int, str, str]] = []
+    for statement in statements:
+        original = "\n".join(
+            physical_lines[statement.start_line - 1 : statement.end_line]
+        )
+        entries.append(
+            (statement.start_line, statement.end_line, original, statement.text)
+        )
+    for line_no, raw_line in enumerate(physical_lines, 1):
+        if line_no not in covered_lines and raw_line.strip().startswith("#"):
+            entries.append((line_no, line_no, raw_line, raw_line.strip()))
+    return sorted(entries, key=lambda entry: entry[0])
+
+
+def flow_affinities(
+    style: ReasoningStyle,
+    loops: Sequence[LoopContract],
+    *,
+    limit: int = 4,
+) -> List[Tuple[LoopContract, List[str]]]:
+    """Rank operational loops by exact owner-skill overlap with one style."""
+    ranked: List[Tuple[LoopContract, List[str]]] = []
+    for loop in loops:
+        overlap = sorted(style.all_skills.intersection(loop.required_owner_skills))
+        if overlap:
+            ranked.append((loop, overlap))
+    ranked.sort(key=lambda item: (-len(item[1]), item[0].loop_id))
+    return ranked[:limit]
+
+
+def loop_affinities(
+    loop: LoopContract,
+    styles: Sequence[ReasoningStyle],
+    *,
+    limit: int = 3,
+) -> List[Tuple[ReasoningStyle, List[str]]]:
+    """Rank epistemic profiles by exact skill overlap with one operational loop."""
+    ranked: List[Tuple[ReasoningStyle, List[str]]] = []
+    for style in styles:
+        overlap = sorted(style.all_skills.intersection(loop.required_owner_skills))
+        if overlap:
+            ranked.append((style, overlap))
+    ranked.sort(key=lambda item: (-len(item[1]), item[0].style_id))
+    return ranked[:limit]
+
+
+def render_materialization_table(
+    flow: erfl.Flow,
+    style: ReasoningStyle,
+    registry: Mapping[str, Any],
+) -> List[str]:
+    """Render the complete occurrence-to-skill materialization table."""
+    rows = [
+        "| Occurrence | Epistemic operation | Inputs → outputs | Candidate skill materializations |",
+        "| --- | --- | --- | --- |",
+    ]
+    all_occurrences = erfl.occurrences(flow.route)
+    for repeat in flow.repeats:
+        all_occurrences.extend(erfl.occurrences(repeat.expression))
+    for occurrence in all_occurrences:
+        primitive, skills = materializations_for_occurrence(occurrence, style, registry)
+        inputs = ", ".join(port.name for port in occurrence.inputs) or "∅"
+        outputs = ", ".join(port.name for port in occurrence.outputs) or "∅"
+        skill_text = ", ".join(f"`{skill}`" for skill in skills) if skills else "—"
+        rows.append(
+            f"| `{occurrence.alias}:{occurrence.type_code}` | `{primitive}` | "
+            f"`{inputs}` → `{outputs}` | {skill_text} |"
+        )
+    return rows
+
+
+def render_flow_section(
+    source_path: Path,
+    source_text: str,
+    flow: erfl.Flow,
+    style: ReasoningStyle,
+    registry: Mapping[str, Any],
+    validation: Mapping[str, Any],
+) -> List[str]:
+    """Render one canonical flow and its skill-independent interpretation."""
+    lines: List[str] = [f"## {flow.name}", ""]
+    lines.extend(
+        [
+            f"**Function:** {style.goal}",
+            "",
+            f"**Projection status:** `{validation['projection_status']}`",
+            "",
+            f"**Trust transition:** `{style.trust_from}` → `{style.trust_to}`",
+            "",
+            "**Source references:** "
+            f"`{relative(source_path)}`, `{relative(REASONING_TYPES_FILE)}`, "
+            f"`{relative(ERFL_REGISTRY_FILE)}`",
+            "",
+        ]
+    )
+    lines.extend(
+        [
+            "```erfl",
+            source_text.rstrip(),
+            "```",
+            "",
+            "### Statement-by-statement interpretation",
+            "",
+        ]
+    )
+    for index, (start_line, end_line, original, logical_text) in enumerate(
+        interpreted_source_entries(source_text), 1
+    ):
+        semantic, _ = explain_source_line(logical_text, flow, style, registry)
+        if start_line == end_line and "SPDX-" not in original:
+            lines.extend([f"{index}. `{original.strip()}`", ""])
+        else:
+            lines.extend(
+                [
+                    f"{index}. **{statement_label(logical_text)}** "
+                    f"(source lines {start_line}–{end_line})",
+                    "",
+                    "   ```erfl",
+                    *[f"   {source_line}" for source_line in original.splitlines()],
+                    "   ```",
+                    "",
+                ]
+            )
+        lines.extend(
+            [
+                f"   {semantic}",
+                "",
+            ]
+        )
+    return lines
+
+
+def relation_signature(node: erfl.Node) -> List[str]:
+    """Collect relations in stable source order for a collapsed predicate map."""
+    values: List[str] = []
+    if isinstance(node, erfl.SequenceNode):
+        for index, child in enumerate(node.children):
+            values.extend(relation_signature(child))
+            if index < len(node.relations):
+                values.append(node.relations[index])
+    elif not isinstance(node, erfl.Occurrence):
+        for child in node.children:
+            values.extend(relation_signature(child))
+    return stable_unique(values)
+
+
+def render_predicate_map(
+    parsed: Sequence[Tuple[Path, str, erfl.Flow, ReasoningStyle, Dict[str, Any]]],
+) -> List[str]:
+    """Render the non-executing whole-system relation-signature projection."""
+    lines = [
+        "## Whole-system predicate map",
+        "",
+        "This generated projection collapses each `steps` expression to its ordered "
+        "relation signature and named terminal output. Mathformer currently declares "
+        "no normative cross-program handoffs, so every output ends at `terminal`; the "
+        "renderer does not infer workflow links from shared skills or handles.",
+        "",
+        "```erfl",
+        "map mathformer {",
+    ]
+    for _, _, flow, _, _ in parsed:
+        relations = relation_signature(flow.route)
+        for repeat in flow.repeats:
+            relations.extend(relation_signature(repeat.expression))
+        relations = stable_unique(relations)
+        relation_text = ", ".join(relations) if relations else "requires"
+        output = f"output::{flow.name}.{flow.goal_handle}"
+        lines.extend(
+            [
+                f"  reasoning::{flow.name} -{relation_text}> {output}",
+                f"       -> {output} -> terminal",
+                "",
+            ]
+        )
+    lines.extend(["}", "```", ""])
+    return lines
+
+
+def render_materialization_section(
+    flow: erfl.Flow,
+    style: ReasoningStyle,
+    loops: Sequence[LoopContract],
+    registry: Mapping[str, Any],
+) -> List[str]:
+    """Render operational bindings for one semantic profile."""
+    affinities = flow_affinities(style, loops)
+    if affinities:
+        affinity_text = "; ".join(
+            f"`{loop.loop_id}` ({len(overlap)} shared owner "
+            f"{'skill' if len(overlap) == 1 else 'skills'})"
+            for loop, overlap in affinities
+        )
+    else:
+        affinity_text = "No operational loop has an exact owner-skill overlap."
+    return [
+        f"## {flow.name}",
+        "",
+        f"**Semantic profile:** [all-flows section](ALL_REASONING_FLOWS.md#{flow.name.replace('_', '-')})",
+        "",
+        f"**Operational loop affinities:** {affinity_text}",
+        "",
+        "The table is a one-to-many materialization map, not a required execution "
+        "schedule. A listed skill is a candidate implementation of the occurrence; "
+        "the semantic profile remains backend- and agent-independent.",
+        "",
+        *render_materialization_table(flow, style, registry),
+        "",
+    ]
+
+
+def render_operational_appendix(
+    loops: Sequence[LoopContract],
+    styles: Sequence[ReasoningStyle],
+) -> List[str]:
+    """Render every operational loop contract as a cross-reference appendix."""
+    lines = [
+        "## Operational workflow cross-reference",
+        "",
+        "`skills/SKILL_HOOKS.yaml` defines operational loop contracts: required hooks "
+        "and owner skills that make repository execution controllable. These loops are "
+        "not additional ERFL programs. The affinities below are computed from exact skill "
+        "overlap and therefore indicate likely materialization, not semantic identity.",
+        "",
+    ]
+    for loop in loops:
+        affinities = loop_affinities(loop, styles)
+        if affinities:
+            affinity_text = "; ".join(
+                f"`{style.style_id}` ({len(overlap)} shared "
+                f"{'skill' if len(overlap) == 1 else 'skills'}: "
+                f"{', '.join(f'`{skill}`' for skill in overlap)})"
+                for style, overlap in affinities
+            )
+        else:
+            affinity_text = "No exact skill-overlap affinity is currently registered."
+        hooks = ", ".join(f"`{hook}`" for hook in loop.required_hooks) or "None"
+        skills = (
+            ", ".join(f"`{skill}`" for skill in loop.required_owner_skills) or "None"
+        )
+        recommended = (
+            ", ".join(f"`{hook}`" for hook in loop.recommended_hooks) or "None"
+        )
+        lines.extend(
+            [
+                f"### {loop.loop_id}",
+                "",
+                f"**Purpose:** {loop.description}.",
+                "",
+                f"**Contract size:** {len(loop.required_hooks)} required hooks and "
+                f"{len(loop.required_owner_skills)} required owner skills.",
+                "",
+                f"**Required hooks:** {hooks}",
+                "",
+                f"**Required owner skills:** {skills}",
+                "",
+                f"**Recommended hooks:** {recommended}",
+                "",
+                f"**Closest epistemic profiles:** {affinity_text}",
+                "",
+                "**Interpretation:** This contract specifies the operational capabilities "
+                "that must be present. It does not assert that the hooks form a total "
+                "temporal order, that they ran, or that their outputs satisfy an ERFL goal.",
+                "",
+            ]
+        )
+    return lines
+
+
+def assert_semantic_catalogue_boundary(
+    content: str,
+    styles: Sequence[ReasoningStyle],
+    loops: Sequence[LoopContract],
+) -> None:
+    """Reject canonical implementation identifiers in the semantic catalogue."""
+    forbidden: Set[str] = set()
+    for style in styles:
+        forbidden.update(style.all_skills)
+    for loop in loops:
+        forbidden.add(loop.loop_id)
+        forbidden.update(loop.required_hooks)
+        forbidden.update(loop.recommended_hooks)
+    action_source = ACTION_REGISTRY_FILE.read_text(encoding="utf-8")
+    forbidden.update(re.findall(r'action\(\s*"([^"]+)"', action_source))
+    contamination = sorted(
+        identifier for identifier in forbidden if identifier in content
+    )
+    if contamination:
+        raise ValueError(
+            "Semantic catalogue contains canonical implementation identifiers: "
+            f"{contamination}"
+        )
+
+
+def render_catalog(flows_dir: Path) -> Tuple[str, str, Dict[str, Any]]:
+    """Validate all sources and render semantic and operational catalogues."""
+    registry = erfl.load_registry(ERFL_REGISTRY_FILE)
+    registry_findings = erfl.validate_registries(registry)
+    if registry_findings:
+        raise ValueError(
+            "ERFL registry alignment failed: "
+            + json.dumps(registry_findings, sort_keys=True)
+        )
+    styles = parse_reasoning_styles(REASONING_TYPES_FILE)
+    loops = parse_loop_contracts(SKILL_HOOKS_FILE)
+    style_by_id = {style.style_id: style for style in styles}
+    sources = {path.stem: path for path in sorted(flows_dir.glob("*.rflow"))}
+    missing_profiles = sorted(set(style_by_id) - set(sources))
+    extra_profiles = sorted(set(sources) - set(style_by_id))
+    if missing_profiles or extra_profiles:
+        raise ValueError(
+            "Reasoning style/profile mismatch: "
+            f"missing_profiles={missing_profiles}, extra_profiles={extra_profiles}"
+        )
+
+    parsed: List[Tuple[Path, str, erfl.Flow, ReasoningStyle, Dict[str, Any]]] = []
+    for style in styles:
+        source_path = sources[style.style_id]
+        source_text = source_path.read_text(encoding="utf-8")
+        flow = erfl.parse_document(source_text)
+        if flow.name != style.style_id:
+            raise ValueError(
+                f"Flow {relative(source_path)} declares {flow.name}, expected {style.style_id}"
+            )
+        validation = erfl.validate_flow(flow, registry=registry, strict=True)
+        if not validation["ok"]:
+            raise ValueError(
+                f"Flow {flow.name} is invalid: "
+                + json.dumps(validation["findings"], sort_keys=True)
+            )
+        parsed.append((source_path, source_text, flow, style, validation))
+
+    profile_index = [
+        f"- [`{flow.name}`](#{flow.name.replace('_', '-')})"
+        for _, _, flow, _, _ in parsed
+    ]
+    lines: List[str] = [
+        "<!--",
+        "# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>",
+        "#",
+        "# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>",
+        "# Neuro-symbolic AI Group",
+        "#",
+        # REUSE-IgnoreStart
+        "# SPDX-License-Identifier: MIT",
+        # REUSE-IgnoreEnd
+        "-->",
+        "",
+        "<!-- Generated by skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py. -->",
+        "",
+        "# All Mathformer reasoning flows",
+        "",
+        "This single-file reference contains every canonical epistemic reasoning-flow "
+        "profile represented in Mathformer ERFL 0.3. It is generated from the `.rflow` "
+        "sources, the reasoning-style registry, and the ERFL semantic registry. Edit "
+        "those sources rather than this file.",
+        "",
+        f"Catalog coverage: **{len(parsed)} canonical ERFL profiles**.",
+        "",
+        "This catalogue follows the supplied ERFL 0.2 reference's semantic-document "
+        "boundary: it contains occurrence graphs and their epistemic interpretations, "
+        "not implementation schedules. Mathformer's 0.2→0.3 conformance and extension "
+        "map is recorded in `skills/control/reasoning-flow-language/references/erfl-0.3.json`.",
+        "",
+        "An underscore occurrence (`_`) is an unresolved projection gap. A gap-bearing "
+        "flow is descriptive and non-executable; it cannot license acceptance or an "
+        "inferred reasoning type.",
+        "",
+        "Repository skill, hook, action, and operational-loop mappings are generated "
+        "separately in [Reasoning flow materializations](REASONING_FLOW_MATERIALIZATIONS.md). "
+        "These profiles remain independent workflow abstractions; scope and authority may "
+        "move between them only through explicit, claim-conserving handoffs.",
+        "",
+        "## Cross-cutting workflow extensions",
+        "",
+        "Two cross-cutting designs refine how workflows expose higher-order change and "
+        "external knowledge resources. Their ERFL 0.3 semantics are applied in the "
+        "canonical profiles below:",
+        "",
+        "- [Reflective refinement](REFLECTIVE_REFINEMENT.md) models reasoning change as an "
+        "immutable baseline/delta/candidate transition with independent testing and governed "
+        "adoption. This structure is applied to "
+        "[`trajectory_reflection_and_process_improvement`](#trajectory-reflection-and-process-improvement).",
+        "- [Knowledge resources in reasoning flows](KNOWLEDGE_RESOURCES_IN_REASONING_FLOWS.md) "
+        "defines the `@KB`/`@SEARCH`/`@STORE` bindings, inverted access arrows, calibrated "
+        "persistence arrows, and explicit snapshot/manifest/receipt pattern applied in "
+        "the profiles below. Resource arrows declare access or guarded effects and never "
+        "carry epistemic warrant.",
+        "",
+        "## Canonical profile index",
+        "",
+        *profile_index,
+        "",
+    ]
+    lines.extend(render_predicate_map(parsed))
+    for source_path, source_text, flow, style, validation in parsed:
+        lines.extend(
+            render_flow_section(
+                source_path,
+                source_text,
+                flow,
+                style,
+                registry,
+                validation,
+            )
+        )
+    content = "\n".join(lines).rstrip() + "\n"
+    assert_semantic_catalogue_boundary(content, styles, loops)
+
+    materialization_profile_index = [
+        f"- [`{flow.name}`](#{flow.name.replace('_', '-')})"
+        for _, _, flow, _, _ in parsed
+    ]
+    loop_index = [
+        f"- [`{loop.loop_id}`](#{loop.loop_id.replace('_', '-')})" for loop in loops
+    ]
+    materialization_lines: List[str] = [
+        "<!--",
+        "# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>",
+        "#",
+        "# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>",
+        "# Neuro-symbolic AI Group",
+        "#",
+        # REUSE-IgnoreStart
+        "# SPDX-License-Identifier: MIT",
+        # REUSE-IgnoreEnd
+        "-->",
+        "",
+        "<!-- Generated by skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py. -->",
+        "",
+        "# Reasoning flow materializations",
+        "",
+        "This operational cross-reference maps canonical epistemic occurrences to "
+        "candidate repository skills and controlled loop contracts. It is generated "
+        "separately from [All Mathformer reasoning flows](ALL_REASONING_FLOWS.md) so "
+        "implementation names, hook ownership, and scheduling cannot become part of "
+        "the reasoning language's semantics.",
+        "",
+        f"Coverage: **{len(parsed)} semantic profiles** and "
+        f"**{len(loops)} operational loop contracts**.",
+        "",
+        "A declared materialization is a possibility, not evidence that the capability "
+        "ran or that the semantic goal was achieved.",
+        "",
+        "## Profile materialization index",
+        "",
+        *materialization_profile_index,
+        "",
+        "## Operational loop index",
+        "",
+        *loop_index,
+        "",
+    ]
+    for _, _, flow, style, _ in parsed:
+        materialization_lines.extend(
+            render_materialization_section(flow, style, loops, registry)
+        )
+    materialization_lines.extend(render_operational_appendix(loops, styles))
+    materializations = "\n".join(materialization_lines).rstrip() + "\n"
+    metadata = {
+        "profile_count": len(parsed),
+        "profile_ids": [flow.name for _, _, flow, _, _ in parsed],
+        "loop_contract_count": len(loops),
+        "loop_contract_ids": [loop.loop_id for loop in loops],
+        "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        "materializations_sha256": hashlib.sha256(
+            materializations.encode("utf-8")
+        ).hexdigest(),
+        "semantic_forbidden_identifier_count": 0,
+    }
+    return content, materializations, metadata
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the renderer command-line interface."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--flows-dir", type=Path, default=DEFAULT_FLOWS_DIR)
+    parser.add_argument("--output-file", type=Path, default=DEFAULT_OUTPUT_FILE)
+    parser.add_argument(
+        "--materializations-file",
+        type=Path,
+        default=DEFAULT_MATERIALIZATIONS_FILE,
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Fail if the output file is absent or differs from the generated catalogue.",
+    )
+    parser.add_argument("--json", action="store_true", help="Emit a JSON result.")
+    return parser
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Render or check the canonical semantic and materialization references."""
+    args = build_parser().parse_args(argv)
+    flows_dir = args.flows_dir.resolve()
+    output_file = args.output_file.resolve()
+    materializations_file = args.materializations_file.resolve()
+    try:
+        content, materializations, metadata = render_catalog(flows_dir)
+        if args.check:
+            actual = (
+                output_file.read_text(encoding="utf-8")
+                if output_file.exists()
+                else None
+            )
+            actual_materializations = (
+                materializations_file.read_text(encoding="utf-8")
+                if materializations_file.exists()
+                else None
+            )
+            semantic_synchronized = actual == content
+            materializations_synchronized = actual_materializations == materializations
+            synchronized = semantic_synchronized and materializations_synchronized
+            ok = synchronized
+            action = "checked"
+            if not synchronized:
+                message = (
+                    "One or more catalogues are missing or stale: "
+                    f"{relative(output_file)}, {relative(materializations_file)}; "
+                    "run the renderer without --check."
+                )
+            else:
+                message = (
+                    "Catalogues are synchronized: "
+                    f"{relative(output_file)}, {relative(materializations_file)}"
+                )
+        else:
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            output_file.write_text(content, encoding="utf-8")
+            materializations_file.parent.mkdir(parents=True, exist_ok=True)
+            materializations_file.write_text(materializations, encoding="utf-8")
+            semantic_synchronized = True
+            materializations_synchronized = True
+            synchronized = True
+            ok = True
+            action = "rendered"
+            message = (
+                "Rendered catalogues: "
+                f"{relative(output_file)}, {relative(materializations_file)}"
+            )
+        payload = {
+            "ok": ok,
+            "action": action,
+            "output_file": relative(output_file),
+            "materializations_file": relative(materializations_file),
+            "semantic_synchronized": semantic_synchronized,
+            "materializations_synchronized": materializations_synchronized,
+            "synchronized": synchronized,
+            **metadata,
+        }
+    except (OSError, ValueError, erfl.FlowSyntaxError) as exc:
+        payload = {
+            "ok": False,
+            "action": "checked" if args.check else "rendered",
+            "output_file": relative(output_file),
+            "materializations_file": relative(materializations_file),
+            "error": str(exc),
+        }
+        message = str(exc)
+
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print(message, file=sys.stdout if payload["ok"] else sys.stderr)
+    return 0 if payload["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

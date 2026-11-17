@@ -1,0 +1,544 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_validate_atp_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected validate.atp route through its single controlled ATP validation action.",
+  "aliases": [
+    "validate.atp"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Match": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "properties": {
+              "route_id": {
+                "const": "validate.atp"
+              },
+              "action_ids": {
+                "const": [
+                  "test:family:atp"
+                ]
+              }
+            }
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "description": "Source-owned mapping of action IDs to native WorkflowAction records.",
+        "additionalProperties": {
+          "type": "object"
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Native optional repository mount; null retains REPO_ROOT."
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "test:family:atp"
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RouteState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "match": {
+      "type": "Match"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "context": {
+      "type": "RunContext"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot",
+      "required": false
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_validate_atp_route_initialize",
+          "operation": "mathformer_validate_atp_route_initialize"
+        }
+      }
+    },
+    "select_action": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "Match"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_validate_atp_route_select_action",
+          "operation": "mathformer_validate_atp_route_select_action"
+        }
+      }
+    },
+    "invoke_action": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot",
+          "required": false
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_validate_atp_route_invoke_action",
+          "operation": "mathformer_validate_atp_route_invoke_action"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_validate_atp_route_advance",
+          "operation": "mathformer_validate_atp_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "Match"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_validate_atp_route_finish",
+          "operation": "mathformer_validate_atp_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "route_actions",
+        "kind": "loop",
+        "description": "One native route action; done is true at the bound, so exhaustion is unreachable.",
+        "state_type": "RouteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select_action",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "invoke",
+              "kind": "call",
+              "operation": "invoke_action",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.invoke.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "RouteState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "RouteState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.route_actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked dispatch behavior only; completion establishes no scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/test_program/run_comprehensive_tests.py",
+        "selector": "run; prepare_checks; advance_check; finalize_checks; publish_report",
+        "digest": "sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a"
+      },
+      {
+        "path": "scripts/validate_atp_route_tools.py",
+        "selector": "register_validate_atp_route_tools; selected_match; checked_registry",
+        "digest": "sha256:96c2f4d15bcca3cd0ffe6e27baa0f7821fb4bafb5d696cc85b16f2ca237dd1c4"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_validate_atp_route_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/workflow_write_audit.py",
+        "selector": "snapshot_repository; audit_snapshots",
+        "digest": "sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "validate_atp_route_descriptor",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_validate_atp_route_workflow_tests.py",
+        "selector": "ATPRouteTests",
+        "digest": "sha256:8a016aaddffd94c2545d71a6c2e8ad774679b5fc030086688f8879689094a528"
+      },
+      {
+        "path": "tests/mcp/fixtures/validate_atp_route_boundary.py",
+        "selector": "serve",
+        "digest": "sha256:fa9153c69eeecce7e0dab7d17223b9b5a658d991e576afdd94449eb16c6b69ae"
+      },
+      {
+        "path": "tests/mcp/fixtures/validate_atp_route_original.py.txt",
+        "selector": "selected source backup route executor and shared helpers",
+        "digest": "sha256:756199a52c7b8024986e042ce3de635c07589390820863d0d1094a83f215316b"
+      }
+    ],
+    "gaps": [
+      "Action internals and downstream matrix traversal remain inside native invoke_action, not separate graph nodes.",
+      "The 3600-second limit and five-call ceiling are Lunar normalization budgets, not native route budgets.",
+      "Complete network/external effects require qualification; capability placeholders are not runtime grants.",
+      "Lunar supplies v1 receipts/digests/provenance; optional native logs alone do not establish them."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "validate.atp",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "validate.atp",
+        "title": "Validate the ATP proof-search family",
+        "action_ids": [
+          "test:family:atp"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Authoritative scripts/mathformer.py::run_intent_match shared helpers and run_action; callable MCP ports restore native dataclasses and repository Path context. Generated YAML describes dispatch only.",
+      "callers": [
+        "scripts/mathformer.py::main (ask --run)",
+        "scripts/mcp_server.py::mathformer_ask",
+        "scripts/mcp_server.py::mathformer_run_workflow"
+      ],
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "failure_policy": "Native child failures remain payload data; unexpected exceptions terminate execution.",
+      "selection": "Already selected validate.atp; route scoring and ambiguity resolution remain native.",
+      "service_controls": "Native-only registry projection, service read-only policy and configured write roots are enforced before non-dry execution.",
+      "invoke_action": "Call native run_action, including admission, preflight, dry-run, the 900-second subprocess, captured output and write auditing. The downstream comprehensive runner owns ordered ATP matrix traversal, default optional-dependency skips, check timeouts, finalization and report publication. Child failures remain payload data; unexpected exceptions propagate. No retries."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "test:family:atp"
+      ],
+      "action_workflows": [
+        "hub_test_family_atp_workflow"
+      ],
+      "bound_behavior": "Exactly one iteration returns normally, including failed-child payloads; keep_going cannot extend it."
+    }
+  }
+}

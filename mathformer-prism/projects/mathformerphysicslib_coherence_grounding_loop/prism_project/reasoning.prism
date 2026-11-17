@@ -1,0 +1,83 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathformerphysicslib_coherence_grounding_loop import (
+    ApiOperabilityReview,
+    ApiReviewBasis,
+    PhysicsOwnershipMap,
+    CoherenceDecisionCase,
+    PhysicsLibraryInventory,
+    CoherenceRepairCase,
+    CoherenceRepairActions,
+    GenerativeCoherenceProbe,
+    GenerativeReviewBasis,
+    IntegrationReview,
+    IntegrationReviewBasis,
+    MathformerPhysicsLibrarySnapshot,
+    PhysicsGroundingCase,
+    PhysicsLibraryGateReport,
+    MathlibReuseAudit,
+    RedefinitionReview,
+    RedefinitionReviewBasis,
+)
+import occurrences as steps
+import relations as links
+
+# Map library ownership and Mathlib reuse, run deterministic and generative
+# coherence reviews, plan controlled repairs, and apply the coherence gate.
+reasoning AssessPhysicsLibraryCoherence(
+    workflow_source: MathformerPhysicsLibrarySnapshot,
+) -> Generated[PhysicsLibraryGateReport]:
+    sequence:
+        # Record modules, concepts, and canonical ownership.
+        [library_inventory: steps.InventoryPhysicsLibrary(workflow_source)]
+        # Identify canonical concepts, aliases, and unresolved ownership conflicts.
+        [ownership_map: steps.CanonicalizePhysicsConcepts(library_inventory.value)] by links.AlignCanonicalConcepts
+        # Establish scope-bound applicability of existing mathlib declarations.
+        [reuse_audit: steps.GroundPhysicsInMathlib(PhysicsGroundingCase(
+            workflow_source = workflow_source,
+            ownership_map = ownership_map.value,
+        ))] by links.AlignWithMathlib
+        parallel:
+            # Assess duplication, shadowing, and redefinition spread.
+            [redefinition_review: steps.AssessRedefinitionRisk(RedefinitionReviewBasis(
+                library_inventory = library_inventory.value,
+                ownership_map = ownership_map.value,
+                reuse_audit = reuse_audit.value,
+            ))] by links.TestRedefinitionRisk
+            # Assess imports, dependency structure, and discoverability.
+            [integration_review: steps.AssessLibraryIntegration(IntegrationReviewBasis(
+                library_inventory = library_inventory.value,
+                ownership_map = ownership_map.value,
+                reuse_audit = reuse_audit.value,
+            ))] by links.TestLibraryIntegration
+            # Assess whether the public physics API is usable in its declared scope.
+            [api_review: steps.AssessPhysicsApi(ApiReviewBasis(
+                library_inventory = library_inventory.value,
+                ownership_map = ownership_map.value,
+                reuse_audit = reuse_audit.value,
+            ))] by links.TestApiOperability
+            # Probe coherence claims while retaining the bounded authority of generative evidence.
+            [coherence_probe: steps.ProbeLibraryCoherence(GenerativeReviewBasis(
+                library_inventory = library_inventory.value,
+                ownership_map = ownership_map.value,
+                reuse_audit = reuse_audit.value,
+            ))] by links.ProbeCoherenceClaims
+        # Propose monotone repairs and explicit revalidation obligations.
+        [repair_actions: steps.PlanCoherenceRepairs(CoherenceRepairCase(
+            redefinition_review = redefinition_review.value,
+            integration_review = integration_review.value,
+            api_review = api_review.value,
+            coherence_probe = coherence_probe.value,
+        ))] by links.ReviseFromCoherenceFindings
+        # Gate the current library and proposed actions without representing the
+        # repair plan itself as repaired code.
+        [gate_report: steps.GatePhysicsLibrary(CoherenceDecisionCase(
+            repair_actions = repair_actions.value,
+            redefinition_review = redefinition_review.value,
+            integration_review = integration_review.value,
+            api_review = api_review.value,
+            coherence_probe = coherence_probe.value,
+        ))] by links.ApplyCoherenceGate
+    return gate_report

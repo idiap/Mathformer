@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from reflection_testing_loop import (
+    ImprovementCase,
+    MathformerWorkflowTrajectoryEvidence,
+    ProcessDisposition,
+    RevisionBasis,
+    RevisionEvidence,
+    RevisionTestCase,
+    TrajectoryAssessment,
+    WorkflowRevision,
+)
+
+# Compare workflow evidence and expose bounded improvement hypotheses.
+type AssessWorkflowTrajectory = (source: MathformerWorkflowTrajectoryEvidence) -> Generated[TrajectoryAssessment]
+
+# Create an immutable candidate revision with explicit preservation obligations.
+type ProposeMonotoneRevision = (source: RevisionBasis) -> Generated[WorkflowRevision]
+
+# Run deterministic and content probes against the candidate revision and baseline cases.
+type TestRevisionAgainstBaseline = (source: RevisionTestCase) -> Generated[RevisionEvidence]
+
+# Adopt, retain experimentally, reject, or block the revision under regression and control constraints.
+type DecideRevisionAdoption = (source: ImprovementCase) -> Generated[ProcessDisposition]

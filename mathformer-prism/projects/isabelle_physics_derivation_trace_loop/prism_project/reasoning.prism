@@ -1,0 +1,78 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from isabelle_physics_derivation_trace_loop import (
+    IsabelleAcceptanceCase,
+    IsabelleMathematicalReview,
+    IsabelleSessionReport,
+    IsabellePhysicsDisposition,
+    IsabelleDerivationPlan,
+    IsabelleGroundingBasis,
+    IsabellePhysicsReview,
+    PhysicalModel,
+    IsabellePhysicsCase,
+    SourceDerivationModel,
+    IsabelleProcessReview,
+    IsabelleFormalizationPacket,
+    IsabelleReflectionCase,
+    IsabelleReviewCase,
+    IsabelleTheory,
+    IsabelleTheoryBasis,
+    PhysicsIsabelleDerivationRequest,
+)
+import occurrences as steps
+import relations as links
+
+# Expand and review a source derivation, prepare its Isabelle formalization
+# packet and physical model, build the theory, review it, and report its status.
+reasoning ReconstructInIsabelle(
+    workflow_source: PhysicsIsabelleDerivationRequest,
+) -> Generated[IsabellePhysicsDisposition]:
+    sequence:
+        # Recover source-anchored physical meaning and applicability scope.
+        [source_model: steps.PrepareSourceDerivation(workflow_source)]
+        parallel:
+            # Expose theorem goals, missing premises, bindings, and side conditions.
+            [formalization_packet: steps.PrepareFormalizationPacket(source_model.value)] by links.PrepareTranslationObligations
+            # Model quantities, dimensions, units, frames, regimes, and laws.
+            [physical_model: steps.ModelPhysicalSystem(source_model.value)] by links.DefinePhysicalModel
+        # Align obligations and physical concepts with applicable Isabelle/HOL material.
+        [isabelle_plan: steps.PlanIsabelleTheory(IsabelleGroundingBasis(
+            formalization_packet = formalization_packet.value,
+            physical_model = physical_model.value,
+        ))] by links.GroundIsabellePlan
+        # Draft an Isabelle theory while retaining open obligations.
+        [theory: steps.DraftIsabelleTheory(IsabelleTheoryBasis(
+            source_model = source_model.value,
+            formalization_packet = formalization_packet.value,
+            isabelle_plan = isabelle_plan.value,
+        ))] by links.DraftIsabelleArtifact
+        # Record session-build evidence and artifact-realness findings.
+        [session_report: steps.RunIsabelleSession(theory.value)] by links.RunIsabelleBuild
+        parallel:
+            # Assess formal hypotheses and obligation coverage.
+            [math_review: steps.ReviewIsabelleMathematics(IsabelleReviewCase(
+                theory = theory.value,
+                session_report = session_report.value,
+                formalization_packet = formalization_packet.value,
+            ))] by links.ReviewMathematicalValidity
+            # Assess preservation of the intended physical meaning.
+            [physics_review: steps.ReviewPhysicsFidelity(IsabellePhysicsCase(
+                theory = theory.value,
+                physical_model = physical_model.value,
+            ))] by links.ReviewPhysicalFidelity
+        # Record process lessons without changing the artifact's authority.
+        [process_review: steps.ReviewIsabelleProcess(IsabelleReflectionCase(
+            math_review = math_review.value,
+            physics_review = physics_review.value,
+        ))] by links.AssessIsabelleProcess
+        # Aggregate session, realness, hypothesis, source, and process findings
+        # into a backend-specific Isabelle physics disposition.
+        [report: steps.ReportIsabellePhysics(IsabelleAcceptanceCase(
+            theory = theory.value,
+            math_review = math_review.value,
+            physics_review = physics_review.value,
+            process_review = process_review.value,
+        ))] by links.SummarizeIsabelleRun
+    return report

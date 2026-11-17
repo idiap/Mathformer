@@ -1,0 +1,623 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_sympy_wiki_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Model main()'s fixed wiki SymPy command loop, stop-on-error aggregation, and final report.",
+  "aliases": [
+    "sympy:wiki"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Options": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "artifact_root": {
+            "type": "string",
+            "minLength": 1,
+            "default": "artifacts/sympy/wiki_sum_first_odd_numbers"
+          },
+          "json": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "options",
+          "python",
+          "commands",
+          "index",
+          "results",
+          "artifacts",
+          "generated"
+        ],
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "artifact_root": {
+                "type": "string",
+                "minLength": 1,
+                "default": "artifacts/sympy/wiki_sum_first_odd_numbers"
+              },
+              "json": {
+                "type": "boolean",
+                "default": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "python": {
+            "type": "string"
+          },
+          "commands": {
+            "type": "array",
+            "minItems": 11,
+            "maxItems": 11,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "argv": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 11
+          },
+          "results": {
+            "type": "array",
+            "maxItems": 11,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "cmd",
+                "ok",
+                "returncode",
+                "duration_ms",
+                "stdout",
+                "stderr"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "cmd": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "returncode": {
+                  "type": "integer"
+                },
+                "duration_ms": {
+                  "type": "number"
+                },
+                "stdout": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "stderr": {
+                  "type": "string",
+                  "maxLength": 4000
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "artifacts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "generated": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "StepResult": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "id",
+          "cmd",
+          "ok",
+          "returncode",
+          "duration_ms",
+          "stdout",
+          "stderr"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "cmd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "returncode": {
+            "type": "integer"
+          },
+          "duration_ms": {
+            "type": "number"
+          },
+          "stdout": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "stderr": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Completion": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "report",
+          "report_path",
+          "exit_code"
+        ],
+        "properties": {
+          "report": {
+            "type": "object",
+            "required": [
+              "ok",
+              "python",
+              "results",
+              "artifacts"
+            ],
+            "properties": {
+              "ok": {
+                "type": "boolean"
+              },
+              "python": {
+                "type": "string"
+              },
+              "results": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "cmd",
+                    "ok",
+                    "returncode",
+                    "duration_ms",
+                    "stdout",
+                    "stderr"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "cmd": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "returncode": {
+                      "type": "integer"
+                    },
+                    "duration_ms": {
+                      "type": "number"
+                    },
+                    "stdout": {
+                      "type": "string",
+                      "maxLength": 4000
+                    },
+                    "stderr": {
+                      "type": "string",
+                      "maxLength": 4000
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "artifacts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "report_path": {
+            "type": "string"
+          },
+          "exit_code": {
+            "enum": [
+              0,
+              1
+            ],
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "options": {
+      "type": "Options"
+    }
+  },
+  "outputs": {
+    "completion": {
+      "type": "Completion",
+      "value": {
+        "ref": "flow.outputs.completion"
+      }
+    }
+  },
+  "operations": {
+    "prepare": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_wiki_prepare",
+          "operation": "mathformer_sympy_wiki_prepare"
+        }
+      }
+    },
+    "execute": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "StepResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_wiki_execute",
+          "operation": "mathformer_sympy_wiki_execute"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "result": {
+          "type": "StepResult"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_wiki_advance",
+          "operation": "mathformer_sympy_wiki_advance"
+        }
+      }
+    },
+    "finalize": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "completion": {
+          "type": "Completion"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_sympy_wiki_finalize",
+          "operation": "mathformer_sympy_wiki_finalize"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare",
+        "kind": "call",
+        "operation": "prepare",
+        "arguments": {
+          "options": {
+            "ref": "inputs.options"
+          }
+        }
+      },
+      {
+        "id": "commands",
+        "kind": "loop",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.prepare.outputs.state"
+        },
+        "max_iterations": 11,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "execute",
+              "kind": "call",
+              "operation": "execute",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "result": {
+                  "ref": "steps.execute.outputs.result"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finalize",
+        "kind": "call",
+        "operation": "finalize",
+        "arguments": {
+          "state": {
+            "ref": "steps.commands.outputs.state"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "completion": {
+        "type": "Completion",
+        "value": {
+          "ref": "steps.finalize.outputs.completion"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs",
+          "artifact_root"
+        ],
+        "write": [
+          "artifact_root",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow",
+        "produce_validation_report"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 24
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked orchestration description only; completion establishes no scientific truth, promotion, or runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/sympy/run_wiki_case.py",
+        "digest": "sha256:868a56cfc9c84da01b47f90fb774c5f51bf135bccc4b5c2bc476e6833027fc84"
+      },
+      {
+        "path": "scripts/sympy_wiki_tools.py",
+        "digest": "sha256:ab97486af46377cb7c5e77fc5fe9c6cd8e2fdb6d9809d0ac497c5c76d1923f49"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Subprocess tool internals, scientific payload validation and complete native external effects are outside this main() projection.",
+      "The required 3600-second contract wall limit is inherited normalization metadata, not a source deadline. Source has only 120 seconds per subprocess; hub timeout is null.",
+      "Mandatory receipts/digests are contract requirements, not capabilities established by the native optional reports."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "sympy:wiki",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md"
+    },
+    "mathformer.execution": {
+      "source": "tests/sympy/run_wiki_case.py:main",
+      "source_tex": "tests/latex/wiki_level/sum_first_odd_numbers.tex",
+      "command_order": [
+        "dependency_probe",
+        "api_index",
+        "parse_source",
+        "model_assumptions",
+        "ground_api",
+        "draft_artifact",
+        "execute_artifact",
+        "validate_identity",
+        "search_counterexamples",
+        "verify_trace",
+        "consistency_report"
+      ],
+      "dependencies": "model_assumptions consumes parse_packet; ground_api consumes api_index; draft consumes parse_packet, assumptions, api_grounding and produces AutoformalizedSumFirstOddNumbers.py. Execution, identity, counterexamples and trace consume that artifact. Consistency consumes it plus parse, assumptions, grounding, draft, execution, identity, counterexamples and trace reports.",
+      "artifacts": "dependency_probe.json; api_index.json; parse_packet.json; assumptions.json; api_grounding.json; draft_report.json; execution_report.json; symbolic_validation.json; counterexample_report.json; trace_verification.json; sympy_consistency_report.json/.md/.html; e2e_report.json",
+      "command_details": "API indexing includes --self-test. Ground concepts: finite_sum, odd_numbers, square, symbolic_simplification, natural_number. Counterexample search uses --max-n 100. Exact argv and path wiring are constructed by prepare from source.",
+      "bound_semantics": "Exactly 11 planned commands, each executed at most once. done is true on failure or the eleventh completion; the source returns normally at that bound. on_exhausted=fail is unreachable for correctly implemented advance.",
+      "artifact_semantics": "Fixed filesystem paths are carried in State and read/written by successive commands; no artifact existence is implied by a planned path or failed run.",
+      "binding_notes": "The CLI and MCP share prepare, execute_step, advance and finalize. MCP validates the fixed plan and command prefix, applies service write policy, and sends native print output to service stderr to preserve stdio transport."
+    },
+    "mathformer.native_boundary": {
+      "execution": "Hub sympy:wiki launches this script with --json, no dependencies, no hub timeout; preflight, dry-run handling and post-execution write audit remain owned by scripts/mathformer.py, outside the selected main() graph.",
+      "direct_cli": "Allows --artifact-root and --json; artifact_root is a host-resolved resource supporting that override.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "failure_policy": "Preserve completion.exit_code=1 on any recorded failed step; exceptions prevent normal completion. A returned failed report is not acceptance.",
+      "other_callers": "Slow deterministic skill tests impose 180 seconds externally; SymPy self-test fallbacks may call main's script when expected artifacts are missing. Neither adds a deadline to main()."
+    }
+  }
+}

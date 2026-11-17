@@ -1,0 +1,240 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Supplied source-original.py SHA256: a785045b139859619da7ed085f5fd1cd3bdb3a3a956a10d62aa8c84ec00c58fe
+from __future__ import annotations
+
+def run_leaf_action(
+    item: WorkflowAction, context: RunContext, extra_args: Sequence[str], *, repository_root=None
+) -> Dict[str, Any]:
+    """Run one non-composed action.
+
+    Motivation:
+        Centralize subprocess behavior so every workflow has the same dry-run,
+        preflight, report, and output semantics.
+
+    Intent:
+        Execute only the argv declared by the registry, plus explicitly allowed
+        extra args, without invoking a shell.
+
+    Inputs:
+        A leaf `WorkflowAction`, runtime context, and optional pass-through args.
+
+    Outputs:
+        A result dictionary containing command, exit code, output, and status.
+    """
+
+    mount = {} if repository_root is None else {"repository_root": repository_root}
+    boundary = prepare_leaf_boundary(item, context, extra_args, **mount)
+    payload = boundary["payload"]
+    if not boundary["execute"]:
+        return payload
+    payload = launch_leaf_boundary(item, payload, **mount)
+    return finish_leaf_boundary(item, boundary, payload, **mount)
+
+def complete_leaf_boundary(payload, returncode, stdout, stderr):
+    """Pack native captured process output for one-shot and staged callers."""
+    payload.update(status="completed", returncode=returncode, stdout=stdout,
+                   stderr=stderr, ok=returncode == 0)
+    return payload
+
+def launch_leaf_boundary(item, payload, *, repository_root=None, environment=None):
+    """Shared one-shot subprocess boundary; unexpected launch errors propagate."""
+    command = payload["argv"]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=REPO_ROOT if repository_root is None else repository_root,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=item.timeout_seconds,
+            **({} if environment is None else {"env": environment}),
+        )
+        complete_leaf_boundary(payload, result.returncode, result.stdout, result.stderr)
+    except subprocess.TimeoutExpired as exc:
+        payload.update(
+            {
+                "status": "timeout",
+                "returncode": None,
+                "stdout": exc.stdout or "",
+                "stderr": exc.stderr or "",
+                "ok": False,
+                "timeout_seconds": item.timeout_seconds,
+            }
+        )
+    return payload
+
+def prepare_leaf_boundary(item, context, extra_args, *, repository_root=None):
+    """Shared preflight and before-snapshot; staged callers may supply their mount.
+
+    Registry admission/argv remain project-owned. Ordinary CLI callers retain
+    the repository default; in-process adapters pass their explicit filesystem
+    context to both snapshot boundaries.
+    """
+    errors = preflight(item, context, extra_args, repository_root=repository_root)
+    command = resolve_command(item.command) + list(extra_args)
+    payload: Dict[str, Any] = {
+        "action": action_to_dict(item),
+        "argv": command,
+        "cwd": rel(REPO_ROOT if repository_root is None else repository_root),
+        "dry_run": context.dry_run,
+        "ok": not errors,
+        "preflight_errors": errors,
+    }
+    if errors:
+        return {"execute": False, "payload": payload, "snapshot": {}}
+    if context.dry_run:
+        payload["status"] = "dry_run"
+        return {"execute": False, "payload": payload, "snapshot": {}}
+
+    return {"execute": True, "payload": payload, "snapshot": snapshot_repository(
+        REPO_ROOT if repository_root is None else repository_root)}
+
+def finish_leaf_boundary(item, boundary, payload, *, repository_root=None):
+    """Audit the same repository mount used by prepare_leaf_boundary."""
+    payload = dict(payload)
+    after_snapshot = snapshot_repository(REPO_ROOT if repository_root is None else repository_root)
+    write_audit = audit_snapshots(
+        boundary["snapshot"],
+        after_snapshot,
+        action_id=item.action_id,
+        safety=item.safety,
+        declared_roots=item.writes,
+    )
+    payload["write_audit"] = write_audit
+    if not write_audit["ok"]:
+        payload["ok"] = False
+        payload["status"] = "undeclared_writes"
+        unexpected = ", ".join(write_audit["unexpected_paths"])
+        message = (
+            f"action {item.action_id} wrote outside its declared roots "
+            f"{list(item.writes)}: {unexpected}"
+        )
+        payload["stderr"] = "\n".join(
+            part for part in (payload.get("stderr", ""), message) if part
+        )
+    return payload
+
+def admit_action(action_id, registry, extra_args=(), seen=None):
+    """Apply native entry guards in order, copying recursion ancestry."""
+    ancestry = set(seen or set())
+    status = "accepted"
+    if action_id not in registry:
+        status = "unknown_action"
+    elif action_id in ancestry:
+        status = "dependency_cycle"
+    else:
+        ancestry.add(action_id)
+        if registry[action_id].depends_on and extra_args:
+            status = "extra_args_for_sequence"
+    return {"accepted": status == "accepted", "status": status,
+            "ancestry": sorted(ancestry)}
+
+def reject_action(action_id, admission):
+    """Return native failure data without executing dependencies."""
+    result = {"ok": False, "status": admission["status"], "action_id": action_id}
+    if admission["status"] == "dependency_cycle":
+        result["cycle"] = sorted(set(admission["ancestry"]) | {action_id})
+    return result
+
+def initialize_dependencies(admission):
+    """Materialize the native iterator and its loop-carried state."""
+    return {"index": 0, "children": [], "dependencies_ok": True,
+            "ancestry": list(admission["ancestry"])}
+
+def visit_dependency(item, registry, context, state, *, repository_root=None):
+    """Visit one registered dependency through the original recursive controller."""
+    mount = {} if repository_root is None else {"repository_root": repository_root}
+    return run_action(item.depends_on[state["index"]], registry, context,
+                      seen=set(state["ancestry"]), **mount)
+
+def advance_dependencies(item, state, child, context):
+    """Append exactly once; a failed dependency never recovers aggregate success."""
+    updated = {"index": state["index"] + 1,
+               "children": [*state["children"], child],
+               "dependencies_ok": state["dependencies_ok"] and bool(child.get("ok", False)),
+               "ancestry": list(state["ancestry"])}
+    done = updated["index"] == len(item.depends_on) or (
+        not child.get("ok", False) and not context.keep_going)
+    return updated, done
+
+def finish_dependencies(item, state):
+    """Return the native sequence envelope; no parent command is implied."""
+    return {"action": action_to_dict(item),
+            "status": "sequence_completed" if state["dependencies_ok"] else "sequence_failed",
+            "ok": state["dependencies_ok"], "children": state["children"]}
+
+def dependency_command_guard(item, state, context):
+    """Shared native predicate for launching a composed action's command."""
+    return bool(item.command) and (state["dependencies_ok"] or context.keep_going)
+
+def aggregate_dependencies(item, state, leaf):
+    """Preserve dependency failure even when the parent's command succeeds."""
+    ok = state["dependencies_ok"] and leaf.get("ok", False)
+    return {"action": action_to_dict(item),
+            "status": "completed_with_dependencies" if ok else "failed_with_dependencies",
+            "ok": ok, "children": state["children"], "leaf": leaf}
+
+def run_action(
+    action_id: str,
+    registry: Mapping[str, WorkflowAction],
+    context: RunContext,
+    *,
+    extra_args: Sequence[str] = (),
+    seen: Optional[Set[str]] = None,
+    repository_root: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Run a registered action or composed workflow sequence.
+
+    Motivation:
+        Let higher-level quality gates reuse smaller controlled actions without
+        duplicating command lists.
+
+    Intent:
+        Resolve the action id, prevent dependency cycles, run dependencies in
+        order, and stop on failure unless keep-going is requested.
+
+    Inputs:
+        The action id, registry, execution context, optional extra args, and
+        recursion guard. An explicit repository_root carries the caller's mount
+        through dependency recursion, preflight, subprocess cwd and write audits;
+        omitted mounts preserve the CLI's repository default.
+
+    Outputs:
+        A result dictionary for the action or sequence.
+    """
+
+    mount = {} if repository_root is None else {"repository_root": repository_root}
+    prepared = prepare_action(action_id, registry, context, extra_args=extra_args, seen=seen, **mount)
+    if 'result' in prepared:
+        return prepared['result']
+    item = registry[action_id]
+    leaf = run_leaf_action(item, context, extra_args, **mount)
+    if 'state' in prepared:
+        return aggregate_dependencies(item, prepared['state'], leaf)
+    return leaf
+
+def prepare_action(action_id, registry, context, *, extra_args=(), seen=None, dependency_runner=None,
+                   repository_root=None):
+    """Shared admission and ordered dependency traversal before leaf preflight.
+
+    Staged in-process callers supply a native dependency runner; the CLI retains
+    visit_dependency and its subprocess execution without a timeout override.
+    """
+    admission = admit_action(action_id, registry, extra_args, seen)
+    if not admission['accepted']:
+        return {'result': reject_action(action_id, admission)}
+    item = registry[action_id]
+    if not item.depends_on:
+        return {}
+    state = initialize_dependencies(admission)
+    mount = {} if repository_root is None else {"repository_root": repository_root}
+    for _child_id in item.depends_on:
+        child = (visit_dependency(item, registry, context, state, **mount) if dependency_runner is None
+                 else dependency_runner(item.depends_on[state['index']], set(state['ancestry'])))
+        state, done = advance_dependencies(item, state, child, context)
+        if done:
+            break
+    if not dependency_command_guard(item, state, context):
+        return {'result': finish_dependencies(item, state)}
+    return {'state': state}

@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+{
+  "schema_version": "mathformer.meta_skills.skill_quality_card.v0.1",
+  "card_id": "meta-skill-task-registry-manager",
+  "subject": "meta-skill-task-registry-manager",
+  "subject_type": "meta_skill",
+  "deterministic_boundary": [
+    "Validates task registry JSON files against local schemas and hub action ids.",
+    "Writes validation reports under artifacts/meta_skills."
+  ],
+  "generative_boundary": [
+    "May suggest task decomposition or registry wording.",
+    "May not declare a generated workflow promoted without lifecycle evidence."
+  ],
+  "epistemic_risks": [
+    "Registry becomes a second router instead of a visible workflow description.",
+    "Registry path checks pass while semantic workflow coverage remains weak."
+  ],
+  "necessary_conditions": [
+    "Task registry schema exists.",
+    "Every controlled action id is known to scripts/mathformer.py.",
+    "Every composed skill path exists or is explicitly marked as meta_skill."
+  ],
+  "sufficiency_claim": "Sufficient for registry structural validity; not sufficient for backend correctness without workflow-specific validators.",
+  "representation_contract": [
+    "Task registries list visible workflows, composed skills, controlled actions, artifacts, validators, generated skills, release boundaries, and risk controls.",
+    "Validators write JSON reports with findings and checked registry count."
+  ],
+  "validation_oracles": [
+    "python meta_skills/scripts/validate_task_registries.py --json",
+    "python tests/meta_skills/run_meta_skill_suite.py --json"
+  ],
+  "failure_modes": [
+    "Unknown controlled action.",
+    "Missing release boundary.",
+    "Generated skill lacks promotion boundary."
+  ],
+  "promotion_gate": {
+    "state": "task_local_validated",
+    "required_evidence": [
+      "task registry validation report",
+      "meta-skill suite report"
+    ],
+    "blocking_conditions": [
+      "registry finding severity is error",
+      "hub action reference missing"
+    ]
+  }
+}

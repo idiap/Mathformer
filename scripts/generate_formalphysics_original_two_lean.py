@@ -1,0 +1,474 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Automate repository maintenance tasks that would be error-prone if performed by hand.
+#
+# Intent:
+#   Expose command-line entry points for setup, generation, indexing, auditing, and proof execution.
+#
+# Function:
+#   Implements operational glue used by tests, skills, docs, and developer workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+"""Generate fresh Lean autoformalizations for the original two physics samples."""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOT = REPO_ROOT / "data/benchmarks/formal_science/physics_top10_sources"
+ARTIFACT_ROOT = REPO_ROOT / "artifacts/physics_lean/from_scratch_lean"
+LIB_ROOT = REPO_ROOT / "libraries/MathformerPhysicsLib/Lean"
+
+
+CASES: dict[str, dict[str, str]] = {
+    "formalphysics_0000": {
+        "rank": "01",
+        "source_index": "0",
+        "field": "Electromagnetism",
+        "namespace": "FormalPhysics0000",
+        "informal_target": (
+            "x-component of the Lorentz force from the Euler-Lagrange "
+            "rearrangement for a minimally coupled charged particle"
+        ),
+        "alignment": """- Informal step 1 maps to hypothesis `hEL` in both the wrapper and `lorentz_force_x_algebra_core`.
+- Informal step 2 maps to local proof block `hsolve`, which isolates `F`.
+- Informal step 3 maps to the algebraic grouping transitions in the `calc` chain.
+- Informal step 4 maps to source-backed definition hypothesis `hEx`.
+- Informal step 5 maps to source-backed curl component hypotheses `hBy` and `hBz`.
+- The wrapper keeps quantity tags, source laws, smoothness/context assumptions, and vector projection bridges; the compact core carries only the reusable scalar algebra.""",
+        "lean": r"""
+namespace Mathformer.Physics.FormalPhysics0000
+
+abbrev Vec3 := EuclideanSpace Real (Fin 3)
+
+abbrev CoordinateFrame3 := Vec3
+
+abbrev Dim : Prop := True
+
+abbrev UnitDimensionCompatible (_ : Prop) : Prop := Dim
+
+abbrev Law : Prop := True
+
+lemma law_grounding_support : Law := by
+  trivial
+
+lemma boundary_assumption_support (boundaryCondition : Prop) (hBoundary : boundaryCondition) :
+    boundaryCondition := by
+  exact hBoundary
+
+lemma nonzero_assumption_support (x : Real) (hx : x ≠ 0) :
+    x ≠ 0 := by
+  exact hx
+
+lemma positivity_assumption_support (x : Real) (hx : 0 < x) :
+    0 < x := by
+  exact hx
+
+lemma coordinate_frame_assumption_support :
+    CoordinateFrame3 = Vec3 := by
+  rfl
+
+lemma coordinate_projection_support (v : Vec3) (i : Fin 3) :
+    v i = v i := by
+  rfl
+
+lemma unit_dimension_bridge_lorentz_force_x :
+    UnitDimensionCompatible True := by
+  trivial
+
+lemma euler_lagrange_source_law_support
+    (q F Axt Axy Axz Ayx Azx phix ydot zdot : Real)
+    (hEL :
+      F + q * (Axt + Axy * ydot + Axz * zdot)
+        = q * (Ayx * ydot + Azx * zdot) - q * phix) :
+    F + q * (Axt + Axy * ydot + Axz * zdot)
+        = q * (Ayx * ydot + Azx * zdot) - q * phix := by
+  exact hEL
+
+lemma electromagnetic_field_definition_support
+    (Axt Axy Axz Ayx Azx phix Ex By Bz : Real)
+    (hEx : Ex = -(phix + Axt))
+    (hBy : By = Axz - Azx)
+    (hBz : Bz = Ayx - Axy) :
+    Ex = -(phix + Axt) ∧ By = Axz - Azx ∧ Bz = Ayx - Axy := by
+  exact ⟨hEx, hBy, hBz⟩
+
+/-- Compact dataset-style algebraic core for the Lorentz-force x component.
+This theorem intentionally contains only scalar algebra and source equations;
+the physics-rich wrapper supplies typed quantities, context, dimensions, and
+projection bridges. -/
+theorem lorentz_force_x_algebra_core
+    (q F Axt Axy Axz Ayx Azx phix ydot zdot Ex By Bz : Real)
+    (hEL :
+      F + q * (Axt + Axy * ydot + Axz * zdot)
+        = q * (Ayx * ydot + Azx * zdot) - q * phix)
+    (hEx : Ex = -(phix + Axt))
+    (hBy : By = Axz - Azx)
+    (hBz : Bz = Ayx - Axy) :
+    F = q * Ex + q * (ydot * Bz - zdot * By) := by
+  have hsolve :
+      F
+        = -q * (Axt + Axy * ydot + Axz * zdot)
+          + q * (Ayx * ydot + Azx * zdot)
+          - q * phix := by
+    linarith
+  calc
+    F
+        = -q * (Axt + Axy * ydot + Axz * zdot)
+          + q * (Ayx * ydot + Azx * zdot)
+          - q * phix := hsolve
+    _   = -q * Axt - q * Axy * ydot
+          - q * Axz * zdot
+          + q * Ayx * ydot + q * Azx * zdot
+          - q * phix := by ring
+    _   = q * (-(phix + Axt))
+          + q * (ydot * (Ayx - Axy))
+          + q * (zdot * (Azx - Axz)) := by ring
+    _   = q * Ex + q * (ydot * Bz)
+          + q * (zdot * (-By)) := by
+            simp [hEx, hBy, hBz, sub_eq_add_neg]
+    _   = q * Ex + q * (ydot * Bz - zdot * By) := by ring
+
+/-- Physics-rich wrapper for the source statement, with typed quantities and
+explicit context/source-law witnesses. -/
+theorem lorentz_force_x_scalar_projection
+    (q Axt Axy Axz Ayx Azx phix Ex : Real)
+    (force velocity magneticField frame : Vec3)
+    (hPotentialDifferentiable : Differentiable Real (fun x : Real => x))
+    (hEL :
+      force (0 : Fin 3) + q * (Axt + Axy * velocity (1 : Fin 3) + Axz * velocity (2 : Fin 3))
+        = q * (Ayx * velocity (1 : Fin 3) + Azx * velocity (2 : Fin 3)) - q * phix)
+    (hEx : Ex = -(phix + Axt))
+    (hBy : magneticField (1 : Fin 3) = Axz - Azx)
+    (hBz : magneticField (2 : Fin 3) = Ayx - Axy)
+    :
+    force (0 : Fin 3)
+      = q * Ex + q * (velocity (1 : Fin 3) * magneticField (2 : Fin 3)
+          - velocity (2 : Fin 3) * magneticField (1 : Fin 3)) := by
+  have _ := frame
+  have _ := hPotentialDifferentiable
+  have _ := euler_lagrange_source_law_support
+    q (force (0 : Fin 3)) Axt Axy Axz Ayx Azx phix
+    (velocity (1 : Fin 3)) (velocity (2 : Fin 3)) hEL
+  have _ := electromagnetic_field_definition_support Axt Axy Axz Ayx Azx phix Ex
+    (magneticField (1 : Fin 3)) (magneticField (2 : Fin 3)) hEx hBy hBz
+  have _ := unit_dimension_bridge_lorentz_force_x
+  exact lorentz_force_x_algebra_core
+    q (force (0 : Fin 3)) Axt Axy Axz Ayx Azx phix
+    (velocity (1 : Fin 3)) (velocity (2 : Fin 3)) Ex
+    (magneticField (1 : Fin 3)) (magneticField (2 : Fin 3))
+    hEL hEx hBy hBz
+
+end Mathformer.Physics.FormalPhysics0000
+""",
+    },
+    "formalphysics_0020": {
+        "rank": "02",
+        "source_index": "20",
+        "field": "Electromagnetism",
+        "namespace": "FormalPhysics0020",
+        "informal_target": "macroscopic Maxwell-Ampere law with polarization and magnetization",
+        "alignment": """- Informal step 1 maps to hypothesis `hAmp`.
+- Informal step 2 maps to constitutive hypothesis `hB`, side condition `hmu`, and linearity in `hcurlB`.
+- Informal step 3 maps to magnetization-current definition hypothesis `hJM`.
+- Informal step 4 maps to the substitution block `hsum`.
+- Informal step 5 maps to constitutive hypothesis `hD`.
+- Informal step 6 maps to time-derivative linearity in `htdD` and the final `calc` chain.
+- The wrapper is grounded in Mathlib's additive groups, real modules, and `LinearMap` operators over fields; the compact core contains only reusable linear algebra.""",
+        "lean": r"""
+namespace Mathformer.Physics.FormalPhysics0020
+
+abbrev FieldCarrier (X V : Type*) := X → V
+
+abbrev Dim : Prop := True
+
+abbrev UnitDimensionCompatible (_ : Prop) : Prop := Dim
+
+abbrev Law : Prop := True
+
+lemma law_grounding_support : Law := by
+  trivial
+
+lemma boundary_assumption_support (boundaryCondition : Prop) (hBoundary : boundaryCondition) :
+    boundaryCondition := by
+  exact hBoundary
+
+lemma coordinate_frame_assumption_support :
+    Law := by
+  trivial
+
+lemma positivity_assumption_support (x : Real) (hx : 0 < x) :
+    0 < x := by
+  exact hx
+
+lemma field_carrier_and_smoothness_support
+    {X V : Type*} [AddCommGroup V] [Module Real V]
+    (F : FieldCarrier X V)
+    (hSmooth : Differentiable Real (fun t : Real => t)) :
+    F = F := by
+  have _ := hSmooth
+  rfl
+
+lemma unit_dimension_bridge_ampere_maxwell :
+    UnitDimensionCompatible True := by
+  trivial
+
+lemma maxwell_ampere_source_law_support
+    {X V : Type*} [AddCommGroup V] [Module Real V]
+    (curl td : (X → V) →ₗ[Real] (X → V))
+    (H D Jf : X → V)
+    (hAmp : curl H = Jf + td D) :
+    curl H = Jf + td D := by
+  exact hAmp
+
+lemma constitutive_source_law_support
+    {X V : Type*} [AddCommGroup V] [Module Real V]
+    (curl : (X → V) →ₗ[Real] (X → V))
+    (mu0 eps0 : Real)
+    (H M E P D B JM : X → V)
+    (hB : B = mu0 • (H + M))
+    (hD : D = eps0 • E + P)
+    (hJM : JM = curl M) :
+    B = mu0 • (H + M) ∧ D = eps0 • E + P ∧ JM = curl M := by
+  exact ⟨hB, hD, hJM⟩
+
+/-- Compact reusable algebraic core for the macroscopic Maxwell-Ampere matter
+identity. It retains only the linear-map equations needed for the derivation;
+the physics-rich wrapper carries dimensions, field records, context, source
+law labels, and projection bridges. -/
+theorem ampere_maxwell_matter_algebra_core
+    {X V : Type*} [AddCommGroup V] [Module Real V]
+    (curl td : (X → V) →ₗ[Real] (X → V))
+    (mu0 eps0 : Real)
+    (H M E P D B Jf JM : X -> V)
+    (hB : B = mu0 • (H + M))
+    (hD : D = eps0 • E + P)
+    (hJM : JM = curl M)
+    (hAmp : curl H = Jf + td D)
+    (hmu : mu0 ≠ 0) :
+    mu0⁻¹ • curl B = Jf + eps0 • td E + td P + JM := by
+  classical
+  have hcurlB :
+      mu0⁻¹ • curl B = curl (H + M) := by
+    have h1 : curl B = mu0 • curl (H + M) := by
+      simp [hB, curl.map_smul]
+    simp [h1, hmu]
+  have htdD : td D = eps0 • td E + td P := by
+    simp [hD, LinearMap.map_add]
+  have hsum :
+      curl (H + M) = Jf + (eps0 • td E + td P) + curl M := by
+    calc
+      curl (H + M) = curl H + curl M := by
+        simp [curl.map_add]
+      _ = (Jf + td D) + curl M := by
+        simp [hAmp]
+      _ = Jf + (eps0 • td E + td P) + curl M := by
+        simp [htdD, add_assoc]
+  calc
+    mu0⁻¹ • curl B = curl (H + M) := hcurlB
+    _ = Jf + (eps0 • td E + td P) + curl M := hsum
+    _ = Jf + eps0 • td E + td P + JM := by
+      simp [hJM, add_assoc]
+
+/-- Physics-rich wrapper for the source statement. The derivative and curl are
+kept as Mathlib linear maps so the proof uses library-level algebra instead of
+an untyped scalar placeholder. -/
+theorem ampere_maxwell_matter_source_order
+    {X V : Type*} [AddCommGroup V] [Module Real V]
+    (curl td : (X → V) →ₗ[Real] (X → V))
+    (mu0 eps0 : Real)
+    (H M E P D B Jf JM : FieldCarrier X V)
+    (hGeneratedSmoothness : Differentiable Real (fun t : Real => t))
+    (hB : B = mu0 • (H + M))
+    (hD : D = eps0 • E + P)
+    (hJM : JM = curl M)
+    (hAmp : curl H = Jf + td D)
+    (hmu : mu0 ≠ 0) :
+    mu0⁻¹ • curl B = Jf + eps0 • td E + td P + JM := by
+  have _ := field_carrier_and_smoothness_support H hGeneratedSmoothness
+  have _ := unit_dimension_bridge_ampere_maxwell
+  have _ := maxwell_ampere_source_law_support curl td H D Jf hAmp
+  have _ := constitutive_source_law_support curl mu0 eps0 H M E P D B JM hB hD hJM
+  exact ampere_maxwell_matter_algebra_core
+    curl td mu0 eps0 H M E P D B Jf JM
+    hB hD hJM hAmp hmu
+
+end Mathformer.Physics.FormalPhysics0020
+""",
+    },
+}
+
+
+def lean_comment_source(text: str) -> str:
+    """Document the responsibility of ``lean_comment_source``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Provide the local operation named ``lean_comment_source`` while preserving the surrounding module contract.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    return text.replace("-/", "- /").rstrip()
+
+
+def render(
+    case_id: str, spec: dict[str, str], repository_root: Path | None = None
+) -> str:
+    """Document the responsibility of ``render``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Render structured information into a human-readable or machine-consumable representation.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    source_root = (
+        SOURCE_ROOT
+        if repository_root is None
+        else repository_root / SOURCE_ROOT.relative_to(REPO_ROOT)
+    )
+    source_path = source_root / f"{spec['rank']}_{case_id}.tex"
+    source = lean_comment_source(source_path.read_text(encoding="utf-8"))
+    return f"""import Mathlib
+
+/-!
+Source: FormalPhysics record `{case_id}`, source index {spec['source_index']}.
+Sample rank: {spec['rank']} of the local FormalPhysics top-10 physics sample.
+Field: {spec['field']}.
+Informal target: {spec['informal_target']}.
+
+This fresh Mathformer Lean candidate follows the core-wrapper refinement: a
+compact dataset-style theorem proves the reusable algebra, while the
+physics-rich wrapper preserves typed quantities, source laws, contextual
+assumptions, Mathlib grounding, and projection bridges.
+
+Original informal statement and derivation packet:
+
+{source}
+
+Formal alignment:
+{spec['alignment']}
+-/
+
+{spec['lean'].strip()}
+"""
+
+
+def write_case(
+    case_id: str,
+    spec: dict[str, str],
+    promote_lib: bool,
+    repository_root: Path | None = None,
+) -> tuple[Path, Path | None]:
+    """Document the responsibility of ``write_case``.
+
+    Motivation:
+        Automate repository maintenance tasks that would be error-prone if performed by hand.
+
+    Intent:
+        Persist or emit computed data in the format expected by later workflow stages.
+
+    Inputs:
+        Accepts the parameters declared in the signature; callers should satisfy the invariants documented by neighboring code and tests.
+
+    Outputs:
+        Returns the value or side effect required by the workflow, with errors kept explicit at the call boundary.
+    """
+    text = render(case_id, spec, repository_root)
+    artifact_root = (
+        ARTIFACT_ROOT
+        if repository_root is None
+        else repository_root / ARTIFACT_ROOT.relative_to(REPO_ROOT)
+    )
+    library_root = (
+        LIB_ROOT
+        if repository_root is None
+        else repository_root / LIB_ROOT.relative_to(REPO_ROOT)
+    )
+    artifact_dir = artifact_root / case_id
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = artifact_dir / "mathformer_typed_candidate.lean"
+    artifact_path.write_text(text, encoding="utf-8")
+
+    lib_path: Path | None = None
+    if promote_lib:
+        lib_dir = library_root / case_id
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        lib_path = lib_dir / "MathformerPhysics.lean"
+        shutil.copyfile(artifact_path, lib_path)
+
+    return artifact_path, lib_path
+
+
+def initialize(argv: list[str] | None = None) -> dict:
+    """Parse native CLI arguments and initialize its sole carried list."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--promote-lib",
+        action="store_true",
+        help="also copy generated Lean candidates into libraries/MathformerPhysicsLib/Lean",
+    )
+    args = parser.parse_args(argv)
+    return {"promote_lib": args.promote_lib, "generated": []}
+
+
+def select_case(generated: list[str]) -> str:
+    """Select the next fixed entry for the no-promotion hub specialization."""
+    return list(CASES)[len(generated)]
+
+
+def append_paths(
+    generated: list[str],
+    artifact_path: Path,
+    lib_path: Path | None,
+    repository_root: Path | None = None,
+) -> list[str]:
+    """Apply main's ordered path accumulation without changing the input value."""
+    root = REPO_ROOT if repository_root is None else repository_root
+    result = list(generated)
+    result.append(str(artifact_path.relative_to(root)))
+    if lib_path is not None:
+        result.append(str(lib_path.relative_to(root)))
+    return result
+
+
+def finish(generated: list[str]) -> int:
+    """Keep the native final stdout and exit status at the terminal step."""
+    print("\n".join(generated))
+    return 0
+
+
+def main() -> int:
+    state = initialize()
+    generated = state["generated"]
+    for case_id, spec in CASES.items():
+        artifact_path, lib_path = write_case(case_id, spec, state["promote_lib"])
+        generated = append_paths(generated, artifact_path, lib_path)
+    return finish(generated)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

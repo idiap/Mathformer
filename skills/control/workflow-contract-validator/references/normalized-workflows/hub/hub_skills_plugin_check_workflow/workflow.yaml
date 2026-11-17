@@ -1,0 +1,340 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_skills_plugin_check_workflow
+version: 1.0.0
+kind: workflow
+description: Compare generated plugin surfaces with their canonical projection, with
+  check=True.
+aliases:
+- skills:plugin-check
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Root:
+    schema:
+      type: string
+      minLength: 1
+    representation: directory
+  Projection:
+    schema:
+      type: object
+      additionalProperties:
+        type: string
+  Paths:
+    schema:
+      type: array
+      items:
+        type: string
+  Flag:
+    schema:
+      type: boolean
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 1
+  CheckResult:
+    schema:
+      type: object
+      required:
+      - ok
+      - mode
+      - changed
+      - exit_code
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        mode:
+          const: check
+        changed:
+          type: array
+          items:
+            type: string
+        exit_code:
+          type: integer
+          enum:
+          - 0
+          - 1
+inputs:
+  root:
+    type: Root
+outputs:
+  differences:
+    type: Paths
+    value:
+      ref: flow.outputs.differences
+  result:
+    type: CheckResult
+    value:
+      ref: flow.outputs.result
+operations:
+  project:
+    inputs:
+      root:
+        type: Root
+    outputs:
+      expected:
+        type: Projection
+      expected_order:
+        type: Paths
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_check_project
+        operation: mathformer_plugin_check_project
+  find_stale:
+    inputs:
+      root:
+        type: Root
+      expected:
+        type: Projection
+    outputs:
+      stale:
+        type: Paths
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_check_find_stale
+        operation: mathformer_plugin_check_find_stale
+  compare:
+    inputs:
+      root:
+        type: Root
+      expected:
+        type: Projection
+      stale:
+        type: Paths
+      expected_order:
+        type: Paths
+    outputs:
+      differences:
+        type: Paths
+      drift:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_check_compare
+        operation: mathformer_plugin_check_compare
+  report:
+    inputs:
+      differences:
+        type: Paths
+      ok:
+        type: Flag
+      exit_code:
+        type: ExitCode
+    outputs:
+      result:
+        type: CheckResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_plugin_check_report
+        operation: mathformer_plugin_check_report
+flow:
+  kind: sequence
+  steps:
+  - id: projection
+    kind: call
+    operation: project
+    arguments:
+      root:
+        ref: inputs.root
+  - id: stale
+    kind: call
+    operation: find_stale
+    arguments:
+      root:
+        ref: inputs.root
+      expected:
+        ref: steps.projection.outputs.expected
+  - id: comparison
+    kind: call
+    operation: compare
+    arguments:
+      root:
+        ref: inputs.root
+      expected:
+        ref: steps.projection.outputs.expected
+      stale:
+        ref: steps.stale.outputs.stale
+      expected_order:
+        ref: steps.projection.outputs.expected_order
+  - id: outcome
+    kind: switch
+    description: main exits 1 on check drift and 0 on parity; both print changed paths.
+    cases:
+    - id: drift
+      when:
+        ref: steps.comparison.outputs.drift
+      body:
+        kind: call
+        operation: report
+        arguments:
+          differences:
+            ref: steps.comparison.outputs.differences
+          ok:
+            literal: false
+          exit_code:
+            literal: 1
+    default:
+      kind: call
+      operation: report
+      arguments:
+        differences:
+          ref: steps.comparison.outputs.differences
+        ok:
+          literal: true
+        exit_code:
+          literal: 0
+    outputs:
+      result:
+        type: CheckResult
+        value:
+          ref: selected.outputs.result
+  outputs:
+    differences:
+      type: Paths
+      value:
+        ref: steps.comparison.outputs.differences
+    result:
+      type: CheckResult
+      value:
+        ref: steps.outcome.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      write: []
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - read_canonical_sources
+    - compare_plugin_projection
+    forbidden:
+    - modify_plugin_files
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 4
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Plugin textual parity only; no scientific validity or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/sync_agent_plugins.py
+    selector: 'synchronize(root: Path, *, check: bool) -> list[str]; expected_files;
+      find_stale; compare_projection; emit_plugin_report; main'
+    digest: sha256:a03705054813e88f8ef2617dcd743b9e40e31a2ef2594fe858811b0d2c68b06c
+  - path: scripts/workflow_catalog.py
+    selector: load_catalog; descriptor_text
+    digest: sha256:0aaeb77013e2e299cfaab4687084101ec815c25a49bcc4fa1286237c0977330a
+  - path: scripts/mathformer.py
+    selector: build_registry skills:plugin-check; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/plugin_check_tools.py
+    selector: register_plugin_check_tools
+    digest: sha256:0905a36a1b9f58eb3f133ddbd725072cf85fa375801b138ce3613389fa915a69
+  - path: scripts/mcp_server.py
+    selector: register_plugin_check_tools(mcp)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: MCP tool inventory
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory skills:plugin-check authored descriptor
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Helper traversals and carried state remain internal to the shared native calls;
+    full Python equivalence is not asserted.
+  - OSError/ValueError aborts dependent operations. Native main prints the error to
+    stderr and exits 1 without success JSON; MCP propagates a tool failure with no
+    workflow outputs.
+  - Hub preflight, dry-run, single-subprocess launch and write audit remain the enclosing
+    native controller boundary, not graph operations. Explicit root selects the checkout
+    normally supplied by REPO_ROOT.
+  - 3600 seconds and four operation calls are host-enforced contract budgets, not
+    native timeout or retry bounds.
+  - MCP reporting retains native serialized JSON on stderr because stdout carries
+    protocol frames. Exit code is transported as result metadata; drift returns ok=false
+    and exit_code=1.
+  - Receipts and provenance are supplied by Lunar runtime; standalone native CLI has
+    only its native observability.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: skills:plugin-check
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: skills:plugin-check
+      summary: Check Codex and Claude plugin discovery, metadata and source parity.
+      family: skills
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - scripts/sync_agent_plugins.py
+      - --check
+      depends_on: []
+      required_paths:
+      - scripts/sync_agent_plugins.py
+      - skills/
+      required_tools: []
+      optional_tools: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: Existing hub controller launches one subprocess after successful preflight;
+      dry-run stops before launch.
+    audit: run_leaf_action audits writes; optional hub reports belong to the enclosing
+      controller.
+    root: Native main supplies REPO_ROOT; explicit root selects the checkout for source
+      filesystem reads.
+    check: true
+    excluded_branch: Non-check writes changed files and deletes stale generated entrypoints
+      with unmanaged-content guards; owned by skills:plugin-sync.
+    routing: NL plugin-check and plugin-sync routes call this action in their existing
+      route order.
+    failure_policy: Preserve nonzero exit, preflight failure and write-audit failure;
+      never treat drift as acceptance.
+# REUSE-IgnoreEnd

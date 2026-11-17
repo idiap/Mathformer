@@ -1,0 +1,344 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_adoption_receipt_validate_workflow
+version: 1.0.0
+kind: workflow
+description: 'Offline validate_invocation projection: parse evidence, check receipt,
+  validate two events and digest joins; return provenance.'
+aliases:
+- adoption:receipt-validate
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Directory:
+    schema:
+      type: string
+    representation: value
+  Receipt:
+    schema:
+      type: object
+      description: Internal bundle of provenance, terminal and exactly two parsed
+        events after identity and exact raw-log digest checks.
+    representation: value
+  Flag:
+    schema:
+      type: boolean
+    representation: value
+  Step:
+    schema:
+      type: string
+      enum:
+      - skill_application_complete
+      - skill_application_error
+  Status:
+    schema:
+      type: string
+      enum:
+      - complete
+      - error
+  Cursor:
+    schema:
+      type: object
+      description: Immutable receipt and terminal expectations plus enumerate cursor;
+        only index/current event advances, no evolving workflow state.
+      required:
+      - receipt
+      - terminal_step
+      - terminal_status
+      - index
+      properties:
+        receipt:
+          type: object
+        terminal_step:
+          type: string
+        terminal_status:
+          type: string
+        index:
+          type: integer
+          minimum: 1
+          maximum: 3
+      additionalProperties: false
+  Provenance:
+    schema:
+      type: object
+      description: Original provenance dictionary, including complete, failed or cancelled
+        recorded status.
+    representation: value
+inputs:
+  directory:
+    type: Directory
+outputs:
+  provenance:
+    type: Provenance
+    value:
+      ref: flow.outputs.provenance
+operations:
+  read_check:
+    inputs:
+      directory:
+        type: Directory
+    outputs:
+      receipt:
+        type: Receipt
+      complete:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_receipt_read_check
+        operation: mathformer_receipt_read_check
+  pack_cursor:
+    inputs:
+      receipt:
+        type: Receipt
+      terminal_step:
+        type: Step
+      terminal_status:
+        type: Status
+    outputs:
+      state:
+        type: Cursor
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_receipt_pack_cursor
+        operation: mathformer_receipt_pack_cursor
+  validate_event:
+    inputs:
+      state:
+        type: Cursor
+    outputs:
+      state:
+        type: Cursor
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_receipt_validate_event
+        operation: mathformer_receipt_validate_event
+  finish_joins:
+    inputs:
+      state:
+        type: Cursor
+    outputs:
+      provenance:
+        type: Provenance
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_receipt_finish_joins
+        operation: mathformer_receipt_finish_joins
+flow:
+  kind: sequence
+  steps:
+  - id: read_check
+    kind: call
+    operation: read_check
+    arguments:
+      directory:
+        ref: inputs.directory
+  - id: expectation
+    kind: switch
+    cases:
+    - id: complete
+      when:
+        ref: steps.read_check.outputs.complete
+      body:
+        kind: call
+        operation: pack_cursor
+        arguments:
+          receipt:
+            ref: steps.read_check.outputs.receipt
+          terminal_step:
+            literal: skill_application_complete
+          terminal_status:
+            literal: complete
+    default:
+      kind: call
+      operation: pack_cursor
+      arguments:
+        receipt:
+          ref: steps.read_check.outputs.receipt
+        terminal_step:
+          literal: skill_application_error
+        terminal_status:
+          literal: error
+    outputs:
+      state:
+        type: Cursor
+        value:
+          ref: selected.outputs.state
+  - id: events
+    kind: loop
+    state_type: Cursor
+    initial:
+      ref: steps.expectation.outputs.state
+    body:
+      kind: call
+      operation: validate_event
+      arguments:
+        state:
+          ref: loop.state
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 2
+    on_exhausted: fail
+    outputs:
+      state:
+        type: Cursor
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish_joins
+    arguments:
+      state:
+        ref: steps.events.outputs.state
+  outputs:
+    provenance:
+      type: Provenance
+      value:
+        ref: steps.finish.outputs.provenance
+policy:
+  effects:
+    filesystem:
+      read:
+      - invocation_directory/provenance.json
+      - invocation_directory/result.json
+      - invocation_directory/reasoning.jsonl
+      write: []
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - read_receipt
+    - validate_receipt
+    forbidden:
+    - execute_recorded_invocation
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Receipt consistency only; valid failed/cancelled receipts return
+    normally. No scientific or runtime qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/control/reasoning-log-schema-guardian/scripts/adoption_provenance.py
+    digest: sha256:a9a24e31ba4fad57a41f4c03417f4488a4f000c28f908aa32752f872a12ba6be
+    selector: validate_invocation
+  - path: scripts/mathformer.py
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/adoption_receipt_validate_tools.py
+    digest: sha256:cdbb89c7a27a414c96039200fc1a288fc04a113885db09b9f5879566abaf9c28
+  - path: scripts/adoption_receipt_render_tools.py
+    digest: sha256:bc2b2c5bf1ed4c4e640c2acdbf8e10716536679495c19410d3ff7bcdfb955f95
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Parsing, recursive strict-JSON helpers and duplicate-key dictionaries stay inside
+    read_check; all supplied JSON/log lines are traversed before the two-event check.
+    No input-size, recursion-depth or parsing-iteration bound exists.
+  - The 3600-second policy limit is inherited normalization metadata, not enforced
+    by validate_invocation; hub timeout is None. Five calls bound this projection,
+    not helper work.
+  - Native validation remains read-only and does not emit workflow events; Lunar owns
+    execution receipts and events for the bound projection.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: adoption:receipt-validate
+    owner_skill: skills/control/reasoning-log-schema-guardian/SKILL.md
+    contract:
+      id: adoption:receipt-validate
+      summary: Validate immutable invocation, result and reasoning joins offline.
+      family: control
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - skills/control/reasoning-log-schema-guardian/scripts/adoption_provenance.py
+      - validate
+      depends_on: []
+      writes: []
+      allows_extra_args: true
+      timeout_seconds: null
+  mathformer.source_semantics:
+    read_check: Read provenance.json then result.json with strict JSON; read exact
+      reasoning bytes, split lines, skip blank lines and parse every remaining line
+      in order. Reject duplicate keys, nonfinite numbers and unsupported values. Parsing
+      accumulates events; helper recursion/dictionaries remain internal.
+    identity_guard: 'Stop on first detected mismatch: both schema versions equal 1;
+      invocation ID is 32 lowercase hex characters; parent is null/string and differs
+      from ID; metadata keys are allowed; canonical metadata/result SHA-256 and exact
+      reasoning-byte SHA-256 match; terminal invocation/parent/status join provenance;
+      terminal status is complete/failed/cancelled; exactly two events.'
+    event_checks: In order, expect start then selected terminal step, event_index
+      1 then 2, matching payload/application invocation and parent IDs, application
+      skill str(metadata.get('skill_id', 'portable-adoption')), equal payload skill,
+      and application running then complete/error status. Stop at first mismatch.
+    cursor_bound: Shared native helpers carry existing locals and enumerate index.
+      Both events are checked once; done is true after event 2. The source entrypoint
+      calls the same helpers. Exhaustion is unreachable for an intact receipt and
+      the authored two-iteration loop.
+    finish: Require start.inputs.metadata_digest and terminal evidence.metadata_digest
+      to equal provenance.metadata_digest; terminal evidence.result_digest equals
+      provenance.result_digest. Return unchanged provenance even for failed/cancelled
+      receipts.
+    failure: First mismatch raises ValueError. OSError, KeyError, TypeError, UnicodeError
+      and JSONDecodeError are converted to ValueError('Incomplete or malformed invocation
+      receipt'); strict-JSON ValueError propagates. Other exceptions retain native
+      propagation; no retry.
+  mathformer.native_boundary:
+    execution: scripts/mathformer.py registers a dependency-free leaf action invoking
+      main(['validate', invocation_dir]); main calls validate_invocation. Preflight
+      failure/dry-run stops before subprocess execution.
+    outputs: 'CLI prints {ok: true, provenance: ...} and exits 0; ValueError prints
+      {ok: false, error: ...} and exits 1. Function output here is provenance, not
+      HubResult.'
+    other_callers:
+    - render_summary
+    - MCP receipt-validation tool
+    - tests
+    qualification_capability_names_are_not_runtime_grants: true
+# REUSE-IgnoreEnd

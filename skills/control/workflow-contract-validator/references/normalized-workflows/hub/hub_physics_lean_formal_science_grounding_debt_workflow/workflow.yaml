@@ -1,0 +1,490 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_lean_formal_science_grounding_debt_workflow
+version: 1.0.0
+kind: workflow
+description: 'Fixed FormalScience grounding-debt validation: three ordered monitor
+  calls, five checks, aggregate report and exit status.'
+aliases:
+- physics-lean:formal-science-grounding-debt
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Boolean:
+    schema:
+      type: boolean
+  CaseId:
+    schema:
+      type: string
+      enum:
+      - 0191
+      - 0059
+  MonitorReport:
+    schema:
+      type: object
+      properties:
+        grounding_debt_report:
+          type: object
+          properties:
+            findings:
+              type: array
+              items:
+                type: object
+                properties:
+                  code:
+                    type: string
+                additionalProperties: true
+          additionalProperties: true
+      additionalProperties: true
+  Checks:
+    schema:
+      type: array
+      minItems: 5
+      maxItems: 5
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+          ok:
+            type: boolean
+          detail:
+            type: object
+        required:
+        - id
+        - ok
+        - detail
+        additionalProperties: false
+  GateReport:
+    schema:
+      type: object
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: formal_science_grounding_debt_gate
+        ok:
+          type: boolean
+        checks:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              ok:
+                type: boolean
+              detail:
+                type: object
+            required:
+            - id
+            - ok
+            - detail
+            additionalProperties: false
+      required:
+      - schema_version
+      - style
+      - ok
+      - checks
+      additionalProperties: false
+  ExitCode:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 1
+  Context:
+    schema:
+      type: object
+      properties:
+        repository_root:
+          type: string
+          minLength: 1
+        allow_mutating:
+          type: boolean
+      required:
+      - repository_root
+      - allow_mutating
+      additionalProperties: false
+  Text:
+    schema:
+      type: string
+inputs:
+  json_output:
+    type: Boolean
+  context:
+    type: Context
+outputs:
+  report:
+    type: GateReport
+    value:
+      ref: flow.outputs.report
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  stdout:
+    type: Text
+    value:
+      ref: flow.outputs.stdout
+operations:
+  monitor_synthetic:
+    inputs:
+      context:
+        type: Context
+    outputs:
+      report:
+        type: MonitorReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_grounding_debt_monitor_synthetic
+        operation: mathformer_grounding_debt_monitor_synthetic
+  monitor_case:
+    inputs:
+      case_id:
+        type: CaseId
+      context:
+        type: Context
+    outputs:
+      report:
+        type: MonitorReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_grounding_debt_monitor_case
+        operation: mathformer_grounding_debt_monitor_case
+  construct_checks:
+    inputs:
+      bad:
+        type: MonitorReport
+      case_0191:
+        type: MonitorReport
+      case_0059:
+        type: MonitorReport
+      context:
+        type: Context
+    outputs:
+      checks:
+        type: Checks
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_grounding_debt_construct_checks
+        operation: mathformer_grounding_debt_construct_checks
+  aggregate:
+    inputs:
+      checks:
+        type: Checks
+    outputs:
+      report:
+        type: GateReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_grounding_debt_aggregate
+        operation: mathformer_grounding_debt_aggregate
+  write_report:
+    inputs:
+      report:
+        type: GateReport
+      context:
+        type: Context
+    outputs:
+      report:
+        type: GateReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_grounding_debt_write_report
+        operation: mathformer_grounding_debt_write_report
+  emit_return:
+    inputs:
+      report:
+        type: GateReport
+      json_output:
+        type: Boolean
+    outputs:
+      exit_code:
+        type: ExitCode
+      stdout:
+        type: Text
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_grounding_debt_emit_return
+        operation: mathformer_grounding_debt_emit_return
+flow:
+  kind: sequence
+  steps:
+  - id: synthetic
+    kind: call
+    operation: monitor_synthetic
+    arguments:
+      context:
+        ref: inputs.context
+  - id: case_0191
+    kind: call
+    operation: monitor_case
+    arguments:
+      case_id:
+        literal: 0191
+      context:
+        ref: inputs.context
+  - id: case_0059
+    kind: call
+    operation: monitor_case
+    arguments:
+      case_id:
+        literal: 0059
+      context:
+        ref: inputs.context
+  - id: checks
+    kind: call
+    operation: construct_checks
+    arguments:
+      bad:
+        ref: steps.synthetic.outputs.report
+      case_0191:
+        ref: steps.case_0191.outputs.report
+      case_0059:
+        ref: steps.case_0059.outputs.report
+      context:
+        ref: inputs.context
+  - id: aggregate
+    kind: call
+    operation: aggregate
+    arguments:
+      checks:
+        ref: steps.checks.outputs.checks
+  - id: write
+    kind: call
+    operation: write_report
+    arguments:
+      report:
+        ref: steps.aggregate.outputs.report
+      context:
+        ref: inputs.context
+  - id: finish
+    kind: switch
+    cases:
+    - id: json
+      when:
+        ref: inputs.json_output
+      body:
+        kind: call
+        operation: emit_return
+        arguments:
+          report:
+            ref: steps.write.outputs.report
+          json_output:
+            literal: true
+    default:
+      kind: call
+      operation: emit_return
+      arguments:
+        report:
+          ref: steps.write.outputs.report
+        json_output:
+          literal: false
+    outputs:
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+      stdout:
+        type: Text
+        value:
+          ref: selected.outputs.stdout
+  outputs:
+    report:
+      type: GateReport
+      value:
+        ref: steps.write.outputs.report
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.finish.outputs.exit_code
+    stdout:
+      type: Text
+      value:
+        ref: steps.finish.outputs.stdout
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/physics_lean/formal_science_grounding_debt/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 7
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked validation description only; passing selected checks
+    establishes neither all findings cleared nor scientific truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/physics_lean/run_formal_science_grounding_debt_gate.py
+    selector: main
+    digest: sha256:c75c1b6deb20142bea2896a810a68d51d696293559c7caff3da64dca85cee529
+  - path: scripts/mathformer.py
+    selector: build_registry/action:physics-lean:formal-science-grounding-debt; run_action;
+      run_leaf_action; preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/physics-lean/physics-lean-drift-pathology-monitor/scripts/monitor_physics_lean_drift_pathologies.py
+    selector: formal_science_grounding_debt_report; emit
+    digest: sha256:e3df2692328944adcf5795e9a94081f2025f5c4907550390428d0d48a1915b46
+  - path: scripts/grounding_debt_tools.py
+    selector: register_grounding_debt_tools; source
+    digest: sha256:c57f786476ab6e235bc34c93cc9e1be9d80d2edffb1de10e2962532c42c336c3
+  - path: scripts/mcp_server.py
+    selector: register_grounding_debt_tools; _analysis_write_policy; _path_allowed
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: 'inventory: authored grounding-debt contract'
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Hub preflight/dry-run and post-execution write audit remain outside this main
+    projection; they can skip execution or additionally mark failure.
+  - The retained 3600-second policy bound is enforced by Lunar around execution; native
+    gate subprocesses and hub registration remain without a timeout.
+  - Contract receipts and artifact digests are supplied by Lunar; native report writing
+    alone does not establish mandatory v1 receipts.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-lean:formal-science-grounding-debt
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: physics-lean:formal-science-grounding-debt
+      family: physics_lean
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/physics_lean/run_formal_science_grounding_debt_gate.py
+      - --json
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: null
+      writes:
+      - artifacts/physics_lean/formal_science_grounding_debt/
+  mathformer.main_semantics:
+    arguments: json_output is argparse --json (default false); the hub fixes it true.
+      Unknown argv are rejected by argparse; hub action rejects extra arguments.
+    synthetic_source: A Hamiltonian source law and Hilbert-space state imply the result.
+    synthetic_lean: 'abbrev Law (_ : Prop) : Prop := True
+
+      abbrev UnitDimensionCompatible (_ : Prop) : Prop := True
+
+      theorem bad (source_law : True) (psi H : Real) (unit_dimension_bridge : UnitDimensionCompatible
+      True) : True := by trivial
+
+      '
+    synthetic_path: libraries/MathformerPhysicsLib/Lean/formalphysics_9999/MathformerPhysics.lean
+    cases:
+      0191:
+        constant: CASE_0191
+        path: MathformerPhysicsLib/Lean/formalphysics_0191/MathformerPhysics.lean
+        source: TDSE product differentiation uses Hilbert states, Hamiltonians, adjoint
+          bra law, ket law, and parameter derivatives.
+      0059:
+        constant: CASE_0059
+        path: MathformerPhysicsLib/Lean/formalphysics_0059/MathformerPhysics.lean
+        source: Calculus of variations uses fixed endpoints, differentiation under
+          the integral, and chain-rule integral substitution.
+    checks:
+    - id: trivial_support_debt_blocks
+      condition: Required codes are a subset of debt_codes(bad).
+      required_codes:
+      - prop_true_support_definition
+      - local_law_shim_true
+      - source_law_typed_true
+    - id: formalphysics_0191_no_true_law_debt
+      condition: Both source_law_typed_true and local_law_shim_true are absent from
+        debt_codes(case_0191).
+    - id: formalphysics_0059_no_true_law_debt
+      condition: Both source_law_typed_true and local_law_shim_true are absent from
+        debt_codes(case_0059).
+    - id: formalphysics_0191_uses_hilbert_foundation_support
+      condition: All four literal fragments occur in CASE_0191.
+      fragments:
+      - import MathformerPhysicsLib.Lean.Foundations
+      - InnerProductSpace ℂ H
+      - HilbertBoundedOperator
+      - TimeDependentSchrodingerProductDifferentiationFrontier
+    - id: formalphysics_0059_exposes_variational_derivative_integral_packet
+      condition: All four literal fragments occur in CASE_0059.
+      fragments:
+      - VariationChainIntegralFrontier
+      - differentiate_under_integral
+      - chain_rule_integral_substitution
+      - fixed_endpoints
+    monitor_internals: 'Owned by monitor operations: traverse Lean lines accumulating
+      debt findings, then optionally add known_object_scalar_placeholder. Findings
+      alone leave monitor exit zero; gate tests only selected codes.'
+    stopping: Exactly three monitor subprocess calls and five checks on normal completion;
+      no refinement loop, carried iteration state, retry or checkpoint. Reports remain
+      available until checks; checks remain in final report.
+    context: The CLI defaults to its source repository. Bound execution supplies an
+      existing absolute repository_root containing the native monitor script and case
+      files. All case and report paths remain source-owned relative paths; no arbitrary
+      output path is accepted.
+  mathformer.native_boundary:
+    execution: Shared native Python steps are exposed through registered MCP tools.
+      Context repository_root selects native input paths and subprocess cwd; allow_mutating
+      and service write roots gate the fixed report path. The graph projects main,
+      outside hub preflight and write audit.
+    effects_status: partial_native_declarations
+    failure_policy: Preserve nonzero gate exit and outer hub failure; no failed check
+      becomes early acceptance.
+# REUSE-IgnoreEnd

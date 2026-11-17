@@ -1,0 +1,634 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_generative_probes_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected generative.probes route through its single controlled validation action.",
+  "aliases": [
+    "generative.probes"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Match": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "properties": {
+              "route_id": {
+                "const": "generative.probes",
+                "type": "string"
+              },
+              "action_ids": {
+                "const": [
+                  "test:generative"
+                ],
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "test:generative": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "family": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "safety": {
+                "type": "string"
+              },
+              "command": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "depends_on": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "required_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "required_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "optional_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "writes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "allows_extra_args": {
+                "type": "boolean"
+              },
+              "timeout_seconds": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "notes": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "summary",
+              "family",
+              "kind",
+              "safety",
+              "command",
+              "depends_on",
+              "required_paths",
+              "required_tools",
+              "optional_tools",
+              "writes",
+              "allows_extra_args",
+              "timeout_seconds",
+              "notes"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "test:generative"
+      }
+    },
+    "IntentState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "ok"
+              ],
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "Match"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot",
+      "required": false
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "IntentState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_probes_initialize",
+          "operation": "mathformer_generative_probes_initialize"
+        }
+      }
+    },
+    "select": {
+      "inputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "match": {
+          "type": "Match"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_probes_select",
+          "operation": "mathformer_generative_probes_select"
+        }
+      }
+    },
+    "invoke": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot",
+          "required": false
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_probes_invoke",
+          "operation": "mathformer_generative_probes_invoke"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_probes_advance",
+          "operation": "mathformer_generative_probes_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "match": {
+          "type": "Match"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_generative_probes_finish",
+          "operation": "mathformer_generative_probes_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "Exact one-action source loop; normal completion, including failure data, sets done before the bound.",
+        "state_type": "IntentState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "invoke",
+              "kind": "call",
+              "operation": "invoke",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.invoke.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "IntentState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "IntentState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked validation description only; no scientific result, runtime qualification or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "complete",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/run_generative.py",
+        "selector": "main; validate",
+        "digest": "sha256:ee9bba99a6e0b2c3e0d1152e161d637a358c20bb801a12dfcec74d5b8e651701"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_ask; mathformer_run_workflow",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/generative_probes_route_tools.py",
+        "selector": "register_generative_probes_route_tools; selected_match; checked_registry; check_state",
+        "digest": "sha256:7dd49d1f9552aab1acee500c2eaea342590985527545fb7b1126d9a3dbcd98bd"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "generative_probes_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": []
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "generative.probes",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "generative.probes",
+        "title": "Run generative skill and content probes",
+        "action_ids": [
+          "test:generative"
+        ],
+        "skill_routes": [
+          "skill-test-program-orchestrator"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Five callable MCP ports reuse the native accumulator helpers and run_action. JSON projections restore native route/action objects; caller-authored executable declarations are rejected.",
+      "callers": [
+        "scripts/mathformer.py:main ask --run",
+        "scripts/mcp_server.py:mathformer_ask",
+        "scripts/mcp_server.py:mathformer_run_workflow"
+      ],
+      "service_write_roots": "Invoke checks declared artifacts/ writes against configured MCP service roots before non-dry execution, including mounted repository roots.",
+      "selection": "Already selected route; canonical build_intent_routes metadata and registry are supplied by native callers.",
+      "mount": "Optional repository_root is forwarded unchanged; absence preserves the native repository default.",
+      "effects_status": "Leaf declares artifacts/ writes; optional caller reports remain caller-owned.",
+      "failure_policy": "Preserve native failure payloads; unexpected exceptions terminate execution."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "test:generative"
+      ],
+      "action_workflows": [
+        "hub_test_generative_workflow"
+      ],
+      "keep_going_semantics": "Stops on failure unless keep_going; this one-action route always stops after its child.",
+      "bound_semantics": "Exact route cardinality is one; done is true at its bound, so on_exhausted is unreachable under native transitions."
+    },
+    "mathformer.operation_semantics": {
+      "initialize": "scripts/mathformer.py:initialize_intent_state initializes {ok: true, children: []}.",
+      "select": "scripts/mathformer.py:select_intent_action selects match.route.action_ids[len(state.children)] from restored native route metadata.",
+      "invoke": "scripts/mathformer.py:run_action, prepare_action and run_leaf_action own admission, preflight, dry-run, launch and write audit, in that order. No dependencies or extra arguments exist for this selected action. Rejection/preflight failure returns failure data without launching; successful dry-run returns without launching or auditing. Otherwise run sys.executable tests/run_generative.py --json in the supplied mount (default REPO_ROOT), with a 900-second subprocess timeout, then audit writes even after timeout. Nonzero exit, timeout or undeclared writes sets child.ok=false; unexpected launch exceptions propagate without final audit. tests/run_generative.py:main/validate loads quality_criteria.json then probes.json, traverses probes.get('probes', []) once in input order, accumulating both missing-required-field and empty-forbidden_claims errors without early stopping. The traversal has no explicit count cap and naturally handles zero probes. It writes artifacts/test_program/generative/probe_validation_report.json, prints JSON, and exits 0 if no errors, otherwise 3. Both --validate-only settings use this path; there are no generative jobs, rubric scoring, retries or convergence. Timing/report/log helpers remain internal. This callable operation retains the native leaf as an opaque boundary.",
+      "advance": "scripts/mathformer.py:advance_intent_state appends the child and ANDs child.ok into sticky state.ok. With action_count=1, done is true after one observation, regardless of keep_going or child success.",
+      "finish": "scripts/mathformer.py:finish_intent_state and intent_match_to_dict pack schema_version=1, aggregate ok, intent_run_completed or intent_run_failed, native route metadata, caller score/matched_terms and ordered children. Missing registry metadata raises as in the source."
+    },
+    "mathformer.runtime_notes": {
+      "notes": [
+        "Admission, preflight, launch, audit and input-length-bounded probe traversal remain inside invoke; no artificial probe cap is imposed.",
+        "The 3600-second policy limit is enforced by Lunar, not a native global deadline; the native subprocess timeout is 900 seconds.",
+        "Lunar owns required receipts, digests and the five-call budget; optional native caller logging and reports remain caller-owned."
+      ]
+    }
+  }
+}

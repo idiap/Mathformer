@@ -1,0 +1,433 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_setup_full_workflow
+version: 1.0.0
+kind: workflow
+description: Execute the selected full local setup route through native controls.
+aliases:
+- setup.full
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  SelectedMatch:
+    schema:
+      type: object
+      description: JSON projection of IntentMatch; retain all native route metadata.
+      properties:
+        route:
+          type: object
+          properties:
+            route_id:
+              type: string
+              const: setup.full
+            action_ids:
+              type: array
+              const:
+              - setup:all
+          required:
+          - route_id
+          - action_ids
+        score:
+          type: number
+        matched_terms:
+          type: array
+          items:
+            type: string
+      required:
+      - route
+      - score
+      - matched_terms
+  Registry:
+    schema:
+      type: object
+      description: Native WorkflowAction mapping; selected registration must be unchanged.
+      properties:
+        setup:all:
+          type: object
+      required:
+      - setup:all
+      additionalProperties:
+        type: object
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+  ActionId:
+    schema:
+      type: string
+      const: setup:all
+  State:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+            properties:
+              ok:
+                type: boolean
+            required:
+            - ok
+      required:
+      - ok
+      - children
+      additionalProperties: false
+  Done:
+    schema:
+      type: boolean
+  ActionCount:
+    schema:
+      type: integer
+      const: 1
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: SelectedMatch
+  registry:
+    type: Registry
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_setup_full_route_initialize
+        operation: mathformer_setup_full_route_initialize
+  select:
+    inputs:
+      state:
+        type: State
+      match:
+        type: SelectedMatch
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_setup_full_route_select
+        operation: mathformer_setup_full_route_select
+  run_child:
+    inputs:
+      action_id:
+        type: ActionId
+      registry:
+        type: Registry
+      context:
+        type: RunContext
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_setup_full_route_run_child
+        operation: mathformer_setup_full_route_run_child
+  advance:
+    inputs:
+      state:
+        type: State
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+      action_count:
+        type: ActionCount
+    outputs:
+      state:
+        type: State
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_setup_full_route_advance
+        operation: mathformer_setup_full_route_advance
+  finish:
+    inputs:
+      state:
+        type: State
+      match:
+        type: SelectedMatch
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_setup_full_route_finish
+        operation: mathformer_setup_full_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: Native ordered action traversal specialized to the one-action route.
+      advance sets done at one observation for either success or failure; keep_going
+      cannot extend the route. Exhaustion is unreachable with the native advance function.
+    state_type: State
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: run_child
+        kind: call
+        operation: run_child
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          registry:
+            ref: inputs.registry
+          context:
+            ref: inputs.context
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.run_child.outputs.child
+          context:
+            ref: inputs.context
+          action_count:
+            literal: 1
+      outputs:
+        state:
+          type: State
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Done
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: State
+        value:
+          ref: loop.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - .lake/
+      - .venv/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked setup description; completion establishes no scientific
+    truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: initialize_intent_state; select_intent_action; advance_intent_state;
+      finish_intent_state; build_registry; build_intent_routes; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/install_env.py
+    selector: main; initialize; install_python; setup_lean; complete
+    digest: sha256:2c8a00fbf461dddcb10899271ca41d47bf90c9a077b47add7db3c250aab1a5fd
+  - path: scripts/mcp_server.py
+    selector: register_setup_full_route_tools; mathformer_ask; mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/setup_full_route_tools.py
+    selector: register_setup_full_route_tools; selected_match; checked_registry; check_state
+    digest: sha256:0b897681aa4d0b4600f11734f9e6896d208281bfe8d13f1d588fa3f4733ac522
+  - path: scripts/adoption_check_tools.py
+    selector: Context
+    digest: sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac
+  - path: scripts/workflow_write_audit.py
+    selector: snapshot_repository; audit_snapshots
+    digest: sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: setup_full_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_setup_full_route_workflow_tests.py
+    selector: SetupRouteTests
+    digest: sha256:d1b23a2f0afcbba6212ab808ad690a12589c1b8fd31c8b871c530f7b40dda6d3
+  - path: tests/mcp/fixtures/setup_full_route_boundary.py
+    selector: boundary; serve
+    digest: sha256:0ebd9fd3a847ac09b84fd35ead67fccc3b4de44366f3fba98feff2904a8df2d0
+  - path: tests/mcp/fixtures/setup_full_route_original.py.txt
+    selector: frozen selected source and shared state helpers
+    digest: sha256:f072a7e59eb8531cd0fda9333c056ffc17000686f2b98ae814d0d94ccf5f6531
+  gaps:
+  - Action and installer internals remain inside the native run_action and its subprocess
+    rather than expanded into graph nodes.
+  - Lunar enforces the declared 3600-second ceiling and five-operation budget; neither
+    is a native global limit. The native action subprocess timeout remains None.
+  - Lunar provides graph receipts and provenance. Native output capture, route metadata,
+    negative results and repository write audit remain source-owned. Environment effects
+    still require deployment qualification; capability placeholder names are not grants.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: setup.full
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: setup.full
+      title: Set up the full local development environment
+      action_ids:
+      - setup:all
+  mathformer.native_boundary:
+    execution: Registered mathformer_setup_full_route_* tools share native intent-state
+      helpers and run_action with scripts/mathformer.py:run_intent_match.
+    callers:
+    - CLI main ask --run
+    - scripts/mcp_server.py:mathformer_ask
+    - scripts/mcp_server.py:mathformer_run_workflow
+    dispatch: Native MCP resolves the normalized identity, rejects route extra arguments,
+      and checks service write roots. Bound run_child also checks service read-only
+      policy and write roots; RunContext retains native mutation authorization and
+      dry-run.
+    scope: Already selected native route; NL scoring and caller admission stay outside
+      this graph.
+    failure_policy: Return native negative results unchanged; exceptions terminate
+      execution.
+    hydration: SelectedMatch restores the canonical native route and preserves score/matched_terms.
+      Supplied route fields and full registry declarations must match their native
+      values; JSON cannot supply executable code.
+    context: All five RunContext flags, selected match, exact native registry projection
+      and nullable repository_root are explicit ports. Null preserves the native default
+      repository mount.
+  mathformer.composition:
+    ordered_actions:
+    - setup:all
+    action_workflows:
+    - hub_setup_all_workflow
+    bound: One action is fixed by SelectedMatch; after its result done is true, so
+      exhaustion is unreachable and returns normally even on ok=false.
+    keep_going_semantics: Cannot add work to this one-action route; aggregate failure
+      stays sticky.
+  mathformer.execute_details:
+    command:
+    - uv
+    - run
+    - python
+    - scripts/install_env.py
+    - --all-extras
+    - --with-lean
+    subprocess_timeout_seconds: null
+    boundary: Native required-path, uv discovery and mutation preflight precede execution.
+      Dry-run does not launch. Capture exit code, stdout and stderr, then audit writes.
+      Nonzero exits and undeclared writes become child.ok=false; unexpected launch
+      exceptions propagate. No dependencies, extra arguments or retries.
+    installer: main validates Python >=3.10, creates and verifies the virtual environment,
+      selects and deduplicates all extras, installs them in one checked uv invocation,
+      then resolves lake and runs lake update followed by lake build. Completion is
+      emitted only after success. This fixed route selects Python and Lean; skip branches
+      remain inside the native installer. Missing tools and checked subprocess failures
+      stop execution.
+# REUSE-IgnoreEnd

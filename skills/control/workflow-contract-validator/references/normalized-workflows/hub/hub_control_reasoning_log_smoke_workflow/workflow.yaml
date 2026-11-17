@@ -1,0 +1,463 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_control_reasoning_log_smoke_workflow
+version: 1.0.0
+kind: workflow
+description: Single-pass synthetic reasoning-log smoke test; return seven checks and
+  summaries after temporary artifact cleanup.
+aliases:
+- control:reasoning-log-smoke
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Fixture:
+    schema:
+      type: object
+      properties:
+        log_file:
+          type: string
+        rendered_file:
+          type: string
+        html_file:
+          type: string
+        skill_call_id:
+          type: string
+      required:
+      - log_file
+      - rendered_file
+      - html_file
+      - skill_call_id
+    representation: value
+  Validation:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        summary:
+          type: object
+        findings:
+          type: array
+          items:
+            type: object
+      required:
+      - ok
+      - summary
+      - findings
+    representation: value
+  Rendered:
+    schema:
+      type: object
+      properties:
+        markdown:
+          type: string
+        html:
+          type: string
+        summary:
+          type: object
+          properties:
+            event_count:
+              type: integer
+              minimum: 0
+            skill_invocation_count:
+              type: integer
+              minimum: 0
+            html_bytes:
+              type: integer
+              minimum: 0
+          required:
+          - event_count
+          - skill_invocation_count
+          - html_bytes
+      required:
+      - markdown
+      - html
+      - summary
+    representation: value
+  Coverage:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        skill_count:
+          type: integer
+          minimum: 0
+        script_count:
+          type: integer
+          minimum: 0
+        logging_class_counts:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+        native_logged_script_count:
+          type: integer
+          minimum: 0
+        wrapper_logged_script_count:
+          type: integer
+          minimum: 0
+        missing_skill_count:
+          type: integer
+          minimum: 0
+      required:
+      - ok
+      - skill_count
+      - script_count
+      - logging_class_counts
+      - native_logged_script_count
+      - wrapper_logged_script_count
+      - missing_skill_count
+    representation: value
+  SmokeReport:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        checks:
+          type: object
+          properties:
+            validation_ok:
+              type: boolean
+            render_has_skill:
+              type: boolean
+            render_has_evidence:
+              type: boolean
+            html_render_has_skill:
+              type: boolean
+            html_render_has_filters:
+              type: boolean
+            coverage_ok:
+              type: boolean
+            coverage_has_all_skills:
+              type: boolean
+          required:
+          - validation_ok
+          - render_has_skill
+          - render_has_evidence
+          - html_render_has_skill
+          - html_render_has_filters
+          - coverage_ok
+          - coverage_has_all_skills
+        validation_summary:
+          type: object
+        render_summary:
+          type: object
+          properties:
+            event_count:
+              type: integer
+              minimum: 0
+            skill_invocation_count:
+              type: integer
+              minimum: 0
+            html_bytes:
+              type: integer
+              minimum: 0
+          required:
+          - event_count
+          - skill_invocation_count
+          - html_bytes
+        coverage_summary:
+          type: object
+          properties:
+            skill_count:
+              type: integer
+              minimum: 0
+            script_count:
+              type: integer
+              minimum: 0
+            logging_class_counts:
+              type: object
+              additionalProperties:
+                type: integer
+                minimum: 0
+            native_logged_script_count:
+              type: integer
+              minimum: 0
+            wrapper_logged_script_count:
+              type: integer
+              minimum: 0
+            missing_skill_count:
+              type: integer
+              minimum: 0
+          required:
+          - skill_count
+          - script_count
+          - logging_class_counts
+          - native_logged_script_count
+          - wrapper_logged_script_count
+          - missing_skill_count
+      required:
+      - ok
+      - checks
+      - validation_summary
+      - render_summary
+      - coverage_summary
+    representation: value
+  Context:
+    schema:
+      type: object
+      properties:
+        repository_root:
+          type: string
+      required:
+      - repository_root
+      additionalProperties: false
+    representation: value
+inputs:
+  context:
+    type: Context
+outputs:
+  result:
+    type: SmokeReport
+    value:
+      ref: flow.outputs.result
+operations:
+  create_fixture:
+    inputs:
+      context:
+        type: Context
+    outputs:
+      fixture:
+        type: Fixture
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_smoke_create_fixture
+        operation: mathformer_reasoning_smoke_create_fixture
+  validate_fixture:
+    inputs:
+      fixture:
+        type: Fixture
+    outputs:
+      validation:
+        type: Validation
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_smoke_validate_fixture
+        operation: mathformer_reasoning_smoke_validate_fixture
+  render_fixture:
+    inputs:
+      fixture:
+        type: Fixture
+      validation:
+        type: Validation
+    outputs:
+      rendered:
+        type: Rendered
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_smoke_render_fixture
+        operation: mathformer_reasoning_smoke_render_fixture
+  audit_coverage:
+    inputs:
+      fixture:
+        type: Fixture
+    outputs:
+      coverage:
+        type: Coverage
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_smoke_audit_coverage
+        operation: mathformer_reasoning_smoke_audit_coverage
+  finish:
+    inputs:
+      fixture:
+        type: Fixture
+      validation:
+        type: Validation
+      rendered:
+        type: Rendered
+      coverage:
+        type: Coverage
+    outputs:
+      result:
+        type: SmokeReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_smoke_finish
+        operation: mathformer_reasoning_smoke_finish
+flow:
+  kind: sequence
+  steps:
+  - id: fixture
+    kind: call
+    operation: create_fixture
+    arguments:
+      context:
+        ref: inputs.context
+  - id: validation
+    kind: call
+    operation: validate_fixture
+    arguments:
+      fixture:
+        ref: steps.fixture.outputs.fixture
+  - id: rendering
+    kind: call
+    operation: render_fixture
+    arguments:
+      fixture:
+        ref: steps.fixture.outputs.fixture
+      validation:
+        ref: steps.validation.outputs.validation
+  - id: coverage
+    kind: call
+    operation: audit_coverage
+    arguments:
+      fixture:
+        ref: steps.fixture.outputs.fixture
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      fixture:
+        ref: steps.fixture.outputs.fixture
+      validation:
+        ref: steps.validation.outputs.validation
+      rendered:
+        ref: steps.rendering.outputs.rendered
+      coverage:
+        ref: steps.coverage.outputs.coverage
+  outputs:
+    result:
+      type: SmokeReport
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - temporary_reasoning_fixture
+      write:
+      - temporary_reasoning_fixture
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - create_synthetic_fixture
+    - validate_and_render_logs
+    - audit_skill_logging
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked smoke-test description only; no runtime qualification,
+    scientific result or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/control/reasoning-log-schema-guardian/scripts/self_test_reasoning_logs.py
+    digest: sha256:fdf39cac6fdefc0988b03ef59e347598e5607dd6b3f4245cf7ff509a8c3fa7af
+    selector: run_self_test
+  - path: scripts/reasoning_smoke_tools.py
+    digest: sha256:42a5ad8d0d98525627f706c1efee3aec3cd3e194579a866f9bd86684a04538fe
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: scripts/mathformer.py
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/test_matrix.json
+    digest: sha256:845b27544adf99920207b8390d5a5a3a6eefdb3c58a595947fe269f2c7c08f40
+  - path: tests/mcp/run_reasoning_smoke_workflow_tests.py
+    digest: sha256:e18e6b65ddde25025ada00d618aeace5737e0d6753bb55fcdae68511891de9ca
+  - path: tests/mcp/fixtures/reasoning_smoke_original.py.txt
+    digest: sha256:ce7fba6d6321306f0add09094f5059ddddf4c197c6b813c3aea2ac6e7f77d25f
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Helper scans and classification branches remain within owning operations; no full
+    Python-equivalence claim.
+  - The 3600-second ceiling and five-call ceiling are enforced by Lunar; the native
+    single-pass function has no global budget, retry or scan cap. Interrupted temporary
+    scopes are released on MCP server lifespan exit.
+  - Required receipts and provenance are descriptor obligations, not upgrades to native
+    optional logging.
+  - The exported SmokeReport is run_self_test's payload; the hub transport envelope,
+    preflight and post-execution write audit remain outside this selected function.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: control:reasoning-log-smoke
+    owner_skill: skills/control/reasoning-log-schema-guardian/SKILL.md
+    contract:
+      id: control:reasoning-log-smoke
+      summary: Run the deterministic reasoning-log contract smoke test.
+      family: control
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - skills/control/reasoning-log-schema-guardian/scripts/self_test_reasoning_logs.py
+      - --json
+      depends_on: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Five registered MCP tools invoke the same extracted step functions
+      as run_self_test, in native order. Explicit context.repository_root selects
+      read-only repository inputs (the original entrypoint defaults to REPO_ROOT).
+    failure_policy: Preflight errors or dry-run prevent launch; post-execution write
+      auditing can fail the hub result. Unhandled exceptions abort execution and TemporaryDirectory
+      cleans up.
+    entrypoint: main() prints JSON with --json, otherwise text; exits 0 for report.ok
+      and 3 for failed checks.
+    temporary_lifetime: One server-owned TemporaryDirectory spans all five operations.
+      Finish and step exceptions clean it; host budget interruption/disconnect cleans
+      unfinished scopes at server lifespan exit. No persistent artifacts are returned.
+    callers:
+    - reasoning-log schema intent route
+    - control:reasoning-log-consumer-readiness
+    - control:all
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: Straight-line single pass; no retry, refinement, convergence or checkpoint
+      loop. Helper iteration is collection-bounded, with no artificial exhaustion
+      branch.
+# REUSE-IgnoreEnd

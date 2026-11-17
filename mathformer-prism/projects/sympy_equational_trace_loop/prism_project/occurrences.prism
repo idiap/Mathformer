@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from sympy_equational_trace_loop import (
+    ParsedEquations,
+    SympyArtifact,
+    SympyAssessmentCase,
+    SympyConsistencyReport,
+    SympyDraftBasis,
+    SympyEquationFormalizationRequest,
+    SympyExecutionReport,
+    SympyGroundingContext,
+    SympyTraceCase,
+    SympyValidationReport,
+)
+
+# Expose equations, symbols, and the exact identity under investigation.
+type ParseEquations = (source: SympyEquationFormalizationRequest) -> Generated[ParsedEquations]
+
+# Model assumptions and establish scope-bound API applicability.
+type GroundSympyContext = (source: SympyEquationFormalizationRequest) -> Generated[SympyGroundingContext]
+
+# Construct an executable candidate while retaining validation obligations.
+type DraftSympyArtifact = (source: SympyDraftBasis) -> Generated[SympyArtifact]
+
+# Execute the artifact and retain symbolic, numeric, and transformation-trace outputs.
+type RunSympyArtifact = (source: SympyArtifact) -> Generated[SympyExecutionReport]
+
+# Validate the identity, search bounded counterexamples, and verify every cited transformation.
+type ValidateSympyTrace = (source: SympyTraceCase) -> Generated[SympyValidationReport]
+
+# Merge parsing, grounding, execution, identity, counterexample, and trace findings into a consistency report.
+type ReportSympyConsistency = (source: SympyAssessmentCase) -> Generated[SympyConsistencyReport]

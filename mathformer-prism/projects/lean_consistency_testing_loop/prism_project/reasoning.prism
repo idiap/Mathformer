@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from lean_consistency_testing_loop import (
+    CompiledLeanArtifactSet,
+    ConsistencyReviewSet,
+    LeanConsistencyCase,
+    LeanConsistencyDisposition,
+    LeanFidelityCase,
+    LeanLibraryCase,
+    LeanValidityCase,
+)
+import occurrences as steps
+import relations as links
+
+# Recover the meaning of compiled Lean declarations, test their formal shape,
+# source fidelity, and library coherence, and issue one reference-free report.
+reasoning AssessLeanConsistency(
+    workflow_source: CompiledLeanArtifactSet,
+) -> Generated[LeanConsistencyDisposition]:
+    sequence:
+        # Reverse-informalize the declarations and retain their line-level explanations.
+        [lean_meaning: steps.RecoverLeanMeaning(workflow_source)]
+        parallel:
+            # Assess compilation, declaration shape, non-vacuity, and artifact realness.
+            [formal_validity: steps.AssessLeanValidity(LeanValidityCase(
+                workflow_source = workflow_source,
+                lean_meaning = lean_meaning.value,
+            ))] by links.TestLeanValidity
+            # Assess internal meaning and agreement with source anchors.
+            [source_fidelity: steps.AssessSourceFidelity(LeanFidelityCase(
+                workflow_source = workflow_source,
+                lean_meaning = lean_meaning.value,
+            ))] by links.TestSourceFidelity
+            # Assess cross-file concepts and applicability of mathlib grounding.
+            [library_coherence: steps.AssessLibraryCoherence(LeanLibraryCase(
+                workflow_source = workflow_source,
+                lean_meaning = lean_meaning.value,
+            ))] by links.TestLibraryCoherence
+        # Compare the independent findings and expose agreement, disagreement, and drift.
+        [reference_free: steps.CompareConsistencyEvidence(ConsistencyReviewSet(
+            formal_validity = formal_validity.value,
+            source_fidelity = source_fidelity.value,
+            library_coherence = library_coherence.value,
+        ))] by links.CompareConsistencyReviews
+        # Produce the unified consistency status and retain every blocking finding.
+        [disposition: steps.CalibrateLeanConsistency(LeanConsistencyCase(
+            formal_validity = formal_validity.value,
+            source_fidelity = source_fidelity.value,
+            library_coherence = library_coherence.value,
+            reference_free = reference_free.value,
+        ))] by links.CalibrateConsistencyStatus
+    return disposition

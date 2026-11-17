@@ -1,0 +1,1025 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_physics_lean_drift_pathology_monitor_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "One-shot native drift monitor with shared deterministic stages, CLI self-test/help branches, and callable MCP bindings.",
+  "aliases": [
+    "physics-lean:drift-pathology-monitor"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Argv": {
+      "schema": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Options": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "self_test": {
+            "type": "boolean"
+          },
+          "source_file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lean_file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lean_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type_packet": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assumption_packet": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unit_report": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "physical_semantics_report": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assumption_critic_report": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dimension_critic_report": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "halted": {
+            "type": "boolean"
+          },
+          "help_text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "self_test",
+          "source_file",
+          "source_text",
+          "lean_file",
+          "lean_text",
+          "type_packet",
+          "assumption_packet",
+          "unit_report",
+          "physical_semantics_report",
+          "assumption_critic_report",
+          "dimension_critic_report",
+          "output",
+          "halted",
+          "help_text"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Material": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "source_text": {
+            "type": "string"
+          },
+          "lean_text": {
+            "type": "string"
+          },
+          "lean_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type_packet": {},
+          "assumption_packet": {},
+          "unit_report": {},
+          "semantics_report": {},
+          "assumption_report": {},
+          "dimension_report": {}
+        },
+        "required": [
+          "source_text",
+          "lean_text",
+          "lean_path",
+          "type_packet",
+          "assumption_packet",
+          "unit_report",
+          "semantics_report",
+          "assumption_report",
+          "dimension_report"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Analysis": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "lean": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "boolean",
+                "integer"
+              ]
+            }
+          },
+          "grounding_debt": {
+            "type": "object",
+            "required": [
+              "style",
+              "schema_version",
+              "ok",
+              "finding_count",
+              "findings"
+            ]
+          },
+          "type_packet_text": {
+            "type": "string"
+          },
+          "unit_status": {},
+          "semantic_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "assumption_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "dimension_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "findings": {
+            "type": "array",
+            "maxItems": 0
+          },
+          "source_dense": {
+            "type": "boolean"
+          },
+          "lean_scalar_heavy": {
+            "type": "boolean"
+          },
+          "packet_mentions_quantity": {
+            "type": "boolean"
+          },
+          "unit_missing_or_failed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source",
+          "lean",
+          "grounding_debt",
+          "type_packet_text",
+          "unit_status",
+          "semantic_codes",
+          "assumption_codes",
+          "dimension_codes",
+          "labels",
+          "findings",
+          "source_dense",
+          "lean_scalar_heavy",
+          "packet_mentions_quantity",
+          "unit_missing_or_failed"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Findings": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "category": {
+              "enum": [
+                "notational_collapse",
+                "abstraction_elevation",
+                "proof_strategy_substitution",
+                "implicit_premise_selection"
+              ]
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "warning",
+                "error",
+                "critical"
+              ]
+            },
+            "blocker": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "category",
+            "severity",
+            "code",
+            "message",
+            "source_cues",
+            "lean_cues",
+            "repair_surface",
+            "rerun_gates",
+            "blocker"
+          ]
+        }
+      }
+    },
+    "Report": {
+      "schema": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "style": {
+                "const": "physics_lean_drift_pathology_monitor_report"
+              },
+              "status": {
+                "enum": [
+                  "pass",
+                  "warn",
+                  "fail"
+                ]
+              },
+              "category_counts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "max_severity": {
+                "enum": [
+                  "info",
+                  "warning",
+                  "error",
+                  "critical"
+                ]
+              },
+              "grounding_debt_report": {
+                "type": "object",
+                "properties": {
+                  "ok": {
+                    "type": "boolean"
+                  },
+                  "finding_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "findings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                },
+                "required": [
+                  "style",
+                  "schema_version",
+                  "ok",
+                  "finding_count",
+                  "findings"
+                ]
+              }
+            },
+            "required": [
+              "style",
+              "taxonomy_source",
+              "status",
+              "category_counts",
+              "max_severity",
+              "source_features",
+              "lean_features",
+              "assumption_support_labels",
+              "prior_critic_codes",
+              "grounding_debt_report",
+              "findings",
+              "acceptance_policy"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "ExitCode": {
+      "schema": {
+        "type": "integer",
+        "const": 0
+      }
+    },
+    "Context": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "working_directory": {
+            "type": "string"
+          },
+          "program_name": {
+            "type": "string"
+          },
+          "process_argv": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allow_mutating": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "working_directory",
+          "program_name",
+          "process_argv",
+          "allow_mutating"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "JsonText": {
+      "schema": {
+        "type": "string"
+      }
+    },
+    "Stdout": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "inputs": {
+    "argv": {
+      "type": "Argv"
+    },
+    "context": {
+      "type": "Context"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "Report",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    },
+    "exit_code": {
+      "type": "ExitCode",
+      "value": {
+        "ref": "flow.outputs.exit_code"
+      }
+    },
+    "stdout": {
+      "type": "Stdout",
+      "value": {
+        "ref": "flow.outputs.stdout"
+      }
+    }
+  },
+  "operations": {
+    "parse": {
+      "inputs": {
+        "argv": {
+          "type": "Argv"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "options": {
+          "type": "Options"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_drift_parse",
+          "operation": "mathformer_drift_parse"
+        }
+      }
+    },
+    "load": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "material": {
+          "type": "Material"
+        },
+        "material_json": {
+          "type": "JsonText"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_drift_load",
+          "operation": "mathformer_drift_load"
+        }
+      }
+    },
+    "inspect_pack": {
+      "inputs": {
+        "material": {
+          "type": "Material"
+        },
+        "material_json": {
+          "type": "JsonText"
+        }
+      },
+      "outputs": {
+        "analysis": {
+          "type": "Analysis"
+        },
+        "analysis_json": {
+          "type": "JsonText"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_drift_inspect_pack",
+          "operation": "mathformer_drift_inspect_pack"
+        }
+      }
+    },
+    "apply_rules": {
+      "inputs": {
+        "analysis": {
+          "type": "Analysis"
+        },
+        "analysis_json": {
+          "type": "JsonText"
+        }
+      },
+      "outputs": {
+        "findings": {
+          "type": "Findings"
+        },
+        "findings_json": {
+          "type": "JsonText"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_drift_apply_rules",
+          "operation": "mathformer_drift_apply_rules"
+        }
+      }
+    },
+    "summarize": {
+      "inputs": {
+        "analysis": {
+          "type": "Analysis"
+        },
+        "findings": {
+          "type": "Findings"
+        },
+        "analysis_json": {
+          "type": "JsonText"
+        },
+        "findings_json": {
+          "type": "JsonText"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "report_json": {
+          "type": "JsonText"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_drift_summarize",
+          "operation": "mathformer_drift_summarize"
+        }
+      }
+    },
+    "self_test": {
+      "inputs": {},
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "report_json": {
+          "type": "JsonText"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_drift_self_test",
+          "operation": "mathformer_drift_self_test"
+        }
+      }
+    },
+    "emit": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        },
+        "report": {
+          "type": "Report"
+        },
+        "context": {
+          "type": "Context"
+        },
+        "report_json": {
+          "type": "JsonText"
+        }
+      },
+      "outputs": {
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Stdout"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_drift_emit",
+          "operation": "mathformer_drift_emit"
+        }
+      }
+    },
+    "help": {
+      "inputs": {
+        "options": {
+          "type": "Options"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "exit_code": {
+          "type": "ExitCode"
+        },
+        "stdout": {
+          "type": "Stdout"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_drift_help",
+          "operation": "mathformer_drift_help"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "parse",
+        "kind": "call",
+        "operation": "parse",
+        "arguments": {
+          "argv": {
+            "ref": "inputs.argv"
+          },
+          "context": {
+            "ref": "inputs.context"
+          }
+        }
+      },
+      {
+        "id": "run",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "help",
+            "when": {
+              "ref": "steps.parse.outputs.options.halted"
+            },
+            "body": {
+              "kind": "call",
+              "operation": "help",
+              "arguments": {
+                "options": {
+                  "ref": "steps.parse.outputs.options"
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select_report",
+              "kind": "switch",
+              "cases": [
+                {
+                  "id": "self_test",
+                  "when": {
+                    "ref": "steps.parse.outputs.options.self_test"
+                  },
+                  "body": {
+                    "kind": "call",
+                    "operation": "self_test",
+                    "arguments": {}
+                  }
+                }
+              ],
+              "default": {
+                "kind": "sequence",
+                "description": "One normal build_report call decomposed in its original evaluation order.",
+                "steps": [
+                  {
+                    "id": "load",
+                    "kind": "call",
+                    "operation": "load",
+                    "arguments": {
+                      "options": {
+                        "ref": "steps.parse.outputs.options"
+                      },
+                      "context": {
+                        "ref": "inputs.context"
+                      }
+                    },
+                    "description": "Read source, Lean, then type/assumption/unit/semantics/assumption-critic/dimension packets; retain Lean path even when inline Lean wins."
+                  },
+                  {
+                    "id": "inspect",
+                    "kind": "call",
+                    "operation": "inspect_pack",
+                    "arguments": {
+                      "material": {
+                        "ref": "steps.load.outputs.material"
+                      },
+                      "material_json": {
+                        "ref": "steps.load.outputs.material_json"
+                      }
+                    },
+                    "description": "Extract source then Lean cues; scan grounding debt; serialize type packet, read unit status, collect semantic/assumption/dimension codes, recursively gather support labels, initialize findings, compute four guards and pack state. source_dense is any quantum/operator/vector/calculus cue; lean_scalar_heavy is raw_scalar_count>=3 without quantity/dimension surface; packet_mentions_quantity searches lower-case type JSON for quantity/dimension/vector/operator/hilbert; unit_missing_or_failed means unit status missing, fail or null."
+                  },
+                  {
+                    "id": "rules",
+                    "kind": "call",
+                    "operation": "apply_rules",
+                    "arguments": {
+                      "analysis": {
+                        "ref": "steps.inspect.outputs.analysis"
+                      },
+                      "analysis_json": {
+                        "ref": "steps.inspect.outputs.analysis_json"
+                      }
+                    },
+                    "description": "Independent ordered ifs, not exclusive branches: quantum cue without Hilbert/operator; vector cue and (absent vector surface or vector_structure_erased); dense source and scalar-heavy Lean without quantity packet cues; dense source and missing/failed unit guard with raw_scalar_erasure or physical_quantities_erased. These four append critical blockers. Source calculus without Lean calculus appends critical/blocker if trivial proof or target-shaped hypothesis, otherwise error; source physical_law without Lean law surface appends error; trivial proof plus target-shaped hypothesis appends critical/blocker. Calculus plus derivative-strategy substitution appends warning. Side conditions without source-backed/mathlib-backed/generated-support/blocked labels append warning; hidden_strengthening or missing_assumption_packet critic codes append error."
+                  },
+                  {
+                    "id": "summarize",
+                    "kind": "call",
+                    "operation": "summarize",
+                    "arguments": {
+                      "analysis": {
+                        "ref": "steps.inspect.outputs.analysis"
+                      },
+                      "findings": {
+                        "ref": "steps.rules.outputs.findings"
+                      },
+                      "analysis_json": {
+                        "ref": "steps.inspect.outputs.analysis_json"
+                      },
+                      "findings_json": {
+                        "ref": "steps.rules.outputs.findings_json"
+                      }
+                    },
+                    "description": "Any blocker gives fail; otherwise max rank>=1 gives warn, else pass. Grounding-debt ok does not affect this status."
+                  }
+                ],
+                "outputs": {
+                  "report": {
+                    "type": "Report",
+                    "value": {
+                      "ref": "steps.summarize.outputs.report"
+                    }
+                  },
+                  "report_json": {
+                    "type": "JsonText",
+                    "value": {
+                      "ref": "steps.summarize.outputs.report_json"
+                    }
+                  }
+                }
+              },
+              "outputs": {
+                "report": {
+                  "type": "Report",
+                  "value": {
+                    "ref": "selected.outputs.report"
+                  }
+                },
+                "report_json": {
+                  "type": "JsonText",
+                  "value": {
+                    "ref": "selected.outputs.report_json"
+                  }
+                }
+              }
+            },
+            {
+              "id": "emit",
+              "kind": "call",
+              "operation": "emit",
+              "arguments": {
+                "options": {
+                  "ref": "steps.parse.outputs.options"
+                },
+                "report": {
+                  "ref": "steps.select_report.outputs.report"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "report_json": {
+                  "ref": "steps.select_report.outputs.report_json"
+                }
+              },
+              "description": "Emit exactly one selected report and return 0, including for status fail; serialization and I/O errors propagate."
+            }
+          ],
+          "outputs": {
+            "report": {
+              "type": "Report",
+              "value": {
+                "ref": "steps.select_report.outputs.report"
+              }
+            },
+            "exit_code": {
+              "type": "ExitCode",
+              "value": {
+                "ref": "steps.emit.outputs.exit_code"
+              }
+            },
+            "stdout": {
+              "type": "Stdout",
+              "value": {
+                "ref": "steps.emit.outputs.stdout"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "report": {
+            "type": "Report",
+            "value": {
+              "ref": "selected.outputs.report"
+            }
+          },
+          "exit_code": {
+            "type": "ExitCode",
+            "value": {
+              "ref": "selected.outputs.exit_code"
+            }
+          },
+          "stdout": {
+            "type": "Stdout",
+            "value": {
+              "ref": "selected.outputs.stdout"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "Report",
+        "value": {
+          "ref": "steps.run.outputs.report"
+        }
+      },
+      "exit_code": {
+        "type": "ExitCode",
+        "value": {
+          "ref": "steps.run.outputs.exit_code"
+        }
+      },
+      "stdout": {
+        "type": "Stdout",
+        "value": {
+          "ref": "steps.run.outputs.stdout"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "native_output_path"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "read_monitor_inputs",
+        "produce_monitor_report"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion",
+        "promote_artifacts"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 6
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Deterministic cue report only; completion establishes neither semantic fidelity nor scientific acceptance."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/physics-lean/physics-lean-drift-pathology-monitor/scripts/monitor_physics_lean_drift_pathologies.py",
+        "selector": "main(argv) → build_report(...)",
+        "digest": "sha256:e3df2692328944adcf5795e9a94081f2025f5c4907550390428d0d48a1915b46"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry/action:physics-lean:drift-pathology-monitor; run_action; run_leaf_action; preflight",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/drift_pathology_tools.py",
+        "selector": "register_drift_pathology_tools",
+        "digest": "sha256:ba0946a0ad9f7fdd96c2595e1cdce2eb20584f9688948e8cb70055f07f705fc0"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_drift_pathology_tools; service write policy",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory: authored drift monitor contract",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Helper scans stay inside their owning operations; no general Python equivalence is claimed.",
+      "Native main has no timeout or input-size cap; Lunar enforces the unchanged 3600-second/six-call contract budgets.",
+      "Lunar records mandatory receipts and replay artifacts; standalone main retains its native CLI observability."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "physics-lean:drift-pathology-monitor",
+      "owner_skill": "skills/physics-lean/physics-lean-drift-pathology-monitor/SKILL.md",
+      "contract": {
+        "id": "physics-lean:drift-pathology-monitor",
+        "family": "physics_lean",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "depends_on": [],
+        "allows_extra_args": true,
+        "timeout_seconds": null
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Selected native script stages run through MCP tools under service write controls. Hub preflight, subprocess and auditing remain outside this selected script graph.",
+      "failure_policy": "Normal main returns 0 even for report fail; parsing, I/O, malformed packet use and assertion errors propagate. Hub ok reflects subprocess success.",
+      "context": "Caller supplies working directory, program name and process argv (used only for null argv), plus mutation consent; no process-global chdir or argv mutation."
+    },
+    "mathformer.scans": {
+      "state": "Findings accumulate inside apply_rules; grounding findings, critic-code/support-label sets and category counters remain local to their owning operations.",
+      "bounds": "Finite input scans and recursive JSON traversal; declaration_near visits at most eight current/preceding lines. No repair, retry or convergence loop and no artificial graph iteration cap.",
+      "grounding": "Prop=True support scan always applies; local Law/unit shims, source/support=True and reflexive dimension bridges require absent Lean path or formalphysics_ in that path. Scalar placeholders use source/Lean cues regardless of path; debt ok excludes critical/error only.",
+      "representation": "Native set membership uses unique arrays between operations. Validated JSON companions preserve insertion order across canonicalizing transports for cue arrays and emitted report bytes."
+    }
+  }
+}

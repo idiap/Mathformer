@@ -1,0 +1,483 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_test_family_control_workflow
+version: 1.0.0
+kind: workflow
+description: Traverse the canonical control-family test rows and publish their report.
+aliases:
+- test:family:control
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Domain:
+    schema:
+      type: object
+      properties:
+        selected_count:
+          type: integer
+          minimum: 0
+          maximum: 1024
+      required:
+      - selected_count
+      additionalProperties: false
+      description: Source-derived count of control rows in the canonical matrix; must
+        equal actual selection.
+  State:
+    schema:
+      type: object
+      properties:
+        matrix:
+          type: array
+          items:
+            type: object
+        selected:
+          type: array
+          maxItems: 1024
+          items:
+            type: object
+        families:
+          type: array
+          items:
+            type: string
+        index:
+          type: integer
+          minimum: 0
+          maximum: 1024
+        results:
+          type: array
+          maxItems: 1024
+          items:
+            type: object
+      required:
+      - matrix
+      - selected
+      - families
+      - index
+      - results
+      additionalProperties: false
+  Bool:
+    schema:
+      type: boolean
+  Report:
+    schema:
+      type: object
+      properties:
+        run_id:
+          type: string
+        ok:
+          type: boolean
+        profile:
+          type: string
+        families:
+          type: array
+          items:
+            type: string
+        summary:
+          type: object
+        results:
+          type: array
+          items:
+            type: object
+        schema_errors:
+          type: array
+          items:
+            type: string
+        matrix_errors:
+          type: array
+          items:
+            type: string
+        capability_ledger:
+          type: object
+        dependency_map:
+          type: string
+      required:
+      - run_id
+      - ok
+      - profile
+      - families
+      - summary
+      - results
+      - schema_errors
+      - matrix_errors
+      - capability_ledger
+      - dependency_map
+  Exit:
+    schema:
+      type: integer
+      enum:
+      - 0
+      - 3
+  Context:
+    schema:
+      type: object
+      properties:
+        run_id:
+          type: string
+      required:
+      - run_id
+      additionalProperties: false
+  RuntimeContext:
+    schema:
+      type: object
+      properties:
+        handle:
+          type: string
+      required:
+      - handle
+      additionalProperties: false
+inputs:
+  domain:
+    type: Domain
+  context:
+    type: Context
+outputs:
+  report:
+    type: Report
+    value:
+      ref: steps.finalize.outputs.report
+  exit_code:
+    type: Exit
+    value:
+      ref: steps.publish.outputs.exit_code
+operations:
+  prepare:
+    inputs:
+      domain:
+        type: Domain
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      context:
+        type: RuntimeContext
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_family_prepare
+        operation: mathformer_control_family_prepare
+  cursor_guard:
+    inputs:
+      state:
+        type: State
+      context:
+        type: RuntimeContext
+    outputs:
+      pending:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_family_cursor_guard
+        operation: mathformer_control_family_cursor_guard
+  advance:
+    inputs:
+      state:
+        type: State
+      context:
+        type: RuntimeContext
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_family_advance
+        operation: mathformer_control_family_advance
+  finalize:
+    inputs:
+      state:
+        type: State
+      context:
+        type: RuntimeContext
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_family_finalize
+        operation: mathformer_control_family_finalize
+  publish:
+    inputs:
+      report:
+        type: Report
+      context:
+        type: RuntimeContext
+    outputs:
+      exit_code:
+        type: Exit
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_family_publish
+        operation: mathformer_control_family_publish
+  retain_empty:
+    inputs:
+      state:
+        type: State
+      context:
+        type: RuntimeContext
+    outputs:
+      state:
+        type: State
+      pending:
+        type: Bool
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_control_family_retain_empty
+        operation: mathformer_control_family_retain_empty
+flow:
+  kind: sequence
+  steps:
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      domain:
+        ref: inputs.domain
+      context:
+        ref: inputs.context
+  - id: initial_guard
+    kind: call
+    operation: cursor_guard
+    arguments:
+      state:
+        ref: steps.prepare.outputs.state
+      context:
+        ref: steps.prepare.outputs.context
+  - kind: loop
+    state_type: State
+    initial:
+      ref: steps.prepare.outputs.state
+    max_iterations: 1024
+    on_exhausted: fail
+    description: One native advance per selected row; empty selection retains state
+      once without executing a check. The final allowed advance exits normally; exhaustion
+      fails before finalization.
+    body:
+      kind: switch
+      cases:
+      - id: empty
+        when:
+          not:
+            ref: steps.initial_guard.outputs.pending
+        body:
+          kind: call
+          operation: retain_empty
+          arguments:
+            state:
+              ref: loop.state
+            context:
+              ref: steps.prepare.outputs.context
+      default:
+        kind: sequence
+        steps:
+        - id: advance
+          kind: call
+          operation: advance
+          arguments:
+            state:
+              ref: loop.state
+            context:
+              ref: steps.prepare.outputs.context
+        - id: guard
+          kind: call
+          operation: cursor_guard
+          arguments:
+            state:
+              ref: steps.advance.outputs.state
+            context:
+              ref: steps.prepare.outputs.context
+        outputs:
+          state:
+            type: State
+            value:
+              ref: steps.advance.outputs.state
+          pending:
+            type: Bool
+            value:
+              ref: steps.guard.outputs.pending
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        pending:
+          type: Bool
+          value:
+            ref: selected.outputs.pending
+    next_state:
+      ref: body.outputs.state
+    until:
+      not:
+        ref: body.outputs.pending
+    outputs:
+      state:
+        type: State
+        value:
+          ref: body.outputs.state
+    id: consume
+  - id: finalize
+    kind: call
+    operation: finalize
+    arguments:
+      state:
+        ref: steps.consume.outputs.state
+      context:
+        ref: steps.prepare.outputs.context
+  - id: publish
+    kind: call
+    operation: publish
+    arguments:
+      report:
+        ref: steps.finalize.outputs.report
+      context:
+        ref: steps.prepare.outputs.context
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finalize.outputs.report
+    exit_code:
+      type: Exit
+      value:
+        ref: steps.publish.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 2052
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked description only; no scientific validity or runtime
+    qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/test_program/run_comprehensive_tests.py
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+    selector: run; prepare_checks; advance_check; run_check; finalize_checks; publish_report;
+      main
+  - path: scripts/mathformer.py
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/control_family_workflow_tools.py
+    digest: sha256:e2b29de70bf1ed571ded74e9943fbf58829334dec0f516175b0acb71d1d7da45
+  - path: scripts/comprehensive_strict_tools.py
+    digest: sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: tests/mcp/run_control_family_workflow_tests.py
+    digest: sha256:66358e79e6ff2250dcfa3ce80390a5a62b48324173e126dc43c78fef2cc9bb32
+  - path: tests/mcp/fixtures/control_family_original.py.txt
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: tests/mcp/fixtures/comprehensive_workflow_boundary.py
+    digest: sha256:b21352e7b0f9e6e7439d058573e75457f0485f5fd9b65d9002b6801b7cea33d7
+  - path: tests/mcp/fixtures/comprehensive_strict_boundary.py
+    digest: sha256:7ef72487cc2ff1b63f167a1d1c5ccbfec5b5dc3bc300c597253f14b066591bd3
+  gaps:
+  - Domain.selected_count must match actual control selection and be at most 1024;
+    larger selections are rejected.
+  - Native traversal has no fixed cap; exhaustion is unreachable for admitted inputs
+    at the authored 1024 iteration bound.
+  - Alternate dependency-map-only and changed-file routes are excluded by the fixed
+    hub arguments.
+  - Native hub preflight, dry-run, 900-second subprocess timeout and outer write audit
+    remain controller responsibilities. Block tools enforce service write authorization,
+    artifact path policy and owned cursor state.
+  - Complete network/external-effect qualification of arbitrary canonical matrix rows
+    is outside this projection.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: test:family:control
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: test:family:control
+      summary: Run the comprehensive test matrix for the control module family.
+      family: control
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/test_program/run_comprehensive_tests.py
+      - --module-family
+      - control
+      - --json
+      depends_on: []
+      required_paths:
+      - tests/test_program/run_comprehensive_tests.py
+      - tests/test_matrix.json
+      required_tools: []
+      optional_tools: []
+      writes:
+      - artifacts/
+      allows_extra_args: false
+      timeout_seconds: 900
+  mathformer.native_boundary:
+    execution: Native CLI/intent dispatch uses run_action then run_leaf_action with
+      preflight, dry-run and repository write auditing.
+    defaults: Workstation profile; fail-on-warning, validate-matrix, changed-files-only,
+      dependency-map-only, JSONL and JUnit disabled. Parse-time run_id is supplied
+      through context; remaining arguments come from native parse_args.
+    normalization_limits: 3600 seconds retained as metadata; operation budget expanded
+      from opaque one-call metadata to 2N+4. Native hub subprocess timeout is 900
+      seconds.
+    failure_policy: Preserve published exit 3 and native hub failure envelope; exceptions
+      abort dependent operations.
+# REUSE-IgnoreEnd

@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+{
+  "schema_version": "mathformer.meta_skills.skill_quality_card.v0.1",
+  "card_id": "mathformer-workflow-router",
+  "subject": "mathformer-workflow-router",
+  "subject_type": "skill",
+  "skill_path": "skills/control/mathformer-workflow-router/SKILL.md",
+  "deterministic_boundary": [
+    "Calls scripts/mathformer.py ask/list/show/run/audit through controlled routes.",
+    "Audits route coverage for every registered workflow family."
+  ],
+  "generative_boundary": [
+    "May paraphrase user intent into candidate requests.",
+    "May not fabricate action ids or bypass the hub."
+  ],
+  "epistemic_risks": [
+    "Ambiguous requests route to the wrong workflow.",
+    "Help output describes an unavailable pipeline surface."
+  ],
+  "necessary_conditions": [
+    "Every route action id exists in scripts/mathformer.py.",
+    "Router help lists implemented surfaces and safety labels.",
+    "Coverage audit has no missing families."
+  ],
+  "sufficiency_claim": "Sufficient as a natural-language entrypoint only when matched terms, action ids, and safety metadata are inspectable.",
+  "representation_contract": [
+    "Route outputs include route_id, score, matched_terms, action_ids, skill_routes, examples, and operator notes.",
+    "Pipeline help groups workflows by family and lists action safety labels."
+  ],
+  "validation_oracles": [
+    "python skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py --audit-coverage --json",
+    "python skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py --help-pipeline --json"
+  ],
+  "failure_modes": [
+    "Unknown action reference.",
+    "Missing family route coverage.",
+    "Generative request executes mutating action without explicit permission."
+  ],
+  "promotion_gate": {
+    "state": "promoted",
+    "required_evidence": [
+      "coverage audit",
+      "pipeline help self-test",
+      "MCP help surface sync"
+    ],
+    "blocking_conditions": [
+      "route lacks action ids",
+      "coverage misses a workflow family"
+    ]
+  }
+}

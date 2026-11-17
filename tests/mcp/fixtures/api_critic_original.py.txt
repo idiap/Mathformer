@@ -1,0 +1,40 @@
+def critic_api(concept_graph: Mapping[str, Any]) -> dict[str, Any]:
+    """Check that foundation-owned concepts expose expected API terms."""
+    findings: list[dict[str, Any]] = []
+    for concept in concept_graph.get("concepts", []):
+        owner = concept.get("owner_module")
+        if not owner or "Foundations" not in str(owner):
+            continue
+        path = REPO_ROOT / str(owner)
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
+        required_terms = list(concept.get("api_terms", []))
+        present = [term for term in required_terms if term.lower() in text.lower()]
+        if required_terms and not present:
+            findings.append(
+                {
+                    "severity": "high",
+                    "kind": "foundation_without_operable_api",
+                    "concept_id": concept.get("concept_id"),
+                    "owner_module": owner,
+                    "message": "Foundation owner lacks expected API terms for downstream theorem use.",
+                }
+            )
+        elif required_terms and len(present) < min(2, len(required_terms)):
+            findings.append(
+                {
+                    "severity": "low",
+                    "kind": "thin_foundation_api",
+                    "concept_id": concept.get("concept_id"),
+                    "owner_module": owner,
+                    "present_terms": present,
+                    "message": "Foundation owner has a thin API surface; downstream usage examples should be added.",
+                }
+            )
+    return {
+        "style": "mathformerphysicslib_api_operability_report",
+        "schema_version": 1,
+        "ok": not any(item["severity"] == "high" for item in findings),
+        "finding_count": len(findings),
+        "findings": findings,
+    }
+

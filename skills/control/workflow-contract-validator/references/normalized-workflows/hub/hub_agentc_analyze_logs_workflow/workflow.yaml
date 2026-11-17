@@ -1,0 +1,399 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_agentc_analyze_logs_workflow
+version: 1.0.0
+kind: workflow
+description: Execute the shared analyze_logs.py::main stages, preserving argparse
+  help early exit and native statistics processing.
+aliases:
+- agentc:analyze-logs
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Argv:
+    schema:
+      type: array
+      items:
+        type: string
+    representation: value
+  Options:
+    schema:
+      type:
+      - object
+      - 'null'
+      properties:
+        report_file:
+          type: string
+        output_json:
+          type:
+          - string
+          - 'null'
+        output_tex:
+          type:
+          - string
+          - 'null'
+      required:
+      - report_file
+      - output_json
+      - output_tex
+      additionalProperties: false
+    representation: value
+  Payload:
+    schema:
+      type: object
+      description: JSON object read from --report-file; dataclass filtering follows.
+    representation: value
+  Report:
+    schema:
+      type: object
+      description: Nominal projection of SystematicAutoformalizationReport after native
+        dataclass construction; not a replacement payload validator.
+    representation: value
+  Paths:
+    schema:
+      type:
+      - object
+      - 'null'
+      properties:
+        json:
+          type: string
+        tex:
+          type: string
+      required:
+      - json
+      - tex
+      additionalProperties: false
+    representation: value
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+    representation: value
+  Halted:
+    schema:
+      type: boolean
+    representation: value
+inputs:
+  argv:
+    type: Argv
+outputs:
+  paths:
+    type: Paths
+    value:
+      ref: flow.outputs.paths
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+operations:
+  parse:
+    inputs:
+      argv:
+        type: Argv
+    outputs:
+      options:
+        type: Options
+      halted:
+        type: Halted
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_analysis_parse
+        operation: mathformer_analysis_parse
+  load:
+    inputs:
+      options:
+        type: Options
+    outputs:
+      payload:
+        type: Payload
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_analysis_load
+        operation: mathformer_analysis_load
+  coerce:
+    inputs:
+      payload:
+        type: Payload
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_analysis_coerce
+        operation: mathformer_analysis_coerce
+  save:
+    inputs:
+      report:
+        type: Report
+      options:
+        type: Options
+    outputs:
+      paths:
+        type: Paths
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_analysis_save
+        operation: mathformer_analysis_save
+  finish:
+    inputs:
+      paths:
+        type: Paths
+    outputs:
+      exit_code:
+        type: ExitCode
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_analysis_finish
+        operation: mathformer_analysis_finish
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse
+    arguments:
+      argv:
+        ref: inputs.argv
+  - id: dispatch
+    kind: switch
+    cases:
+    - id: help
+      when:
+        ref: steps.parse.outputs.halted
+      body:
+        kind: sequence
+        steps:
+        - id: finish_help
+          kind: call
+          operation: finish
+          arguments:
+            paths:
+              literal: null
+        outputs:
+          paths:
+            type: Paths
+            value:
+              literal: null
+          exit_code:
+            type: ExitCode
+            value:
+              ref: steps.finish_help.outputs.exit_code
+    default:
+      kind: sequence
+      steps:
+      - id: load
+        kind: call
+        operation: load
+        arguments:
+          options:
+            ref: steps.parse.outputs.options
+      - id: coerce
+        kind: call
+        operation: coerce
+        arguments:
+          payload:
+            ref: steps.load.outputs.payload
+      - id: save
+        kind: call
+        operation: save
+        description: 'Inside save, build reads reasoning entries, history and cycle
+          manifest in that order. Sort nonempty entries by integer event_index if
+          all entries qualify, otherwise by timestamp/step. Accumulate event/skill
+          counts, FIFO matched-start durations, critique counts and categorized errors.
+          Gather output, round and dependency Lean files; traverse dependencies until
+          queue exhaustion without a visited-set or depth bound; normalize/deduplicate
+          paths and skip missing files during structural analysis. Aggregate refinement
+          history; compute first-to-last deltas over name-sorted round versions only
+          when at least two versions exist. Carried state stays within this operation:
+          counters, timing lists, unmatched-start queues, dependency queue/results,
+          seen paths and file/round statistics. Collection loops stop at exhaustion;
+          dependency cycles can prevent termination. There is no refinement/retry/convergence
+          loop. After building, each absent output path independently defaults using
+          report.report_file or report.output_file, falling back to artifacts/autoformalization/autoformalization
+          only if that candidate is None; strip suffix and append .stats.json/.stats.tex.
+          Create both parents before JSON then LaTeX writes. Errors propagate; earlier
+          writes are not rolled back. Error lines are truncated to the top 20; selected
+          LaTeX tables use 20/30-row caps, not iteration budgets.'
+        arguments:
+          report:
+            ref: steps.coerce.outputs.report
+          options:
+            ref: steps.parse.outputs.options
+      - id: finish
+        kind: call
+        operation: finish
+        arguments:
+          paths:
+            ref: steps.save.outputs.paths
+      outputs:
+        paths:
+          type: Paths
+          value:
+            ref: steps.save.outputs.paths
+        exit_code:
+          type: ExitCode
+          value:
+            ref: steps.finish.outputs.exit_code
+    outputs:
+      paths:
+        type: Paths
+        value:
+          ref: selected.outputs.paths
+      exit_code:
+        type: ExitCode
+        value:
+          ref: selected.outputs.exit_code
+  outputs:
+    paths:
+      type: Paths
+      value:
+        ref: steps.dispatch.outputs.paths
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.dispatch.outputs.exit_code
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/
+      - artifacts/workflow_hub/
+      - cli_selected_output_paths
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - analyze_existing_artifacts
+    - write_statistics
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked statistics description only; no proof, scientific endorsement
+    or runtime qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/autoformalization/autoformalization-agentc/scripts/analyze_logs.py
+    selector: main
+    digest: sha256:3f84fb38622d2115fd0d2c1a38c5bf3d1c1b42a80266e6e521d5812025d1a41e
+  - path: skills/autoformalization/autoformalization-agentc/scripts/analyze_logs.py
+    selector: _load_report_payload; _coerce_report
+    digest: sha256:3f84fb38622d2115fd0d2c1a38c5bf3d1c1b42a80266e6e521d5812025d1a41e
+  - path: skills/autoformalization/autoformalization-agentc/scripts/agentc.py
+    selector: save_autoformalization_statistics; build_autoformalization_statistics;
+      _iter_dependency_reports; render_autoformalization_statistics_latex
+    digest: sha256:f905407d76dcf8caaecf50716c9d6f8b0d342c65cda61dafe63254236312767f
+  - path: scripts/mathformer.py
+    selector: build_registry/action:agentc:analyze-logs; run_action; run_leaf_action;
+      prepare_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/agentc_analysis_tools.py
+    digest: sha256:9fbe5a908563e8959f562217b8edfb1d9ecce151d6f5109b4acf8f44304fa444
+  - path: scripts/mcp_server.py
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Statistics helper internals remain a native opaque call, including unbounded dependency
+    traversal without cycle detection.
+  - Report is a JSON projection of the native dataclass; construction retains native
+    validation and errors.
+  - Hub preflight, dry-run and post-execution write auditing remain outside this main-entrypoint
+    workflow.
+  - Native CLI has no timeout; Lunar enforces the retained descriptor limits. MCP
+    completion printing uses stderr to preserve protocol framing.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: agentc:analyze-logs
+    owner_skill: skills/autoformalization/autoformalization-agentc/SKILL.md
+    contract:
+      id: agentc:analyze-logs
+      summary: Analyze an AgentC workflow report; pass --report-file and outputs after
+        `--`.
+      family: agentc
+      kind: utility
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - skills/autoformalization/autoformalization-agentc/scripts/analyze_logs.py
+      depends_on: []
+      writes:
+      - artifacts/
+      allows_extra_args: true
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Native hub dispatch remains external. This bound graph executes the
+      shared main stages directly through registered MCP tools.
+    intent: agentc.analyze
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    control: Preflight errors return without launching; otherwise dry_run returns
+      without launching; otherwise forward extra_args into script argv, capture exit
+      status/stdout/stderr, then audit writes against declared roots. Undeclared writes
+      set ok=false/status=undeclared_writes without rollback.
+    failure_policy: Preserve native returncode/ok/status, including failed subprocess
+      and preflight. Uncaught main loading/coercion/analysis/writing errors terminate;
+      no automatic retry or resume.
+    effects_status: partial_native_declarations
+    output_paths: CLI/report-selected paths can lie outside artifacts/; native hub
+      audits such writes against its artifacts/ declaration after execution.
+    qualification_capability_names_are_not_runtime_grants: true
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    modeling: Five callable main stages; help exits after parsing with exit_code 0
+      and null paths. All other parser exits fail. Statistics helper internals remain
+      source-owned.
+# REUSE-IgnoreEnd

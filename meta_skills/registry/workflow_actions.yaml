@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+{
+  "schema_version": "mathformer.meta_skills.workflow_actions.v0.1",
+  "mcp_boundary": {
+    "policy": "Expose workflow-level registry and validation actions only; do not expose one MCP tool per draft skill.",
+    "config_source_of_truth": "config/",
+    "external_api_key_policy": "External API keys must be loaded through config/mathformer_mcp.local.toml or explicit service config overrides, not skill environment variables."
+  },
+  "workflow_actions": [
+    {
+      "action_id": "meta-skills:registry-validate",
+      "surface": "hub_action",
+      "mcp_exposure": "via mathformer_ask or mathformer_run_action",
+      "draft_skill_execution": "denied"
+    },
+    {
+      "action_id": "meta-skills:taxonomic-navigation",
+      "surface": "hub_action",
+      "mcp_exposure": "via mathformer_ask or mathformer_run_action",
+      "draft_skill_execution": "denied"
+    },
+    {
+      "action_id": "meta-skills:validate",
+      "surface": "hub_action",
+      "mcp_exposure": "via mathformer_ask or mathformer_run_action",
+      "draft_skill_execution": "denied"
+    }
+  ],
+  "allowed_mcp_tools": [
+    "mathformer_help",
+    "mathformer_ask",
+    "mathformer_list_actions",
+    "mathformer_show_action",
+    "mathformer_run_action",
+    "mathformer_list_workflows",
+    "mathformer_show_workflow",
+    "mathformer_run_workflow",
+    "mathformer_audit"
+  ],
+  "denied_surfaces": [
+    "per_generated_skill_mcp_tools",
+    "direct_draft_skill_execution",
+    "skill_environment_api_key_loading"
+  ]
+}

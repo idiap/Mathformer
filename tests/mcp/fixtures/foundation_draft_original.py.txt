@@ -1,0 +1,1435 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Draft conservative MathformerPhysicsLib Lean foundation modules."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+FOUNDATION_ROOT = REPO_ROOT / "MathformerPhysicsLib" / "Lean" / "Foundations"
+INDEX_PATH = REPO_ROOT / "MathformerPhysicsLib" / "Lean" / "Foundations.lean"
+
+
+TEMPLATES: dict[str, str] = {
+    "Carriers": """import Mathlib
+
+namespace MathformerPhysicsLib
+namespace Foundations
+namespace Carriers
+
+/-- Mathlib grounding: finite-dimensional real vectors use `EuclideanSpace ℝ (Fin 3)`. -/
+abbrev RealVector3 := EuclideanSpace ℝ (Fin 3)
+
+/-- Mathlib grounding: component projection is ordinary function application on `Fin 3`. -/
+def realVector3Component (v : RealVector3) (i : Fin 3) : ℝ := v i
+
+/-- Mathlib grounding: the component bridge is definitional for `EuclideanSpace` coordinates. -/
+theorem realVector3Component_apply (v : RealVector3) (i : Fin 3) :
+    realVector3Component v i = v i := rfl
+
+/-- Mathlib grounding: Hilbert-style states should use existing inner-product-space structures. -/
+abbrev HilbertStateCarrier (𝕜 : Type*) (H : Type*) [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] := H
+
+end Carriers
+end Foundations
+end MathformerPhysicsLib
+""",
+    "Fields": """import Mathlib
+
+namespace MathformerPhysicsLib
+namespace Foundations
+namespace Fields
+
+/-- Mathlib grounding: finite-dimensional real vectors use `EuclideanSpace ℝ (Fin 3)`. -/
+abbrev RealVector3 := EuclideanSpace ℝ (Fin 3)
+
+/-- Mathlib grounding: a physics vector field is a function into a Mathlib vector carrier. -/
+abbrev RealVectorField3 (X : Type*) := X → RealVector3
+
+/-- Physics role: explicit evaluation bridge for vector-field source statements. -/
+def evalRealVectorField3 {X : Type*} (F : RealVectorField3 X) (x : X) : RealVector3 := F x
+
+/-- Mathlib grounding: field evaluation is ordinary function application. -/
+theorem evalRealVectorField3_apply {X : Type*} (F : RealVectorField3 X) (x : X) :
+    evalRealVectorField3 F x = F x := rfl
+
+end Fields
+end Foundations
+end MathformerPhysicsLib
+""",
+    "Operators": """import Mathlib
+
+namespace MathformerPhysicsLib
+namespace Foundations
+namespace Operators
+
+/-- Mathlib grounding: fields are functions into `EuclideanSpace ℝ (Fin 3)`. -/
+abbrev RealVector3 := EuclideanSpace ℝ (Fin 3)
+
+/-- Mathlib grounding: a field operator should use `LinearMap` when linearity is required. -/
+abbrev LinearFieldOperator (X : Type*) := (X → RealVector3) →ₗ[ℝ] (X → RealVector3)
+
+/-- Physics role: apply a Mathlib-backed linear operator to a vector field. -/
+def applyLinearFieldOperator {X : Type*} (L : LinearFieldOperator X) (F : X → RealVector3) :
+    X → RealVector3 := L F
+
+/-- Mathlib grounding: commutators are represented as algebraic multiplication differences. -/
+def commutator {A : Type*} [Mul A] [Sub A] (x y : A) : A := x * y - y * x
+
+end Operators
+end Foundations
+end MathformerPhysicsLib
+""",
+    "HilbertSpace": """import Mathlib
+
+namespace MathformerPhysicsLib
+namespace Foundations
+namespace HilbertSpace
+
+/-- Mathlib grounding: a physics Hilbert state carrier is a complete Mathlib
+inner-product space, not a local replacement for Hilbert-space structure. -/
+abbrev HilbertStateCarrier (𝕜 : Type*) (H : Type*) [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] [CompleteSpace H] := H
+
+/-- Mathlib grounding: Hilbert-space inner products are Mathlib `inner` values. -/
+def hilbertInner (𝕜 : Type*) {H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (x y : H) : 𝕜 :=
+  inner 𝕜 x y
+
+/-- Physics role: the bridge is definitional, preserving Mathlib convention and notation. -/
+theorem hilbertInner_apply (𝕜 : Type*) {H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (x y : H) :
+    hilbertInner 𝕜 x y = inner 𝕜 x y := rfl
+
+/-- Mathlib grounding: bounded Hilbert operators should use continuous linear maps. -/
+abbrev HilbertBoundedOperator (𝕜 : Type*) (H : Type*) [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] := H →L[𝕜] H
+
+/-- Physics role: application of a bounded Hilbert operator is ordinary function application. -/
+def applyHilbertOperator {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (T : HilbertBoundedOperator 𝕜 H) (x : H) : H :=
+  T x
+
+/-- Physics role: a Dirac transition amplitude is a Mathlib inner product. -/
+def transitionAmplitude (𝕜 : Type*) {H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (bra ket : H) : 𝕜 :=
+  inner 𝕜 bra ket
+
+/-- Mathlib grounding: transition amplitudes preserve the underlying inner product. -/
+theorem transitionAmplitude_apply (𝕜 : Type*) {H : Type*} [RCLike 𝕜]
+    [NormedAddCommGroup H] [InnerProductSpace 𝕜 H] (bra ket : H) :
+    transitionAmplitude 𝕜 bra ket = inner 𝕜 bra ket := rfl
+
+/-- Physics role: expectation values are inner products of a state with the
+operator-applied state. -/
+def hilbertExpectation {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (T : HilbertBoundedOperator 𝕜 H) (psi : H) : 𝕜 :=
+  inner 𝕜 psi (T psi)
+
+/-- Mathlib grounding: bounded Hilbert-operator commutators are continuous
+linear maps built from composition, subtraction, and Mathlib operator
+application. -/
+def hilbertOperatorCommutator {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (X P : HilbertBoundedOperator 𝕜 H) :
+    HilbertBoundedOperator 𝕜 H :=
+  X.comp P - P.comp X
+
+/-- Physics role: applying a bounded Hilbert-operator commutator expands to the
+operator difference `[X, P] ψ = X(P ψ) - P(X ψ)`. -/
+theorem hilbertOperatorCommutator_apply {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (X P : HilbertBoundedOperator 𝕜 H) (psi : H) :
+    hilbertOperatorCommutator X P psi = X (P psi) - P (X psi) := by
+  rfl
+
+/-- Physics role: the expected commutator value in a state is an ordinary
+Hilbert expectation of the bounded commutator operator. -/
+def hilbertCommutatorExpectation {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (X P : HilbertBoundedOperator 𝕜 H) (psi : H) : 𝕜 :=
+  hilbertExpectation (hilbertOperatorCommutator X P) psi
+
+/-- Physics role: source-backed normalized state evidence. -/
+structure NormalizedStateWitness {H : Type*} [NormedAddCommGroup H] (psi : H) : Prop where
+  norm_eq_one : ‖psi‖ = 1
+
+/-- Physics role: a parameterized expectation value keeps the operator and
+state curves explicit before differentiating. -/
+def parameterizedHilbertExpectation {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] (T : ℝ → HilbertBoundedOperator ℂ H) (psi : ℝ → H)
+    (lambda : ℝ) : ℂ :=
+  hilbertExpectation (T lambda) (psi lambda)
+
+/-- Mathlib grounding: the parameterized expectation is definitional. -/
+theorem parameterizedHilbertExpectation_apply {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] (T : ℝ → HilbertBoundedOperator ℂ H) (psi : ℝ → H)
+    (lambda : ℝ) :
+    parameterizedHilbertExpectation T psi lambda = hilbertExpectation (T lambda) (psi lambda) := rfl
+
+/-- Mathlib grounding: if two scalar curves agree near a parameter and both have
+derivatives there, uniqueness of `HasDerivAt` transfers the derivative value. -/
+theorem derivativeEqOfEventuallyEq {energy expectation : ℝ → ℂ} {lambda : ℝ}
+    {dEnergy dExpectation : ℂ} (h_eq : energy =ᶠ[nhds lambda] expectation)
+    (h_energy : HasDerivAt energy dEnergy lambda)
+    (h_expectation : HasDerivAt expectation dExpectation lambda) :
+    dEnergy = dExpectation := by
+  exact h_energy.unique (h_expectation.congr_of_eventuallyEq h_eq)
+
+/-- Physics role: a parameterized expectation identity differentiates by the
+Mathlib uniqueness theorem for derivatives, leaving the calculation of the
+expectation derivative as an explicit typed premise. -/
+theorem energyDerivativeEqExpectationDerivative {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] (energy : ℝ → ℂ)
+    (T : ℝ → HilbertBoundedOperator ℂ H) (psi : ℝ → H) {lambda : ℝ}
+    {dEnergy dExpectation : ℂ}
+    (energy_eq_expectation_near :
+      energy =ᶠ[nhds lambda] fun mu => parameterizedHilbertExpectation T psi mu)
+    (energy_has_deriv : HasDerivAt energy dEnergy lambda)
+    (expectation_has_deriv :
+      HasDerivAt (fun mu => parameterizedHilbertExpectation T psi mu) dExpectation lambda) :
+    dEnergy = dExpectation :=
+  derivativeEqOfEventuallyEq energy_eq_expectation_near energy_has_deriv expectation_has_deriv
+
+/-- Physics role: a parameterized Hamiltonian eigenstate equation
+`H(λ) ψ(λ) = E(λ) ψ(λ)`. -/
+def ParameterizedEigenstateEquation {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] (T : ℝ → HilbertBoundedOperator ℂ H) (psi : ℝ → H)
+    (energy : ℝ → ℂ) (lambda : ℝ) : Prop :=
+  T lambda (psi lambda) = energy lambda • psi lambda
+
+/-- Physics role: the eigenstate/normalization source facts hold near a
+parameter, which is the local form needed for differentiating the expectation
+curve. -/
+def EigenstateExpectationIdentityNear {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] (energy : ℝ → ℂ)
+    (T : ℝ → HilbertBoundedOperator ℂ H) (psi : ℝ → H) (lambda : ℝ) : Prop :=
+  ∀ᶠ mu in nhds lambda,
+    ParameterizedEigenstateEquation T psi energy mu ∧ NormalizedStateWitness (psi mu)
+
+/-- Frontier 0021-1: a normalized eigenstate has expectation equal to its
+eigenvalue. -/
+theorem parameterizedHilbertExpectation_eq_eigenvalue_of_eigenstate {H : Type*}
+    [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (energy : ℝ → ℂ) (T : ℝ → HilbertBoundedOperator ℂ H) (psi : ℝ → H)
+    (lambda : ℝ)
+    (eigen_eq : ParameterizedEigenstateEquation T psi energy lambda)
+    (normalized : NormalizedStateWitness (psi lambda)) :
+    parameterizedHilbertExpectation T psi lambda = energy lambda := by
+  unfold parameterizedHilbertExpectation hilbertExpectation
+  rw [eigen_eq, inner_smul_right]
+  rw [inner_self_eq_norm_sq_to_K, normalized.norm_eq_one]
+  norm_num
+
+/-- Frontier 0021-2: source eigenstate and normalization facts near `λ` derive
+the local energy/expectation curve identity instead of assuming it. -/
+theorem energy_eq_parameterizedExpectation_near_of_eigenstate {H : Type*}
+    [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (energy : ℝ → ℂ) (T : ℝ → HilbertBoundedOperator ℂ H) (psi : ℝ → H)
+    (lambda : ℝ)
+    (near_identity : EigenstateExpectationIdentityNear energy T psi lambda) :
+    energy =ᶠ[nhds lambda] fun mu => parameterizedHilbertExpectation T psi mu := by
+  filter_upwards [near_identity] with mu hmu
+  exact (parameterizedHilbertExpectation_eq_eigenvalue_of_eigenstate
+    energy T psi mu hmu.1 hmu.2).symm
+
+/-- Physics role: a fluctuation ket `(T - μ) ψ` is represented using a
+Mathlib-backed bounded operator and scalar action. -/
+def fluctuationKet {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (T : HilbertBoundedOperator 𝕜 H) (mu : 𝕜) (psi : H) : H :=
+  T psi - mu • psi
+
+/-- Physics role: a probability from a complex amplitude is its squared norm. -/
+noncomputable def probabilityFromAmplitude (z : ℂ) : ℝ :=
+  ‖z‖ ^ 2
+
+/-- Mathlib grounding: `probabilityFromAmplitude` is definitionally the
+squared norm of the complex amplitude. -/
+theorem probabilityFromAmplitude_apply (z : ℂ) :
+    probabilityFromAmplitude z = ‖z‖ ^ 2 := rfl
+
+/-- Mathlib grounding: equality of amplitudes transports through the Born-rule
+probability surface. -/
+theorem probabilityFromAmplitude_congr {z w : ℂ} (h : z = w) :
+    probabilityFromAmplitude z = probabilityFromAmplitude w := by
+  rw [h]
+
+/-- Mathlib grounding: Hilbert bases are Mathlib `HilbertBasis` values. -/
+abbrev HilbertBasisSurface (ι : Type*) (𝕜 : Type*) (H : Type*) [RCLike 𝕜]
+    [NormedAddCommGroup H] [InnerProductSpace 𝕜 H] [CompleteSpace H] :=
+  HilbertBasis ι 𝕜 H
+
+/-- Physics role: source-backed conjugate symmetry for a Dirac braket pair. -/
+structure DiracConjugateSymmetryWitness (fg gf : ℂ) : Prop where
+  conjugate_relation : star fg = gf
+
+/-- Physics role: the Dirac expression `(⟨f|g⟩ - ⟨g|f⟩)/(2i)` as a named
+complex scalar before downstream real/imaginary projection. -/
+noncomputable def diracImaginaryQuotient (fg gf : ℂ) : ℂ :=
+  (fg - gf) / (2 * Complex.I)
+
+/-- Physics role: the source chain
+`⟨f|g⟩ - ⟨g|f⟩ = ⟨ψ|[X,P]|ψ⟩ = iℏ` proves the Dirac imaginary quotient bridge
+instead of assuming that quotient directly. -/
+theorem diracImaginaryQuotient_from_commutator_expectation {fg gf comm : ℂ} {hbar : ℝ}
+    (braket_difference_eq_commutator : fg - gf = comm)
+    (commutator_expectation_eq_canonical : comm = Complex.I * (hbar : ℂ)) :
+    diracImaginaryQuotient fg gf = (hbar : ℂ) / 2 := by
+  unfold diracImaginaryQuotient
+  rw [braket_difference_eq_commutator, commutator_expectation_eq_canonical]
+  field_simp [Complex.I_ne_zero]
+
+/-- Mathlib grounding: for a complex scalar, the Dirac imaginary quotient with
+the conjugate is the scalar imaginary part embedded in `ℂ`. -/
+theorem diracImaginaryQuotient_star_eq_im (z : ℂ) :
+    diracImaginaryQuotient z (star z) = (z.im : ℂ) := by
+  rw [diracImaginaryQuotient]
+  field_simp [Complex.I_ne_zero]
+  cases z
+  apply Complex.ext
+  · simp
+  · simp
+    ring
+
+/-- Mathlib grounding: conjugate symmetry identifies the Dirac imaginary
+quotient with the scalar imaginary part. -/
+theorem diracImaginaryQuotient_eq_im_of_conjugate {fg gf : ℂ} (h_conj : star fg = gf) :
+    diracImaginaryQuotient fg gf = (Complex.im fg : ℂ) := by
+  rw [← h_conj]
+  exact diracImaginaryQuotient_star_eq_im fg
+
+/-- Mathlib grounding: the squared Dirac imaginary quotient is the squared
+complex imaginary part under conjugate symmetry. -/
+theorem diracImaginaryQuotient_sq_eq_im_sq_of_conjugate {fg gf : ℂ}
+    (h_conj : star fg = gf) :
+    (diracImaginaryQuotient fg gf) ^ 2 = (Complex.im fg : ℂ) ^ 2 := by
+  exact congrArg (fun z : ℂ => z ^ 2) (diracImaginaryQuotient_eq_im_of_conjugate h_conj)
+
+/-- Physics role: explicit witness that two state vectors are orthogonal. -/
+structure HilbertOrthogonalityWitness {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (x y : H) : Prop where
+  inner_eq_zero : inner 𝕜 x y = 0
+
+/-- Frontier 0015-1: a two-level Rabi state expansion in a Hilbert carrier. -/
+def TwoLevelRabiStateExpansion {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (psi excitedZero groundOne : H) (Omega t : ℝ) : Prop :=
+  psi =
+    (Real.cos (Omega * t / 2) : ℂ) • excitedZero +
+      ((-Complex.I) * (Real.sin (Omega * t / 2) : ℂ)) • groundOne
+
+/-- Frontier 0015-2: the expected vacuum-Rabi transition amplitude. -/
+noncomputable def VacuumRabiAmplitude (Omega t : ℝ) : ℂ :=
+  (-Complex.I) * (Real.sin (Omega * t / 2) : ℂ)
+
+/-- Frontier 0015-3: under a normalized target ket and orthogonal source ket,
+the Rabi state expansion gives the target transition amplitude. -/
+theorem transitionAmplitude_from_twoLevelRabiStateExpansion {H : Type*}
+    [NormedAddCommGroup H] [InnerProductSpace ℂ H] [CompleteSpace H]
+    (psi groundOne excitedZero : HilbertStateCarrier ℂ H) (Omega t : ℝ)
+    (ground_normalized : NormalizedStateWitness groundOne)
+    (orthogonality : HilbertOrthogonalityWitness (𝕜 := ℂ) groundOne excitedZero)
+    (state_expansion : TwoLevelRabiStateExpansion psi excitedZero groundOne Omega t) :
+    transitionAmplitude ℂ groundOne psi = VacuumRabiAmplitude Omega t := by
+  have hground : inner ℂ groundOne groundOne = 1 := by
+    rw [inner_self_eq_norm_sq_to_K, ground_normalized.norm_eq_one]
+    norm_num
+  unfold TwoLevelRabiStateExpansion at state_expansion
+  unfold VacuumRabiAmplitude
+  rw [state_expansion]
+  unfold transitionAmplitude
+  rw [inner_add_right, inner_smul_right, inner_smul_right]
+  rw [orthogonality.inner_eq_zero, hground]
+  simp
+
+/-- Frontier 0015-4: the vacuum-Rabi amplitude surface unfolds to `-i sin`. -/
+theorem vacuumRabiAmplitude_apply (Omega t : ℝ) :
+    VacuumRabiAmplitude Omega t =
+      (-Complex.I) * (Real.sin (Omega * t / 2) : ℂ) := rfl
+
+/-- Frontier 0015-5: Mathlib's complex norm-square of `-i r` is `r²`. -/
+theorem complex_normSq_neg_I_mul_real (r : ℝ) :
+    Complex.normSq ((-Complex.I) * (r : ℂ)) = r ^ 2 := by
+  simp [Complex.normSq_apply]
+  ring
+
+/-- Frontier 0015-6: the squared norm of `-i r` is `r²`. -/
+theorem norm_neg_I_mul_real_sq (r : ℝ) :
+    ‖((-Complex.I) * (r : ℂ))‖ ^ 2 = r ^ 2 := by
+  rw [norm_mul, norm_neg, Complex.norm_I]
+  norm_num
+
+/-- Frontier 0015-7: the Born probability of `-i r` is `r²`. -/
+theorem probabilityFromAmplitude_neg_I_mul_real (r : ℝ) :
+    probabilityFromAmplitude ((-Complex.I) * (r : ℂ)) = r ^ 2 := by
+  unfold probabilityFromAmplitude
+  exact norm_neg_I_mul_real_sq r
+
+/-- Frontier 0015-8: the vacuum-Rabi amplitude has Born probability
+`sin²(Ωt/2)`. -/
+theorem probabilityFromVacuumRabiAmplitude (Omega t : ℝ) :
+    probabilityFromAmplitude (VacuumRabiAmplitude Omega t) =
+      Real.sin (Omega * t / 2) ^ 2 := by
+  unfold VacuumRabiAmplitude
+  exact probabilityFromAmplitude_neg_I_mul_real (Real.sin (Omega * t / 2))
+
+/-- Frontier 0015-9: a transition amplitude identified with the vacuum-Rabi
+amplitude yields the source probability. -/
+theorem bornProbabilityFromVacuumRabiTransitionAmplitude {z : ℂ} {Omega t : ℝ}
+    (h : z = VacuumRabiAmplitude Omega t) :
+    probabilityFromAmplitude z = Real.sin (Omega * t / 2) ^ 2 := by
+  rw [h]
+  exact probabilityFromVacuumRabiAmplitude Omega t
+
+/-- Frontier 0015-10: if the measured probability is defined by the Born rule
+from the transition amplitude, the Rabi probability follows from the state
+expansion. -/
+theorem vacuumRabiProbabilityFromStateExpansion {H : Type*}
+    [NormedAddCommGroup H] [InnerProductSpace ℂ H] [CompleteSpace H]
+    (psi groundOne excitedZero : HilbertStateCarrier ℂ H) (Omega t Pg : ℝ)
+    (ground_normalized : NormalizedStateWitness groundOne)
+    (orthogonality : HilbertOrthogonalityWitness (𝕜 := ℂ) groundOne excitedZero)
+    (state_expansion : TwoLevelRabiStateExpansion psi excitedZero groundOne Omega t)
+    (probability_definition :
+      Pg = probabilityFromAmplitude (transitionAmplitude ℂ groundOne psi)) :
+    Pg = Real.sin (Omega * t / 2) ^ 2 := by
+  rw [probability_definition]
+  exact bornProbabilityFromVacuumRabiTransitionAmplitude
+    (transitionAmplitude_from_twoLevelRabiStateExpansion
+      psi groundOne excitedZero Omega t ground_normalized orthogonality state_expansion)
+
+/-- Physics role: projection-like operators should expose idempotence and an
+inner-product symmetry condition before they are used as orthogonal projections. -/
+structure HilbertProjectionWitness {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (P : HilbertBoundedOperator 𝕜 H) : Prop where
+  idempotent : P.comp P = P
+  inner_symmetric : ∀ x y : H, inner 𝕜 (P x) y = inner 𝕜 x (P y)
+
+/-- Physics role: a candidate adjoint must satisfy the Hilbert-space inner-product relation. -/
+structure HilbertOperatorAdjointWitness {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (T Tstar : HilbertBoundedOperator 𝕜 H) : Prop where
+  adjoint_relation : ∀ x y : H, inner 𝕜 (T x) y = inner 𝕜 x (Tstar y)
+
+/-- Physics role: a self-adjoint observable is represented by the adjoint relation to itself. -/
+structure SelfAdjointOperatorWitness {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (T : HilbertBoundedOperator 𝕜 H) : Prop where
+  self_adjoint_relation : ∀ x y : H, inner 𝕜 (T x) y = inner 𝕜 x (T y)
+
+/-- Physics role: source-level differentiated eigenstate equation
+`H' ψ + H ψ' = E' ψ + E ψ'` at a parameter. -/
+def DifferentiatedEigenstateEquation {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] (H0 dH : HilbertBoundedOperator ℂ H)
+    (psi dpsi : H) (energy dEnergy : ℂ) : Prop :=
+  dH psi + H0 dpsi = dEnergy • psi + energy • dpsi
+
+/-- Frontier 0021-3: the Hellmann-Feynman derivative follows from the
+differentiated eigen-equation, normalization, self-adjointness, and the
+real-valued eigenvalue cancellation. -/
+theorem hellmannFeynmanDerivativeFromDifferentiatedEigenEquation {H : Type*}
+    [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (H0 dH : HilbertBoundedOperator ℂ H) (psi dpsi : H) (energy dEnergy : ℂ)
+    (normalized : NormalizedStateWitness psi)
+    (self_adjoint : SelfAdjointOperatorWitness H0)
+    (eigen_eq : H0 psi = energy • psi)
+    (eigenvalue_real : star energy = energy)
+    (differentiated_eigen_eq :
+      DifferentiatedEigenstateEquation H0 dH psi dpsi energy dEnergy) :
+    dEnergy = hilbertExpectation dH psi := by
+  have hnorm : inner ℂ psi psi = 1 := by
+    rw [inner_self_eq_norm_sq_to_K, normalized.norm_eq_one]
+    norm_num
+  have hH : inner ℂ psi (H0 dpsi) = energy * inner ℂ psi dpsi := by
+    rw [← self_adjoint.self_adjoint_relation psi dpsi, eigen_eq, inner_smul_left]
+    have hstar : (starRingEnd ℂ) energy = energy := by
+      simpa using eigenvalue_real
+    rw [hstar]
+  unfold DifferentiatedEigenstateEquation at differentiated_eigen_eq
+  have hinner := congrArg (fun v => inner ℂ psi v) differentiated_eigen_eq
+  change inner ℂ psi (dH psi + H0 dpsi) =
+    inner ℂ psi (dEnergy • psi + energy • dpsi) at hinner
+  rw [inner_add_right, inner_add_right, inner_smul_right, inner_smul_right,
+    hnorm, hH] at hinner
+  have hinner' : inner ℂ psi (dH psi) + energy * inner ℂ psi dpsi =
+      dEnergy + energy * inner ℂ psi dpsi := by
+    simpa using hinner
+  have hcalc : inner ℂ psi (dH psi) = dEnergy :=
+    add_right_cancel hinner'
+  unfold hilbertExpectation
+  exact hcalc.symm
+
+/-- Physics role: a unitary evolution candidate preserves the Hilbert inner product. -/
+structure UnitaryOperatorWitness {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (U : HilbertBoundedOperator 𝕜 H) : Prop where
+  preserves_inner : ∀ x y : H, inner 𝕜 (U x) (U y) = inner 𝕜 x y
+
+/-- Physics role: Hilbert-Schmidt support is kept as an explicit basis-relative
+summability witness until promoted through a stronger Mathlib-specific API. -/
+structure HilbertSchmidtWithBasisWitness {ι 𝕜 H : Type*} [RCLike 𝕜]
+    [NormedAddCommGroup H] [InnerProductSpace 𝕜 H] [CompleteSpace H]
+    (b : HilbertBasisSurface ι 𝕜 H) (T : HilbertBoundedOperator 𝕜 H) : Prop where
+  square_summable_images : Summable fun i : ι => ‖T (b i)‖ ^ 2
+
+/-- Mathlib grounding: a position wavefunction is a function into complex
+amplitudes until a stronger measure-theoretic API is promoted. -/
+abbrev PositionWavefunction (X : Type*) := X → ℂ
+
+/-- Physics role: the Born-rule position-expectation integrand `x |ψ x|²`. -/
+noncomputable def positionExpectationIntegrand {X : Type*} (xValue : X → ℝ)
+    (psi : PositionWavefunction X) (x : X) : ℝ :=
+  xValue x * ‖psi x‖ ^ 2
+
+/-- Mathlib grounding: the position-expectation integrand unfolds to the
+Born-rule density weighted by the position value. -/
+theorem positionExpectationIntegrand_apply {X : Type*} (xValue : X → ℝ)
+    (psi : PositionWavefunction X) (x : X) :
+    positionExpectationIntegrand xValue psi x = xValue x * ‖psi x‖ ^ 2 := rfl
+
+/-- Physics role: a position-basis resolution identity is represented by an
+explicit measure kernel surface before stronger delta-kernel APIs are promoted. -/
+structure PositionResolutionIdentityMeasureKernel (X : Type*) [MeasurableSpace X]
+    (μ : MeasureTheory.Measure X) : Prop where
+  measure_space_grounded : True
+
+/-- Physics role: the Born-rule position expectation as a Mathlib measure
+integral. -/
+noncomputable def positionExpectationIntegral {X : Type*} [MeasurableSpace X]
+    (μ : MeasureTheory.Measure X) (xValue : X → ℝ) (psi : PositionWavefunction X) : ℝ :=
+  ∫ x, positionExpectationIntegrand xValue psi x ∂μ
+
+/-- Mathlib grounding: the position expectation integral is definitionally the
+integral of the Born-rule position integrand. -/
+theorem positionExpectationIntegral_apply {X : Type*} [MeasurableSpace X]
+    (μ : MeasureTheory.Measure X) (xValue : X → ℝ) (psi : PositionWavefunction X) :
+    positionExpectationIntegral μ xValue psi =
+      ∫ x, positionExpectationIntegrand xValue psi x ∂μ := rfl
+
+end HilbertSpace
+end Foundations
+end MathformerPhysicsLib
+""",
+    "UnboundedOperators": """import Mathlib
+
+namespace MathformerPhysicsLib
+namespace Foundations
+namespace UnboundedOperators
+
+/-- Mathlib grounding: an unbounded Hilbert operator is represented by a
+Mathlib linear submodule domain together with a linear action from the domain
+subtype into the ambient Hilbert space. -/
+structure UnboundedHilbertOperator (𝕜 : Type*) (H : Type*) [RCLike 𝕜]
+    [NormedAddCommGroup H] [InnerProductSpace 𝕜 H] where
+  domain : Submodule 𝕜 H
+  action : domain →ₗ[𝕜] H
+
+/-- Physics role: domain membership remains an explicit proposition. -/
+def MemDomain {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H] [InnerProductSpace 𝕜 H]
+    (A : UnboundedHilbertOperator 𝕜 H) (x : H) : Prop :=
+  x ∈ A.domain
+
+/-- Physics role: applying an unbounded operator requires explicit domain evidence. -/
+def apply {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H] [InnerProductSpace 𝕜 H]
+    (A : UnboundedHilbertOperator 𝕜 H) (x : H) (hx : MemDomain A x) : H :=
+  A.action ⟨x, hx⟩
+
+/-- Mathlib grounding: restrict a domain-bearing operator to a submodule of
+its original domain.  This exposes core restrictions without pretending the
+restricted operator is bounded. -/
+def restrictToSubmodule {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (A : UnboundedHilbertOperator 𝕜 H)
+    (S : Submodule 𝕜 H) (hS : S ≤ A.domain) :
+    UnboundedHilbertOperator 𝕜 H where
+  domain := S
+  action := A.action.comp (Submodule.inclusion hS)
+
+/-- Mathlib grounding: applying a restricted unbounded operator is definitionally
+the original operator action with the submodule-domain evidence transported. -/
+theorem restrictToSubmodule_apply {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (A : UnboundedHilbertOperator 𝕜 H)
+    (S : Submodule 𝕜 H) (hS : S ≤ A.domain) (x : S) :
+    apply (restrictToSubmodule A S hS) (x : H) x.property =
+      apply A (x : H) (hS x.property) := rfl
+
+/-- Mathlib grounding: applying to a domain subtype is definitional. -/
+theorem apply_subtype {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (A : UnboundedHilbertOperator 𝕜 H) (x : A.domain) :
+    apply A (x : H) x.property = A.action x := rfl
+
+/-- Mathlib grounding: unbounded-operator application is additive on its domain. -/
+theorem apply_add {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H] [InnerProductSpace 𝕜 H]
+    (A : UnboundedHilbertOperator 𝕜 H) {x y : H} (hx : MemDomain A x) (hy : MemDomain A y) :
+    apply A (x + y) (A.domain.add_mem hx hy) = apply A x hx + apply A y hy := by
+  exact A.action.map_add ⟨x, hx⟩ ⟨y, hy⟩
+
+/-- Mathlib grounding: unbounded-operator application respects scalar
+multiplication on its domain. -/
+theorem apply_smul {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (A : UnboundedHilbertOperator 𝕜 H) (c : 𝕜) {x : H}
+    (hx : MemDomain A x) :
+    apply A (c • x) (A.domain.smul_mem c hx) = c • apply A x hx := by
+  exact A.action.map_smul c ⟨x, hx⟩
+
+/-- Mathlib grounding: the graph of a domain-bearing operator is a set in the
+product Hilbert space. -/
+def graph {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H] [InnerProductSpace 𝕜 H]
+    (A : UnboundedHilbertOperator 𝕜 H) : Set (H × H) :=
+  {p | ∃ hx : MemDomain A p.1, apply A p.1 hx = p.2}
+
+/-- Physics role: a dense-domain obligation is explicit and Mathlib-native. -/
+def HasDenseDomain {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H] [InnerProductSpace 𝕜 H]
+    (A : UnboundedHilbertOperator 𝕜 H) : Prop :=
+  Dense ((A.domain : Set H))
+
+/-- Physics role: a closed unbounded operator is one whose graph is closed in
+the Mathlib product topology. -/
+def IsClosedUnboundedOperator {𝕜 H : Type*} [RCLike 𝕜] [NormedAddCommGroup H]
+    [InnerProductSpace 𝕜 H] (A : UnboundedHilbertOperator 𝕜 H) : Prop :=
+  IsClosed (graph A)
+
+/-- Physics role: symmetry for an unbounded Hilbert operator is an
+inner-product identity on the operator domain. -/
+structure SymmetricUnboundedOperator {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] (A : UnboundedHilbertOperator ℂ H) : Prop where
+  inner_symmetric : ∀ x y : A.domain,
+    inner ℂ (A.action x) (y : H) = inner ℂ (x : H) (A.action y)
+
+/-- Physics role: an adjoint witness relates two domain-bearing operators by
+the Hilbert-space adjoint pairing. -/
+structure UnboundedAdjointWitness {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] (A Astar : UnboundedHilbertOperator ℂ H) : Prop where
+  pairing : ∀ x : A.domain, ∀ y : Astar.domain,
+    inner ℂ (A.action x) (y : H) = inner ℂ (x : H) (Astar.action y)
+
+/-- Physics role: a self-adjoint unbounded-operator witness records dense
+domain, adjoint pairing to itself, and a maximal-domain obligation. -/
+structure SelfAdjointUnboundedOperatorWitness {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] (A : UnboundedHilbertOperator ℂ H) : Prop where
+  dense_domain : HasDenseDomain A
+  adjoint_pairing : UnboundedAdjointWitness A A
+  adjoint_domain_maximal :
+    ∀ B : UnboundedHilbertOperator ℂ H, UnboundedAdjointWitness A B → B.domain ≤ A.domain
+
+/-- Physics role: an expectation value for an unbounded operator is only formed
+for a state that already carries domain evidence. -/
+def expectationOnDomain {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (A : UnboundedHilbertOperator ℂ H) (psi : A.domain) : ℂ :=
+  inner ℂ (psi : H) (A.action psi)
+
+/-- Physics role: a common invariant core for two unbounded operators. -/
+structure CommonInvariantCore {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (X P : UnboundedHilbertOperator ℂ H) where
+  core : Submodule ℂ H
+  core_dense : Dense ((core : Set H))
+  core_le_position_domain : core ≤ X.domain
+  core_le_momentum_domain : core ≤ P.domain
+  position_maps_core : ∀ psi : core, apply X (psi : H) (core_le_position_domain psi.property) ∈ core
+  momentum_maps_core : ∀ psi : core, apply P (psi : H) (core_le_momentum_domain psi.property) ∈ core
+
+/-- Physics role: the commutator value `[X,P]ψ = X(Pψ) - P(Xψ)` on a common
+invariant core. -/
+def commutatorValueOnCore {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    {X P : UnboundedHilbertOperator ℂ H} (C : CommonInvariantCore X P) (psi : C.core) : H :=
+  apply X
+      (apply P (psi : H) (C.core_le_momentum_domain psi.property))
+      (C.core_le_position_domain (C.momentum_maps_core psi)) -
+    apply P
+      (apply X (psi : H) (C.core_le_position_domain psi.property))
+      (C.core_le_momentum_domain (C.position_maps_core psi))
+
+/-- Physics role: a position/momentum pair is an unbounded-operator pair with a
+dense common invariant core and a canonical commutator on that core. -/
+structure PositionMomentumPair {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H] where
+  position : UnboundedHilbertOperator ℂ H
+  momentum : UnboundedHilbertOperator ℂ H
+  hbar : ℝ
+  hbar_nonneg : 0 ≤ hbar
+  position_self_adjoint : SelfAdjointUnboundedOperatorWitness position
+  momentum_self_adjoint : SelfAdjointUnboundedOperatorWitness momentum
+  common_core : CommonInvariantCore position momentum
+  canonical_commutator_on_core :
+    ∀ psi : common_core.core,
+      commutatorValueOnCore common_core psi = (Complex.I * (hbar : ℂ)) • (psi : H)
+
+/-- Physics role: the commutator expectation on a normalized vector in the
+common core is the canonical scalar `iℏ`. -/
+theorem canonicalCommutatorExpectationOnNormalizedCore {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] (Q : PositionMomentumPair)
+    (psi : Q.common_core.core) (normalized : ‖(psi : H)‖ = 1) :
+    inner ℂ (psi : H) (commutatorValueOnCore Q.common_core psi) = Complex.I * (Q.hbar : ℂ) := by
+  have hinner : inner ℂ (psi : H) (psi : H) = 1 := by
+    rw [inner_self_eq_norm_sq_to_K, normalized]
+    norm_num
+  rw [Q.canonical_commutator_on_core psi]
+  rw [inner_smul_right, hinner, mul_one]
+
+end UnboundedOperators
+end Foundations
+end MathformerPhysicsLib
+""",
+    "PositionMomentumModels": """import MathformerPhysicsLib.Lean.Foundations.UnboundedOperators
+
+namespace MathformerPhysicsLib
+namespace Foundations
+namespace PositionMomentumModels
+
+open MathformerPhysicsLib.Foundations.UnboundedOperators
+open MeasureTheory
+
+/-- Mathlib grounding: a Schwartz wavefunction on the real line is Mathlib's
+`SchwartzMap ℝ ℂ`, not a locally redefined smooth-decay predicate. -/
+abbrev RealSchwartzWavefunction := SchwartzMap ℝ ℂ
+
+/-- Mathlib grounding: differentiation on real Schwartz wavefunctions reuses
+Mathlib's continuous derivative operator on Schwartz space. -/
+noncomputable def realSchwartzDerivative :
+    RealSchwartzWavefunction →L[ℂ] RealSchwartzWavefunction :=
+  SchwartzMap.derivCLM ℂ
+
+/-- Physics role: a controlled Schwartz/L2-style realization of the
+position-momentum commutator. -/
+structure SchwartzL2PositionMomentumModel (H : Type*) [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] [CompleteSpace H] where
+  position : UnboundedHilbertOperator ℂ H
+  momentum : UnboundedHilbertOperator ℂ H
+  hbar : ℝ
+  hbar_nonneg : 0 ≤ hbar
+  common_core : CommonInvariantCore position momentum
+  position_self_adjoint : SelfAdjointUnboundedOperatorWitness position
+  momentum_self_adjoint : SelfAdjointUnboundedOperatorWitness momentum
+  schwartzToHilbert : RealSchwartzWavefunction → H
+  core_represented_by_schwartz :
+    ∀ psi : common_core.core, ∃ f : RealSchwartzWavefunction, schwartzToHilbert f = (psi : H)
+  positionActionOnSchwartz : RealSchwartzWavefunction → RealSchwartzWavefunction
+  momentumActionOnSchwartz : RealSchwartzWavefunction → RealSchwartzWavefunction
+  momentum_is_minus_i_hbar_derivative :
+    ∀ f : RealSchwartzWavefunction,
+      momentumActionOnSchwartz f =
+        (-Complex.I * (hbar : ℂ)) • realSchwartzDerivative f
+  position_action_matches_hilbert_operator :
+    ∀ psi : common_core.core, ∀ f : RealSchwartzWavefunction,
+      schwartzToHilbert f = (psi : H) →
+        schwartzToHilbert (positionActionOnSchwartz f) =
+          apply position (psi : H) (common_core.core_le_position_domain psi.property)
+  momentum_action_matches_hilbert_operator :
+    ∀ psi : common_core.core, ∀ f : RealSchwartzWavefunction,
+      schwartzToHilbert f = (psi : H) →
+        schwartzToHilbert (momentumActionOnSchwartz f) =
+          apply momentum (psi : H) (common_core.core_le_momentum_domain psi.property)
+  canonical_commutator_on_core :
+    ∀ psi : common_core.core,
+      commutatorValueOnCore common_core psi = (Complex.I * (hbar : ℂ)) • (psi : H)
+
+/-- A Schwartz/L2 realization promotes to the abstract unbounded
+position-momentum pair consumed by downstream Dirac/Heisenberg formalizations. -/
+def SchwartzL2PositionMomentumModel.toPositionMomentumPair {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] [CompleteSpace H] (M : SchwartzL2PositionMomentumModel H) :
+    PositionMomentumPair (H := H) :=
+  { position := M.position
+    momentum := M.momentum
+    hbar := M.hbar
+    hbar_nonneg := M.hbar_nonneg
+    position_self_adjoint := M.position_self_adjoint
+    momentum_self_adjoint := M.momentum_self_adjoint
+    common_core := M.common_core
+    canonical_commutator_on_core := M.canonical_commutator_on_core }
+
+/-- Physics role: the concrete Schwartz/L2 realization supplies the same
+canonical expectation theorem as the abstract unbounded pair. -/
+theorem canonicalCommutatorExpectationOnSchwartzCore {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] [CompleteSpace H] (M : SchwartzL2PositionMomentumModel H)
+    (psi : M.common_core.core) (normalized : ‖(psi : H)‖ = 1) :
+    inner ℂ (psi : H) (commutatorValueOnCore M.common_core psi) =
+      Complex.I * (M.hbar : ℂ) := by
+  exact canonicalCommutatorExpectationOnNormalizedCore M.toPositionMomentumPair psi normalized
+
+/-- Mathlib grounding: the concrete Hilbert carrier for a particle on the real
+line is Mathlib's complex `L²(ℝ)` space over Lebesgue volume. -/
+abbrev RealLineL2Wavefunction := MeasureTheory.Lp ℂ 2 (volume : Measure ℝ)
+
+/-- Mathlib grounding: the canonical injection from real-line Schwartz
+wavefunctions into `L²(ℝ)` is Mathlib's continuous `toLpCLM` map. -/
+noncomputable def realSchwartzToL2 :
+    RealSchwartzWavefunction →L[ℂ] RealLineL2Wavefunction :=
+  SchwartzMap.toLpCLM ℂ ℂ 2 (volume : Measure ℝ)
+
+/-- Mathlib grounding: the `L²` class produced by `realSchwartzToL2` agrees
+almost everywhere with the original Schwartz function. -/
+theorem realSchwartzToL2_apply_ae (f : RealSchwartzWavefunction) :
+    realSchwartzToL2 f =ᵐ[(volume : Measure ℝ)] f := by
+  simpa [realSchwartzToL2] using
+    (SchwartzMap.coeFn_toLp f 2 (volume : Measure ℝ))
+
+/-- Recursive frontier: density of the Schwartz image in real-line `L²`. -/
+noncomputable def RealLineL2SchwartzRangeDense : Prop :=
+  DenseRange realSchwartzToL2
+
+/-- Frontier 0014-1: the Schwartz image in `L²(ℝ)` as a Mathlib submodule. -/
+noncomputable def realSchwartzL2RangeSubmodule : Submodule ℂ RealLineL2Wavefunction :=
+  LinearMap.range realSchwartzToL2
+
+/-- Frontier 0014-2: every embedded Schwartz wavefunction belongs to the
+Mathlib range submodule. -/
+theorem realSchwartzToL2_mem_rangeSubmodule (f : RealSchwartzWavefunction) :
+    realSchwartzToL2 f ∈ realSchwartzL2RangeSubmodule :=
+  ⟨f, rfl⟩
+
+/-- Frontier 0014-3: the submodule range and the ordinary set-theoretic range
+name the same subset of `L²(ℝ)`. -/
+theorem realSchwartzL2RangeSubmodule_coe :
+    (realSchwartzL2RangeSubmodule : Set RealLineL2Wavefunction) =
+      Set.range realSchwartzToL2 := by
+  ext psi
+  rfl
+
+/-- Frontier 0014-4: density can be stated equivalently for the structured
+range submodule. -/
+noncomputable def RealLineL2SchwartzRangeSubmoduleDense : Prop :=
+  Dense ((realSchwartzL2RangeSubmodule : Set RealLineL2Wavefunction))
+
+/-- Frontier 0014-5: dense range of the embedding supplies density of the
+structured range submodule. -/
+theorem realSchwartzRangeSubmoduleDense_of_denseRange
+    (h : RealLineL2SchwartzRangeDense) :
+    RealLineL2SchwartzRangeSubmoduleDense := by
+  simpa [RealLineL2SchwartzRangeSubmoduleDense, RealLineL2SchwartzRangeDense,
+    realSchwartzL2RangeSubmodule_coe] using h
+
+/-- Recursive frontier: the model's common invariant core is exactly the
+Schwartz image in `L²(ℝ)`. -/
+noncomputable def RealLineL2CoreIsSchwartzRange
+    (M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction) : Prop :=
+  (M.common_core.core : Set RealLineL2Wavefunction) = Set.range realSchwartzToL2
+
+/-- Frontier 0014-6: a stronger core statement says the common invariant core
+is exactly the Schwartz range submodule. -/
+noncomputable def RealLineL2CoreEqualsSchwartzRangeSubmodule
+    (M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction) : Prop :=
+  M.common_core.core = realSchwartzL2RangeSubmodule
+
+/-- Frontier 0014-7: equality with the structured Schwartz range submodule
+implies the older set-level core/range statement. -/
+theorem realLineL2CoreIsSchwartzRange_of_submodule_eq
+    {M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction}
+    (h : RealLineL2CoreEqualsSchwartzRangeSubmodule M) :
+    RealLineL2CoreIsSchwartzRange M := by
+  unfold RealLineL2CoreIsSchwartzRange
+  rw [h, realSchwartzL2RangeSubmodule_coe]
+
+/-- Frontier 0014-8: once the core is the Schwartz range and the embedding has
+dense range, the model's common core is dense by Mathlib topology. -/
+theorem realLineL2CoreDense_of_rangeSubmodule
+    {M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction}
+    (hcore : RealLineL2CoreEqualsSchwartzRangeSubmodule M)
+    (hdense : RealLineL2SchwartzRangeDense) :
+    Dense ((M.common_core.core : Set RealLineL2Wavefunction)) := by
+  rw [hcore]
+  exact realSchwartzRangeSubmoduleDense_of_denseRange hdense
+
+/-- Frontier support: a concrete model's set-level common-core equality
+promotes to equality with the structured Schwartz range submodule. -/
+theorem RealLineL2CoreEqualsSchwartzRangeSubmodule.of_set_range
+    {M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction}
+    (h : RealLineL2CoreIsSchwartzRange M) :
+    RealLineL2CoreEqualsSchwartzRangeSubmodule M := by
+  ext psi
+  unfold RealLineL2CoreIsSchwartzRange at h
+  have hset :
+      (M.common_core.core : Set RealLineL2Wavefunction) =
+        (realSchwartzL2RangeSubmodule : Set RealLineL2Wavefunction) := by
+    rw [h, realSchwartzL2RangeSubmodule_coe]
+  exact Set.ext_iff.mp hset psi
+
+/-- Physics role: the real-line position action is multiplication by the
+coordinate on Schwartz wavefunctions. -/
+def RealLinePositionActionIsCoordinateMultiplication
+    (M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction) : Prop :=
+  ∀ f : RealSchwartzWavefunction, ∀ x : ℝ,
+    M.positionActionOnSchwartz f x = (x : ℂ) * f x
+
+/-- Frontier 0014-9: the real-line momentum action is the standard
+`-iℏ d/dx` action already grounded in Mathlib's Schwartz derivative. -/
+def RealLineMomentumActionIsDerivative
+    (M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction) : Prop :=
+  ∀ f : RealSchwartzWavefunction,
+    M.momentumActionOnSchwartz f =
+      (-Complex.I * (M.hbar : ℂ)) • realSchwartzDerivative f
+
+/-- Frontier 0014-10: the pointwise Schwartz commutator before quotienting into
+`L²`, used as the concrete calculation target for the canonical commutator. -/
+noncomputable def RealLineSchwartzCommutatorAction
+    (M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction)
+    (f : RealSchwartzWavefunction) : RealSchwartzWavefunction :=
+  M.positionActionOnSchwartz (M.momentumActionOnSchwartz f) -
+    M.momentumActionOnSchwartz (M.positionActionOnSchwartz f)
+
+/-- Frontier 0014-10 companion: the pointwise canonical commutator on
+Schwartz wavefunctions. -/
+def RealLineSchwartzCanonicalCommutator
+    (M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction) : Prop :=
+  ∀ f : RealSchwartzWavefunction, ∀ x : ℝ,
+    RealLineSchwartzCommutatorAction M f x = (Complex.I * (M.hbar : ℂ)) * f x
+
+/-- Frontier 0014 companion: the canonical Schwartz commutator as equality of
+Mathlib Schwartz functions, not only pointwise scalar notation. -/
+def RealLineSchwartzCanonicalCommutatorAsSchwartzMap
+    (M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction) : Prop :=
+  ∀ f : RealSchwartzWavefunction,
+    RealLineSchwartzCommutatorAction M f = (Complex.I * (M.hbar : ℂ)) • f
+
+/-- Frontier support: pointwise canonical commutator evidence promotes to an
+equality in Mathlib's `SchwartzMap` carrier. -/
+theorem realLineSchwartzCanonicalCommutatorAsSchwartzMap_of_pointwise
+    {M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction}
+    (h : RealLineSchwartzCanonicalCommutator M) :
+    RealLineSchwartzCanonicalCommutatorAsSchwartzMap M := by
+  intro f
+  ext x
+  simpa using h f x
+
+/-- Frontier support: the SchwartzMap equality can be read back as the
+pointwise canonical commutator. -/
+theorem realLineSchwartzCanonicalCommutator_of_schwartzMap
+    {M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction}
+    (h : RealLineSchwartzCanonicalCommutatorAsSchwartzMap M) :
+    RealLineSchwartzCanonicalCommutator M := by
+  intro f x
+  have hx := congrArg (fun g : RealSchwartzWavefunction => g x) (h f)
+  simpa using hx
+
+/-- Frontier support: the generic model already supplies the real-line momentum
+derivative law. -/
+theorem realLineMomentumActionIsDerivative
+    (M : SchwartzL2PositionMomentumModel RealLineL2Wavefunction) :
+    RealLineMomentumActionIsDerivative M :=
+  M.momentum_is_minus_i_hbar_derivative
+
+/-- Concrete `L²(ℝ)` realization package for the position-momentum model. -/
+structure RealLineL2PositionMomentumModel where
+  model : SchwartzL2PositionMomentumModel RealLineL2Wavefunction
+  schwartzToHilbert_eq_toLp : model.schwartzToHilbert = realSchwartzToL2
+  schwartz_dense_range : RealLineL2SchwartzRangeDense
+  common_core_is_schwartz_range : RealLineL2CoreIsSchwartzRange model
+  position_action_is_coordinate_multiplication : RealLinePositionActionIsCoordinateMultiplication model
+
+/-- Frontier support: a concrete model inherits core density from the
+Schwartz-to-`L²` dense-range certificate. -/
+theorem RealLineL2PositionMomentumModel.core_dense_from_schwartz_range
+    (M : RealLineL2PositionMomentumModel) :
+    Dense ((M.model.common_core.core : Set RealLineL2Wavefunction)) := by
+  have hcore := M.common_core_is_schwartz_range
+  unfold RealLineL2CoreIsSchwartzRange at hcore
+  rw [hcore]
+  exact M.schwartz_dense_range
+
+/-- Frontier support: the concrete model's common core is exactly the Mathlib
+Schwartz range submodule, not only the corresponding set range. -/
+theorem RealLineL2PositionMomentumModel.common_core_eq_schwartz_range_submodule
+    (M : RealLineL2PositionMomentumModel) :
+    RealLineL2CoreEqualsSchwartzRangeSubmodule M.model :=
+  RealLineL2CoreEqualsSchwartzRangeSubmodule.of_set_range M.common_core_is_schwartz_range
+
+/-- Frontier support: the concrete model exposes the pointwise coordinate
+multiplication law for position. -/
+theorem RealLineL2PositionMomentumModel.position_coordinate_multiplication
+    (M : RealLineL2PositionMomentumModel) :
+    RealLinePositionActionIsCoordinateMultiplication M.model :=
+  M.position_action_is_coordinate_multiplication
+
+/-- Frontier support: the concrete model exposes the `-iℏ d/dx` momentum law. -/
+theorem RealLineL2PositionMomentumModel.momentum_derivative
+    (M : RealLineL2PositionMomentumModel) :
+    RealLineMomentumActionIsDerivative M.model :=
+  realLineMomentumActionIsDerivative M.model
+
+/-- Frontier support: position action compatibility specialized to the
+Mathlib Schwartz-to-`L²` embedding. -/
+theorem RealLineL2PositionMomentumModel.position_action_matches_toL2
+    (M : RealLineL2PositionMomentumModel)
+    (psi : M.model.common_core.core) (f : RealSchwartzWavefunction)
+    (hf : realSchwartzToL2 f = (psi : RealLineL2Wavefunction)) :
+    realSchwartzToL2 (M.model.positionActionOnSchwartz f) =
+      apply M.model.position (psi : RealLineL2Wavefunction)
+        (M.model.common_core.core_le_position_domain psi.property) := by
+  have hf' : M.model.schwartzToHilbert f = (psi : RealLineL2Wavefunction) := by
+    simpa [M.schwartzToHilbert_eq_toLp] using hf
+  have h := M.model.position_action_matches_hilbert_operator psi f hf'
+  simpa [M.schwartzToHilbert_eq_toLp] using h
+
+/-- Frontier support: momentum action compatibility specialized to the Mathlib
+Schwartz-to-`L²` embedding. -/
+theorem RealLineL2PositionMomentumModel.momentum_action_matches_toL2
+    (M : RealLineL2PositionMomentumModel)
+    (psi : M.model.common_core.core) (f : RealSchwartzWavefunction)
+    (hf : realSchwartzToL2 f = (psi : RealLineL2Wavefunction)) :
+    realSchwartzToL2 (M.model.momentumActionOnSchwartz f) =
+      apply M.model.momentum (psi : RealLineL2Wavefunction)
+        (M.model.common_core.core_le_momentum_domain psi.property) := by
+  have hf' : M.model.schwartzToHilbert f = (psi : RealLineL2Wavefunction) := by
+    simpa [M.schwartzToHilbert_eq_toLp] using hf
+  have h := M.model.momentum_action_matches_hilbert_operator psi f hf'
+  simpa [M.schwartzToHilbert_eq_toLp] using h
+
+/-- Frontier 0014-21: the position operator restricted to the model's
+Schwartz/common core. -/
+noncomputable def RealLinePositionRestrictedToSchwartzCore
+    (M : RealLineL2PositionMomentumModel) :
+    UnboundedHilbertOperator ℂ RealLineL2Wavefunction :=
+  restrictToSubmodule M.model.position M.model.common_core.core
+    M.model.common_core.core_le_position_domain
+
+/-- Frontier 0014-22: the momentum operator restricted to the model's
+Schwartz/common core. -/
+noncomputable def RealLineMomentumRestrictedToSchwartzCore
+    (M : RealLineL2PositionMomentumModel) :
+    UnboundedHilbertOperator ℂ RealLineL2Wavefunction :=
+  restrictToSubmodule M.model.momentum M.model.common_core.core
+    M.model.common_core.core_le_momentum_domain
+
+/-- Frontier support: the restricted position operator has dense domain because
+the common invariant core is dense. -/
+theorem RealLinePositionRestrictedToSchwartzCore_hasDenseDomain
+    (M : RealLineL2PositionMomentumModel) :
+    HasDenseDomain (RealLinePositionRestrictedToSchwartzCore M) :=
+  show Dense ((M.model.common_core.core : Set RealLineL2Wavefunction)) from
+  M.model.common_core.core_dense
+
+/-- Frontier support: the restricted momentum operator has dense domain because
+the common invariant core is dense. -/
+theorem RealLineMomentumRestrictedToSchwartzCore_hasDenseDomain
+    (M : RealLineL2PositionMomentumModel) :
+    HasDenseDomain (RealLineMomentumRestrictedToSchwartzCore M) :=
+  show Dense ((M.model.common_core.core : Set RealLineL2Wavefunction)) from
+  M.model.common_core.core_dense
+
+/-- Frontier 0014-23: the exact graph-core target for position.  This is the
+Mathlib topology statement needed to upgrade a Schwartz-core operator into the
+closed real-line position operator. -/
+def RealLinePositionSchwartzGraphCoreTarget
+    (M : RealLineL2PositionMomentumModel) : Prop :=
+  closure (graph (RealLinePositionRestrictedToSchwartzCore M)) =
+    graph M.model.position
+
+/-- Frontier 0014-24: the exact graph-core target for momentum.  This is the
+Mathlib topology statement needed to upgrade a Schwartz-core operator into the
+closed real-line momentum operator. -/
+def RealLineMomentumSchwartzGraphCoreTarget
+    (M : RealLineL2PositionMomentumModel) : Prop :=
+  closure (graph (RealLineMomentumRestrictedToSchwartzCore M)) =
+    graph M.model.momentum
+
+/-- Frontier 0014-25: position essential self-adjointness on the Schwartz core,
+spelled as a dense restricted operator, a graph-core closure target, and the
+self-adjoint closure witness carried by the ambient model. -/
+def RealLinePositionEssentialSelfAdjointOnSchwartzCoreTarget
+    (M : RealLineL2PositionMomentumModel) : Prop :=
+  HasDenseDomain (RealLinePositionRestrictedToSchwartzCore M) ∧
+    RealLinePositionSchwartzGraphCoreTarget M ∧
+      SelfAdjointUnboundedOperatorWitness M.model.position
+
+/-- Frontier 0014-26: momentum essential self-adjointness on the Schwartz core,
+spelled as a dense restricted operator, a graph-core closure target, and the
+self-adjoint closure witness carried by the ambient model. -/
+def RealLineMomentumEssentialSelfAdjointOnSchwartzCoreTarget
+    (M : RealLineL2PositionMomentumModel) : Prop :=
+  HasDenseDomain (RealLineMomentumRestrictedToSchwartzCore M) ∧
+    RealLineMomentumSchwartzGraphCoreTarget M ∧
+      SelfAdjointUnboundedOperatorWitness M.model.momentum
+
+/-- Frontier 0014-27: a spectral-calculus availability target for position is
+now tied to the explicit Schwartz-core essential-self-adjointness target. -/
+def RealLinePositionSpectralCalculusAvailable
+    (M : RealLineL2PositionMomentumModel) : Prop :=
+  RealLinePositionEssentialSelfAdjointOnSchwartzCoreTarget M
+
+/-- Frontier 0014-28: a spectral-calculus availability target for momentum is
+now tied to the explicit Schwartz-core essential-self-adjointness target. -/
+def RealLineMomentumSpectralCalculusAvailable
+    (M : RealLineL2PositionMomentumModel) : Prop :=
+  RealLineMomentumEssentialSelfAdjointOnSchwartzCoreTarget M
+
+/-- Recursive frontier packet for the remaining analytic closure obligations
+after the first ten 0014 real-line `L²` surfaces are in place. -/
+structure RealLineL2ClosureFrontier
+    (M : RealLineL2PositionMomentumModel) : Type where
+  schwartz_commutator_pointwise : RealLineSchwartzCanonicalCommutator M.model
+  position_essentially_self_adjoint_on_schwartz :
+    RealLinePositionEssentialSelfAdjointOnSchwartzCoreTarget M
+  momentum_essentially_self_adjoint_on_schwartz :
+    RealLineMomentumEssentialSelfAdjointOnSchwartzCoreTarget M
+  spectral_calculus_available_for_position :
+    RealLinePositionSpectralCalculusAvailable M
+  spectral_calculus_available_for_momentum :
+    RealLineMomentumSpectralCalculusAvailable M
+
+/-- Frontier 0014-11: transporting the pointwise Schwartz commutator through
+the Mathlib Schwartz-to-`L²` embedding agrees with the unbounded commutator on
+the common core. -/
+def RealLineSchwartzCommutatorTransport
+    (M : RealLineL2PositionMomentumModel) : Prop :=
+  ∀ psi : M.model.common_core.core, ∀ f : RealSchwartzWavefunction,
+    realSchwartzToL2 f = (psi : RealLineL2Wavefunction) →
+      realSchwartzToL2 (RealLineSchwartzCommutatorAction M.model f) =
+        commutatorValueOnCore M.model.common_core psi
+
+/-- Frontier 0014-12: the position/momentum action compatibility bridges imply
+transport of the Schwartz commutator into the unbounded `L²` commutator. -/
+theorem realLineSchwartzCommutatorTransport_from_actions
+    (M : RealLineL2PositionMomentumModel) :
+    RealLineSchwartzCommutatorTransport M := by
+  intro psi f hf
+  unfold RealLineSchwartzCommutatorAction commutatorValueOnCore
+  rw [map_sub]
+  rw [M.position_action_matches_toL2
+      ⟨apply M.model.momentum (psi : RealLineL2Wavefunction)
+          (M.model.common_core.core_le_momentum_domain psi.property),
+        M.model.common_core.momentum_maps_core psi⟩
+      (M.model.momentumActionOnSchwartz f)
+      (M.momentum_action_matches_toL2 psi f hf)]
+  rw [M.momentum_action_matches_toL2
+      ⟨apply M.model.position (psi : RealLineL2Wavefunction)
+          (M.model.common_core.core_le_position_domain psi.property),
+        M.model.common_core.position_maps_core psi⟩
+      (M.model.positionActionOnSchwartz f)
+      (M.position_action_matches_toL2 psi f hf)]
+
+/-- Frontier 0014-13: after transport into `L²`, the Schwartz commutator has
+the canonical `iℏ` action on common-core representatives. -/
+def RealLineSchwartzCanonicalCommutatorTransported
+    (M : RealLineL2PositionMomentumModel) : Prop :=
+  ∀ psi : M.model.common_core.core, ∀ f : RealSchwartzWavefunction,
+    realSchwartzToL2 f = (psi : RealLineL2Wavefunction) →
+      realSchwartzToL2 (RealLineSchwartzCommutatorAction M.model f) =
+        (Complex.I * (M.model.hbar : ℂ)) • (psi : RealLineL2Wavefunction)
+
+/-- Frontier 0014-14: commutator transport plus the model's canonical
+common-core commutator gives the transported canonical commutator. -/
+theorem realLineSchwartzCanonicalCommutatorTransported_of_transport
+    (M : RealLineL2PositionMomentumModel)
+    (htransport : RealLineSchwartzCommutatorTransport M) :
+    RealLineSchwartzCanonicalCommutatorTransported M := by
+  intro psi f hf
+  rw [htransport psi f hf]
+  exact M.model.canonical_commutator_on_core psi
+
+/-- Frontier 0014-15: pointwise Schwartz canonical commutator evidence is kept
+as an explicit dependency while promoting to the transported `L²` statement. -/
+theorem realLineSchwartzCanonicalCommutatorTransported_of_pointwise
+    (M : RealLineL2PositionMomentumModel)
+    (htransport : RealLineSchwartzCommutatorTransport M)
+    (_hpointwise : RealLineSchwartzCanonicalCommutator M.model) :
+    RealLineSchwartzCanonicalCommutatorTransported M :=
+  realLineSchwartzCanonicalCommutatorTransported_of_transport M htransport
+
+/-- Frontier support: a canonical commutator equality in the SchwartzMap
+carrier transports directly through the Mathlib Schwartz-to-`L²` linear map. -/
+theorem realLineSchwartzCanonicalCommutatorTransported_of_schwartzMap
+    (M : RealLineL2PositionMomentumModel)
+    (hmap : RealLineSchwartzCanonicalCommutatorAsSchwartzMap M.model) :
+    RealLineSchwartzCanonicalCommutatorTransported M := by
+  intro psi f hf
+  rw [hmap f]
+  rw [map_smul]
+  rw [hf]
+
+/-- Frontier 0014-16: the position operator has the explicit dense-domain,
+self-adjoint-witness, and Schwartz-core-domain obligations needed before
+claiming essential self-adjointness on the real-line model. -/
+def RealLinePositionEssentialSelfAdjointTarget
+    (M : RealLineL2PositionMomentumModel) : Prop :=
+  HasDenseDomain M.model.position ∧
+    SelfAdjointUnboundedOperatorWitness M.model.position ∧
+      M.model.common_core.core ≤ M.model.position.domain
+
+/-- Frontier support for the position essential-self-adjointness target carried
+by the current model interface. -/
+theorem realLinePositionEssentialSelfAdjointTarget
+    (M : RealLineL2PositionMomentumModel) :
+    RealLinePositionEssentialSelfAdjointTarget M :=
+  ⟨M.model.position_self_adjoint.dense_domain,
+    M.model.position_self_adjoint,
+    M.model.common_core.core_le_position_domain⟩
+
+/-- Frontier 0014-17: the momentum operator has the explicit dense-domain,
+self-adjoint-witness, and Schwartz-core-domain obligations needed before
+claiming essential self-adjointness on the real-line model. -/
+def RealLineMomentumEssentialSelfAdjointTarget
+    (M : RealLineL2PositionMomentumModel) : Prop :=
+  HasDenseDomain M.model.momentum ∧
+    SelfAdjointUnboundedOperatorWitness M.model.momentum ∧
+      M.model.common_core.core ≤ M.model.momentum.domain
+
+/-- Frontier support for the momentum essential-self-adjointness target carried
+by the current model interface. -/
+theorem realLineMomentumEssentialSelfAdjointTarget
+    (M : RealLineL2PositionMomentumModel) :
+    RealLineMomentumEssentialSelfAdjointTarget M :=
+  ⟨M.model.momentum_self_adjoint.dense_domain,
+    M.model.momentum_self_adjoint,
+    M.model.common_core.core_le_momentum_domain⟩
+
+/-- Frontier 0014-18: spectral-calculus target packet for position.  The
+available-calculus field remains an explicit obligation label until grounded in
+a Mathlib spectral API. -/
+structure RealLinePositionSpectralCalculusTarget
+    (M : RealLineL2PositionMomentumModel) : Type where
+  essential_self_adjoint : RealLinePositionEssentialSelfAdjointTarget M
+  spectral_calculus_available : RealLinePositionSpectralCalculusAvailable M
+
+/-- Frontier 0014-19: spectral-calculus target packet for momentum.  The
+available-calculus field remains an explicit obligation label until grounded in
+a Mathlib spectral API. -/
+structure RealLineMomentumSpectralCalculusTarget
+    (M : RealLineL2PositionMomentumModel) : Type where
+  essential_self_adjoint : RealLineMomentumEssentialSelfAdjointTarget M
+  spectral_calculus_available : RealLineMomentumSpectralCalculusAvailable M
+
+/-- Frontier 0014-20: recursive packet collecting the next self-adjointness and
+spectral-calculus closure targets exposed by the real-line `L²` model. -/
+structure RealLineL2SpectralClosureTargets
+    (M : RealLineL2PositionMomentumModel) : Type where
+  position_essential_self_adjoint : RealLinePositionEssentialSelfAdjointTarget M
+  momentum_essential_self_adjoint : RealLineMomentumEssentialSelfAdjointTarget M
+  position_spectral_calculus : RealLinePositionSpectralCalculusTarget M
+  momentum_spectral_calculus : RealLineMomentumSpectralCalculusTarget M
+
+/-- Frontier support: the first closure-frontier packet expands into the next
+self-adjointness and spectral-calculus target packet. -/
+def RealLineL2ClosureFrontier.toSpectralClosureTargets
+    (M : RealLineL2PositionMomentumModel)
+    (C : RealLineL2ClosureFrontier M) :
+    RealLineL2SpectralClosureTargets M :=
+  let hpos := realLinePositionEssentialSelfAdjointTarget M
+  let hmom := realLineMomentumEssentialSelfAdjointTarget M
+  { position_essential_self_adjoint := hpos
+    momentum_essential_self_adjoint := hmom
+    position_spectral_calculus :=
+      { essential_self_adjoint := hpos
+        spectral_calculus_available := C.spectral_calculus_available_for_position }
+    momentum_spectral_calculus :=
+      { essential_self_adjoint := hmom
+        spectral_calculus_available := C.spectral_calculus_available_for_momentum } }
+
+/-- The concrete real-line `L²` realization inherits the canonical commutator
+expectation theorem from the generic Schwartz/L2 model. -/
+theorem canonicalCommutatorExpectationOnRealLineL2SchwartzCore
+    (M : RealLineL2PositionMomentumModel)
+    (psi : M.model.common_core.core)
+    (normalized : ‖(psi : RealLineL2Wavefunction)‖ = 1) :
+    inner ℂ (psi : RealLineL2Wavefunction) (commutatorValueOnCore M.model.common_core psi) =
+      Complex.I * (M.model.hbar : ℂ) := by
+  exact canonicalCommutatorExpectationOnSchwartzCore M.model psi normalized
+
+end PositionMomentumModels
+end Foundations
+end MathformerPhysicsLib
+""",
+    "VectorCalculus": """import Mathlib
+
+namespace MathformerPhysicsLib
+namespace Foundations
+namespace VectorCalculus
+
+/-- Mathlib grounding: vector calculus acts on fields over `EuclideanSpace ℝ (Fin 3)`. -/
+abbrev RealVector3 := EuclideanSpace ℝ (Fin 3)
+
+/-- Physics role: a curl-like operator is a reusable field-to-field surface.
+It is a bridge until specialized Mathlib vector-calculus APIs are selected. -/
+abbrev CurlLikeOperator (X : Type*) := (X → RealVector3) → X → RealVector3
+
+/-- Physics role: time-derivative operators expose regularity obligations separately. -/
+abbrev TimeDerivativeOperator (α : Type*) := (ℝ → α) → ℝ → α
+
+end VectorCalculus
+end Foundations
+end MathformerPhysicsLib
+""",
+    "Units": """import Mathlib
+
+namespace MathformerPhysicsLib
+namespace Foundations
+namespace Units
+
+/-- Mathlib grounding: dimension compatibility is a proposition over existing Mathlib values. -/
+structure DimensionCompatible {α : Type*} (lhs rhs : α) : Type where
+  relation : lhs = rhs
+
+/-- Physics role: recover the equality carried by a dimension-compatibility witness. -/
+theorem dimensionCompatibleEq {α : Type*} {lhs rhs : α}
+    (h : DimensionCompatible lhs rhs) : lhs = rhs := h.relation
+
+end Units
+end Foundations
+end MathformerPhysicsLib
+""",
+    "Laws": """import Mathlib
+
+namespace MathformerPhysicsLib
+namespace Foundations
+namespace Laws
+
+/-- Mathlib grounding: a physical law witness is evidence for a proposition over Mathlib carriers. -/
+structure PhysicalLawWitness (P : Prop) : Type where
+  holds : P
+
+/-- Physics role: classify why a physical-law witness is allowed in a generated theorem. -/
+inductive PhysicalLawWitnessRole where
+  | sourceLaw
+  | constitutiveAssumption
+  | domainAssumption
+  | bridgeLemma
+  | generatedSupport
+  deriving DecidableEq, Repr
+
+/-- Physics role: companion metadata for auditing `PhysicalLawWitness` usage. -/
+structure PhysicalLawWitnessMetadata (P : Prop) where
+  role : PhysicalLawWitnessRole
+  sourceAnchor : Option String := none
+  recursiveFrontier : Bool := false
+
+/-- Physics role: recover the source-backed law proposition for downstream theorem use. -/
+theorem physicalLawHolds {P : Prop} (law : PhysicalLawWitness P) : P := law.holds
+
+end Laws
+end Foundations
+end MathformerPhysicsLib
+""",
+    "Contexts": """import Mathlib
+
+namespace MathformerPhysicsLib
+namespace Foundations
+namespace Contexts
+
+/-- Mathlib grounding: generated support assumptions remain propositions, with provenance explicit. -/
+structure GeneratedSupportAssumption (P : Prop) : Type where
+  provenance : String
+  holds : P
+
+/-- Physics role: recover the proposition from an explicit generated-support assumption. -/
+theorem generatedSupportHolds {P : Prop} (h : GeneratedSupportAssumption P) : P := h.holds
+
+/-- Mathlib grounding: regimes and boundary contexts are propositions over existing carriers. -/
+structure PhysicsContext (P : Prop) : Type where
+  label : String
+  holds : P
+
+end Contexts
+end Foundations
+end MathformerPhysicsLib
+""",
+}
+
+
+INDEX_TEXT = """import Mathlib
+import MathformerPhysicsLib.Lean.Foundations.Carriers
+import MathformerPhysicsLib.Lean.Foundations.Contexts
+import MathformerPhysicsLib.Lean.Foundations.Fields
+import MathformerPhysicsLib.Lean.Foundations.HilbertSpace
+import MathformerPhysicsLib.Lean.Foundations.Laws
+import MathformerPhysicsLib.Lean.Foundations.Operators
+import MathformerPhysicsLib.Lean.Foundations.PositionMomentumModels
+import MathformerPhysicsLib.Lean.Foundations.UnboundedOperators
+import MathformerPhysicsLib.Lean.Foundations.Units
+import MathformerPhysicsLib.Lean.Foundations.VectorCalculus
+
+/-!
+# MathformerPhysicsLib Lean Foundations
+
+Accepted foundation support should preserve Mathlib-native carriers and expose
+level-0 physics-specific bridges for laws, units, contexts, and reusable
+operator surfaces. Richer physics-facing APIs must enter the recursive
+foundation promotion frontier before downstream theorem repair may depend on
+them as accepted support.
+-/
+"""
+
+
+def load_json(path: Path | None) -> dict[str, Any]:
+    """Load optional JSON."""
+    if path is None:
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def modules_from_plan(plan: dict[str, Any]) -> list[str]:
+    """Return modules requested by a surface plan."""
+    modules = {
+        str(item.get("foundation_module"))
+        for item in plan.get("surfaces", [])
+        if isinstance(item, dict)
+    }
+    return sorted(module for module in modules if module in TEMPLATES) or sorted(
+        TEMPLATES
+    )
+
+
+def build_draft(plan: dict[str, Any], *, write: bool) -> dict[str, Any]:
+    """Build or preview foundation modules."""
+    modules = modules_from_plan(plan)
+    items = []
+    for module in modules:
+        path = FOUNDATION_ROOT / f"{module}.lean"
+        text = TEMPLATES[module]
+        if write:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        items.append(
+            {
+                "module": module,
+                "path": path.relative_to(REPO_ROOT).as_posix(),
+                "state": "candidate_generated",
+                "contains_mathlib_grounding": "Mathlib grounding:" in text,
+                "declaration_count": text.count("/--"),
+            }
+        )
+    if write:
+        INDEX_PATH.write_text(INDEX_TEXT, encoding="utf-8")
+    return {
+        "style": "physics_foundation_generation_report",
+        "source_surface_plan": plan.get("source_packet_id"),
+        "write": write,
+        "accepted_index": INDEX_PATH.relative_to(REPO_ROOT).as_posix(),
+        "modules": items,
+        "terminal_state": "draft_written" if write else "draft_preview",
+    }
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--surface-plan", type=Path)
+    parser.add_argument("--write", action="store_true")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run drafting."""
+    args = parse_args(argv)
+    if args.self_test:
+        report = build_draft(
+            {
+                "source_packet_id": "self_test",
+                "surfaces": [{"foundation_module": "Fields"}],
+            },
+            write=False,
+        )
+        assert report["modules"][0]["module"] == "Fields"
+        assert report["modules"][0]["contains_mathlib_grounding"]
+    else:
+        report = build_draft(load_json(args.surface_plan), write=args.write)
+    output = json.dumps(report, ensure_ascii=False, indent=2)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output + "\n", encoding="utf-8")
+    if args.json or not args.output:
+        print(output)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from sympy_physics_derivation_trace_loop import (
+    ExpandedDerivation,
+    PhysicalModel,
+    PhysicsSympyDerivationRequest,
+    SampleCoverageReview,
+    SourceDerivationModel,
+    SympyDerivationArtifact,
+    SympyDerivationBasis,
+    SympyDerivationPlan,
+    SympyExecutionReport,
+    SympyFormalReviewCase,
+    SympyGroundingBasis,
+    SympyMathematicalReview,
+    SympyPhysicalReviewCase,
+    SympyPhysicsBasis,
+    SympyPhysicsCase,
+    SympyPhysicsDisposition,
+    SympyPhysicsReview,
+    SympyRepairCase,
+    SympyRepairRoute,
+)
+
+# Recover source-anchored laws, assumptions, regimes, and intended target.
+type ReadSourceDerivation = (source: PhysicsSympyDerivationRequest) -> Generated[SourceDerivationModel]
+
+# Model quantities, units, dimensions, regimes, and frames.
+type ModelPhysicalSystem = (source: SourceDerivationModel) -> Generated[PhysicalModel]
+
+# Propose explicit bridges for detected derivation gaps without claiming proof.
+type ExpandDerivationSteps = (source: SympyDerivationBasis) -> Generated[ExpandedDerivation]
+
+# Align the physical model with applicable SymPy APIs and assumptions.
+type PlanSympyDerivation = (source: SympyGroundingBasis) -> Generated[SympyDerivationPlan]
+
+# Draft the executable physics derivation artifact.
+type DraftSympyDerivation = (source: SympyPhysicsBasis) -> Generated[SympyDerivationArtifact]
+
+# Execute the artifact and classify its concrete diagnostics.
+type ExecuteSympyDerivation = (source: SympyDerivationArtifact) -> Generated[SympyExecutionReport]
+
+# Assess steps, units, samples, and final mathematical equations.
+type ReviewSympyMathematics = (source: SympyFormalReviewCase) -> Generated[SympyMathematicalReview]
+
+# Assess physical meaning, dimensions, regimes, and governing laws.
+type ReviewPhysicsFidelity = (source: SympyPhysicalReviewCase) -> Generated[SympyPhysicsReview]
+
+# Route localized repairs, map their expansion frontier, and decide whether the bounded loop should recurse or block.
+type RouteSympyRepairs = (source: SympyRepairCase) -> Generated[SympyRepairRoute]
+
+# Assess whether the grounded sample exercises the required source, equation, law, API, and reasoning-log surfaces.
+type ReviewSampleCoverage = (source: SympyRepairRoute) -> Generated[SampleCoverageReview]
+
+# Report the executed run together with open repair and revalidation obligations.
+type ReportSympyPhysics = (source: SympyPhysicsCase) -> Generated[SympyPhysicsDisposition]

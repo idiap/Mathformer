@@ -1,0 +1,647 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-FileContributor: Danilo Gusicuma <danilo.gusicuma@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_mcp_independent_service_workflow
+version: 1.0.0
+kind: workflow
+description: Validate the selected independent MCP service route; never start the
+  server.
+aliases:
+- mcp.independent.service
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+        json_output:
+          type: boolean
+        keep_going:
+          type: boolean
+        allow_mutating:
+          type: boolean
+        write_report:
+          type: boolean
+      required:
+      - dry_run
+      - json_output
+      - keep_going
+      - allow_mutating
+      - write_report
+      additionalProperties: false
+  HubResult:
+    schema:
+      type: object
+      required:
+      - ok
+      properties:
+        ok:
+          type: boolean
+      additionalProperties: true
+  SelectedMatch:
+    schema:
+      type: object
+      required:
+      - route
+      - score
+      - matched_terms
+      properties:
+        route:
+          type: object
+          required:
+          - route_id
+          - action_ids
+          - title
+          - description
+          - skill_routes
+          - examples
+          - operator_note
+          properties:
+            route_id:
+              const: mcp.independent.service
+            action_ids:
+              const:
+              - mcp:service-config
+              - mcp:service-dependencies
+              - mcp:service-self-check
+            title:
+              type: string
+            description:
+              type: string
+            skill_routes:
+              type: array
+              items:
+                type: string
+            examples:
+              type: array
+              items:
+                type: string
+            operator_note:
+              type: string
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+  Registry:
+    schema:
+      type: object
+      description: JSON dataclass records matching the three server-owned execution-registry
+        entries, including its configured per-action timeout cap. Obtain canonical
+        records from service action discovery plus the configured cap; client commands
+        cannot be registered here.
+      required:
+      - mcp:service-config
+      - mcp:service-dependencies
+      - mcp:service-self-check
+      additionalProperties: false
+      properties:
+        mcp:service-config:
+          type: object
+          properties:
+            summary:
+              type: string
+            family:
+              type: string
+            kind:
+              type: string
+            safety:
+              type: string
+            command:
+              type: array
+              items:
+                type: string
+            depends_on:
+              type: array
+              items:
+                type: string
+            required_paths:
+              type: array
+              items:
+                type: string
+            required_tools:
+              type: array
+              items:
+                type: string
+            optional_tools:
+              type: array
+              items:
+                type: string
+            writes:
+              type: array
+              items:
+                type: string
+            allows_extra_args:
+              type: boolean
+            timeout_seconds:
+              type:
+              - integer
+              - 'null'
+            notes:
+              type: string
+            action_id:
+              type: string
+          required:
+          - action_id
+          - summary
+          - family
+          - kind
+          - safety
+          - command
+          - depends_on
+          - required_paths
+          - required_tools
+          - optional_tools
+          - writes
+          - allows_extra_args
+          - timeout_seconds
+          - notes
+          additionalProperties: false
+        mcp:service-dependencies:
+          type: object
+          properties:
+            summary:
+              type: string
+            family:
+              type: string
+            kind:
+              type: string
+            safety:
+              type: string
+            command:
+              type: array
+              items:
+                type: string
+            depends_on:
+              type: array
+              items:
+                type: string
+            required_paths:
+              type: array
+              items:
+                type: string
+            required_tools:
+              type: array
+              items:
+                type: string
+            optional_tools:
+              type: array
+              items:
+                type: string
+            writes:
+              type: array
+              items:
+                type: string
+            allows_extra_args:
+              type: boolean
+            timeout_seconds:
+              type:
+              - integer
+              - 'null'
+            notes:
+              type: string
+            action_id:
+              type: string
+          required:
+          - action_id
+          - summary
+          - family
+          - kind
+          - safety
+          - command
+          - depends_on
+          - required_paths
+          - required_tools
+          - optional_tools
+          - writes
+          - allows_extra_args
+          - timeout_seconds
+          - notes
+          additionalProperties: false
+        mcp:service-self-check:
+          type: object
+          properties:
+            summary:
+              type: string
+            family:
+              type: string
+            kind:
+              type: string
+            safety:
+              type: string
+            command:
+              type: array
+              items:
+                type: string
+            depends_on:
+              type: array
+              items:
+                type: string
+            required_paths:
+              type: array
+              items:
+                type: string
+            required_tools:
+              type: array
+              items:
+                type: string
+            optional_tools:
+              type: array
+              items:
+                type: string
+            writes:
+              type: array
+              items:
+                type: string
+            allows_extra_args:
+              type: boolean
+            timeout_seconds:
+              type:
+              - integer
+              - 'null'
+            notes:
+              type: string
+            action_id:
+              type: string
+          required:
+          - action_id
+          - summary
+          - family
+          - kind
+          - safety
+          - command
+          - depends_on
+          - required_paths
+          - required_tools
+          - optional_tools
+          - writes
+          - allows_extra_args
+          - timeout_seconds
+          - notes
+          additionalProperties: false
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+  ActionId:
+    schema:
+      type: string
+      enum:
+      - mcp:service-config
+      - mcp:service-dependencies
+      - mcp:service-self-check
+  ActionCount:
+    schema:
+      type: integer
+      const: 3
+  Boolean:
+    schema:
+      type: boolean
+  IntentState:
+    schema:
+      type: object
+      required:
+      - ok
+      - children
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 3
+          items:
+            type: object
+  IntentResult:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - ok
+      - status
+      - route
+      - children
+      additionalProperties: false
+      properties:
+        schema_version:
+          const: 1
+        ok:
+          type: boolean
+        status:
+          enum:
+          - intent_run_completed
+          - intent_run_failed
+        route:
+          type: object
+        children:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            type: object
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: SelectedMatch
+  registry:
+    type: Registry
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  result:
+    type: IntentResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: IntentState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_independent_service_initialize
+        operation: mathformer_independent_service_initialize
+  select_action:
+    inputs:
+      state:
+        type: IntentState
+      match:
+        type: SelectedMatch
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_independent_service_select_action
+        operation: mathformer_independent_service_select_action
+  run_child:
+    inputs:
+      action_id:
+        type: ActionId
+      registry:
+        type: Registry
+      context:
+        type: RunContext
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_independent_service_run_child
+        operation: mathformer_independent_service_run_child
+  advance:
+    inputs:
+      state:
+        type: IntentState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+      action_count:
+        type: ActionCount
+    outputs:
+      state:
+        type: IntentState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_independent_service_advance
+        operation: mathformer_independent_service_advance
+  finish:
+    inputs:
+      state:
+        type: IntentState
+      match:
+        type: SelectedMatch
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: IntentResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_independent_service_finish
+        operation: mathformer_independent_service_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: The fixed selected route has three actions; the final action sets
+      done, so the bound returns normally.
+    state_type: IntentState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 3
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select_action
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: execute
+        kind: call
+        operation: run_child
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          registry:
+            ref: inputs.registry
+          context:
+            ref: inputs.context
+          repository_root:
+            ref: inputs.repository_root
+      - id: accumulate
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.execute.outputs.child
+          context:
+            ref: inputs.context
+          action_count:
+            literal: 3
+      outputs:
+        state:
+          type: IntentState
+          value:
+            ref: steps.accumulate.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: steps.accumulate.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: IntentState
+        value:
+          ref: loop.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: IntentResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 11
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked service diagnostics only; no scientific truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes; initialize_intent_state; select_intent_action;
+      advance_intent_state; finish_intent_state; run_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/probe_mcp_service_dependencies.py
+    selector: build_dependency_report
+    digest: sha256:54ee4f50aaae21297a9269d0280d0b700dd62161886c62663a07dbd847fcd0cc
+  - path: scripts/mathformer_mcp_service.py
+    selector: self_check; assemble_self_check_report
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: scripts/mcp_server.py
+    selector: mathformer_ask; mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/independent_service_route_tools.py
+    selector: register_independent_service_route_tools; unpack_match
+    digest: sha256:ac71b38a40504b1e4e7f1867e6b8ee2adcd8e5cb480b2ae2298b33b05a451d29
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: route mcp.independent.service authored contract preservation
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Child internals remain opaque native calls; the typed graph covers the selected
+    controller, not arbitrary Python equivalence.
+  - The 3600-second descriptor deadline is enforced by Lunar, not the CLI. MCP retains
+    its configurable per-action timeout cap (initially 600 seconds).
+  - Lunar supplies required receipts, digests and provenance; native CLI optional
+    logging remains unchanged.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: mcp.independent.service
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: mcp.independent.service
+      title: Validate the independent whole-pipeline MCP service
+      action_ids:
+      - mcp:service-config
+      - mcp:service-dependencies
+      - mcp:service-self-check
+  mathformer.native_boundary:
+    execution: Already selected native route with JSON match and RunContext, explicit
+      server-owned execution-registry records, and null/default or exact service repository
+      mount.
+    callers:
+    - scripts/mathformer.py::main (ask --run)
+    - scripts/mcp_server.py::mathformer_ask
+    - scripts/mcp_server.py::mathformer_run_workflow
+    dispatch: MCP resolves the normalized identity to the route and checks service
+      write roots before execution except in dry-run.
+    child_semantics: Dry-run launches no subprocess; executed success requires zero
+      exit status and a passing write audit.
+    action_semantics:
+      config: Validate config/mathformer_mcp.example.toml and scan designated tracked
+        files for secrets.
+      dependencies: Probe fixed tables of 10 packages then 6 tools; each scan carries
+        cursor, rows and done. Missing required dependencies set ready=false but ok=true.
+      self_check: Combine config, dependency ok (not ready), router coverage, hub
+        audit, secret scan and auth policy; collect service coverage; never start
+        the server.
+    bound_semantics: Three is the exact route length, not a refinement cap; done is
+      true after action three. Exhaustion failure is unreachable under native helpers.
+    registry_transport: Records must exactly match the three service-owned execution
+      registry entries. No arbitrary command registration.
+# REUSE-IgnoreEnd

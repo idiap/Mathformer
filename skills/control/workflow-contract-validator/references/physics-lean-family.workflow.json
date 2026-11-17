@@ -1,0 +1,1066 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_test_family_physics_lean_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Fixed physics_lean hub invocation with native preflight, supervised sequential matrix traversal, publication and write audit.",
+  "aliases": [
+    "test:family:physics-lean"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "ExtraArguments": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Scope": {
+      "schema": {
+        "const": {
+          "matrix": "tests/test_matrix.json",
+          "sha256": "17b2fc38f51c7711873b68dc5f630cfc0eb06351160ad6401ea67a6044ace322",
+          "selected_count": 11
+        },
+        "description": "Admissibility assertion for the canonical matrix snapshot, not a native CLI argument."
+      }
+    },
+    "Boundary": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "execute",
+          "payload",
+          "snapshot"
+        ],
+        "properties": {
+          "execute": {
+            "type": "boolean"
+          },
+          "payload": {
+            "type": "object"
+          },
+          "snapshot": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "CheckState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "matrix",
+          "selected",
+          "families",
+          "index",
+          "results"
+        ],
+        "properties": {
+          "matrix": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "selected": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 11
+          },
+          "families": {
+            "type": "array",
+            "items": {
+              "const": "physics_lean"
+            }
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 11
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 11
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Report": {
+      "schema": {
+        "type": "object",
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "run_id",
+              "ok",
+              "profile",
+              "families",
+              "summary",
+              "results",
+              "schema_errors",
+              "matrix_errors",
+              "capability_ledger",
+              "dependency_map"
+            ],
+            "properties": {
+              "run_id": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "profile": {
+                "const": "workstation"
+              },
+              "families": {
+                "type": "array",
+                "items": {
+                  "const": "physics_lean"
+                }
+              },
+              "summary": {
+                "type": "object"
+              },
+              "results": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "schema_errors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "matrix_errors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "capability_ledger": {
+                "type": "object"
+              },
+              "dependency_map": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "maxProperties": 0
+          }
+        ],
+        "description": "Empty only on native process termination; never published or exposed as a report."
+      }
+    },
+    "Runtime": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "handle"
+        ],
+        "properties": {
+          "handle": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Progress": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "state",
+          "pending",
+          "terminated"
+        ],
+        "properties": {
+          "state": {
+            "type": "object",
+            "required": [
+              "matrix",
+              "selected",
+              "families",
+              "index",
+              "results"
+            ],
+            "properties": {
+              "matrix": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "selected": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "maxItems": 11
+              },
+              "families": {
+                "type": "array",
+                "items": {
+                  "const": "physics_lean"
+                }
+              },
+              "index": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 11
+              },
+              "results": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "maxItems": 11
+              }
+            },
+            "additionalProperties": false
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "terminated": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "extra_args": {
+      "type": "ExtraArguments"
+    },
+    "scope": {
+      "type": "Scope"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "prepare_boundary": {
+      "inputs": {
+        "context": {
+          "type": "RunContext"
+        },
+        "extra_args": {
+          "type": "ExtraArguments"
+        }
+      },
+      "outputs": {
+        "boundary": {
+          "type": "Boundary"
+        },
+        "execute": {
+          "type": "Boolean"
+        },
+        "runtime": {
+          "type": "Runtime"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_lean_family_prepare_boundary",
+          "operation": "mathformer_physics_lean_family_prepare_boundary"
+        }
+      }
+    },
+    "return_boundary": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        },
+        "runtime": {
+          "type": "Runtime"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_lean_family_return_boundary",
+          "operation": "mathformer_physics_lean_family_return_boundary"
+        }
+      }
+    },
+    "prepare_checks": {
+      "inputs": {
+        "scope": {
+          "type": "Scope"
+        },
+        "boundary": {
+          "type": "Boundary"
+        },
+        "runtime": {
+          "type": "Runtime"
+        }
+      },
+      "outputs": {
+        "progress": {
+          "type": "Progress"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_lean_family_prepare_checks",
+          "operation": "mathformer_physics_lean_family_prepare_checks"
+        }
+      }
+    },
+    "checks_pending": {
+      "inputs": {
+        "progress": {
+          "type": "Progress"
+        },
+        "runtime": {
+          "type": "Runtime"
+        }
+      },
+      "outputs": {
+        "progress": {
+          "type": "Progress"
+        },
+        "pending": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_lean_family_checks_pending",
+          "operation": "mathformer_physics_lean_family_checks_pending"
+        }
+      }
+    },
+    "retain_state": {
+      "inputs": {
+        "progress": {
+          "type": "Progress"
+        },
+        "runtime": {
+          "type": "Runtime"
+        }
+      },
+      "outputs": {
+        "progress": {
+          "type": "Progress"
+        },
+        "pending": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_lean_family_retain_state",
+          "operation": "mathformer_physics_lean_family_retain_state"
+        }
+      }
+    },
+    "advance_check": {
+      "inputs": {
+        "progress": {
+          "type": "Progress"
+        },
+        "runtime": {
+          "type": "Runtime"
+        }
+      },
+      "outputs": {
+        "progress": {
+          "type": "Progress"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_lean_family_advance_check",
+          "operation": "mathformer_physics_lean_family_advance_check"
+        }
+      }
+    },
+    "finalize_checks": {
+      "inputs": {
+        "progress": {
+          "type": "Progress"
+        },
+        "runtime": {
+          "type": "Runtime"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "Report"
+        },
+        "terminated": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_lean_family_finalize_checks",
+          "operation": "mathformer_physics_lean_family_finalize_checks"
+        }
+      }
+    },
+    "publish_and_audit": {
+      "inputs": {
+        "report": {
+          "type": "Report"
+        },
+        "boundary": {
+          "type": "Boundary"
+        },
+        "runtime": {
+          "type": "Runtime"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_lean_family_publish_and_audit",
+          "operation": "mathformer_physics_lean_family_publish_and_audit"
+        }
+      }
+    },
+    "complete_failure": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        },
+        "runtime": {
+          "type": "Runtime"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_lean_family_complete_failure",
+          "operation": "mathformer_physics_lean_family_complete_failure"
+        }
+      }
+    },
+    "bypass_progress": {
+      "inputs": {
+        "boundary": {
+          "type": "Boundary"
+        },
+        "runtime": {
+          "type": "Runtime"
+        }
+      },
+      "outputs": {
+        "progress": {
+          "type": "Progress"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_physics_lean_family_bypass_progress",
+          "operation": "mathformer_physics_lean_family_bypass_progress"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "boundary",
+        "kind": "call",
+        "operation": "prepare_boundary",
+        "arguments": {
+          "context": {
+            "ref": "inputs.context"
+          },
+          "extra_args": {
+            "ref": "inputs.extra_args"
+          }
+        }
+      },
+      {
+        "id": "prepare",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "yes",
+            "when": {
+              "ref": "steps.boundary.outputs.execute"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "prepare",
+                  "kind": "call",
+                  "operation": "prepare_checks",
+                  "arguments": {
+                    "scope": {
+                      "ref": "inputs.scope"
+                    },
+                    "boundary": {
+                      "ref": "steps.boundary.outputs.boundary"
+                    },
+                    "runtime": {
+                      "ref": "steps.boundary.outputs.runtime"
+                    }
+                  }
+                },
+                {
+                  "id": "guard",
+                  "kind": "call",
+                  "operation": "checks_pending",
+                  "arguments": {
+                    "progress": {
+                      "ref": "steps.prepare.outputs.progress"
+                    },
+                    "runtime": {
+                      "ref": "steps.boundary.outputs.runtime"
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "progress": {
+                  "type": "Progress",
+                  "value": {
+                    "ref": "steps.guard.outputs.progress"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "bypass_progress",
+          "arguments": {
+            "boundary": {
+              "ref": "steps.boundary.outputs.boundary"
+            },
+            "runtime": {
+              "ref": "steps.boundary.outputs.runtime"
+            }
+          }
+        },
+        "outputs": {
+          "progress": {
+            "type": "Progress",
+            "value": {
+              "ref": "selected.outputs.progress"
+            }
+          }
+        }
+      },
+      {
+        "id": "traversal",
+        "kind": "loop",
+        "state_type": "Progress",
+        "initial": {
+          "ref": "steps.prepare.outputs.progress"
+        },
+        "body": {
+          "kind": "switch",
+          "cases": [
+            {
+              "id": "yes",
+              "when": {
+                "ref": "loop.state.pending"
+              },
+              "body": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "advance",
+                    "kind": "call",
+                    "operation": "advance_check",
+                    "arguments": {
+                      "progress": {
+                        "ref": "loop.state"
+                      },
+                      "runtime": {
+                        "ref": "steps.boundary.outputs.runtime"
+                      }
+                    }
+                  },
+                  {
+                    "id": "guard",
+                    "kind": "call",
+                    "operation": "checks_pending",
+                    "arguments": {
+                      "progress": {
+                        "ref": "steps.advance.outputs.progress"
+                      },
+                      "runtime": {
+                        "ref": "steps.boundary.outputs.runtime"
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "progress": {
+                    "type": "Progress",
+                    "value": {
+                      "ref": "steps.guard.outputs.progress"
+                    }
+                  },
+                  "pending": {
+                    "type": "Boolean",
+                    "value": {
+                      "ref": "steps.guard.outputs.pending"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "default": {
+            "kind": "call",
+            "operation": "retain_state",
+            "arguments": {
+              "progress": {
+                "ref": "loop.state"
+              },
+              "runtime": {
+                "ref": "steps.boundary.outputs.runtime"
+              }
+            }
+          },
+          "outputs": {
+            "progress": {
+              "type": "Progress",
+              "value": {
+                "ref": "selected.outputs.progress"
+              }
+            },
+            "pending": {
+              "type": "Boolean",
+              "value": {
+                "ref": "selected.outputs.pending"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.progress"
+        },
+        "until": {
+          "not": {
+            "ref": "body.outputs.pending"
+          }
+        },
+        "max_iterations": 11,
+        "on_exhausted": "fail",
+        "outputs": {
+          "progress": {
+            "type": "Progress",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "completion",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "yes",
+            "when": {
+              "ref": "steps.boundary.outputs.execute"
+            },
+            "body": {
+              "kind": "switch",
+              "cases": [
+                {
+                  "id": "yes",
+                  "when": {
+                    "ref": "steps.traversal.outputs.progress.terminated"
+                  },
+                  "body": {
+                    "kind": "call",
+                    "operation": "complete_failure",
+                    "arguments": {
+                      "boundary": {
+                        "ref": "steps.boundary.outputs.boundary"
+                      },
+                      "runtime": {
+                        "ref": "steps.boundary.outputs.runtime"
+                      }
+                    }
+                  }
+                }
+              ],
+              "default": {
+                "kind": "sequence",
+                "steps": [
+                  {
+                    "id": "finalize",
+                    "kind": "call",
+                    "operation": "finalize_checks",
+                    "arguments": {
+                      "progress": {
+                        "ref": "steps.traversal.outputs.progress"
+                      },
+                      "runtime": {
+                        "ref": "steps.boundary.outputs.runtime"
+                      }
+                    }
+                  },
+                  {
+                    "id": "publication",
+                    "kind": "switch",
+                    "cases": [
+                      {
+                        "id": "yes",
+                        "when": {
+                          "ref": "steps.finalize.outputs.terminated"
+                        },
+                        "body": {
+                          "kind": "call",
+                          "operation": "complete_failure",
+                          "arguments": {
+                            "boundary": {
+                              "ref": "steps.boundary.outputs.boundary"
+                            },
+                            "runtime": {
+                              "ref": "steps.boundary.outputs.runtime"
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "default": {
+                      "kind": "call",
+                      "operation": "publish_and_audit",
+                      "arguments": {
+                        "report": {
+                          "ref": "steps.finalize.outputs.report"
+                        },
+                        "boundary": {
+                          "ref": "steps.boundary.outputs.boundary"
+                        },
+                        "runtime": {
+                          "ref": "steps.boundary.outputs.runtime"
+                        }
+                      }
+                    },
+                    "outputs": {
+                      "result": {
+                        "type": "HubResult",
+                        "value": {
+                          "ref": "selected.outputs.result"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "outputs": {
+                  "result": {
+                    "type": "HubResult",
+                    "value": {
+                      "ref": "steps.publication.outputs.result"
+                    }
+                  }
+                }
+              },
+              "outputs": {
+                "result": {
+                  "type": "HubResult",
+                  "value": {
+                    "ref": "selected.outputs.result"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "return_boundary",
+          "arguments": {
+            "boundary": {
+              "ref": "steps.boundary.outputs.boundary"
+            },
+            "runtime": {
+              "ref": "steps.boundary.outputs.runtime"
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "HubResult",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.completion.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 27
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked validation description; completion establishes no scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "tests/test_program/run_comprehensive_tests.py",
+        "selector": "run; enter_checks; prepare_checks; checks_pending; advance_check; run_check; finalize_checks; parse_args; main; publish_report",
+        "digest": "sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_registry; run_action; run_leaf_action; prepare_leaf_boundary; complete_leaf_boundary; finish_leaf_boundary",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/test_matrix.json",
+        "selector": "physics_lean rows in matrix order",
+        "digest": "sha256:17b2fc38f51c7711873b68dc5f630cfc0eb06351160ad6401ea67a6044ace322"
+      },
+      {
+        "path": "scripts/physics_lean_family_tools.py",
+        "selector": "PhysicsLeanFamilyTools; _worker; register_physics_lean_family_tools",
+        "digest": "sha256:0532a4d86f2ac5637499725c0b5e816e36cd9e6537daac41b39c004818959ee8"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_physics_lean_family_tools; service write policy",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/comprehensive_strict_tools.py",
+        "selector": "source_runner",
+        "digest": "sha256:692874cb5a8c7869a675ee2fe16f2a3a88ab7be2dfe103a5c995217f372afecd"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory: physics-lean-family.workflow.json",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_physics_lean_family_workflow_tests.py",
+        "selector": "PhysicsLeanFamilyTests",
+        "digest": "sha256:fc2bafe17c7c1939f3f434522784ba7d6b264c1f9af24025e684e8362364d26f"
+      },
+      {
+        "path": "tests/mcp/fixtures/physics_lean_family_boundary.py",
+        "selector": "external compiler/provider boundaries; worker bootstrap",
+        "digest": "sha256:ba4dcffdde1575ab0ac1aa4281e39bd8b86b75e3468a6d5165fddf471fff209f"
+      },
+      {
+        "path": "tests/mcp/fixtures/physics_lean_family_original.py.txt",
+        "selector": "original selected source backup: run; main",
+        "digest": "sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a"
+      }
+    ],
+    "gaps": [
+      "This fixed invocation excludes inactive snapshot-only, strict, matrix-coverage and alternate-reporting CLI branches; native entrypoints retain them.",
+      "Scope asserts the canonical eleven-row projection. At most eleven selected rows are admitted; larger selections require re-normalization. The native runner has no iteration bound.",
+      "Check/report schemas are partial projections; native validation remains authoritative. Native effects require qualification. Lunar supplies v1 execution receipts and digests."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "test:family:physics-lean",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md",
+      "contract": {
+        "id": "test:family:physics-lean",
+        "summary": "Run the comprehensive test matrix for the physics_lean module family.",
+        "family": "physics_lean",
+        "kind": "validation",
+        "safety": "writes_artifacts",
+        "command": [
+          "{python}",
+          "tests/test_program/run_comprehensive_tests.py",
+          "--module-family",
+          "physics_lean",
+          "--json"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "tests/test_program/run_comprehensive_tests.py",
+          "tests/test_matrix.json"
+        ],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [
+          "artifacts/"
+        ],
+        "allows_extra_args": false,
+        "timeout_seconds": 900,
+        "notes": ""
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Native preflight and snapshots surround one supervised worker invoking shared source steps in order. A server-owned opaque runtime retains the matrix, arguments, histories and report; transported data is assertion-only.",
+      "fixed_defaults": {
+        "profile": "workstation",
+        "fail_on_warning": false,
+        "changed_files_only": false,
+        "validate_matrix": false,
+        "emit_dependency_map_only": false,
+        "write_jsonl": null,
+        "write_junit": null
+      },
+      "outputs": [
+        "artifacts/test_program/dependency_map.json",
+        "artifacts/test_program/deterministic_tests.json",
+        "JSON_stdout",
+        "HubResult"
+      ],
+      "failure_policy": "Failed or timed-out checks accumulate and traversal continues. Unhandled exceptions end the worker with exit 1, skip finalization/publication, and return native captured stderr plus hub write audit. Deadline interruption returns native timeout HubResult. Native report failures publish JSON before exit 3. Write-audit failure overrides success.",
+      "check_semantics": "Missing optional dependencies skip, or fail under fail-on-warning/strict; current eleven rows have none. Check timeouts are 30-180 seconds; completed checks compare expected_exit and audit declared writes.",
+      "bounds": "The worker is interrupted after the native 900-second cumulative deadline, including pauses between calls. The retained 3600-second workflow ceiling does not replace it. Eleven is an admission bound; on_exhausted fails if a modified graph cannot consume an admitted selection.",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "context": "prepare_boundary retains FileState snapshots privately. prepare_checks parses --module-family physics_lean --json once, retaining generated run_id and default output paths in the worker. All subsequent ports require its opaque runtime.",
+      "terminal_paths": "Progress.terminated marks process termination, never a synthetic check/report. checks_pending and retain_state carry terminal state without invoking source steps. Empty report is an internal unused port on finalize failure. complete_failure captures output and audits without publishing.",
+      "zero_iterations": "An empty selected family follows the initial false guard, retains native state, finalizes and publishes. A nonempty loop stops after the first false guard, including row eleven. No retries or failure-driven check exit.",
+      "policy": "Authorization and service write roots are checked on every port, including canonical declared check write sets before any check executes.",
+      "compiler_control": "The root loop carries inactive/empty Progress through bypass_progress/retain_state without source calls or writes; this preserves zero native iterations and supports Lunar scoped loop exhaustion."
+    }
+  }
+}

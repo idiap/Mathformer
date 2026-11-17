@@ -1,0 +1,611 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_setup_python_all_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Execute the selected Python-all route through the native ordered action controller.",
+  "aliases": [
+    "setup.python.all"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "SelectedMatch": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "properties": {
+              "route_id": {
+                "type": "string",
+                "const": "setup.python.all"
+              },
+              "action_ids": {
+                "type": "array",
+                "const": [
+                  "setup:python-all"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "score": {
+            "type": "number"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "setup:python-all"
+        ],
+        "properties": {
+          "setup:python-all": {
+            "type": "object",
+            "required": [
+              "command",
+              "depends_on",
+              "safety",
+              "writes",
+              "timeout_seconds",
+              "required_paths",
+              "required_tools",
+              "allows_extra_args"
+            ],
+            "properties": {
+              "command": {
+                "const": [
+                  "uv",
+                  "run",
+                  "python",
+                  "scripts/install_env.py",
+                  "--all-extras"
+                ]
+              },
+              "depends_on": {
+                "const": []
+              },
+              "required_paths": {
+                "const": [
+                  "scripts/install_env.py"
+                ]
+              },
+              "required_tools": {
+                "const": [
+                  "uv"
+                ]
+              },
+              "allows_extra_args": {
+                "const": false
+              },
+              "safety": {
+                "const": "writes_environment"
+              },
+              "writes": {
+                "const": [
+                  ".venv/"
+                ]
+              },
+              "timeout_seconds": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "IntentState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "ok"
+              ],
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "setup:python-all"
+      }
+    },
+    "ActionCount": {
+      "schema": {
+        "type": "integer",
+        "const": 1
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "SelectedMatch"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "IntentState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_setup_python_all_route_initialize",
+          "operation": "mathformer_setup_python_all_route_initialize"
+        }
+      }
+    },
+    "select": {
+      "inputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_setup_python_all_route_select",
+          "operation": "mathformer_setup_python_all_route_select"
+        }
+      }
+    },
+    "run_action": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_setup_python_all_route_run_action",
+          "operation": "mathformer_setup_python_all_route_run_action"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "action_count": {
+          "type": "ActionCount"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "done": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_setup_python_all_route_advance",
+          "operation": "mathformer_setup_python_all_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "IntentState"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_setup_python_all_route_finish",
+          "operation": "mathformer_setup_python_all_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "description": "Return fresh state {ok true, children empty}; retain no history.",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "Native action iteration specialized to the one action in this route. Advance always reports done after that action, including failure; the bound therefore returns normally and keep_going cannot add work.",
+        "state_type": "IntentState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select",
+              "description": "Select match.route.action_ids[len(state.children)].",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "run",
+              "kind": "call",
+              "operation": "run_action",
+              "description": "Invoke run_action with no extra args or dependencies, carrying repository_root through preflight, cwd and both write snapshots (null preserves the native default mount). Preflight checks installer presence, uv availability and (allow_mutating or dry_run). Errors return ok false without execution; otherwise dry_run returns planned argv. Execution captures subprocess output, then audits repository writes. Nonzero exit, timeout, or undeclared writes yield ok false; unexpected launch errors propagate and prevent advance/finish. The command is uv run python scripts/install_env.py --all-extras. Installer main requires Python 3.10+, creates/updates .venv and verifies its Python executable, then selects and deduplicates benchmark, SymPy/NumPy, Docling and MCP dependencies and installs them in one checked uv pip invocation. Missing prerequisites or checked subprocess failures abort. Python is enabled, Lean is disabled; completion returns 0 only after successful installation.",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "description": "Append child in order. Pack updated.ok as state.ok AND bool(child.get(\"ok\", false)), preserving sticky failure. Compute done as len(updated.children) == action_count OR (not child.get(\"ok\", false) AND not context.keep_going). Child ok false is returned data, so accumulation still executes.",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.run.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "action_count": {
+                  "literal": 1
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "IntentState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Boolean",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "IntentState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "description": "Return schema_version 1, aggregate ok, serialized match/registry route metadata and ordered children; status is intent_run_completed when state.ok, otherwise intent_run_failed. Negative results return normally.",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          ".venv/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Native route completion establishes no scientific result or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; build_intent_routes; build_registry; run_action; run_leaf_action; preflight; prepare_leaf_boundary; launch_leaf_boundary; finish_leaf_boundary; main",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/install_env.py",
+        "selector": "main; initialize; install_python; prepare_python_environment; selected_python_deps; install_python_dependencies; setup_lean; complete",
+        "digest": "sha256:2c8a00fbf461dddcb10899271ca41d47bf90c9a077b47add7db3c250aab1a5fd"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_ask; mathformer_run_workflow; _cap_unbounded_timeouts",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/setup_python_all_route_tools.py",
+        "selector": "register_setup_python_all_route_tools; selected_match; checked_registry",
+        "digest": "sha256:14de93cea459c92ce2291ffd607314d5a1d6423d3c384fcad12918a69a3319a7"
+      },
+      {
+        "path": "tests/mcp/run_setup_python_all_route_workflow_tests.py",
+        "selector": "SetupRouteTests",
+        "digest": "sha256:ff0e133d7755df24abcfa080a8238ea5eda95414ef196c9c666d5f0326ba567d"
+      },
+      {
+        "path": "tests/mcp/fixtures/setup_python_all_route_boundary.py",
+        "selector": "boundary; serve",
+        "digest": "sha256:fc472da29b0cdb93d2f368daff7f21f103754222a7d6f9ac8cc1784045a984de"
+      },
+      {
+        "path": "tests/mcp/fixtures/setup_python_all_route_original.py.txt",
+        "selector": "frozen original controller",
+        "digest": "sha256:840e87f3fb28cd27456ee0f6ca14beb2eef98cf0fe486f91b1ad494b8a88936e"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "setup_python_all_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Leaf and installer internals remain inside the real run_action call; this is not a full Python equivalence model.",
+      "Network/cache effects retain native capability labels and require host qualification; labels are not runtime grants.",
+      "Lunar supplies mandatory v1 receipts, provenance and effect records; optional native logs are preserved by existing entrypoints.",
+      "The 3600-second and five-call ceilings are normalization bounds, not native controller budgets."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "setup.python.all",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md"
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "setup:python-all"
+      ],
+      "action_workflows": [
+        "hub_setup_python_all_workflow"
+      ],
+      "selection": "Already selected route with canonical registered action; NL matching remains caller-owned."
+    },
+    "mathformer.native_boundary": {
+      "execution": "Five registered MCP tools reuse the native state functions and run_action; Lunar compiles and executes the bounded graph.",
+      "repository_mount": "Explicit nullable repository_root carries the source mount; null preserves the CLI default. Service write-root and read-only policies remain enforced.",
+      "timeout": "Registry timeout_seconds preserves null for CLI or the configurable MCP execution cap (default 600). The route has exactly one leaf and no retry."
+    }
+  }
+}

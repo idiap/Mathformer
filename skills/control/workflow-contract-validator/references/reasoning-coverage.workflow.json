@@ -1,0 +1,641 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_control_reasoning_log_coverage_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Audit reasoning-log coverage; expose audit() report, retaining hub invocation metadata.",
+  "aliases": [
+    "control:reasoning-log-coverage"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "SkillsDirectory": {
+      "schema": {
+        "type": "string",
+        "const": "skills",
+        "description": "Repository skills directory; specialization requires at most 10000 matching SKILL.md files and 10000 immediate Python scripts per skill, with stable collections during the scan."
+      }
+    },
+    "AuditState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "pending",
+          "cursor",
+          "owner_hooks",
+          "shared_runtime_scripts",
+          "wrapper_available",
+          "skill_reports",
+          "script_reports",
+          "repo_root"
+        ],
+        "properties": {
+          "pending": {
+            "type": "array",
+            "maxItems": 10000,
+            "items": {
+              "type": "string"
+            }
+          },
+          "cursor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "owner_hooks": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "shared_runtime_scripts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "wrapper_available": {
+            "type": "boolean"
+          },
+          "skill_reports": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "script_reports": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "repo_root": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "SkillState": {
+      "schema": {
+        "type": "object",
+        "description": "Carries parent AuditState plus current skill metadata and accumulating script classifications; parent is preserved until commit.",
+        "required": [
+          "parent",
+          "name",
+          "path",
+          "scripts",
+          "agents",
+          "hook_ids",
+          "cursor",
+          "native_scripts",
+          "wrapper_scripts",
+          "script_reports"
+        ],
+        "properties": {
+          "parent": {
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "scripts": {
+            "type": "array",
+            "maxItems": 10000,
+            "items": {
+              "type": "string"
+            }
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hook_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cursor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "native_scripts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "wrapper_scripts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "script_reports": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "CoverageReport": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "ok",
+          "wrapper_available",
+          "skill_count",
+          "script_count",
+          "logging_class_counts",
+          "native_logged_script_count",
+          "wrapper_logged_script_count",
+          "scripts_without_native_logging_count",
+          "missing_skill_count",
+          "missing_skills",
+          "skills",
+          "scripts",
+          "policy"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "wrapper_available": {
+            "type": "boolean"
+          },
+          "skill_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "script_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "logging_class_counts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "native_logged_script_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "wrapper_logged_script_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "scripts_without_native_logging_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missing_skill_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missing_skills": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "scripts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "policy": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": "string",
+        "description": "Filesystem root used by the native wrapper check and repository-relative report paths."
+      }
+    }
+  },
+  "inputs": {
+    "skills_dir": {
+      "type": "SkillsDirectory"
+    },
+    "repo_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "report": {
+      "type": "CoverageReport",
+      "value": {
+        "ref": "flow.outputs.report"
+      }
+    }
+  },
+  "operations": {
+    "prepare": {
+      "inputs": {
+        "skills_dir": {
+          "type": "SkillsDirectory"
+        },
+        "repo_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "AuditState"
+        },
+        "has_skills": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coverage_prepare",
+          "operation": "mathformer_coverage_prepare"
+        }
+      }
+    },
+    "open_skill": {
+      "inputs": {
+        "state": {
+          "type": "AuditState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "SkillState"
+        },
+        "has_scripts": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coverage_open_skill",
+          "operation": "mathformer_coverage_open_skill"
+        }
+      }
+    },
+    "inspect_script": {
+      "inputs": {
+        "state": {
+          "type": "SkillState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "SkillState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coverage_inspect_script",
+          "operation": "mathformer_coverage_inspect_script"
+        }
+      }
+    },
+    "commit_skill": {
+      "inputs": {
+        "state": {
+          "type": "SkillState"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "AuditState"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coverage_commit_skill",
+          "operation": "mathformer_coverage_commit_skill"
+        }
+      }
+    },
+    "aggregate": {
+      "inputs": {
+        "state": {
+          "type": "AuditState"
+        }
+      },
+      "outputs": {
+        "report": {
+          "type": "CoverageReport"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_coverage_aggregate",
+          "operation": "mathformer_coverage_aggregate"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "prepare_scan",
+        "kind": "call",
+        "operation": "prepare",
+        "arguments": {
+          "skills_dir": {
+            "ref": "inputs.skills_dir"
+          },
+          "repo_root": {
+            "ref": "inputs.repo_root"
+          }
+        }
+      },
+      {
+        "id": "skills",
+        "kind": "loop",
+        "state_type": "AuditState",
+        "initial": {
+          "ref": "steps.prepare_scan.outputs.state"
+        },
+        "max_iterations": 10000,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "load_skill",
+              "kind": "call",
+              "operation": "open_skill",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                }
+              }
+            },
+            {
+              "id": "scripts",
+              "kind": "loop",
+              "state_type": "SkillState",
+              "initial": {
+                "ref": "steps.load_skill.outputs.state"
+              },
+              "max_iterations": 10000,
+              "on_exhausted": "fail",
+              "body": {
+                "kind": "call",
+                "operation": "inspect_script",
+                "arguments": {
+                  "state": {
+                    "ref": "loop.state"
+                  }
+                }
+              },
+              "next_state": {
+                "ref": "body.outputs.state"
+              },
+              "until": {
+                "ref": "body.outputs.done"
+              },
+              "outputs": {
+                "state": {
+                  "type": "SkillState",
+                  "value": {
+                    "ref": "loop.state"
+                  }
+                }
+              }
+            },
+            {
+              "id": "commit",
+              "kind": "call",
+              "operation": "commit_skill",
+              "arguments": {
+                "state": {
+                  "ref": "steps.scripts.outputs.state"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "AuditState",
+              "value": {
+                "ref": "steps.commit.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Flag",
+              "value": {
+                "ref": "steps.commit.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "AuditState",
+            "value": {
+              "ref": "loop.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "aggregate",
+        "kind": "call",
+        "operation": "aggregate",
+        "arguments": {
+          "state": {
+            "ref": "steps.skills.outputs.state"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "report": {
+        "type": "CoverageReport",
+        "value": {
+          "ref": "steps.aggregate.outputs.report"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository"
+        ],
+        "write": []
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "audit_reasoning_log_coverage"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 100020002
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Coverage classification only; textual markers do not prove logging execution."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "skills/control/reasoning-log-schema-guardian/scripts/audit_skill_reasoning_log_coverage.py",
+        "digest": "sha256:f51c8ec2139f4bff8baca8a90fd68942b11afb2279a8891ecd2f1a4bd14890d2",
+        "selector": "audit; prepare_scan; open_skill; inspect_script; commit_skill; aggregate_scan"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/reasoning_coverage_tools.py",
+        "digest": "sha256:fe9c9b5286a3d0700df652ef1c5dd54b3a69ca5c643234bde5a9f80e309698ec"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Payload types retain report structure but leave individual report records and helper parsing internals opaque.",
+      "Literal loop bounds specialize valid directory inputs to at most 10000 skills and 10000 scripts each. Empty collections perform inert cursor iterations; the last real item sets done, including at the cap, so bounded valid scans return normally. Exhaustion failure is unreachable for these inputs; native scans have no cap.",
+      "The 3600-second and operation-call budgets are descriptor limits, not native enforced bounds; the registered action has no timeout.",
+      "Native audit has no receipts requirement; observability declarations do not upgrade native logs.",
+      "This graph models audit(), not the hub transport or main() presentation and optional mutations.",
+      "Lunar rejects loops nested in switch branches. Loops are lifted; MCP cursor adapters return identity state and done for empty collections without calling the native step. Native file reads/classification/aggregation order is unchanged. Empty skill scans use one inert outer and inner iteration; no-script skills use one inert script iteration.",
+      "Callable native steps are registered by scripts/mcp_server.py; descriptor budgets apply only in Lunar. RepositoryRoot makes the native global filesystem context explicit."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "control:reasoning-log-coverage",
+      "owner_skill": "skills/control/reasoning-log-schema-guardian/SKILL.md",
+      "contract": {
+        "id": "control:reasoning-log-coverage",
+        "summary": "Audit that every skill has a reasoning-log coverage path.",
+        "family": "control",
+        "kind": "validation",
+        "safety": "read_only",
+        "command": [
+          "{python}",
+          "skills/control/reasoning-log-schema-guardian/scripts/audit_skill_reasoning_log_coverage.py",
+          "--strict",
+          "--json"
+        ],
+        "depends_on": [],
+        "required_paths": [
+          "skills/SKILL_HOOKS.yaml",
+          "skills/control/reasoning-log-schema-guardian/scripts/run_with_reasoning_log.py"
+        ],
+        "required_tools": [],
+        "optional_tools": [],
+        "writes": [],
+        "allows_extra_args": false,
+        "timeout_seconds": null,
+        "notes": ""
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Dependency-free hub leaf; run_action then run_leaf_action performs preflight, dry-run handling, one subprocess invocation, and undeclared-write auditing.",
+      "failure_policy": "audit() returns a complete report even when ok is false; file/parsing errors propagate without retries. Hub preflight/subprocess failure must not become acceptance.",
+      "entrypoint": "main() calls audit; optional require-native tightens ok using scripts_without_native_logging_count; optional output-file writes JSON. Hub uses neither option, prints full JSON, and exits 3 iff strict and not ok, otherwise 0. Text rendering limits only missing-skill details to 50.",
+      "callers": "Natural-language coverage route, control:all, control:reasoning-log-consumer-readiness, and self_test_reasoning_logs.py (direct audit call)."
+    }
+  }
+}

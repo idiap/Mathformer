@@ -1,0 +1,352 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_control_reasoning_log_consumer_contract_workflow
+version: 1.0.0
+kind: workflow
+description: Evaluate four independent reasoning-log consumer fixtures and aggregate
+  checks.
+aliases:
+- control:reasoning-log-consumer-contract
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  State:
+    schema:
+      type: object
+      required:
+      - root
+      - cases
+      - cursor
+      - checks
+      additionalProperties: false
+      properties:
+        root:
+          type: string
+        cases:
+          const:
+          - case_id: single_skill_success
+            mode: single
+          - case_id: multi_skill_physics_like
+            mode: multi_skill
+          - case_id: recoverable_blocker
+            mode: blocked
+          - case_id: wrapper_only_fallback
+            mode: wrapper
+        cursor:
+          type: integer
+          minimum: 0
+          maximum: 4
+        checks:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+  Check:
+    schema:
+      type: object
+      required:
+      - case_id
+      - ok
+      - errors
+      - status_values
+      - structured_fields_available
+      additionalProperties: false
+      properties:
+        case_id:
+          type: string
+        ok:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: string
+        status_values:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        structured_fields_available:
+          type: object
+          required:
+          - status
+          - skill
+          - run_id
+          - artifacts
+          - risks
+          - next_actions
+          additionalProperties:
+            type: boolean
+  Done:
+    schema:
+      type: boolean
+  Report:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - style
+      - ok
+      - checks
+      additionalProperties: false
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: reasoning_log_consumer_contract_suite
+        ok:
+          type: boolean
+        checks:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: object
+inputs: {}
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_consumer_initialize
+        operation: mathformer_reasoning_consumer_initialize
+  evaluate_fixture:
+    inputs:
+      state:
+        type: State
+    outputs:
+      check:
+        type: Check
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_consumer_evaluate_fixture
+        operation: mathformer_reasoning_consumer_evaluate_fixture
+  append_and_advance:
+    inputs:
+      state:
+        type: State
+      check:
+        type: Check
+    outputs:
+      state:
+        type: State
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_consumer_append_and_advance
+        operation: mathformer_reasoning_consumer_append_and_advance
+  cleanup_and_aggregate:
+    inputs:
+      state:
+        type: State
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_reasoning_consumer_cleanup_and_aggregate
+        operation: mathformer_reasoning_consumer_cleanup_and_aggregate
+flow:
+  kind: sequence
+  steps:
+  - id: initialize_scope
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: fixtures
+    kind: loop
+    description: Exactly four sequential fixtures; normal termination after appending
+      the fourth check.
+    state_type: State
+    initial:
+      ref: steps.initialize_scope.outputs.state
+    max_iterations: 4
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: evaluate
+        kind: call
+        operation: evaluate_fixture
+        arguments:
+          state:
+            ref: loop.state
+      - id: carry
+        kind: call
+        operation: append_and_advance
+        arguments:
+          state:
+            ref: loop.state
+          check:
+            ref: steps.evaluate.outputs.check
+      outputs:
+        state:
+          type: State
+          value:
+            ref: steps.carry.outputs.state
+        done:
+          type: Done
+          value:
+            ref: steps.carry.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: State
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: cleanup_and_aggregate
+    arguments:
+      state:
+        ref: steps.fixtures.outputs.state
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finish.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - temporary_fixture_logs
+      write:
+      - temporary_fixture_logs
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - evaluate_consumer_fixtures
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 10
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked consumer checks only; no runtime qualification or scientific
+    acceptance.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/reasoning_logs/run_consumer_contract_suite.py
+    selector: run_suite; initialize_suite; evaluate_fixture; append_and_advance; aggregate_suite;
+      build_log; check_summary; main
+    digest: sha256:c50bd2f4206bde15fa39f054d07e9cd6a4794d90e81cea19b0d72018585f086f
+  - path: skills/control/reasoning-log-schema-guardian/scripts/summarize_reasoning_log.py
+    selector: summarize
+    digest: sha256:51b7a8aa7efcdd65ec6d83500877aa3235dc26e0009ac8657d2e1322c932e971
+  - path: scripts/mathformer.py
+    selector: control:reasoning-log-consumer-contract; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/reasoning_consumer_tools.py
+    selector: register_reasoning_consumer_tools; consumer_lifespan
+    digest: sha256:4eabea9dfbd5d2b7bd9a1f7e1e6306a28acd07351a3e5d0a42ba42b90a1c850e
+  - path: scripts/mcp_server.py
+    selector: register_reasoning_consumer_tools; consumer_lifespan
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Hub preflight, dry-run, subprocess transport and post-write audit remain native
+    hub boundary controls, not graph nodes.
+  - Native suite has no timeout or receipts; Lunar enforces the descriptor budgets
+    and receipts.
+  - Native exception cleanup occurs immediately. On host loop/call budget interruption
+    an unfinished MCP scope is released when its server session closes (v1 has no
+    finally node).
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: control:reasoning-log-consumer-contract
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: control:reasoning-log-consumer-contract
+      summary: Run consumer-application fixtures over reasoning-log summaries.
+      family: control
+      kind: validation
+      safety: read_only
+      command:
+      - '{python}'
+      - tests/reasoning_logs/run_consumer_contract_suite.py
+      - --json
+      depends_on: []
+      required_paths:
+      - tests/reasoning_logs/run_consumer_contract_suite.py
+      required_tools: []
+      optional_tools: []
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: Native hub dispatch is unchanged. Registered typed MCP tools share
+      extracted source steps with run_suite; Lunar compiles and executes the four-case
+      topology.
+    callers:
+    - control:reasoning-log-consumer-readiness
+    failure_policy: Preflight failure or dry-run skips execution; post-execution write
+      audit can fail the hub result.
+    cli_output: main prints JSON or per-case PASS/FAIL; exits 0 for report.ok, otherwise
+      3.
+    exception_policy: Uncaught exceptions abort; TemporaryDirectory cleans up during
+      unwinding; no retries.
+    loop_bound: Four fixed cases; done is true on iteration four, so normal completion
+      never signals exhaustion.
+    helper_semantics: build_log always starts; multi_skill adds progress using the
+      same skill identity; blocked emits error and returns without completion; single
+      and wrapper complete. Wrapper has no fallback branch. summarize validates and
+      quality-audits, then collects unique identifiers, decisions, risks and next
+      actions, ordered timeline, first artifact value per key. check_summary requires
+      run_ids, skills, timeline, artifacts, risks, next_actions, nonempty skills/timeline
+      and dictionary artifacts; ignores summary.ok and expected statuses.
+# REUSE-IgnoreEnd

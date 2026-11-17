@@ -1,0 +1,588 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_validate_lean_fixture_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Project the selected validate.lean.fixture controller route: one controlled wiki-level Lean suite action, ordered accumulation, and native result packing.",
+  "aliases": [
+    "validate.lean.fixture"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Match": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "object",
+            "properties": {
+              "route_id": {
+                "const": "validate.lean.fixture"
+              },
+              "action_ids": {
+                "type": "array",
+                "const": [
+                  "lean:wiki-level-suite"
+                ]
+              }
+            },
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "additionalProperties": true
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "description": "Source-owned build_registry mapping, preserving native WorkflowAction records; not a caller-editable registry.",
+        "properties": {
+          "lean:wiki-level-suite": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "lean:wiki-level-suite"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "ActionId": {
+      "schema": {
+        "type": "string",
+        "const": "lean:wiki-level-suite"
+      }
+    },
+    "ActionCount": {
+      "schema": {
+        "type": "integer",
+        "const": 1
+      }
+    },
+    "Done": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Explicit repository mount; null uses the native repository default."
+      }
+    }
+  },
+  "inputs": {
+    "match": {
+      "type": "Match"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "context": {
+      "type": "RunContext"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_lean_fixture_route_initialize",
+          "operation": "mathformer_lean_fixture_route_initialize"
+        }
+      }
+    },
+    "select": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "match": {
+          "type": "Match"
+        }
+      },
+      "outputs": {
+        "action_id": {
+          "type": "ActionId"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_lean_fixture_route_select_action",
+          "operation": "mathformer_lean_fixture_route_select_action"
+        }
+      }
+    },
+    "run": {
+      "inputs": {
+        "action_id": {
+          "type": "ActionId"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_lean_fixture_route_invoke_action",
+          "operation": "mathformer_lean_fixture_route_invoke_action"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "action_count": {
+          "type": "ActionCount"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Done"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_lean_fixture_route_advance",
+          "operation": "mathformer_lean_fixture_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "match": {
+          "type": "Match"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_lean_fixture_route_finish",
+          "operation": "mathformer_lean_fixture_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "description": "The fixed route has exactly one action. advance returns done=true at count=1 even on failure, so the bound returns normally; exhaustion is unreachable for source-conforming outputs.",
+        "state_type": "State",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "run",
+              "kind": "call",
+              "operation": "run",
+              "description": "A native child with ok=false is returned data, not a graph exception; accumulate it before finishing. Uncaught exceptions abort.",
+              "arguments": {
+                "action_id": {
+                  "ref": "steps.select.outputs.action_id"
+                },
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.run.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "action_count": {
+                  "literal": 1
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "State",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Done",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "State",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/wiki_level_suite/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 5
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Controller transport and check results only; completion does not establish scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; build_registry; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "tests/wiki_level/run_suite.py",
+        "selector": "run_suite; prepare_suite; advance_case; finish_suite",
+        "digest": "sha256:63e016b2b4650b8be971cbba325be8610a52a785c723808d22579e3e8b3bc315"
+      },
+      {
+        "path": "scripts/lean_fixture_route_tools.py",
+        "selector": "register_lean_fixture_route_tools; selected_match; checked_registry",
+        "digest": "sha256:944190c4518e234b00057dc5d8fdb7d976e500991df6136a09c5d0c72643df1b"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_lean_fixture_route_tools",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/mathformer_mcp_service.py",
+        "selector": "service capabilities",
+        "digest": "sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "lean_fixture_route_descriptor",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "The run operation retains the entire scientific suite and native execution boundary; their internal graphs and full external effects are not modeled.",
+      "The 3600-second ceiling is inherited projection policy, not a native route budget. The action subprocess has its own 300-second timeout; five calls bound only the projected controller operations.",
+      "Lunar records required v1 execution receipts and provenance; native reasoning logs and optional hub reports remain owned by the source."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "validate.lean.fixture",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "validate.lean.fixture",
+        "title": "Validate the wiki-level Lean suite",
+        "action_ids": [
+          "lean:wiki-level-suite"
+        ]
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Authoritative scripts/mathformer.py controller; YAML is an interface projection.",
+      "selection": "Selected native IntentMatch metadata and canonical build_registry records are restored from checked JSON projections. repository_root carries the explicit filesystem context through the native route boundary; null retains the native default.",
+      "callers": [
+        "CLI ask --run",
+        "MCP mathformer_ask",
+        "MCP mathformer_run_workflow via canonical workflow ID"
+      ],
+      "action": {
+        "id": "lean:wiki-level-suite",
+        "depends_on": [],
+        "argv": [
+          "{python}",
+          "tests/wiki_level/run_suite.py",
+          "--json"
+        ],
+        "python": "sys.executable",
+        "subprocess_timeout_seconds": 300,
+        "branches": "Admission rejection, preflight failure or dry-run returns without launch. After launch, audit repository writes; timeout, nonzero return code or undeclared writes makes child.ok=false. No retries."
+      },
+      "failure_policy": "Preserve native failed children as data and always pack route failure after accumulation; uncaught controller errors abort.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "binding": "Registered mathformer_lean_fixture_route_* MCP ports invoke shared native controller functions without a service timeout override.",
+      "source_owned_write_audit": "Concept mapping may create artifacts/mathlib_decl_index.json outside this action's native declared write set on a cold cache. Preserve the resulting undeclared_writes failure; the adapter does not widen native write authority."
+    },
+    "mathformer.composition": {
+      "ordered_actions": [
+        "lean:wiki-level-suite"
+      ],
+      "action_workflows": [
+        "hub_lean_wiki_level_suite_workflow"
+      ],
+      "keep_going_semantics": "Stop at action count or failed child unless keep_going; sticky aggregate failure never recovers. One action means keep_going adds no work."
+    },
+    "mathformer.suite": {
+      "source": "tests/wiki_level/run_suite.py:run_suite",
+      "order": "Load manifest and gold Lean source; process every manifest case in order; compile gold; audit compatibility; check collected expected declarations or skip; aggregate and write report.",
+      "case_state": [
+        "cursor",
+        "ordered cases",
+        "expected_declarations"
+      ],
+      "case_order": "Read case and collect declarations; static review; difficulty; concept map unless skipped; hierarchy navigation unless skipped; theorem-presence check and append case result.",
+      "stopping": "Recorded check failures do not stop case traversal; uncaught exceptions abort. Empty manifests skip case processing. No numeric case cap, convergence loop or retries.",
+      "defaults": "Route argv enables concept mapping, hierarchy navigation and declaration checks; all optional skip branches remain owned by the native suite.",
+      "timeouts": "Individual scientific subprocess timeouts remain native; enclosing action subprocess timeout is 300 seconds.",
+      "outputs": "Aggregate JSON suite report under artifacts/wiki_level_suite/; action captures stdout/stderr and exit status rather than parsing the scientific report."
+    }
+  }
+}

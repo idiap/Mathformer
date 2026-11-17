@@ -1,0 +1,606 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_skills_link_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Publish canonical skills, then verify discovery through the selected skills.link route.",
+  "aliases": [
+    "skills.link"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object"
+        }
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Omitted or null retains the native repository default; explicit roots pass through both actions."
+      }
+    },
+    "Match": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "properties": {
+              "route_id": {
+                "type": "string",
+                "const": "skills.link"
+              },
+              "action_ids": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "const": "skills:link"
+                  },
+                  {
+                    "const": "skills:client-discovery"
+                  }
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "RouteState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "Action": {
+      "schema": {
+        "type": "string",
+        "enum": [
+          "skills:link",
+          "skills:client-discovery"
+        ]
+      }
+    },
+    "Boolean": {
+      "schema": {
+        "type": "boolean"
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "Match"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot",
+      "required": false
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_skills_link_route_initialize",
+          "operation": "mathformer_skills_link_route_initialize"
+        }
+      }
+    },
+    "select": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "Match"
+        }
+      },
+      "outputs": {
+        "action": {
+          "type": "Action"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_skills_link_route_select",
+          "operation": "mathformer_skills_link_route_select"
+        }
+      }
+    },
+    "link": {
+      "inputs": {
+        "context": {
+          "type": "RunContext"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot",
+          "required": false
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_skills_link_route_link",
+          "operation": "mathformer_skills_link_route_link"
+        }
+      }
+    },
+    "discovery": {
+      "inputs": {
+        "context": {
+          "type": "RunContext"
+        },
+        "registry": {
+          "type": "Registry"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot",
+          "required": false
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_skills_link_route_discovery",
+          "operation": "mathformer_skills_link_route_discovery"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "done": {
+          "type": "Boolean"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_skills_link_route_advance",
+          "operation": "mathformer_skills_link_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "Match"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp",
+          "kind": "tool",
+          "target": "mathformer_skills_link_route_finish",
+          "operation": "mathformer_skills_link_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "actions",
+        "kind": "loop",
+        "state_type": "RouteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 2,
+        "on_exhausted": "fail",
+        "description": "The native two-item route exits normally at its bound because advance returns done=true.",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "select",
+              "kind": "call",
+              "operation": "select",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "match": {
+                  "ref": "inputs.match"
+                }
+              }
+            },
+            {
+              "id": "dispatch",
+              "kind": "switch",
+              "cases": [
+                {
+                  "id": "link",
+                  "when": {
+                    "eq": [
+                      {
+                        "ref": "steps.select.outputs.action"
+                      },
+                      {
+                        "literal": "skills:link"
+                      }
+                    ]
+                  },
+                  "body": {
+                    "kind": "call",
+                    "operation": "link",
+                    "arguments": {
+                      "context": {
+                        "ref": "inputs.context"
+                      },
+                      "registry": {
+                        "ref": "inputs.registry"
+                      },
+                      "repository_root": {
+                        "ref": "inputs.repository_root"
+                      }
+                    }
+                  }
+                }
+              ],
+              "default": {
+                "kind": "call",
+                "operation": "discovery",
+                "arguments": {
+                  "context": {
+                    "ref": "inputs.context"
+                  },
+                  "registry": {
+                    "ref": "inputs.registry"
+                  },
+                  "repository_root": {
+                    "ref": "inputs.repository_root"
+                  }
+                }
+              },
+              "outputs": {
+                "child": {
+                  "type": "HubResult",
+                  "value": {
+                    "ref": "selected.outputs.child"
+                  }
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.dispatch.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "RouteState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Boolean",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "RouteState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.actions.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          ".agents/skills/",
+          ".claude/skills/",
+          ".opencode/skills/"
+        ]
+      },
+      "network": [],
+      "external_write": []
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 8
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Describes native publication and discovery, without scientific or runtime qualification."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "build_intent_routes; initialize_intent_state; select_intent_action; advance_intent_state; finish_intent_state; run_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/link_agent_skills.py",
+        "selector": "discover_skills; publish_skills; publish_one",
+        "digest": "sha256:52d087441eb87c601c799543b795709200fc1c46a7dc938f8cc0eb49f036e90c"
+      },
+      {
+        "path": "tests/agent_clients/run_skill_client_discovery.py",
+        "selector": "build_report; check_client; main",
+        "digest": "sha256:b5c612028cbf3a0f6ece36f38fccd13a2a94bd784604d774a5d72b3dc5cdf9f1"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "mathformer_run_workflow",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/skills_link_route_tools.py",
+        "selector": "register_skills_link_route_tools; selected_match; checked_registry; check_state",
+        "digest": "sha256:583d17ec6f55a0334f88f448beb872bd953056adb4f47ed7b4b6a2937d1b8f56"
+      },
+      {
+        "path": "scripts/adoption_check_tools.py",
+        "selector": "Context",
+        "digest": "sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac"
+      },
+      {
+        "path": "scripts/workflow_write_audit.py",
+        "selector": "snapshot_repository; audit_snapshots",
+        "digest": "sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "skills_link_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "run_action retains native admission, preflight, dry-run, subprocess capture and write audit. Publication and discovery traversals remain inside their owning actions, rather than separate graph operations.",
+      "Both registered actions have timeout_seconds=None. Lunar enforces the enclosing 3600-second/eight-call budgets; the CLI has no such budgets and legacy MCP dispatch applies its configurable timeout cap.",
+      "Lunar receipts/events/provenance supplement the source observations; child stdout/stderr and ordered result envelopes remain unchanged."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "skills.link",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md",
+      "contract": {
+        "route_id": "skills.link",
+        "title": "Publish Mathformer skills to local agent clients",
+        "action_ids": [
+          "skills:link",
+          "skills:client-discovery"
+        ],
+        "operator_note": "Requires mutation permission because it writes client skill folders."
+      }
+    },
+    "mathformer.native_boundary": {
+      "execution": "Registered mathformer_skills_link_route_* tools call the same intent-state helpers and run_action as scripts/mathformer.py::run_intent_match.",
+      "callers": [
+        "CLI main ask --run",
+        "scripts/mcp_server.py::mathformer_run_workflow"
+      ],
+      "dispatch": "Exact native registry and selected-route projections are reconstructed; commands cannot be replaced by caller JSON. Publication checks service read-only policy and configured write roots unless dry-running.",
+      "mount": "Omitted repository_root retains the native repository default; explicit roots propagate through both actions.",
+      "exceptions": "Unexpected subprocess-launch exceptions propagate; no route result is fabricated.",
+      "selection": "Already selected skills.link; NL scoring and ambiguity resolution remain native.",
+      "observations": "Each child is appended unchanged; failure is sticky. Discovery JSON remains child.stdout; native returncode controls child.ok. No retries; unexpected launch exceptions propagate."
+    }
+  }
+}

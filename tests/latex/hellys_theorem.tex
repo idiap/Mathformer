@@ -1,0 +1,118 @@
+% SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+% SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+% SPDX-License-Identifier: MIT
+% Neuro-symbolic AI Group
+% File Documentation
+%
+% Motivation:
+%   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+%
+% Intent:
+%   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+%
+% Function:
+%   Contains executable tests, fixtures, and manifests used for local and CI validation.
+%
+% Maintenance Notes:
+%   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{Helly's Theorem}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Overview}
+
+Helly's theorem is a fundamental result in discrete and convex geometry concerning intersections of convex sets. In its classical form, it states that for a finite family of convex subsets of $\mathbb{R}^d$, if every subfamily of size $d+1$ has nonempty intersection, then the entire family has nonempty intersection.
+
+The theorem was discovered by Eduard Helly in 1913 and published in 1923. It has become one of the central tools in convex geometry and gave rise to the notion of a \emph{Helly family}.
+
+\section*{Statement}
+
+Let $X_1, \dots, X_n$ be a finite collection of convex subsets of $\mathbb{R}^d$, where $n \ge d+1$. If every subcollection of $d+1$ of these sets has nonempty intersection, then
+\[
+\bigcap_{j=1}^{n} X_j \neq \varnothing.
+\]
+
+For infinite collections, one adds a compactness assumption:
+
+Let $\{X_\alpha\}$ be a collection of compact convex subsets of $\mathbb{R}^d$ such that every subcollection of cardinality at most $d+1$ has nonempty intersection. Then the whole collection has nonempty intersection.
+
+\section*{Proof idea}
+
+A standard proof of the finite version uses Radon's theorem and induction.
+
+\subsection*{Base case: $n = d+2$}
+
+Assume that for every $j = 1, \dots, n$, there exists a point $x_j$ lying in the intersection of all sets $X_i$ except possibly $X_j$. Applying Radon's theorem to the set
+\[
+A = \{x_1, \dots, x_n\},
+\]
+one obtains a partition of $A$ into two disjoint subsets $A_1$ and $A_2$ whose convex hulls intersect. Let
+\[
+p \in \operatorname{conv}(A_1) \cap \operatorname{conv}(A_2).
+\]
+Then one shows that $p \in X_j$ for every $j$, hence
+\[
+p \in \bigcap_{j=1}^{n} X_j.
+\]
+
+\subsection*{Inductive step}
+
+For $n > d+2$, assume the statement holds for $n-1$ sets. One reduces the problem by replacing two of the sets with their intersection and then applies the induction hypothesis.
+
+The infinite version follows from the finite intersection property and compactness.
+
+\section*{Colorful Helly theorem}
+
+The colorful Helly theorem is an extension in which one considers $d+1$ collections of convex subsets of $\mathbb{R}^d$.
+
+If, for every transversal consisting of one set from each collection, the chosen sets have a common point, then at least one of the collections has the property that all of its sets have a common point.
+
+This can be visualized by assigning a different color to each collection: if every rainbow choice has nonempty intersection, then one color class must itself have nonempty total intersection.
+
+\section*{Fractional Helly theorem}
+
+A further extension is the fractional Helly theorem. It states that for every $a > 0$, there exists $b > 0$ such that if $X_1, \dots, X_n$ are convex subsets of $\mathbb{R}^d$ and at least an $a$-fraction of all $(d+1)$-tuples of these sets have nonempty intersection, then there is a subfamily consisting of at least a $b$-fraction of the sets whose total intersection is nonempty.
+
+\section*{See also}
+
+\begin{itemize}
+    \item Carath\'eodory's theorem
+    \item Doignon's theorem
+    \item Kirchberger's theorem
+    \item Shapley--Folkman lemma
+    \item Krein--Milman theorem
+    \item Choquet theory
+    \item Radon's theorem
+    \item Tverberg's theorem
+    \item Cantor's intersection theorem
+    \item Helly family
+\end{itemize}
+
+\section*{References}
+
+\begin{itemize}
+    \item B. Bollob\'as, ``Intersecting Convex Sets: Helly's Theorem,'' in \emph{The Art of Mathematics: Coffee Time in Memphis}, Cambridge University Press, 2006.
+    \item L. Danzer, B. Gr\"unbaum, and V. Klee, ``Helly's theorem and its relatives,'' in \emph{Convexity}, Proc. Symp. Pure Math., vol.~7, American Mathematical Society, 1963.
+    \item J. Eckhoff, ``Helly, Radon, and Carath\'eodory type theorems,'' in \emph{Handbook of Convex Geometry}, North-Holland, 1993.
+    \item E. Helly, ``\"Uber Mengen konvexer K\"orper mit gemeinschaftlichen Punkten,'' \emph{Jahresbericht der Deutschen Mathematiker-Vereinigung}, 32 (1923), 175--176.
+    \item D. K\"onig, ``\"Uber konvexe K\"orper,'' \emph{Mathematische Zeitschrift}, 14 (1922), 208--220.
+    \item J. Radon, ``Mengen konvexer K\"orper, die einen gemeinsamen Punkt enthalten,'' \emph{Mathematische Annalen}, 83 (1921), 113--115.
+\end{itemize}
+
+\bigskip
+\noindent\textbf{Source note.} This \LaTeX{} file is a clean article-style conversion based on the Wikipedia page ``Helly's theorem.''
+
+\end{document}

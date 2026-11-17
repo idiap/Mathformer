@@ -1,0 +1,2234 @@
+<!doctype html>
+<!--
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+#
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# Neuro-symbolic AI Group
+#
+# SPDX-License-Identifier: MIT
+-->
+
+<!--
+File Documentation
+
+Motivation:
+  Make the framework understandable without requiring readers to inspect implementation details first.
+
+Intent:
+  Explain architecture, installation, principles, tutorials, licensing, and generated library outputs.
+
+Function:
+  Provides human-facing documentation that should stay aligned with tested behavior and code paths.
+
+Maintenance Notes:
+  Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+-->
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mathformer.AutoformalizedCBTChapter3 aligned formalization</title>
+  <style>:root {
+  color-scheme: light;
+  --bg: #f6f7f2;
+  --ink: #1f2524;
+  --muted: #66736f;
+  --panel: #ffffff;
+  --line: #d9ded7;
+  --source: #5f6f00;
+  --formal: #0f6f6a;
+  --code-bg: #0f1615;
+  --code-ink: #edf7f3;
+  --soft-source: #fbfaea;
+  --soft-formal: #eef8f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.55;
+}
+
+a {
+  color: #086c67;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+.page-header {
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.page-header-inner,
+main {
+  width: min(1180px, calc(100vw - 32px));
+  margin: 0 auto;
+}
+
+.page-header-inner {
+  padding: 28px 0 22px;
+}
+
+.crumb {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.7rem, 3vw, 2.6rem);
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.summary span,
+.formal-meta span,
+.line-link {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f8faf6;
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 4px 10px;
+}
+
+main {
+  padding: 24px 0 54px;
+}
+
+.module-notes,
+.imports,
+.toc,
+.source-panel,
+.formal-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.module-notes,
+.imports,
+.toc {
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+h2,
+h3,
+h4 {
+  letter-spacing: 0;
+}
+
+h2 {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+}
+
+h3 {
+  margin: 0 0 14px;
+  font-size: 0.98rem;
+}
+
+h4 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.toc ol {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.toc li {
+  margin: 7px 0;
+}
+
+.toc li span {
+  color: var(--muted);
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 0.88rem;
+}
+
+.alignment-block {
+  padding: 28px 0;
+  border-top: 1px solid var(--line);
+}
+
+.alignment-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.alignment-heading h2 {
+  margin: 0;
+  max-width: 820px;
+  font-size: 1.18rem;
+  line-height: 1.35;
+}
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.line-link {
+  flex: 0 0 auto;
+  text-decoration: none;
+}
+
+.alignment-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.source-panel,
+.formal-panel {
+  min-width: 0;
+  padding: 16px;
+}
+
+.source-panel {
+  background: var(--soft-source);
+}
+
+.formal-panel {
+  background: var(--soft-formal);
+}
+
+.source-subsection + .source-subsection {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(95, 111, 0, 0.18);
+}
+
+.source-subsection p,
+.module-notes p {
+  margin: 0 0 10px;
+}
+
+.empty-note {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.formal-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.formal-meta strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+}
+
+pre {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0;
+  border-radius: 8px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  padding: 14px;
+  font-size: 0.86rem;
+  line-height: 1.48;
+}
+
+.latex-source {
+  background: #292915;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.math-preview {
+  margin-top: 10px;
+  padding: 10px;
+  overflow-x: auto;
+  border: 1px solid rgba(95, 111, 0, 0.22);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.math-display {
+  min-width: 0;
+}
+
+footer {
+  width: min(1180px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 22px 0 36px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 860px) {
+  .alignment-heading,
+  .alignment-grid {
+    display: block;
+  }
+
+  .line-link {
+    display: inline-block;
+    margin-top: 12px;
+  }
+
+  .formal-panel {
+    margin-top: 12px;
+  }
+
+  .page-header-inner,
+  main,
+  footer {
+    width: min(100vw - 22px, 1180px);
+  }
+}</style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/lean.min.js"></script>
+  <script defer>window.addEventListener('DOMContentLoaded', function () { if (window.hljs) { window.hljs.highlightAll(); } });</script>
+</head>
+<body>
+  <header class="page-header">
+    <div class="page-header-inner">
+      <p class="crumb"><a href="../INDEX.html">Aligned Mathformer Library</a> / <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean</a></p>
+      <h1>Mathformer.AutoformalizedCBTChapter3</h1>
+      <div class="summary" aria-label="Module summary">
+        <span>Status: candidate</span>
+        <span>Declarations: 42</span>
+        <span>Generated: 2026-06-06T10:06:01.768267+00:00</span>
+        <span>SHA-256: 9e735c1eed59</span>
+      </div>
+    </div>
+  </header>
+  <main>
+    <section class="module-notes" aria-labelledby="module-notes-title"><h2 id="module-notes-title">Chapter Source Flow</h2><div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Chapter 3 of the CBT textbook archive, &quot;CBT in Cantor&#x27;s 1878 Beitrag&quot;, argues that Cantor&#x27;s use of equivalence classes, the order relation between powers, the direct two-set allusion, Lemma G for `(0,1]` and `[0,1]`, the comb/frame proof gestalt, and the discussion of different powers all presuppose or point toward Cantor-Bernstein reasoning.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+key chapter statements include `M \sim N`, partitions
+of linear sets into equal-power classes, `C \subseteq B \subseteq A`, the
+comparability assertion for powers, the two-set CBT allusion, Lemma G
+`(0,1] \sim [0,1]`, the pushdown/simple-chain construction, frame matchings,
+and diagonal evidence for powers above the continuum.
+
+Source anchors: src_L0001-src_L0451
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[M \sim N\]</div>
+<div class="math-display">\[C \subseteq B \subseteq A\]</div>
+<div class="math-display">\[(0,1] \sim [0,1]\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This module formalizes the chapter&#x27;s reusable core in mathlib-compatible terms.  Equipollence, power comparison by embeddings, Schroeder-Bernstein antisymmetry, sandwich/single-set CBT, frame-indexed tagged-union equivalence, and diagonal non-surjectivity are proved.  The historical continuum comb construction and Cantor&#x27;s Lemma G are represented as explicit structures, because the extracted source gives a mathematical construction narrative rather than a ready-made Lean homeomorphism or interval equivalence proof.</p>
+</div></section>
+    <section class="imports" aria-labelledby="imports-title"><h2 id="imports-title">Imports</h2><pre><code class="language-lean">import Mathlib.Data.Real.Basic
+import Mathlib.Data.Set.Lattice
+import Mathlib.Logic.Function.Basic
+import Mathlib.SetTheory.Cardinal.SchroederBernstein</code></pre></section>
+    <nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">Formal Objects</h2><ol><li><a href="#mathformer-autoformalizedcbtchapter3-samepower">Mathformer.AutoformalizedCBTChapter3.SamePower</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L56">line 56</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-samepower-refl">Mathformer.AutoformalizedCBTChapter3.SamePower.refl</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L69">line 69</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-samepower-symm">Mathformer.AutoformalizedCBTChapter3.SamePower.symm</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L80">line 80</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-samepower-trans">Mathformer.AutoformalizedCBTChapter3.SamePower.trans</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L93">line 93</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-cantorwelldefinedset">Mathformer.AutoformalizedCBTChapter3.CantorWellDefinedSet</a><span>structure at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L112">line 112</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-powerclass">Mathformer.AutoformalizedCBTChapter3.PowerClass</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L123">line 123</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-mem-powerclass-iff">Mathformer.AutoformalizedCBTChapter3.mem_powerClass_iff</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L132">line 132</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-inclusionembedding">Mathformer.AutoformalizedCBTChapter3.inclusionEmbedding</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L141">line 141</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-embeddingtrans">Mathformer.AutoformalizedCBTChapter3.embeddingTrans</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L159">line 159</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-samepower-of-subset-sandwich">Mathformer.AutoformalizedCBTChapter3.samePower_of_subset_sandwich</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L176">line 176</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-powerle">Mathformer.AutoformalizedCBTChapter3.PowerLE</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L191">line 191</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-powerle-of-samepower-subset">Mathformer.AutoformalizedCBTChapter3.powerLE_of_samePower_subset</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L202">line 202</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-powerle-refl">Mathformer.AutoformalizedCBTChapter3.powerLE_refl</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L213">line 213</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-powerle-trans">Mathformer.AutoformalizedCBTChapter3.powerLE_trans</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L225">line 225</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-powerle-antisymm-samepower">Mathformer.AutoformalizedCBTChapter3.powerLE_antisymm_samePower</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L241">line 241</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-powerlt">Mathformer.AutoformalizedCBTChapter3.PowerLT</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L254">line 254</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-powerlt-asymm">Mathformer.AutoformalizedCBTChapter3.powerLT_asymm</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L265">line 265</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-cantorcomparability">Mathformer.AutoformalizedCBTChapter3.CantorComparability</a><span>structure at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L277">line 277</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-twosetcbt-from-power-antisymmetry">Mathformer.AutoformalizedCBTChapter3.twoSetCBT_from_power_antisymmetry</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L289">line 289</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-propersubset">Mathformer.AutoformalizedCBTChapter3.ProperSubset</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L299">line 299</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-cantorreflexive">Mathformer.AutoformalizedCBTChapter3.CantorReflexive</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L309">line 309</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-not-powerlt-of-samepower">Mathformer.AutoformalizedCBTChapter3.not_powerLT_of_samePower</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L319">line 319</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-closedunit">Mathformer.AutoformalizedCBTChapter3.ClosedUnit</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L330">line 330</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-openclosedunit">Mathformer.AutoformalizedCBTChapter3.OpenClosedUnit</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L338">line 338</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-cantorlemmag">Mathformer.AutoformalizedCBTChapter3.CantorLemmaG</a><span>structure at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L350">line 350</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-cantorlemmag-samepower">Mathformer.AutoformalizedCBTChapter3.cantorLemmaG_samePower</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L361">line 361</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-positivenat">Mathformer.AutoformalizedCBTChapter3.positiveNat</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L373">line 373</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-natpositiveequiv">Mathformer.AutoformalizedCBTChapter3.natPositiveEquiv</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L383">line 383</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-singlesetcbt-of-sandwich">Mathformer.AutoformalizedCBTChapter3.singleSetCBT_of_sandwich</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L406">line 406</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-continuumcomb">Mathformer.AutoformalizedCBTChapter3.ContinuumComb</a><span>structure at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L420">line 420</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-continuumcomb-tooth-samepower">Mathformer.AutoformalizedCBTChapter3.continuumComb_tooth_samePower</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L433">line 433</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-framematching">Mathformer.AutoformalizedCBTChapter3.FrameMatching</a><span>structure at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L444">line 444</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-sigmaframeequiv">Mathformer.AutoformalizedCBTChapter3.sigmaFrameEquiv</a><span>def at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L459">line 459</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-framematching-taggedunion-samepower">Mathformer.AutoformalizedCBTChapter3.frameMatching_taggedUnion_samePower</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L484">line 484</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-singlesetframeshift">Mathformer.AutoformalizedCBTChapter3.SingleSetFrameShift</a><span>structure at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L499">line 499</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-singlesetframeshift-samepower">Mathformer.AutoformalizedCBTChapter3.singleSetFrameShift_samePower</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L515">line 515</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-no-surjective-to-powerset">Mathformer.AutoformalizedCBTChapter3.no_surjective_to_powerset</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L527">line 527</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-no-surjective-to-bool-functions">Mathformer.AutoformalizedCBTChapter3.no_surjective_to_bool_functions</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L539">line 539</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-cantorcomparisonprogram">Mathformer.AutoformalizedCBTChapter3.CantorComparisonProgram</a><span>structure at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L557">line 557</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-higher-not-samepower-continuum">Mathformer.AutoformalizedCBTChapter3.higher_not_samePower_continuum</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L574">line 574</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-secondnumberclassevidence">Mathformer.AutoformalizedCBTChapter3.SecondNumberClassEvidence</a><span>structure at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L590">line 590</a></span></li>
+<li><a href="#mathformer-autoformalizedcbtchapter3-secondclass-not-samepower-nat">Mathformer.AutoformalizedCBTChapter3.secondClass_not_samePower_nat</a><span>theorem at <a href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L606">line 606</a></span></li></ol></nav>
+    <article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-samepower" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor says that two well-defined sets fully and unequivocally correlate element by element exactly when they have equal power, or are equivalent.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L56">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:56</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor says that two well-defined sets fully and unequivocally correlate element by element exactly when they have equal power, or are equivalent.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`M \sim N`.
+Source anchors: src_L0015-src_L0022; src_L0043-src_L0047
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[M \sim N\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>In mathlib-compatible form, `SamePower A B` is `Nonempty (A ≃ B)`, an equivalence between set subtypes.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.SamePower</strong>
+      </div>
+      <pre><code class="language-lean">def SamePower {α : Type u} {β : Type v} (A : Set α) (B : Set β) : Prop :=
+  Nonempty (A ≃ B)
+
+namespace SamePower</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-samepower-refl" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor did not prove that `\sim` is reflexive, symmetric, and transitive; this later became the customary rhythm for equivalence relations.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L69">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:69</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor did not prove that `\sim` is reflexive, symmetric, and transitive; this later became the customary rhythm for equivalence relations.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`A \sim A`.
+Source anchors: src_L0048-src_L0052
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A \sim A\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature is exactly `SamePower A A`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.SamePower.refl</strong>
+      </div>
+      <pre><code class="language-lean">theorem refl {α : Type u} (A : Set α) : SamePower A A := by
+  exact ⟨Equiv.refl A⟩</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-samepower-symm" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor&#x27;s relation of equivalence between sets is symmetric in modern equivalence-relation form.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L80">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:80</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor&#x27;s relation of equivalence between sets is symmetric in modern equivalence-relation form.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`A \sim B \Rightarrow B \sim A`.
+Source anchors: src_L0048-src_L0052
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A \sim B \Rightarrow B \sim A\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature turns `SamePower A B` into `SamePower B A`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.SamePower.symm</strong>
+      </div>
+      <pre><code class="language-lean">theorem symm {α : Type u} {β : Type v} {A : Set α} {B : Set β}
+    (h : SamePower A B) : SamePower B A := by
+  rcases h with ⟨e⟩
+  exact ⟨e.symm⟩</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-samepower-trans" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor&#x27;s equivalence of sets is transitive in modern equivalence-relation form.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L93">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:93</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor&#x27;s equivalence of sets is transitive in modern equivalence-relation form.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`A \sim B \wedge B \sim C \Rightarrow A \sim C`.
+Source anchors: src_L0048-src_L0052
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A \sim B \wedge B \sim C \Rightarrow A \sim C\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature composes `SamePower A B` and `SamePower B C` into `SamePower A C`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.SamePower.trans</strong>
+      </div>
+      <pre><code class="language-lean">theorem trans {α : Type u} {β : Type v} {γ : Type w}
+    {A : Set α} {B : Set β} {C : Set γ}
+    (hAB : SamePower A B) (hBC : SamePower B C) : SamePower A C := by
+  rcases hAB with ⟨eAB⟩
+  rcases hBC with ⟨eBC⟩
+  exact ⟨eAB.trans eBC⟩
+
+end SamePower</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-cantorwelldefinedset" data-kind="structure">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor&#x27;s later definition of a well-defined set requires that membership and equality of objects in the same conceptual sphere be determined.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L112">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:112</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor&#x27;s later definition of a well-defined set requires that membership and equality of objects in the same conceptual sphere be determined.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+membership and equality are determined by the logical
+principle of excluded third.
+Source anchors: src_L0023-src_L0033
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[membership and equality are determined by the logical principle of excluded third. Source anchors: src_L0023-src_L0033\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This record keeps the source&#x27;s conceptual-sphere condition explicit.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>structure</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.CantorWellDefinedSet</strong>
+      </div>
+      <pre><code class="language-lean">structure CantorWellDefinedSet (ConceptualSphere : Type u) where
+  carrier : Set ConceptualSphere
+  membership_decidable : ∀ x : ConceptualSphere, Decidable (x ∈ carrier)
+  equality_decidable : ∀ x y : ConceptualSphere, Decidable (x = y)</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-powerclass" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The partitions in Cantor&#x27;s continuum-hypothesis formulation are equivalence classes for the relation of equal power.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L123">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:123</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The partitions in Cantor&#x27;s continuum-hypothesis formulation are equivalence classes for the relation of equal power.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+sets of equal power are put in the same partition.
+Source anchors: src_L0034-src_L0042
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[sets of equal power are put in the same partition. Source anchors: src_L0034-src_L0042\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.PowerClass</strong>
+      </div>
+      <pre><code class="language-lean">def PowerClass {α : Type u} (A : Set α) : Set (Set α) :=
+  {B | SamePower B A}</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-mem-powerclass-iff" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>A set belongs to the equal-power class of `A` exactly when it is equivalent to `A`.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L132">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:132</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>A set belongs to the equal-power class of `A` exactly when it is equivalent to `A`.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`B \in [A]_\sim \leftrightarrow B \sim A`.
+Source anchors: src_L0034-src_L0042
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[B \in [A]_\sim \leftrightarrow B \sim A\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.mem_powerClass_iff</strong>
+      </div>
+      <pre><code class="language-lean">theorem mem_powerClass_iff {α : Type u} {A B : Set α} :
+    B ∈ PowerClass A ↔ SamePower B A := by
+  rfl</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-inclusionembedding" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Generated bridge to Lean alignment</p>
+      <h2>An inclusion of sets induces an embedding of subtypes.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L141">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:141</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>An inclusion of sets induces an embedding of subtypes.</p>
+</div>
+<div class="source-subsection">
+<h4>Generated LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`A\subseteq B \Rightarrow A \hookrightarrow B`.
+Source anchors: src_L0053-src_L0056
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A\subseteq B \Rightarrow A \hookrightarrow B\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.inclusionEmbedding</strong>
+      </div>
+      <pre><code class="language-lean">def inclusionEmbedding {α : Type u} {A B : Set α} (hAB : A ⊆ B) : A ↪ B where
+  toFun x := ⟨x.1, hAB x.2⟩
+  inj&#x27; := by
+    intro x y hxy
+    cases x with
+    | mk xv hx =&gt;
+      cases y with
+      | mk yv hy =&gt;
+        simp at hxy
+        simp [hxy]</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-embeddingtrans" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Generated bridge to Lean alignment</p>
+      <h2>Embeddings compose.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L159">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:159</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>Embeddings compose.  This small helper keeps the Schroeder-Bernstein applications below independent of method names.</p>
+</div>
+<div class="source-subsection">
+<h4>Generated LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`(A\hookrightarrow B) \wedge (B\hookrightarrow C)
+\Rightarrow A\hookrightarrow C`.
+Source anchors: src_L0073-src_L0096
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[(A\hookrightarrow B) \wedge (B\hookrightarrow C) \Rightarrow A\hookrightarrow C\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.embeddingTrans</strong>
+      </div>
+      <pre><code class="language-lean">def embeddingTrans {α : Type u} {β : Type v} {γ : Type w}
+    (f : α ↪ β) (g : β ↪ γ) : α ↪ γ where
+  toFun x := g (f x)
+  inj&#x27; := by
+    intro x y hxy
+    exact f.injective (g.injective hxy)</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-samepower-of-subset-sandwich" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>If `C \subseteq B \subseteq A` and `A` and `C` are in one equivalence class, CBT excludes `B` from being in a different class.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L176">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:176</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>If `C \subseteq B \subseteq A` and `A` and `C` are in one equivalence class, CBT excludes `B` from being in a different class.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`C \subseteq B \subseteq A` and `A \sim C`
+imply `A \sim B`.
+Source anchors: src_L0053-src_L0059
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[C \subseteq B \subseteq A\]</div>
+<div class="math-display">\[A \sim C\]</div>
+<div class="math-display">\[A \sim B\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This is the single-set sandwich form of Schroeder-Bernstein: from subsets `C ⊆ B ⊆ A` and `SamePower A C`, Lean proves `SamePower A B`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.samePower_of_subset_sandwich</strong>
+      </div>
+      <pre><code class="language-lean">theorem samePower_of_subset_sandwich {α : Type u} {A B C : Set α}
+    (hCB : C ⊆ B) (hBA : B ⊆ A) (hAC : SamePower A C) :
+    SamePower A B := by
+  rcases hAC with ⟨eAC⟩
+  exact Function.Embedding.antisymm
+    (embeddingTrans eAC.toEmbedding (inclusionEmbedding hCB))
+    (inclusionEmbedding hBA)</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-powerle" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The order between powers is introduced by saying that `M` has smaller power than `N` when `M` has equal power with a subset of `N`.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L191">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:191</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The order between powers is introduced by saying that `M` has smaller power than `N` when `M` has equal power with a subset of `N`.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`M \preceq N` iff there is an injection from `M` into
+`N`, equivalently `M` is equipollent with a subset of `N`.
+Source anchors: src_L0073-src_L0075
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[M \preceq N\]</div>
+<div class="math-display">\[M\]</div>
+<div class="math-display">\[N\]</div>
+<div class="math-display">\[M\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.PowerLE</strong>
+      </div>
+      <pre><code class="language-lean">def PowerLE {α : Type u} {β : Type v} (A : Set α) (B : Set β) : Prop :=
+  Nonempty (A ↪ B)</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-powerle-of-samepower-subset" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Having equal power with a subset of `B` gives the smaller-or-equal relation between powers.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L202">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:202</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Having equal power with a subset of `B` gives the smaller-or-equal relation between powers.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`A \sim C \subseteq B \Rightarrow A \preceq B`.
+Source anchors: src_L0073-src_L0078
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A \sim C \subseteq B \Rightarrow A \preceq B\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature turns a subset map `C ⊆ B` and `SamePower A C` into `PowerLE A B`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.powerLE_of_samePower_subset</strong>
+      </div>
+      <pre><code class="language-lean">theorem powerLE_of_samePower_subset {α : Type u} {β : Type v}
+    {A : Set α} {B C : Set β} (hCB : C ⊆ B) (hAC : SamePower A C) :
+    PowerLE A B := by
+  rcases hAC with ⟨eAC⟩
+  exact ⟨embeddingTrans eAC.toEmbedding (inclusionEmbedding hCB)⟩</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-powerle-refl" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Every set has power less than or equal to itself.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L213">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:213</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Every set has power less than or equal to itself.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`A \preceq A`.
+Source anchors: src_L0073-src_L0086
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A \preceq A\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.powerLE_refl</strong>
+      </div>
+      <pre><code class="language-lean">theorem powerLE_refl {α : Type u} (A : Set α) : PowerLE A A := by
+  exact ⟨(Equiv.refl A).toEmbedding⟩</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-powerle-trans" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Transitivity is essential for Cantor&#x27;s order relation between powers.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L225">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:225</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Transitivity is essential for Cantor&#x27;s order relation between powers.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`A \preceq B \wedge B \preceq C \Rightarrow
+A \preceq C`.
+Source anchors: src_L0082-src_L0096
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A \preceq B \wedge B \preceq C \Rightarrow A \preceq C\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature composes `PowerLE A B` and `PowerLE B C` into `PowerLE A C`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.powerLE_trans</strong>
+      </div>
+      <pre><code class="language-lean">theorem powerLE_trans {α : Type u} {β : Type v} {γ : Type w}
+    {A : Set α} {B : Set β} {C : Set γ}
+    (hAB : PowerLE A B) (hBC : PowerLE B C) : PowerLE A C := by
+  rcases hAB with ⟨eAB⟩
+  rcases hBC with ⟨eBC⟩
+  exact ⟨embeddingTrans eAB eBC⟩</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-powerle-antisymm-samepower" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The mutual exclusivity or antisymmetry of the two cases of power inequality is exactly the two-set form of CBT.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L241">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:241</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The mutual exclusivity or antisymmetry of the two cases of power inequality is exactly the two-set form of CBT.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`(A \preceq B \wedge B \preceq A) \Rightarrow
+A \sim B`.
+Source anchors: src_L0087-src_L0096; src_L0168-src_L0172
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[(A \preceq B \wedge B \preceq A) \Rightarrow A \sim B\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature is the Schroeder-Bernstein step from `PowerLE A B` and `PowerLE B A` to `SamePower A B`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.powerLE_antisymm_samePower</strong>
+      </div>
+      <pre><code class="language-lean">theorem powerLE_antisymm_samePower {α : Type u} {β : Type v}
+    {A : Set α} {B : Set β} (hAB : PowerLE A B) (hBA : PowerLE B A) :
+    SamePower A B := by
+  rcases hAB with ⟨eAB⟩
+  rcases hBA with ⟨eBA⟩
+  exact Function.Embedding.antisymm eAB eBA</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-powerlt" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Smaller power means embeddability into the other set without equal power.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L254">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:254</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Smaller power means embeddability into the other set without equal power.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`A \prec B := A \preceq B \wedge \neg A\sim B`.
+Source anchors: src_L0073-src_L0096
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A \prec B := A \preceq B \wedge \neg A\sim B\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.PowerLT</strong>
+      </div>
+      <pre><code class="language-lean">def PowerLT {α : Type u} {β : Type v} (A : Set α) (B : Set β) : Prop :=
+  PowerLE A B ∧ ¬ SamePower A B</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-powerlt-asymm" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The two cases of strict power inequality must be mutually exclusive.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L265">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:265</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The two cases of strict power inequality must be mutually exclusive.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+not both `A \prec B` and `B \prec A`.
+Source anchors: src_L0087-src_L0093
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A \prec B\]</div>
+<div class="math-display">\[B \prec A\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature proves `¬ PowerLT B A` from `PowerLT A B`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.powerLT_asymm</strong>
+      </div>
+      <pre><code class="language-lean">theorem powerLT_asymm {α : Type u} {β : Type v} {A : Set α} {B : Set β}
+    (hAB : PowerLT A B) : ¬ PowerLT B A := by
+  intro hBA
+  exact hAB.2 (powerLE_antisymm_samePower hAB.1 hBA.1)</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-cantorcomparability" data-kind="structure">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor&#x27;s comparability assertion says that two non-equivalent sets must be comparable by power.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L277">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:277</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor&#x27;s comparability assertion says that two non-equivalent sets must be comparable by power.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+if `\neg M\sim N`, then `M \preceq N` or
+`N \preceq M`.
+Source anchors: src_L0073-src_L0086
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\neg M\sim N\]</div>
+<div class="math-display">\[M \preceq N\]</div>
+<div class="math-display">\[N \preceq M\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>structure</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.CantorComparability</strong>
+      </div>
+      <pre><code class="language-lean">structure CantorComparability (α : Type u) where
+  comparable : ∀ A B : Set α, ¬ SamePower A B → PowerLE A B ∨ PowerLE B A</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-twosetcbt-from-power-antisymmetry" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Comparability plus mutual exclusivity entails the two-set CBT principle.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L289">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:289</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Comparability plus mutual exclusivity entails the two-set CBT principle.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+antisymmetry of `\preceq` gives
+`A \preceq B \wedge B \preceq A \Rightarrow A \sim B`.
+Source anchors: src_L0087-src_L0096
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\preceq\]</div>
+<div class="math-display">\[A \preceq B \wedge B \preceq A \Rightarrow A \sim B\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature derives `SamePower A B` from the two embedding-order hypotheses `PowerLE A B` and `PowerLE B A`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.twoSetCBT_from_power_antisymmetry</strong>
+      </div>
+      <pre><code class="language-lean">theorem twoSetCBT_from_power_antisymmetry {α : Type u} {A B : Set α}
+    (hAB : PowerLE A B) (hBA : PowerLE B A) : SamePower A B := by
+  exact powerLE_antisymm_samePower hAB hBA</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-propersubset" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>A set is reflexive if it is equivalent to one of its proper subsets.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L299">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:299</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>A set is reflexive if it is equivalent to one of its proper subsets.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`\exists B \subsetneq A,\ A \sim B`.
+Source anchors: src_L0097-src_L0106
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\exists B \subsetneq A,\ A \sim B\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.ProperSubset</strong>
+      </div>
+      <pre><code class="language-lean">def ProperSubset {α : Type u} (B A : Set α) : Prop :=
+  B ⊆ A ∧ ∃ a ∈ A, a ∉ B</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-cantorreflexive" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Infinite sets are characterized in the passage by the possibility of being equivalent to a proper subset.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L309">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:309</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Infinite sets are characterized in the passage by the possibility of being equivalent to a proper subset.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`A` is reflexive iff it has an equivalent proper
+subset.
+Source anchors: src_L0099-src_L0106
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.CantorReflexive</strong>
+      </div>
+      <pre><code class="language-lean">def CantorReflexive {α : Type u} (A : Set α) : Prop :=
+  ∃ B : Set α, ProperSubset B A ∧ SamePower A B</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-not-powerlt-of-samepower" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The direct allusion warns that mere inclusion or a one-one correspondence into another set is not enough to infer strict inequality of powers without knowing no...</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L319">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:319</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The direct allusion warns that mere inclusion or a one-one correspondence into another set is not enough to infer strict inequality of powers without knowing non-equivalence.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`A \preceq B` alone does not imply `A \prec B`.
+Source anchors: src_L0102-src_L0113
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[A \preceq B\]</div>
+<div class="math-display">\[A \prec B\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.not_powerLT_of_samePower</strong>
+      </div>
+      <pre><code class="language-lean">theorem not_powerLT_of_samePower {α : Type u} {β : Type v}
+    {A : Set α} {B : Set β} (h : SamePower A B) : ¬ PowerLT A B := by
+  intro hlt
+  exact hlt.2 h</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-closedunit" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Lemma G says that the open-closed interval `(0,1]` has the same power as the closed interval `[0,1]`.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L330">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:330</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Lemma G says that the open-closed interval `(0,1]` has the same power as the closed interval `[0,1]`.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`(0,1] \sim [0,1]`.
+Source anchors: src_L0114-src_L0121
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[(0,1] \sim [0,1]\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.ClosedUnit</strong>
+      </div>
+      <pre><code class="language-lean">def ClosedUnit : Set ℝ :=
+  Set.Icc (0 : ℝ) 1</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-openclosedunit" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>In current notation, `y` ranges over `(0,1]`.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L338">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:338</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>In current notation, `y` ranges over `(0,1]`.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`(0,1]`.
+Source anchors: src_L0118-src_L0121
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[(0,1]\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.OpenClosedUnit</strong>
+      </div>
+      <pre><code class="language-lean">def OpenClosedUnit : Set ℝ :=
+  Set.Ioc (0 : ℝ) 1</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-cantorlemmag" data-kind="structure">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor&#x27;s Lemma G is represented as the equivalence data between `(0,1]` and `[0,1]`.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L350">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:350</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor&#x27;s Lemma G is represented as the equivalence data between `(0,1]` and `[0,1]`.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`(0,1] \sim [0,1]`.
+Source anchors: src_L0116-src_L0135
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[(0,1] \sim [0,1]\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The source describes Cantor&#x27;s geometric/analytic construction.  This record preserves the theorem as explicit data so downstream formalization can later replace it with a fully analytic interval equivalence.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>structure</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.CantorLemmaG</strong>
+      </div>
+      <pre><code class="language-lean">structure CantorLemmaG where
+  equivalence : SamePower OpenClosedUnit ClosedUnit</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-cantorlemmag-samepower" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Lemma G supplies the same-power relation between the open-closed and closed unit intervals.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L361">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:361</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Lemma G supplies the same-power relation between the open-closed and closed unit intervals.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`(0,1] \sim [0,1]`.
+Source anchors: src_L0116-src_L0135
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[(0,1] \sim [0,1]\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature extracts `SamePower OpenClosedUnit ClosedUnit` from the `CantorLemmaG` evidence record.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.cantorLemmaG_samePower</strong>
+      </div>
+      <pre><code class="language-lean">theorem cantorLemmaG_samePower (G : CantorLemmaG) :
+    SamePower OpenClosedUnit ClosedUnit := by
+  exact G.equivalence</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-positivenat" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The discrete set of points of `[0,1]` is mapped to the corresponding discrete set in `(0,1]` by pushing `0` down the chain.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L373">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:373</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The discrete set of points of `[0,1]` is mapped to the corresponding discrete set in `(0,1]` by pushing `0` down the chain.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`0, 1/2, \ldots` maps to `1/2, \ldots`.
+Source anchors: src_L0131-src_L0140
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[0, 1/2, \ldots\]</div>
+<div class="math-display">\[1/2, \ldots\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The abstract chain core is the equivalence between natural numbers and positive natural numbers by successor.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.positiveNat</strong>
+      </div>
+      <pre><code class="language-lean">def positiveNat : Set ℕ :=
+  {n | 0 &lt; n}</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-natpositiveequiv" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Pushing the first point down the simple chain gives a bijection from the whole discrete chain to the chain with the first point omitted.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L383">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:383</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Pushing the first point down the simple chain gives a bijection from the whole discrete chain to the chain with the first point omitted.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`n \mapsto n+1`.
+Source anchors: src_L0131-src_L0140
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[n \mapsto n+1\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.natPositiveEquiv</strong>
+      </div>
+      <pre><code class="language-lean">def natPositiveEquiv : ℕ ≃ positiveNat where
+  toFun n := ⟨n + 1, Nat.succ_pos n⟩
+  invFun n := n.1 - 1
+  left_inv := by
+    intro n
+    simp
+  right_inv := by
+    intro n
+    cases n with
+    | mk k hk =&gt;
+      apply Subtype.ext
+      exact Nat.succ_pred_eq_of_pos hk</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-singlesetcbt-of-sandwich" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Let the conditions of the single-set formulation of CBT hold with `M` of the power of the continuum; then the comb/pushdown mapping gives an equivalence from `M...</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L406">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:406</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Let the conditions of the single-set formulation of CBT hold with `M` of the power of the continuum; then the comb/pushdown mapping gives an equivalence from `M` onto `M&#x27;`.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`M&#x27;&#x27; \subseteq M&#x27; \subseteq M` and `M \sim M&#x27;&#x27;`
+imply `M \sim M&#x27;`.
+Source anchors: src_L0147-src_L0163
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[M&#x27;&#x27; \subseteq M&#x27; \subseteq M\]</div>
+<div class="math-display">\[M \sim M&#x27;&#x27;\]</div>
+<div class="math-display">\[M \sim M&#x27;\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature proves `SamePower M Mp` from `Mpp ⊆ Mp`, `Mp ⊆ M`, and `SamePower M Mpp`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.singleSetCBT_of_sandwich</strong>
+      </div>
+      <pre><code class="language-lean">theorem singleSetCBT_of_sandwich {α : Type u} {M Mp Mpp : Set α}
+    (hMppMp : Mpp ⊆ Mp) (hMpM : Mp ⊆ M) (hMMpp : SamePower M Mpp) :
+    SamePower M Mp := by
+  exact samePower_of_subset_sandwich hMppMp hMpM hMMpp</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-continuumcomb" data-kind="structure">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The continuum comb proof uses disjoint open-closed segments `S_b` standing over each `b` and pushes members down their chains.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L420">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:420</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The continuum comb proof uses disjoint open-closed segments `S_b` standing over each `b` and pushes members down their chains.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`S_b` and the map `{b}\cup S_b \to S_b`.
+Source anchors: src_L0141-src_L0159
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[S_b\]</div>
+<div class="math-display">\[{b}\cup S_b \to S_b\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This structure records the local chain data used by the comb proof without committing to a particular analytic construction of each segment inside `[0,1]`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>structure</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.ContinuumComb</strong>
+      </div>
+      <pre><code class="language-lean">structure ContinuumComb (Base Point : Type u) where
+  segment : Base → Set Point
+  markedPoint : Base → Point
+  marked_mem_extended : ∀ b : Base, markedPoint b ∈ ({markedPoint b} ∪ segment b)
+  pushdown :
+    ∀ b : Base, SamePower ({markedPoint b} ∪ segment b : Set Point) (segment b)</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-continuumcomb-tooth-samepower" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Each tooth of the comb carries the local pushdown equivalence from the marked point plus its segment onto the open-closed segment.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L433">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:433</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Each tooth of the comb carries the local pushdown equivalence from the marked point plus its segment onto the open-closed segment.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`{b}\cup S_b \sim S_b`.
+Source anchors: src_L0153-src_L0163
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[{b}\cup S_b \sim S_b\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.continuumComb_tooth_samePower</strong>
+      </div>
+      <pre><code class="language-lean">theorem continuumComb_tooth_samePower {Base Point : Type u}
+    (C : ContinuumComb Base Point) (b : Base) :
+    SamePower ({C.markedPoint b} ∪ C.segment b : Set Point) (C.segment b) := by
+  exact C.pushdown b</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-framematching" data-kind="structure">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The generalized drawing proof matches sub-segments, later called frames, by crisscross equivalences.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L444">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:444</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The generalized drawing proof matches sub-segments, later called frames, by crisscross equivalences.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+frames `aa&#x27;`, `b&#x27;b&#x27;&#x27;`, `bb&#x27;`, `a&#x27;a&#x27;&#x27;`, ...
+Source anchors: src_L0199-src_L0213
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[aa&#x27;\]</div>
+<div class="math-display">\[b&#x27;b&#x27;&#x27;\]</div>
+<div class="math-display">\[bb&#x27;\]</div>
+<div class="math-display">\[a&#x27;a&#x27;&#x27;\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>structure</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.FrameMatching</strong>
+      </div>
+      <pre><code class="language-lean">structure FrameMatching (ι : Type u) (α : Type v) (β : Type w) where
+  leftFrame : ι → Set α
+  rightFrame : ι → Set β
+  frameEquiv : ∀ i : ι, leftFrame i ≃ rightFrame i</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-sigmaframeequiv" data-kind="def">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Because corresponding frames are equivalent, their disjoint framed unions are equivalent.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L459">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:459</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Because corresponding frames are equivalent, their disjoint framed unions are equivalent.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+if each frame pair is equivalent, the frame-indexed
+unions are equivalent.
+Source anchors: src_L0199-src_L0206
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[if each frame pair is equivalent, the frame-indexed unions are equivalent. Source anchors: src_L0199-src_L0206\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>Tagged sigma types are the mathlib-safe version of disjoint unions of frames, and `sigmaFrameEquiv` builds an `Equiv` between the two sigma frame spaces.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>def</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.sigmaFrameEquiv</strong>
+      </div>
+      <pre><code class="language-lean">def sigmaFrameEquiv {ι : Type u} {α : Type v} {β : Type w}
+    (A : ι → Set α) (B : ι → Set β) (e : ∀ i : ι, A i ≃ B i) :
+    (Sigma fun i : ι =&gt; A i) ≃ (Sigma fun i : ι =&gt; B i) where
+  toFun x := ⟨x.1, e x.1 x.2⟩
+  invFun y := ⟨y.1, (e y.1).symm y.2⟩
+  left_inv := by
+    intro x
+    cases x with
+    | mk i a =&gt;
+      simp
+  right_inv := by
+    intro y
+    cases y with
+    | mk i b =&gt;
+      simp</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-framematching-taggedunion-samepower" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>The frame proof can be generalized to any sets by taking the given mappings instead of the parallel lines used in the drawing.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L484">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:484</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>The frame proof can be generalized to any sets by taking the given mappings instead of the parallel lines used in the drawing.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+replace parallels by arbitrary one-one maps between
+corresponding frames.
+Source anchors: src_L0207-src_L0219
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[replace parallels by arbitrary one-one maps between corresponding frames. Source anchors: src_L0207-src_L0219\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature proves `SamePower` between universal sets over the tagged sigma frame spaces.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.frameMatching_taggedUnion_samePower</strong>
+      </div>
+      <pre><code class="language-lean">theorem frameMatching_taggedUnion_samePower {ι : Type u}
+    {α : Type v} {β : Type w} (F : FrameMatching ι α β) :
+    SamePower (Set.univ : Set (Sigma fun i : ι =&gt; F.leftFrame i))
+      (Set.univ : Set (Sigma fun i : ι =&gt; F.rightFrame i)) := by
+  refine ⟨?_⟩
+  exact Equiv.Set.univ _ |&gt;.trans (sigmaFrameEquiv F.leftFrame F.rightFrame F.frameEquiv |&gt;.trans (Equiv.Set.univ _).symm)</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-singlesetframeshift" data-kind="structure">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor&#x27;s drawing also yields the single-set formulation: one maps each triangular frame to the next and leaves all other points fixed.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L499">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:499</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor&#x27;s drawing also yields the single-set formulation: one maps each triangular frame to the next and leaves all other points fixed.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+frame shift plus identity outside the framed part.
+Source anchors: src_L0214-src_L0222
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[frame shift plus identity outside the framed part. Source anchors: src_L0214-src_L0222\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>This structure records the abstract ingredients of such a single-set frame shift.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>structure</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.SingleSetFrameShift</strong>
+      </div>
+      <pre><code class="language-lean">structure SingleSetFrameShift (α : Type u) (ι : Type v) where
+  bigSet : Set α
+  middleSet : Set α
+  smallSet : Set α
+  small_subset_middle : smallSet ⊆ middleSet
+  middle_subset_big : middleSet ⊆ bigSet
+  frameIndex : ι → Set α
+  shift_equiv : SamePower bigSet smallSet</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-singlesetframeshift-samepower" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>A single-set frame shift with `smallSet \subseteq middleSet \subseteq bigSet` yields the single-set CBT conclusion.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L515">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:515</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>A single-set frame shift with `smallSet \subseteq middleSet \subseteq bigSet` yields the single-set CBT conclusion.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`small \subseteq middle \subseteq big` and
+`big \sim small` imply `big \sim middle`.
+Source anchors: src_L0214-src_L0219
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[small \subseteq middle \subseteq big\]</div>
+<div class="math-display">\[big \sim small\]</div>
+<div class="math-display">\[big \sim middle\]</div>
+</div>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.singleSetFrameShift_samePower</strong>
+      </div>
+      <pre><code class="language-lean">theorem singleSetFrameShift_samePower {α : Type u} {ι : Type v}
+    (S : SingleSetFrameShift α ι) : SamePower S.bigSet S.middleSet := by
+  exact singleSetCBT_of_sandwich S.small_subset_middle S.middle_subset_big S.shift_equiv</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-no-surjective-to-powerset" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor knew that the positive integers and the continuum have different powers.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L527">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:527</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor knew that the positive integers and the continuum have different powers.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`\mathbb N \not\sim \mathbb R`.
+Source anchors: src_L0246-src_L0258
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\mathbb N \not\sim \mathbb R\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>We expose the standard diagonal obstruction: no type surjects onto its powerset, formalized as `¬ Surjective f`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.no_surjective_to_powerset</strong>
+      </div>
+      <pre><code class="language-lean">theorem no_surjective_to_powerset {α : Type u} (f : α → Set α) :
+    ¬ Surjective f := by
+  exact Function.cantor_surjective f</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-no-surjective-to-bool-functions" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>A direct proof that the set of all real functions has power greater than the power of `R` is obtained by diagonalizing.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L539">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:539</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>A direct proof that the set of all real functions has power greater than the power of `R` is obtained by diagonalizing.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+define `g` by changing the diagonal value of `f_x`.
+Source anchors: src_L0279-src_L0286
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[g\]</div>
+<div class="math-display">\[f_x\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Boolean-valued version is the clean set-theoretic diagonal core of the real-function argument, formalized as `¬ Surjective F`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.no_surjective_to_bool_functions</strong>
+      </div>
+      <pre><code class="language-lean">theorem no_surjective_to_bool_functions {α : Type u} (F : α → α → Bool) :
+    ¬ Surjective F := by
+  intro hsurj
+  let g : α → Bool := fun x =&gt; !F x x
+  rcases hsurj g with ⟨x, hx⟩
+  have hdiag : F x x = !F x x := by
+    simpa [g] using congrFun hx x
+  cases hFx : F x x &lt;;&gt; simp [hFx] at hdiag</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-cantorcomparisonprogram" data-kind="structure">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor&#x27;s comparison program compares natural mathematical sets by their powers and motivates the comparability assertion.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L557">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:557</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor&#x27;s comparison program compares natural mathematical sets by their powers and motivates the comparability assertion.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+compare powers of `\mathbb N`, `\mathbb R`, `(II)`,
+and function spaces.
+Source anchors: src_L0246-src_L0312
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[\mathbb N\]</div>
+<div class="math-display">\[\mathbb R\]</div>
+<div class="math-display">\[(II)\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The record stores a finite observed comparison program with a diagonal higher-power witness.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>structure</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.CantorComparisonProgram</strong>
+      </div>
+      <pre><code class="language-lean">structure CantorComparisonProgram where
+  NaturalPower : Type u
+  ContinuumPower : Type v
+  HigherPower : Type w
+  natural_embeds_continuum : Nonempty (NaturalPower ↪ ContinuumPower)
+  continuum_embeds_higher : Nonempty (ContinuumPower ↪ HigherPower)
+  higher_not_below_continuum : ¬ Nonempty (HigherPower ↪ ContinuumPower)</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-higher-not-samepower-continuum" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>If a higher power does not embed into the continuum, then it is not equipollent with the continuum.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L574">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:574</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>If a higher power does not embed into the continuum, then it is not equipollent with the continuum.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`Higher \not\preceq Continuum \Rightarrow
+Higher \not\sim Continuum`.
+Source anchors: src_L0279-src_L0286
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[Higher \not\preceq Continuum \Rightarrow Higher \not\sim Continuum\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature proves `¬ Nonempty (HigherPower ≃ ContinuumPower)` from a missing embedding witness into the continuum.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.higher_not_samePower_continuum</strong>
+      </div>
+      <pre><code class="language-lean">theorem higher_not_samePower_continuum (P : CantorComparisonProgram) :
+    ¬ Nonempty (P.HigherPower ≃ P.ContinuumPower) := by
+  intro h
+  rcases h with ⟨e⟩
+  exact P.higher_not_below_continuum ⟨e.toEmbedding⟩</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-secondnumberclassevidence" data-kind="structure">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>Cantor&#x27;s denumerable union theorem and denumerable CBT could be used with the Sequent Lemma to prove non-denumerability of `(II)`.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L590">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:590</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>Cantor&#x27;s denumerable union theorem and denumerable CBT could be used with the Sequent Lemma to prove non-denumerability of `(II)`.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+the denumerability proofs plus sequent lemma separate
+`(II)` from the first number-class.
+Source anchors: src_L0288-src_L0335
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[(II)\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The source-level argument is recorded as a reusable evidence packet rather than as a construction of Cantor&#x27;s historical second number-class.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>structure</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.SecondNumberClassEvidence</strong>
+      </div>
+      <pre><code class="language-lean">structure SecondNumberClassEvidence (FirstClass SecondClass : Type u) where
+  first_embeds_second : Nonempty (FirstClass ↪ SecondClass)
+  second_not_denumerable : ¬ Nonempty (SecondClass ↪ ℕ)
+  sequent_generation_principle_available : Prop
+  denumerable_union_available : Prop
+  denumerable_CBT_available : Prop</code></pre>
+    </section>
+  </div>
+</article>
+<article class="alignment-block" id="mathformer-autoformalizedcbtchapter3-secondclass-not-samepower-nat" data-kind="theorem">
+  <header class="alignment-heading">
+    <div>
+      <p class="eyebrow">Original source to Lean alignment</p>
+      <h2>If the second number-class does not embed into `N`, then it cannot have the same power as `N`.</h2>
+    </div>
+    <a class="line-link" href="../../../../backends/lean/Mathformer/AutoformalizedCBTChapter3.lean#L606">backends/lean/Mathformer/AutoformalizedCBTChapter3.lean:606</a>
+  </header>
+  <div class="alignment-grid">
+    <section class="source-panel" aria-label="Textual mention">
+      <h3>Textual Mention</h3>
+      <div class="source-subsection original-text">
+<h4>Original Text</h4>
+<p>If the second number-class does not embed into `N`, then it cannot have the same power as `N`.</p>
+</div>
+<div class="source-subsection">
+<h4>Original LaTeX</h4>
+<pre class="latex-source"><code class="language-latex">
+`(II) \not\preceq \mathbb N \Rightarrow
+(II) \not\sim \mathbb N`.
+Source anchors: src_L0288-src_L0335
+</code></pre>
+<div class="math-preview" aria-label="Rendered LaTeX">
+<div class="math-display">\[(II) \not\preceq \mathbb N \Rightarrow (II) \not\sim \mathbb N\]</div>
+</div>
+</div>
+<div class="source-subsection generated-text">
+<h4>Generated Commentary</h4>
+<p>The Lean signature proves `¬ Nonempty (SecondClass ≃ ℕ)` from `second_not_denumerable`.</p>
+</div>
+    </section>
+    <section class="formal-panel" aria-label="Formalized version">
+      <h3>Formalized Version</h3>
+      <div class="formal-meta">
+        <span>theorem</span>
+        <strong>Mathformer.AutoformalizedCBTChapter3.secondClass_not_samePower_nat</strong>
+      </div>
+      <pre><code class="language-lean">theorem secondClass_not_samePower_nat {FirstClass SecondClass : Type u}
+    (E : SecondNumberClassEvidence FirstClass SecondClass) :
+    ¬ Nonempty (SecondClass ≃ ℕ) := by
+  intro h
+  rcases h with ⟨e⟩
+  exact E.second_not_denumerable ⟨e.toEmbedding⟩
+
+end AutoformalizedCBTChapter3
+end Mathformer</code></pre>
+    </section>
+  </div>
+</article>
+  </main>
+  <footer>
+    Generated by mathformer-library-docs-generator using hook library.aligned_html_documentation. Textual mentions are aligned with the Lean declarations in source order.
+  </footer>
+</body>
+</html>

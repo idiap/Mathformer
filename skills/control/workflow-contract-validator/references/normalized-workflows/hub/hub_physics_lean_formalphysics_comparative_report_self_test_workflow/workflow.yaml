@@ -1,0 +1,791 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_lean_formalphysics_comparative_report_self_test_workflow
+version: 1.0.0
+kind: workflow
+description: Smoke-test the comparative report using temporary fixtures and append-only
+  validation findings.
+aliases:
+- physics-lean:formalphysics-comparative-report-self-test
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Flag:
+    schema:
+      type: boolean
+  State:
+    representation: value
+    schema:
+      type: object
+      required:
+      - tmp
+      - input_json
+      - output_dir
+      - synthesis_json
+      - findings
+      properties:
+        tmp:
+          type: string
+        input_json:
+          type: string
+        output_dir:
+          type: string
+        synthesis_json:
+          type: string
+        findings:
+          type: array
+          items:
+            type: object
+            required:
+            - severity
+            - code
+            properties:
+              severity:
+                const: high
+              code:
+                type: string
+        code:
+          type: integer
+        payload: {}
+        stderr:
+          type: string
+        summary: {}
+        artifacts: {}
+        phase:
+          enum:
+          - artifacts
+          - html
+          - metrics
+          - critics
+        cursor:
+          type: integer
+          minimum: 0
+        html_text:
+          type: string
+        report_payload: {}
+      additionalProperties: false
+  TestReport:
+    representation: value
+    schema:
+      type: object
+      required:
+      - schema_version
+      - ok
+      - style
+      - summary
+      - findings
+      properties:
+        schema_version:
+          const: 1
+        ok:
+          type: boolean
+        style:
+          const: formalphysics_comparative_report_test
+        summary: {}
+        findings:
+          type: array
+          items:
+            type: object
+      additionalProperties: false
+  Context:
+    schema:
+      type: object
+      required:
+      - session_id
+      properties:
+        session_id:
+          type: string
+      additionalProperties: false
+inputs: {}
+outputs:
+  report:
+    type: TestReport
+    value:
+      ref: flow.outputs.report
+operations:
+  fixtures:
+    inputs: {}
+    outputs:
+      state:
+        type: State
+      context:
+        type: Context
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_smoke_fixtures
+        operation: mathformer_comparative_smoke_fixtures
+  builder:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_smoke_builder
+        operation: mathformer_comparative_smoke_builder
+  start_artifacts:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_smoke_start_artifacts
+        operation: mathformer_comparative_smoke_start_artifacts
+  check_item:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_smoke_check_item
+        operation: mathformer_comparative_smoke_check_item
+  after_artifacts:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      present:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_smoke_after_artifacts
+        operation: mathformer_comparative_smoke_after_artifacts
+  report_guard:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      present:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_smoke_report_guard
+        operation: mathformer_comparative_smoke_report_guard
+  start_report:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_smoke_start_report
+        operation: mathformer_comparative_smoke_start_report
+  start_critics:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_smoke_start_critics
+        operation: mathformer_comparative_smoke_start_critics
+  finish_report:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_smoke_finish_report
+        operation: mathformer_comparative_smoke_finish_report
+  retain:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_smoke_retain
+        operation: mathformer_comparative_smoke_retain
+  finish:
+    inputs:
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      report:
+        type: TestReport
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_comparative_smoke_finish
+        operation: mathformer_comparative_smoke_finish
+flow:
+  kind: sequence
+  steps:
+  - id: fixtures
+    kind: call
+    operation: fixtures
+    arguments: {}
+  - id: builder
+    kind: call
+    operation: builder
+    arguments:
+      state:
+        ref: steps.fixtures.outputs.state
+      context:
+        ref: steps.fixtures.outputs.context
+  - id: prepare_artifacts
+    kind: call
+    operation: start_artifacts
+    arguments:
+      state:
+        ref: steps.builder.outputs.state
+      context:
+        ref: steps.fixtures.outputs.context
+  - id: artifacts
+    kind: loop
+    state_type: State
+    initial:
+      ref: steps.prepare_artifacts.outputs.state
+    body:
+      kind: call
+      operation: check_item
+      arguments:
+        state:
+          ref: loop.state
+        context:
+          ref: steps.fixtures.outputs.context
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 9
+    on_exhausted: fail
+    outputs:
+      state:
+        type: State
+        value:
+          ref: loop.state
+  - id: html_guard
+    kind: call
+    operation: after_artifacts
+    arguments:
+      state:
+        ref: steps.artifacts.outputs.state
+      context:
+        ref: steps.fixtures.outputs.context
+  - kind: loop
+    state_type: State
+    initial:
+      ref: steps.html_guard.outputs.state
+    body:
+      id: guarded_item
+      kind: switch
+      cases:
+      - id: exists
+        when:
+          ref: steps.html_guard.outputs.present
+        body:
+          kind: call
+          operation: check_item
+          arguments:
+            state:
+              ref: loop.state
+            context:
+              ref: steps.fixtures.outputs.context
+      default:
+        kind: call
+        operation: retain
+        arguments:
+          state:
+            ref: loop.state
+          context:
+            ref: steps.fixtures.outputs.context
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 14
+    on_exhausted: fail
+    outputs:
+      state:
+        type: State
+        value:
+          ref: loop.state
+    id: html
+  - id: json_guard
+    kind: call
+    operation: report_guard
+    arguments:
+      state:
+        ref: steps.html.outputs.state
+      context:
+        ref: steps.fixtures.outputs.context
+  - id: load_report
+    kind: switch
+    cases:
+    - id: exists
+      when:
+        ref: steps.json_guard.outputs.present
+      body:
+        id: load_report
+        kind: call
+        operation: start_report
+        arguments:
+          state:
+            ref: steps.json_guard.outputs.state
+          context:
+            ref: steps.fixtures.outputs.context
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: retain
+        arguments:
+          state:
+            ref: steps.json_guard.outputs.state
+          context:
+            ref: steps.fixtures.outputs.context
+        id: skip
+      outputs:
+        state:
+          type: State
+          value:
+            ref: steps.skip.outputs.state
+    outputs:
+      state:
+        type: State
+        value:
+          ref: selected.outputs.state
+  - id: metrics
+    kind: loop
+    state_type: State
+    initial:
+      ref: steps.load_report.outputs.state
+    body:
+      id: guarded_item
+      kind: switch
+      cases:
+      - id: exists
+        when:
+          ref: steps.json_guard.outputs.present
+        body:
+          kind: call
+          operation: check_item
+          arguments:
+            state:
+              ref: loop.state
+            context:
+              ref: steps.fixtures.outputs.context
+      default:
+        kind: call
+        operation: retain
+        arguments:
+          state:
+            ref: loop.state
+          context:
+            ref: steps.fixtures.outputs.context
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 5
+    on_exhausted: fail
+    outputs:
+      state:
+        type: State
+        value:
+          ref: loop.state
+  - id: prepare_critics
+    kind: switch
+    cases:
+    - id: exists
+      when:
+        ref: steps.json_guard.outputs.present
+      body:
+        id: prepare_critics
+        kind: call
+        operation: start_critics
+        arguments:
+          state:
+            ref: steps.metrics.outputs.state
+          context:
+            ref: steps.fixtures.outputs.context
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: retain
+        arguments:
+          state:
+            ref: steps.metrics.outputs.state
+          context:
+            ref: steps.fixtures.outputs.context
+        id: skip
+      outputs:
+        state:
+          type: State
+          value:
+            ref: steps.skip.outputs.state
+    outputs:
+      state:
+        type: State
+        value:
+          ref: selected.outputs.state
+  - id: critics
+    kind: loop
+    state_type: State
+    initial:
+      ref: steps.prepare_critics.outputs.state
+    body:
+      id: guarded_item
+      kind: switch
+      cases:
+      - id: exists
+        when:
+          ref: steps.json_guard.outputs.present
+        body:
+          kind: call
+          operation: check_item
+          arguments:
+            state:
+              ref: loop.state
+            context:
+              ref: steps.fixtures.outputs.context
+      default:
+        kind: call
+        operation: retain
+        arguments:
+          state:
+            ref: loop.state
+          context:
+            ref: steps.fixtures.outputs.context
+      outputs:
+        state:
+          type: State
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    max_iterations: 4
+    on_exhausted: fail
+    outputs:
+      state:
+        type: State
+        value:
+          ref: loop.state
+  - id: tail
+    kind: switch
+    cases:
+    - id: exists
+      when:
+        ref: steps.json_guard.outputs.present
+      body:
+        id: tail
+        kind: call
+        operation: finish_report
+        arguments:
+          state:
+            ref: steps.critics.outputs.state
+          context:
+            ref: steps.fixtures.outputs.context
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: retain
+        arguments:
+          state:
+            ref: steps.critics.outputs.state
+          context:
+            ref: steps.fixtures.outputs.context
+        id: skip
+      outputs:
+        state:
+          type: State
+          value:
+            ref: steps.skip.outputs.state
+    outputs:
+      state:
+        type: State
+        value:
+          ref: selected.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.tail.outputs.state
+      context:
+        ref: steps.fixtures.outputs.context
+  outputs:
+    report:
+      type: TestReport
+      value:
+        ref: steps.finish.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - temporary_fixture_workspace
+      write:
+      - temporary_fixture_workspace
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - create_temporary_fixtures
+    - invoke_report_builder
+    - inspect_report_artifacts
+    - produce_validation_report
+    - cleanup_temporary_workspace
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+    - promote_generated_theorems
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 41
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Smoke validation only; no Lean compilation, scientific truth or durable
+    promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/physics_lean/run_formalphysics_comparative_report.py
+    selector: run_check
+    digest: sha256:0ecf9d247c88978481f4cc3a4f95e938f0c273ccdd3c90bcc310facb0ae06ecc
+  - path: tests/physics_lean/run_formalphysics_comparative_report.py
+    selector: run_report_builder; main
+    digest: sha256:0ecf9d247c88978481f4cc3a4f95e938f0c273ccdd3c90bcc310facb0ae06ecc
+  - path: scripts/mathformer.py
+    selector: build_registry; run_action; run_leaf_action; prepare_leaf_boundary;
+      launch_leaf_boundary; finish_leaf_boundary
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/physics-common/formalphysics-comparative-analysis-reporter/scripts/build_comparative_report.py
+    selector: main; build_report; write_outputs
+    digest: sha256:f28e488e2433e9c2158c3ee8c954de70be0116d62afd277dfe6079dd41896d9c
+  - path: scripts/comparative_report_self_test_tools.py
+    selector: register_comparative_report_self_test_tools; owned; comparative_report_lifespan
+    digest: sha256:1e9459a60fefb8353f8404351a65b07093114798ce4536584ce57e17a32b79cc
+  - path: scripts/mcp_server.py
+    selector: MCP registration; lifespan
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory authored comparative report self-test
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_comparative_report_self_test_workflow_tests.py
+    selector: ComparativeSmokeTests; rejecting provider/compiler fixtures
+    digest: sha256:52b9e3b1443590932ba2c5797c9ac30bb0b3bc29a734a07711ff89cce11c425f
+  - path: tests/test_matrix.json
+    selector: mcp.comparative_report_self_test.workflow
+    digest: sha256:1b066b4a6154dc3ac51cfa63329e4ab281987f6fd4867782e4e7bf329fa7116e
+  gaps:
+  - 'Builder internals remain the single native subprocess call: preparation, Foundations
+    context, candidates, judge prompts, reviews, synthesis and output writing have
+    interface-only coverage.'
+  - v1 has no finally node. Native/tool exceptions clean up immediately; host budget,
+    exhaustion or interruption before the next call retains the scope until MCP server
+    lifespan exit.
+  - The 3600-second ceiling is normalization metadata, not a native runtime budget.
+    The fixed source loops complete at their exact bounds; exhaustion means adapter
+    divergence.
+  - Required receipts and digests are produced by Lunar, in addition to native report
+    observability.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-lean:formalphysics-comparative-report-self-test
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: physics-lean:formalphysics-comparative-report-self-test
+      summary: Smoke-test the FormalPhysics comparative report builder.
+      family: physics_lean
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/physics_lean/run_formalphysics_comparative_report.py
+      - --json
+      depends_on: []
+      allows_extra_args: false
+      timeout_seconds: 180
+      writes:
+      - artifacts/formalphysics_comparative_analysis/
+  mathformer.native_boundary:
+    execution: Selected graph is run_check, not its hub envelope. Native hub run_action
+      -> run_leaf_action performs preflight/dry-run, rejects extra args, applies 180-second
+      subprocess timeout and audits repository writes afterward.
+    route_order: comparative-analysis intent lists this smoke test before the separate
+      report-building action; that action is not invoked by run_check.
+    main: Emit report as JSON for --json (otherwise ok text); return 0 when report.ok,
+      else 3. Exceptions abort without a normal report.
+    temporary_outputs: Builder artifacts are inspected before context exit, then removed;
+      exported summary/findings may retain now-deleted paths.
+  mathformer.fixed_checks:
+    artifacts:
+    - json
+    - html
+    - markdown
+    - codex_exec_prompts
+    - qualitative_role_reviews_json
+    - strategy_summary_json
+    - strategy_summary_markdown
+    - theorem_prover_expert_review_markdown
+    - physics_expert_review_markdown
+    html:
+    - Lean Side By Side
+    - Coverage Leaderboard
+    - coverage-table
+    - Invoked Concepts
+    - Role Reviews
+    - Strategy Summary
+    - Judge Synthesis
+    - Synthesis Todos
+    - Metric Criteria
+    - mathlib_concept_grounding
+    - physics_representation_completeness
+    - comparison-data
+    - Foundations
+    - current_mathformer_lean
+    metrics:
+    - mathlib_concept_grounding
+    - variable_naming_quality
+    - formal_physics_modeling_depth
+    - physics_representation_completeness
+    - reviewability_clarity
+    critics:
+    - mathlib_grounding_critic
+    - naming_reviewability_critic
+    - formality_depth_critic
+    - physics_completeness_critic
+    bound_behavior: Each loop consumes its entire fixed tuple, updates findings append-only
+      and returns normally on the last item even if validation failed. done is true
+      on that iteration; on_exhausted is unreachable for these source tuples and signals
+      adapter divergence only.
+  mathformer.runtime:
+    tools: scripts/comparative_report_self_test_tools.py
+    context: Opaque owned temporary fixture session; snapshots and stage order validated
+      at every tool call. Finish and tool errors clean up; server lifespan cleans
+      abandoned sessions.
+    guard_lowering: Optional loops are at root scope with a guarded call body; absent
+      files select an identity retain yielding done=true, without running any item
+      check. This preserves the file guards and permits scoped PRISM loop exhaustion
+      checks.
+# REUSE-IgnoreEnd

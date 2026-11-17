@@ -1,0 +1,444 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_skills_plugin_sync_workflow
+version: 1.0.0
+kind: workflow
+description: 'Run the selected skills.plugin-sync route: synchronize generated plugins,
+  then check drift.'
+aliases:
+- skills.plugin-sync
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+  Match:
+    schema:
+      type: object
+      required:
+      - route
+      - score
+      - matched_terms
+      properties:
+        route:
+          type: object
+          required:
+          - route_id
+          - action_ids
+          properties:
+            route_id:
+              const: skills.plugin-sync
+            action_ids:
+              const:
+              - skills:plugin-sync
+              - skills:plugin-check
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+  Registry:
+    schema:
+      type: object
+      additionalProperties:
+        type: object
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+      description: Null or omission retains native REPO_ROOT; an explicit mount reaches
+        preflight, subprocess cwd and write auditing.
+  ActionId:
+    schema:
+      type: string
+      enum:
+      - skills:plugin-sync
+      - skills:plugin-check
+  ActionCount:
+    schema:
+      type: integer
+      const: 2
+  Boolean:
+    schema:
+      type: boolean
+  State:
+    schema:
+      type: object
+      required:
+      - ok
+      - children
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+      additionalProperties: false
+  RouteResult:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - ok
+      - status
+      - route
+      - children
+      properties:
+        schema_version:
+          const: 1
+        ok:
+          type: boolean
+        status:
+          enum:
+          - intent_run_completed
+          - intent_run_failed
+        route:
+          type: object
+        children:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            type: object
+      additionalProperties: false
+inputs:
+  match:
+    type: Match
+  registry:
+    type: Registry
+  context:
+    type: RunContext
+  repository_root:
+    type: RepositoryRoot
+    required: false
+outputs:
+  result:
+    type: RouteResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skills_plugin_sync_route_initialize
+        operation: mathformer_skills_plugin_sync_route_initialize
+  select:
+    inputs:
+      state:
+        type: State
+      match:
+        type: Match
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skills_plugin_sync_route_select
+        operation: mathformer_skills_plugin_sync_route_select
+  run:
+    inputs:
+      action_id:
+        type: ActionId
+      registry:
+        type: Registry
+      context:
+        type: RunContext
+      repository_root:
+        type: RepositoryRoot
+        required: false
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skills_plugin_sync_route_run
+        operation: mathformer_skills_plugin_sync_route_run
+  advance:
+    inputs:
+      state:
+        type: State
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+      action_count:
+        type: ActionCount
+    outputs:
+      state:
+        type: State
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skills_plugin_sync_route_advance
+        operation: mathformer_skills_plugin_sync_route_advance
+  finish:
+    inputs:
+      state:
+        type: State
+      match:
+        type: Match
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: RouteResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_skills_plugin_sync_route_finish
+        operation: mathformer_skills_plugin_sync_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: Exactly the selected two-action route. done is true by iteration
+      two, so reaching the native action bound returns normally, including failed
+      result data; exhaustion is unreachable for conforming operations.
+    state_type: State
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 2
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: run
+        kind: call
+        operation: run
+        description: skills:plugin-sync invokes scripts/sync_agent_plugins.py; skills:plugin-check
+          invokes it with --check. A returned child with ok=false is data for advance,
+          not a graph exception. Unexpected native exceptions propagate.
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          registry:
+            ref: inputs.registry
+          context:
+            ref: inputs.context
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.run.outputs.child
+          context:
+            ref: inputs.context
+          action_count:
+            literal: 2
+      outputs:
+        state:
+          type: State
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: State
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: RouteResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - .agents/plugins/
+      - .claude-plugin/
+      - artifacts/workflow_hub/
+      - plugins/mathformer/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 8
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked dispatch specification; completion establishes neither
+    scientific truth nor runtime qualification.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes; initialize_intent_state; select_intent_action;
+      advance_intent_state; finish_intent_state; run_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/sync_agent_plugins.py
+    selector: main; synchronize
+    digest: sha256:a03705054813e88f8ef2617dcd743b9e40e31a2ef2594fe858811b0d2c68b06c
+  - path: scripts/mcp_server.py
+    selector: mathformer_ask; mathformer_run_workflow; _cap_unbounded_timeouts
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/skills_plugin_sync_route_tools.py
+    selector: register_skills_plugin_sync_route_tools; selected_match; checked_registry;
+      check_state
+    digest: sha256:d1d7f322d61004824014cbdbed5062027ef0714eff5558c8f98e882020b200b2
+  - path: scripts/workflow_write_audit.py
+    selector: snapshot_repository; audit_snapshots
+    digest: sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1
+  - path: scripts/workflow_catalog.py
+    selector: load_catalog; descriptor_text
+    digest: sha256:0aaeb77013e2e299cfaab4687084101ec815c25a49bcc4fa1286237c0977330a
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: skills_plugin_sync_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - run_action and synchronize are source-owned operations; subprocess internals and
+    discovered-file/catalog loops remain opaque rather than expanded into this route
+    graph.
+  - Native CLI subprocesses have no global deadline; the retained 3600-second ceiling
+    and eight-call limit are enforced by Lunar. Registry timeout_seconds preserves
+    null for CLI or the positive cap supplied by MCP callers.
+  - Lunar owns required receipts and artifact digests. Native optional CLI reports
+    remain caller-owned and are not fabricated by route tools.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: skills.plugin-sync
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: skills.plugin-sync
+      title: Regenerate Mathformer agent plugins
+      description: Update plugin discovery surfaces after editing canonical skills.
+      action_ids:
+      - skills:plugin-sync
+      - skills:plugin-check
+      operator_note: Writes the generated plugin and marketplace files.
+  mathformer.native_boundary:
+    execution: Authoritative execution is scripts/mathformer.py:run_intent_match;
+      registered route tools share its initialize/select/run_action/advance/finish
+      implementations. CLI main ask --run and MCP mathformer_ask/mathformer_run_workflow
+      retain native dispatch. NL selection and service admission precede the selected
+      route.
+    repository_root: Omission or null preserves the native repository default; an
+      explicit mount reaches run_action preflight, subprocess cwd and write audits.
+      Sync tools enforce the configured service write roots and read-only policy.
+    failure_policy: Returned child failures are appended and retained in aggregate
+      ok; stop immediately unless keep_going. No rollback, retry, convergence or checkpoint
+      support. Unexpected launch/helper errors propagate.
+    timing: CLI action subprocesses have no timeout and there is no global wall-time
+      budget. MCP supplies a configurable per-action timeout, default 600 seconds,
+      and service write-root checks; timeout results remain failed child data.
+    effects_status: Declared generated-file roots; preserve the native post-execution
+      write audit.
+    qualification_capability_names_are_not_runtime_grants: true
+  mathformer.composition:
+    ordered_actions:
+    - skills:plugin-sync
+    - skills:plugin-check
+    action_workflows:
+    - hub_skills_plugin_sync_workflow
+    - hub_skills_plugin_check_workflow
+    keep_going_semantics: done uses the current child's failure and keep_going, while
+      aggregate ok remains sticky; two attempted actions always terminate normally
+      through finish.
+    selection: Match constrains this projection to the source-owned ordered pair;
+      the loop bound is exactly two action attempts, with no default-cap specialization.
+  mathformer.plugin_projection:
+    owning_operation: run
+    behavior: Both actions build expected metadata, skill entrypoints, optional workflow
+      projections and licensing, discover stale entrypoints, and compare content.
+      Dry-run skips subprocesses.
+    sync: Iterate expected files in order, skipping identical content; then remove
+      stale generated entrypoints and eligible generated companions. Unmanaged stale
+      content raises an error after any preceding writes, which are preserved.
+    check: Comparison only; drift exits unsuccessfully. Missing/invalid inputs and
+      filesystem errors terminate the subprocess unsuccessfully. Iteration counts
+      follow discovered files/catalog entries, not a refinement bound.
+# REUSE-IgnoreEnd

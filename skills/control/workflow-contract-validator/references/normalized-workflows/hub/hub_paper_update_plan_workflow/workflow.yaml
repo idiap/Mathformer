@@ -1,0 +1,804 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_paper_update_plan_workflow
+version: 1.0.0
+kind: workflow
+description: Native paper-update planning with shared staged planner functions, ordered
+  evidence dependency, admission, preflight, completion capture and write auditing.
+aliases:
+- paper:update-plan
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+        json_output:
+          type: boolean
+        keep_going:
+          type: boolean
+        allow_mutating:
+          type: boolean
+        write_report:
+          type: boolean
+      required:
+      - dry_run
+      - json_output
+      - keep_going
+      - allow_mutating
+      - write_report
+      additionalProperties: false
+    representation: value
+  HubResult:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        status:
+          type: string
+        schema_version:
+          type: integer
+        action:
+          type: object
+          properties:
+            id:
+              type: string
+            summary:
+              type: string
+            family:
+              type: string
+            kind:
+              type: string
+            safety:
+              type: string
+            command:
+              type: array
+              items:
+                type: string
+            depends_on:
+              type: array
+              items:
+                type: string
+            required_paths:
+              type: array
+              items:
+                type: string
+            required_tools:
+              type: array
+              items:
+                type: string
+            optional_tools:
+              type: array
+              items:
+                type: string
+            writes:
+              type: array
+              items:
+                type: string
+            allows_extra_args:
+              type: boolean
+            timeout_seconds:
+              type:
+              - integer
+              - 'null'
+            notes:
+              type: string
+          required:
+          - id
+          - summary
+          - family
+          - kind
+          - safety
+          - command
+          - depends_on
+          - required_paths
+          - required_tools
+          - optional_tools
+          - writes
+          - allows_extra_args
+          - timeout_seconds
+          - notes
+          additionalProperties: false
+        action_id:
+          type: string
+        argv:
+          type: array
+          items:
+            type: string
+        cwd:
+          type: string
+        dry_run:
+          type: boolean
+        preflight_errors:
+          type: array
+          items:
+            type: string
+        returncode:
+          type:
+          - integer
+          - 'null'
+        stdout:
+          type: string
+        stderr:
+          type: string
+        timeout_seconds:
+          type: integer
+        write_audit:
+          type: object
+        children:
+          type: array
+          items:
+            type: object
+            required:
+            - ok
+            properties:
+              ok:
+                type: boolean
+            description: Source-owned recursive child/leaf result, retained without
+              projection.
+        leaf:
+          type: object
+          required:
+          - ok
+          properties:
+            ok:
+              type: boolean
+          description: Source-owned recursive child/leaf result, retained without
+            projection.
+        route:
+          type: object
+        cycle:
+          type: array
+          items:
+            type: string
+        report_file:
+          type: string
+      required:
+      - ok
+      additionalProperties: false
+    representation: value
+  Boolean:
+    schema:
+      type: boolean
+  Boundary:
+    schema:
+      type: object
+      description: Native admission, action, context, dependency iterator state, and
+        optional prepared leaf boundary; includes before-write snapshot.
+  Loaded:
+    schema:
+      type: object
+      properties:
+        packet:
+          description: Native JSON value from json.loads; structural errors remain
+            build failures.
+        output:
+          type: string
+        json:
+          type: boolean
+        process:
+          type: object
+          properties:
+            ok:
+              type: boolean
+            status:
+              type: string
+            schema_version:
+              type: integer
+            action:
+              type: object
+              properties:
+                id:
+                  type: string
+                summary:
+                  type: string
+                family:
+                  type: string
+                kind:
+                  type: string
+                safety:
+                  type: string
+                command:
+                  type: array
+                  items:
+                    type: string
+                depends_on:
+                  type: array
+                  items:
+                    type: string
+                required_paths:
+                  type: array
+                  items:
+                    type: string
+                required_tools:
+                  type: array
+                  items:
+                    type: string
+                optional_tools:
+                  type: array
+                  items:
+                    type: string
+                writes:
+                  type: array
+                  items:
+                    type: string
+                allows_extra_args:
+                  type: boolean
+                timeout_seconds:
+                  type:
+                  - integer
+                  - 'null'
+                notes:
+                  type: string
+              required:
+              - id
+              - summary
+              - family
+              - kind
+              - safety
+              - command
+              - depends_on
+              - required_paths
+              - required_tools
+              - optional_tools
+              - writes
+              - allows_extra_args
+              - timeout_seconds
+              - notes
+              additionalProperties: false
+            action_id:
+              type: string
+            argv:
+              type: array
+              items:
+                type: string
+            cwd:
+              type: string
+            dry_run:
+              type: boolean
+            preflight_errors:
+              type: array
+              items:
+                type: string
+            returncode:
+              type:
+              - integer
+              - 'null'
+            stdout:
+              type: string
+            stderr:
+              type: string
+            timeout_seconds:
+              type: integer
+            write_audit:
+              type: object
+            children:
+              type: array
+              items:
+                type: object
+                required:
+                - ok
+                properties:
+                  ok:
+                    type: boolean
+                description: Source-owned recursive child/leaf result, retained without
+                  projection.
+            leaf:
+              type: object
+              required:
+              - ok
+              properties:
+                ok:
+                  type: boolean
+              description: Source-owned recursive child/leaf result, retained without
+                projection.
+            route:
+              type: object
+            cycle:
+              type: array
+              items:
+                type: string
+            report_file:
+              type: string
+          required:
+          - ok
+          additionalProperties: false
+      required:
+      - process
+      additionalProperties: false
+      oneOf:
+      - required:
+        - packet
+        - output
+        - json
+        - process
+      - required:
+        - process
+        maxProperties: 1
+  Plan:
+    schema:
+      type: object
+      properties:
+        schema_version:
+          const: 1
+        plan_type:
+          const: paper_update_plan
+        feature_count:
+          type: integer
+        features:
+          type: array
+          items:
+            type: object
+        paper_claim_delta:
+          type: array
+          items:
+            type: string
+        non_claims:
+          type: array
+          items:
+            type: string
+        section_patch_plan:
+          type: array
+          items:
+            type: string
+        figure_table_plan:
+          type: array
+          items:
+            type: string
+        validation_checklist:
+          type: array
+          items:
+            type: string
+        residual_risks:
+          type: array
+          items:
+            type: string
+      required:
+      - schema_version
+      - plan_type
+      - feature_count
+      - features
+      - paper_claim_delta
+      - non_claims
+      - section_patch_plan
+      - figure_table_plan
+      - validation_checklist
+      - residual_risks
+      additionalProperties: false
+  Path:
+    schema:
+      type: string
+  Argv:
+    schema:
+      type: array
+      items:
+        type: string
+  Planned:
+    schema:
+      type: object
+      properties:
+        value:
+          type: object
+          properties:
+            schema_version:
+              const: 1
+            plan_type:
+              const: paper_update_plan
+            feature_count:
+              type: integer
+            features:
+              type: array
+              items:
+                type: object
+            paper_claim_delta:
+              type: array
+              items:
+                type: string
+            non_claims:
+              type: array
+              items:
+                type: string
+            section_patch_plan:
+              type: array
+              items:
+                type: string
+            figure_table_plan:
+              type: array
+              items:
+                type: string
+            validation_checklist:
+              type: array
+              items:
+                type: string
+            residual_risks:
+              type: array
+              items:
+                type: string
+          required:
+          - schema_version
+          - plan_type
+          - feature_count
+          - features
+          - paper_claim_delta
+          - non_claims
+          - section_patch_plan
+          - figure_table_plan
+          - validation_checklist
+          - residual_risks
+          additionalProperties: false
+      additionalProperties: false
+inputs:
+  context:
+    type: RunContext
+  repository_root:
+    type: Path
+  extra_args:
+    type: Argv
+  seen:
+    type: Argv
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  prepare:
+    inputs:
+      context:
+        type: RunContext
+      repository_root:
+        type: Path
+      extra_args:
+        type: Argv
+      seen:
+        type: Argv
+    outputs:
+      boundary:
+        type: Boundary
+      execute:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_paper_update_prepare
+        operation: mathformer_paper_update_prepare
+  load:
+    inputs:
+      boundary:
+        type: Boundary
+    outputs:
+      loaded:
+        type: Loaded
+      process:
+        type: HubResult
+      loaded_ok:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_paper_update_load
+        operation: mathformer_paper_update_load
+  build:
+    inputs:
+      loaded:
+        type: Loaded
+    outputs:
+      plan:
+        type: Planned
+      process:
+        type: HubResult
+      plan_ok:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_paper_update_build
+        operation: mathformer_paper_update_build
+  publish:
+    inputs:
+      loaded:
+        type: Loaded
+      plan:
+        type: Planned
+    outputs:
+      process:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_paper_update_publish
+        operation: mathformer_paper_update_publish
+  finish:
+    inputs:
+      boundary:
+        type: Boundary
+      process:
+        type: HubResult
+        required: false
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_paper_update_finish
+        operation: mathformer_paper_update_finish
+flow:
+  kind: sequence
+  steps:
+  - id: prepare
+    kind: call
+    operation: prepare
+    arguments:
+      context:
+        ref: inputs.context
+      repository_root:
+        ref: inputs.repository_root
+      extra_args:
+        ref: inputs.extra_args
+      seen:
+        ref: inputs.seen
+  - id: dispatch
+    kind: switch
+    cases:
+    - id: launch
+      when:
+        ref: steps.prepare.outputs.execute
+      body:
+        kind: sequence
+        steps:
+        - id: load
+          kind: call
+          operation: load
+          arguments:
+            boundary:
+              ref: steps.prepare.outputs.boundary
+        - id: loaded
+          kind: switch
+          cases:
+          - id: read_success
+            when:
+              ref: steps.load.outputs.loaded_ok
+            body:
+              kind: sequence
+              steps:
+              - id: build
+                kind: call
+                operation: build
+                arguments:
+                  loaded:
+                    ref: steps.load.outputs.loaded
+              - id: planned
+                kind: switch
+                cases:
+                - id: build_success
+                  when:
+                    ref: steps.build.outputs.plan_ok
+                  body:
+                    kind: sequence
+                    steps:
+                    - id: publish
+                      kind: call
+                      operation: publish
+                      arguments:
+                        loaded:
+                          ref: steps.load.outputs.loaded
+                        plan:
+                          ref: steps.build.outputs.plan
+                    - id: finish_written
+                      kind: call
+                      operation: finish
+                      arguments:
+                        boundary:
+                          ref: steps.prepare.outputs.boundary
+                        process:
+                          ref: steps.publish.outputs.process
+                    outputs:
+                      result:
+                        type: HubResult
+                        value:
+                          ref: steps.finish_written.outputs.result
+                default:
+                  kind: call
+                  operation: finish
+                  arguments:
+                    boundary:
+                      ref: steps.prepare.outputs.boundary
+                    process:
+                      ref: steps.build.outputs.process
+                outputs:
+                  result:
+                    type: HubResult
+                    value:
+                      ref: selected.outputs.result
+              outputs:
+                result:
+                  type: HubResult
+                  value:
+                    ref: steps.planned.outputs.result
+          default:
+            kind: call
+            operation: finish
+            arguments:
+              boundary:
+                ref: steps.prepare.outputs.boundary
+              process:
+                ref: steps.load.outputs.process
+          outputs:
+            result:
+              type: HubResult
+              value:
+                ref: selected.outputs.result
+        outputs:
+          result:
+            type: HubResult
+            value:
+              ref: steps.loaded.outputs.result
+    default:
+      kind: call
+      operation: finish
+      arguments:
+        boundary:
+          ref: steps.prepare.outputs.boundary
+    outputs:
+      result:
+        type: HubResult
+        value:
+          ref: selected.outputs.result
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.dispatch.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/paper_skills/
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked planning only; no scientific validation, promotion
+    or manuscript approval.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: paper_skills/scientific-paper-drafter/scripts/plan_paper_update.py
+    selector: main
+    digest: sha256:2f1df9bcac253143698887855f99a6b3517991f7a0aa8e611b10db373026d2be
+  - path: scripts/mathformer.py
+    selector: build_registry/paper:update-plan; run_action; dependency helpers; leaf-boundary
+      helpers
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: paper_skills/framework-repository-cartographer/scripts/build_paper_evidence_packet.py
+    selector: main; build_packet; FEATURE_BUILDERS; validation_command
+    digest: sha256:a4554e62ad8531b71f0d591f2796265b2c3915445ce179ace2c23927e90140a8
+  - path: scripts/mcp_service_config.py
+    selector: service.default_timeout_seconds
+    digest: sha256:f3fd43cb362c774ca6d29e3de3895a109ae8fed7062589ac9b37f555ac2e10a2
+  - path: scripts/paper_update_plan_tools.py
+    selector: register_paper_update_plan_tools; captured; source; main
+    digest: sha256:82f47c2eb1c19a20039cbe94a79b220b416b1c42f0bb2e9d1c31efc30f1efbad
+  - path: scripts/workflow_write_audit.py
+    selector: FileState; snapshot_repository; audit_snapshots
+    digest: sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1
+  - path: tests/mcp/run_paper_update_plan_workflow_tests.py
+    selector: deterministic fixtures; MCP/Lunar/PRISM execution assertions
+    digest: sha256:0d27b6d91882c89827c6e3ebb6006b829e78c64156e19d7a4ad5baaccc863557
+  - path: tests/mcp/fixtures/paper_update_plan_original.py.txt
+    selector: frozen original selected main and source functions
+    digest: sha256:1713850e00b4ed8e5106090c90c06f4468306fcf97329b001be2fcf81391d6b9
+  - path: scripts/mcp_server.py
+    selector: register_paper_update_plan_tools; service mount/write guards
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory/paper:update-plan
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Boundary internals and feature payload internals remain source-owned; the graph
+    exposes five staged operations rather than every collection iteration.
+  - MCP stages call the native source functions in process and return captured completion
+    data. CLI subprocess isolation and exact traceback stack frames are not reproduced;
+    native CLI launch remains unchanged.
+  - Native optional logs do not supply mandatory v1 receipts; Lunar owns execution
+    receipts, digests and descriptor budgets. Native collection loops exhaust input
+    and have no descriptor-derived cap.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: paper:update-plan
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+  mathformer.native_boundary:
+    execution: scripts/mathformer.py::prepare_action and leaf-boundary helpers; native
+      evidence main and shared planner parse_options/load_inputs/build_plan/publish_plan
+      via registered MCP stages. CLI run_action shares admission/traversal but retains
+      subprocess launch.
+    specialization: Fixed registered action/argv and one dependency. Explicit repository_root
+      mount, extra_args and recursion ancestry ports; composed extra arguments remain
+      rejected.
+    admission: Unknown action, recursion cycle, or extra args to composed actions
+      return rejection before dependencies.
+    dependency: Default evidence builder collects four feature templates and path-existence
+      metadata; recorded validation commands are never executed.
+    outputs: Markdown paper_update_plan.md and JSON companion under artifacts/paper_skills/;
+      captured summary paths/counts in result.leaf.stdout when launched.
+    bounds: Native CLI has no timeout/global budget; generic MCP has configurable
+      per-command timeout default 600 seconds, distinct from descriptor limits.
+    iteration: Dependency traversal visits exactly one child; internal collection
+      loops exhaust finite inputs normally. No retry, convergence, refinement or checkpoint
+      exists.
+    failure_policy: Preserve native ok/status, subprocess exit, and write-audit failure;
+      completion is not scientific acceptance.
+    effects_status: Native declared write roots and before/after write audits; service
+      mount/write guards also apply.
+  mathformer.composition:
+    ordered_dependencies:
+    - paper:evidence-packet
+    dependency_workflows:
+    - hub_paper_evidence_packet_workflow
+    command_after_dependencies: true
+    keep_going_semantics: Dependency failure permits the planner only with context.keep_going;
+      aggregate ok remains false.
+    extra_args_for_sequence: rejected by run_action
+  mathformer.stage_ports:
+    load: Loaded carries native inputs plus completion data on success, or only process
+      on termination. loaded_ok selects continuation.
+    build: Planned wraps the real native Plan under value on success, and is empty
+      on termination. plan_ok selects continuation. No absent native artifact is synthesized.
+    snapshots: FileState size and nanosecond metadata use decimal strings across JSON
+      and are restored before the native auditor.
+# REUSE-IgnoreEnd

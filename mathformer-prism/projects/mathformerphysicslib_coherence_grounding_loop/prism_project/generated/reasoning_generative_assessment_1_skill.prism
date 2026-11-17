@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from mathformerphysicslib_coherence_grounding_loop import GenerativeReviewBasis
+
+mathformerphysicslib_generative_coherence_critic_skill: Skill[GenerativeReviewBasis] = skill_artifact[GenerativeReviewBasis](
+    "mathformerphysicslib-generative-coherence-critic",
+    "0.0.0+imported",
+    "mathformerphysicslib-generative-coherence-critic",
+    "Build generative probes that stress-test MathformerPhysicsLib coherence, Mathlib grounding, and controlled repair paths.",
+    "# MathformerPhysicsLib Generative Coherence Critic\n\nUse this skill when deterministic critics have run and the system needs\ngenerative interpretation probes that try to expose hidden incoherence without\nturning advisory output into accepted evidence.\n\n## Workflow\n\n1. Run `scripts/build_generative_coherence_critic_plan.py`.\n2. Inspect the seven generated probe records:\n   Mathlib maximality, redefinition/spread, integration/discoverability,\n   physics semantic erasure, API usefulness, negative control, and meta-critic.\n3. Execute Codex-exec or another generative reviewer only against the emitted\n   probe prompts and expected schemas.\n4. Treat results as advisory unless every blocking finding cites deterministic\n   report evidence and names a rerun gate.\n5. Feed evidence-bound failures into the coherence repair planner.\n\n## Outputs\n\n- `mathformerphysicslib_generative_coherence_critic_plan`\n- adversarial and constructive probes\n- expected probe report schemas\n- pass criteria for controlled generative repair\n- deterministic evidence bindings and rerun gates",
+    "{\"agents/openai.yaml\":\"aW50ZXJmYWNlOgogIGRpc3BsYXlfbmFtZTogTWF0aGZvcm1lclBoeXNpY3NMaWIgR2VuZXJhdGl2ZSBDb2hlcmVuY2UgQ3JpdGljCiAgc2hvcnRfZGVzY3JpcHRpb246IEJ1aWxkIGdlbmVyYXRpdmUgcHJvYmVzIGZvciBoaWRkZW4gY29oZXJlbmNlIGFuZCBncm91bmRpbmcgZmFpbHVyZXMuCiAgZGVmYXVsdF9wcm9tcHQ6IFVzZSBtYXRoZm9ybWVycGh5c2ljc2xpYi1nZW5lcmF0aXZlLWNvaGVyZW5jZS1jcml0aWMgdG8gc3RyZXNzLXRlc3QgTWF0aGZvcm1lclBoeXNpY3NMaWIgd2l0aCBnZW5lcmF0aXZlIHByb2Jlcy4KcG9saWN5OgogIGFsbG93X2ltcGxpY2l0X2ludm9jYXRpb246IHRydWUK\"}",
+)

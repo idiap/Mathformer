@@ -1,0 +1,667 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "hub_paper_claim_audit_framework_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Source-backed decomposition of run_action for the framework paper audit.",
+  "aliases": [
+    "paper:claim-audit-framework"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "Context": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "Result": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Strings": {
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "Flag": {
+      "schema": {
+        "type": "boolean"
+      }
+    },
+    "Admission": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "accepted",
+          "status",
+          "ancestry"
+        ],
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "ancestry": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "State": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "index",
+          "children",
+          "dependencies_ok",
+          "ancestry"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object"
+            }
+          },
+          "dependencies_ok": {
+            "type": "boolean"
+          },
+          "ancestry": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "Context"
+    },
+    "extra_args": {
+      "type": "Strings"
+    },
+    "seen": {
+      "type": "Strings"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "Result",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "admit": {
+      "inputs": {
+        "extra_args": {
+          "type": "Strings"
+        },
+        "seen": {
+          "type": "Strings"
+        }
+      },
+      "outputs": {
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_paper_claim_audit_admit",
+          "operation": "mathformer_paper_claim_audit_admit"
+        }
+      }
+    },
+    "reject": {
+      "inputs": {
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_paper_claim_audit_reject",
+          "operation": "mathformer_paper_claim_audit_reject"
+        }
+      }
+    },
+    "initialize": {
+      "inputs": {
+        "admission": {
+          "type": "Admission"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_paper_claim_audit_initialize",
+          "operation": "mathformer_paper_claim_audit_initialize"
+        }
+      }
+    },
+    "visit": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_paper_claim_audit_visit",
+          "operation": "mathformer_paper_claim_audit_visit"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "child": {
+          "type": "Result"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "State"
+        },
+        "done": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_paper_claim_audit_advance",
+          "operation": "mathformer_paper_claim_audit_advance"
+        }
+      }
+    },
+    "command_guard": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "context": {
+          "type": "Context"
+        }
+      },
+      "outputs": {
+        "launch": {
+          "type": "Flag"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_paper_claim_audit_command_guard",
+          "operation": "mathformer_paper_claim_audit_command_guard"
+        }
+      }
+    },
+    "audit_leaf": {
+      "inputs": {
+        "context": {
+          "type": "Context"
+        },
+        "extra_args": {
+          "type": "Strings"
+        },
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "leaf": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_paper_claim_audit_audit_leaf",
+          "operation": "mathformer_paper_claim_audit_audit_leaf"
+        }
+      }
+    },
+    "aggregate": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        },
+        "leaf": {
+          "type": "Result"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_paper_claim_audit_aggregate",
+          "operation": "mathformer_paper_claim_audit_aggregate"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "State"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "Result"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_paper_claim_audit_finish",
+          "operation": "mathformer_paper_claim_audit_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "admission",
+        "kind": "call",
+        "operation": "admit",
+        "arguments": {
+          "extra_args": {
+            "ref": "inputs.extra_args"
+          },
+          "seen": {
+            "ref": "inputs.seen"
+          }
+        }
+      },
+      {
+        "id": "dispatch",
+        "kind": "switch",
+        "cases": [
+          {
+            "id": "accepted",
+            "when": {
+              "ref": "steps.admission.outputs.admission.accepted"
+            },
+            "body": {
+              "kind": "sequence",
+              "steps": [
+                {
+                  "id": "initialize",
+                  "kind": "call",
+                  "operation": "initialize",
+                  "arguments": {
+                    "admission": {
+                      "ref": "steps.admission.outputs.admission"
+                    }
+                  }
+                },
+                {
+                  "kind": "sequence",
+                  "steps": [
+                    {
+                      "id": "visit",
+                      "kind": "call",
+                      "operation": "visit",
+                      "arguments": {
+                        "state": {
+                          "ref": "steps.initialize.outputs.state"
+                        },
+                        "context": {
+                          "ref": "inputs.context"
+                        }
+                      }
+                    },
+                    {
+                      "id": "advance",
+                      "kind": "call",
+                      "operation": "advance",
+                      "arguments": {
+                        "state": {
+                          "ref": "steps.initialize.outputs.state"
+                        },
+                        "child": {
+                          "ref": "steps.visit.outputs.child"
+                        },
+                        "context": {
+                          "ref": "inputs.context"
+                        }
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "state": {
+                      "type": "State",
+                      "value": {
+                        "ref": "steps.advance.outputs.state"
+                      }
+                    }
+                  },
+                  "id": "dependencies",
+                  "description": "One dependency, unrolled once; native advance always returns done at index one."
+                },
+                {
+                  "id": "guard",
+                  "kind": "call",
+                  "operation": "command_guard",
+                  "arguments": {
+                    "state": {
+                      "ref": "steps.dependencies.outputs.state"
+                    },
+                    "context": {
+                      "ref": "inputs.context"
+                    }
+                  }
+                },
+                {
+                  "id": "command",
+                  "kind": "switch",
+                  "cases": [
+                    {
+                      "id": "launch",
+                      "when": {
+                        "ref": "steps.guard.outputs.launch"
+                      },
+                      "body": {
+                        "kind": "sequence",
+                        "steps": [
+                          {
+                            "id": "leaf",
+                            "kind": "call",
+                            "operation": "audit_leaf",
+                            "arguments": {
+                              "context": {
+                                "ref": "inputs.context"
+                              },
+                              "extra_args": {
+                                "ref": "inputs.extra_args"
+                              },
+                              "state": {
+                                "ref": "steps.dependencies.outputs.state"
+                              }
+                            }
+                          },
+                          {
+                            "id": "aggregate",
+                            "kind": "call",
+                            "operation": "aggregate",
+                            "arguments": {
+                              "state": {
+                                "ref": "steps.dependencies.outputs.state"
+                              },
+                              "leaf": {
+                                "ref": "steps.leaf.outputs.leaf"
+                              }
+                            }
+                          }
+                        ],
+                        "outputs": {
+                          "result": {
+                            "type": "Result",
+                            "value": {
+                              "ref": "steps.aggregate.outputs.result"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "default": {
+                    "kind": "call",
+                    "operation": "finish",
+                    "arguments": {
+                      "state": {
+                        "ref": "steps.dependencies.outputs.state"
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "result": {
+                      "type": "Result",
+                      "value": {
+                        "ref": "selected.outputs.result"
+                      }
+                    }
+                  }
+                }
+              ],
+              "outputs": {
+                "result": {
+                  "type": "Result",
+                  "value": {
+                    "ref": "steps.command.outputs.result"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "default": {
+          "kind": "call",
+          "operation": "reject",
+          "arguments": {
+            "admission": {
+              "ref": "steps.admission.outputs.admission"
+            }
+          }
+        },
+        "outputs": {
+          "result": {
+            "type": "Result",
+            "value": {
+              "ref": "selected.outputs.result"
+            }
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "Result",
+        "value": {
+          "ref": "steps.dispatch.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/paper_skills/",
+          "artifacts/workflow_hub/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 7
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Source-linked description; completion does not establish scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "workflow_started",
+      "step_started",
+      "step_completed",
+      "step_failed",
+      "workflow_completed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_action; build_registry; shared controller and leaf boundaries",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "scripts/paper_claim_audit_tools.py",
+        "selector": "register_paper_claim_audit_tools",
+        "digest": "sha256:badbb5029b2d875e7f4e7792d0497eaf146b01b196ca0360af46861639f8d28a"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "_paper_claim_audit_guard and tool registration",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "paper_skills/paper-claim-evidence-auditor/scripts/audit_paper_claims.py",
+        "selector": "main and finite scan helpers",
+        "digest": "sha256:5e7a80f5117a75589ea2c5a4cf927090c0ab0c44d954576736046a7b924b3618"
+      },
+      {
+        "path": "paper_skills/framework-repository-cartographer/scripts/build_paper_evidence_packet.py",
+        "selector": "main; build_packet",
+        "digest": "sha256:a4554e62ad8531b71f0d591f2796265b2c3915445ce179ace2c23927e90140a8"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "inventory authored paper:claim-audit-framework contract",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      }
+    ],
+    "gaps": [
+      "Dependency internals and audit scans remain inside owning native operations.",
+      "Native optional logs do not implement v1 receipts; Lunar records binding receipts, digests, and provenance. Network/external capability names are qualification metadata."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "hub",
+      "native_id": "paper:claim-audit-framework",
+      "owner_skill": "skills/control/workflow-contract-validator/SKILL.md"
+    },
+    "mathformer.native_boundary": {
+      "execution": "scripts/mathformer.py::run_action via build_registry; CLI dispatch and paper:functionality-update-suite use this controller.",
+      "failure_policy": "Native failed results remain data for keep_going; unexpected controller exceptions terminate.",
+      "scientific_payloads": "Result is the native envelope; audit JSON is written by the leaf and captured in stdout.",
+      "effects_status": "partial_native_declarations",
+      "qualification_capability_names_are_not_runtime_grants": true,
+      "projection_limits": {
+        "wall_time_seconds": 3600,
+        "max_operation_calls": 1,
+        "qualification": "Original projection metadata; host operation-call ceiling is seven for the decomposed controller. No native time budget or timeout is introduced."
+      }
+    },
+    "mathformer.composition": {
+      "ordered_dependencies": [
+        "paper:evidence-packet"
+      ],
+      "dependency_workflows": [
+        "hub_paper_evidence_packet_workflow"
+      ],
+      "command_after_dependencies": true,
+      "keep_going_semantics": "Failed dependencies skip audit unless keep_going; aggregate success remains false.",
+      "extra_args_for_sequence": "rejected by run_action",
+      "loop_bound": "Exactly one visit, unrolled from max_iterations=1; native done is always true at index one. Exhaustion cannot occur on admitted source paths."
+    }
+  }
+}

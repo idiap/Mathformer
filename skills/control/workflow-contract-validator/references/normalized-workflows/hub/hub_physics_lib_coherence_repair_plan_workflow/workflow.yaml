@@ -1,0 +1,574 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_lib_coherence_repair_plan_workflow
+version: 1.0.0
+kind: workflow
+description: Ordered execution of the single registered coherence repair planning
+  dependency through shared native hub stages.
+aliases:
+- physics-lib:coherence-repair-plan
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Context:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+    representation: value
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+    representation: value
+  Strings:
+    schema:
+      type: array
+      items:
+        type: string
+  Done:
+    schema:
+      type: boolean
+  Admission:
+    schema:
+      type: object
+      required:
+      - accepted
+      - status
+      - ancestry
+      additionalProperties: false
+      properties:
+        accepted:
+          type: boolean
+        status:
+          enum:
+          - accepted
+          - unknown_action
+          - dependency_cycle
+          - extra_args_for_sequence
+        ancestry:
+          type: array
+          items:
+            type: string
+  DependencyState:
+    schema:
+      type: object
+      required:
+      - index
+      - children
+      - dependencies_ok
+      - ancestry
+      additionalProperties: false
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          maximum: 1
+        children:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+            required:
+            - ok
+            properties:
+              ok:
+                type: boolean
+        dependencies_ok:
+          type: boolean
+        ancestry:
+          type: array
+          items:
+            type: string
+  RepositoryRoot:
+    schema:
+      type: string
+      minLength: 1
+inputs:
+  context:
+    type: Context
+  extra_args:
+    type: Strings
+  seen:
+    type: Strings
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  admit:
+    inputs:
+      extra_args:
+        type: Strings
+      seen:
+        type: Strings
+    outputs:
+      admission:
+        type: Admission
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_alias_admit
+        operation: mathformer_coherence_repair_alias_admit
+  reject:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_alias_reject
+        operation: mathformer_coherence_repair_alias_reject
+  initialize:
+    inputs:
+      admission:
+        type: Admission
+    outputs:
+      state:
+        type: DependencyState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_alias_initialize
+        operation: mathformer_coherence_repair_alias_initialize
+  visit:
+    inputs:
+      context:
+        type: Context
+      state:
+        type: DependencyState
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_alias_visit
+        operation: mathformer_coherence_repair_alias_visit
+  advance:
+    inputs:
+      state:
+        type: DependencyState
+      child:
+        type: HubResult
+      context:
+        type: Context
+    outputs:
+      state:
+        type: DependencyState
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_alias_advance
+        operation: mathformer_coherence_repair_alias_advance
+  finish:
+    inputs:
+      state:
+        type: DependencyState
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_alias_finish
+        operation: mathformer_coherence_repair_alias_finish
+  carry:
+    inputs:
+      state:
+        type: DependencyState
+      result:
+        type: HubResult
+    outputs:
+      state:
+        type: DependencyState
+      done:
+        type: Done
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_coherence_repair_alias_carry
+        operation: mathformer_coherence_repair_alias_carry
+flow:
+  kind: sequence
+  steps:
+  - id: admission
+    kind: call
+    operation: admit
+    arguments:
+      extra_args:
+        ref: inputs.extra_args
+      seen:
+        ref: inputs.seen
+  - id: dispatch
+    kind: switch
+    cases:
+    - id: accepted
+      when:
+        ref: steps.admission.outputs.admission.accepted
+      body:
+        kind: sequence
+        steps:
+        - id: initial
+          kind: call
+          operation: initialize
+          arguments:
+            admission:
+              ref: steps.admission.outputs.admission
+        outputs:
+          state:
+            type: DependencyState
+            value:
+              ref: steps.initial.outputs.state
+          rejection:
+            type: HubResult
+            value:
+              literal:
+                ok: true
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: reject
+        arguments:
+          admission:
+            ref: steps.admission.outputs.admission
+        id: rejection
+      outputs:
+        state:
+          type: DependencyState
+          value:
+            literal:
+              index: 0
+              children: []
+              dependencies_ok: true
+              ancestry: []
+        rejection:
+          type: HubResult
+          value:
+            ref: steps.rejection.outputs.result
+    outputs:
+      state:
+        type: DependencyState
+        value:
+          ref: selected.outputs.state
+      rejection:
+        type: HubResult
+        value:
+          ref: selected.outputs.rejection
+  - id: dependencies
+    kind: loop
+    state_type: DependencyState
+    initial:
+      ref: steps.dispatch.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: switch
+      cases:
+      - id: accepted
+        when:
+          ref: steps.admission.outputs.admission.accepted
+        body:
+          kind: sequence
+          steps:
+          - id: child
+            kind: call
+            operation: visit
+            arguments:
+              state:
+                ref: loop.state
+              context:
+                ref: inputs.context
+              repository_root:
+                ref: inputs.repository_root
+          - id: advance
+            kind: call
+            operation: advance
+            arguments:
+              state:
+                ref: loop.state
+              child:
+                ref: steps.child.outputs.child
+              context:
+                ref: inputs.context
+          outputs:
+            state:
+              type: DependencyState
+              value:
+                ref: steps.advance.outputs.state
+            done:
+              type: Done
+              value:
+                ref: steps.advance.outputs.done
+      default:
+        kind: sequence
+        steps:
+        - kind: call
+          operation: carry
+          arguments:
+            state:
+              ref: loop.state
+            result:
+              ref: steps.dispatch.outputs.rejection
+          id: carry
+        outputs:
+          state:
+            type: DependencyState
+            value:
+              ref: steps.carry.outputs.state
+          done:
+            type: Done
+            value:
+              ref: steps.carry.outputs.done
+      outputs:
+        state:
+          type: DependencyState
+          value:
+            ref: selected.outputs.state
+        done:
+          type: Done
+          value:
+            ref: selected.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: DependencyState
+        value:
+          ref: body.outputs.state
+    description: Exactly one native dependency visit; rejected admission carries data
+      without native work. No retry or refinement.
+  - id: completion
+    kind: switch
+    cases:
+    - id: accepted
+      when:
+        ref: steps.admission.outputs.admission.accepted
+      body:
+        id: completion
+        kind: call
+        operation: finish
+        arguments:
+          state:
+            ref: steps.dependencies.outputs.state
+    default:
+      kind: sequence
+      steps:
+      - kind: call
+        operation: carry
+        arguments:
+          state:
+            ref: steps.dispatch.outputs.state
+          result:
+            ref: steps.dispatch.outputs.rejection
+        id: carry
+      outputs:
+        result:
+          type: HubResult
+          value:
+            ref: steps.carry.outputs.result
+    outputs:
+      result:
+        type: HubResult
+        value:
+          ref: selected.outputs.result
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.completion.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/workflow_hub/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+    - execute_repairs
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 6
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Planning and transport status only; no repair, proof, promotion or
+    scientific acceptance.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_registry; admit_action; reject_action; initialize_dependencies;
+      visit_dependency; advance_dependencies; dependency_command_guard; finish_dependencies;
+      run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/mathformerphysicslib/mathformerphysicslib-coherence-repair-planner/scripts/plan_coherence_repairs.py
+    selector: main; default_reports
+    digest: sha256:3acd9cc0324cc99a0ee733d39fb619adeb2a121788efffc6c6d502fc3b0c3bed
+  - path: skills/mathformerphysicslib/mathformerphysicslib-coherence-inventory-builder/scripts/coherence_common.py
+    selector: repair_plan; self_test_payload
+    digest: sha256:e1da9d47b82e23be26335e4476ba442aa58aedafe245034709d2868909deb125
+  - path: scripts/coherence_repair_alias_tools.py
+    selector: register_coherence_repair_alias_tools
+    digest: sha256:0e7c28d159cce239bdfd82a3bf7e37d1ac8788e47bf19dd39c317b0941b16bb7
+  - path: scripts/coherence_suite_tools.py
+    selector: Context; Admission; State; typed output envelopes
+    digest: sha256:f01f545deae5fdef5acfcfc30fafa39bc7059e66b3184a29f41fb336f3345ace
+  - path: scripts/mcp_server.py
+    selector: register_coherence_repair_alias_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: service_coverage_report
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: libraries/MathformerPhysicsLib/release_status.py
+    selector: build_release_status
+    digest: sha256:d10f70157f9b44923ad8ed3fda743b70133ea890ace3d1c509638704dfc81d59
+  gaps:
+  - Fixed source registry and alias specialization; arbitrary registry overrides are
+    outside this contract.
+  - Leaf internals remain inside visit; subprocess JSON is captured stdout, not a
+    separately typed planning artifact.
+  - Lunar enforces workflow call and wall budgets and records receipts. The native
+    child has no configured subprocess timeout; source optional reporting remains
+    caller-owned.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-lib:coherence-repair-plan
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: physics-lib:coherence-repair-plan
+      summary: Alias for MathformerPhysicsLib coherence repair planning.
+      family: mathformerphysicslib
+      kind: sequence
+      safety: read_only
+      command: []
+      depends_on:
+      - mathformerphysicslib:coherence-repair-plan
+      writes: []
+      allows_extra_args: false
+      timeout_seconds: null
+  mathformer.native_boundary:
+    execution: Registered MCP tools call shared scripts/mathformer.py stages; visit
+      recurses through the native controller and registered planner subprocess with
+      the explicit repository_root mount.
+    failure_policy: Preserve native failure payloads; only operation exceptions terminate
+      graph execution.
+    scientific_payloads: HubResult is a transport envelope; repair_required still
+      permits exit zero.
+    transport: Lunar requires a top-level bounded loop. Rejected admission is carried
+      through it without visiting dependencies; admitted work retains source ordering
+      and state.
+  mathformer.composition:
+    ordered_dependencies:
+    - mathformerphysicslib:coherence-repair-plan
+    dependency_workflows:
+    - hub_mathformerphysicslib_coherence_repair_plan_workflow
+    command_after_dependencies: false
+    keep_going_semantics: Sticky failure; no further work exists after the only child.
+    extra_args_for_sequence: rejected by run_action
+    bound_semantics: Exactly one visit sets done=true; source returns normally at
+      this bound. Exhaustion failure is unreachable.
+    callers: Hub CLI/NL dispatch; repair_plan is also reused by MCP ports, coherence
+      gate and coherence-loop reporting.
+  mathformer.steps:
+    admit: scripts/mathformer.py:build_registry, admit_action. Use the source registry
+      and fixed physics-lib:coherence-repair-plan identity. Copy seen; check unknown
+      action, then cycle, then add identity and reject extra_args for sequences. Return
+      accepted, status and sorted ancestry.
+    reject: scripts/mathformer.py:reject_action. Return ok=false, admission status
+      and fixed action_id; add sorted cycle for dependency_cycle.
+    initialize: scripts/mathformer.py:initialize_dependencies. Pack index=0, children=[],
+      dependencies_ok=true and copied ancestry.
+    visit: scripts/mathformer.py:visit_dependency, run_action, run_leaf_action. Select
+      depends_on[state.index]; recurse with ancestry, context and the same repository
+      mount, forwarding no extra arguments. Child admission precedes preflight; errors
+      return failure, dry-run returns without launching. Otherwise snapshot, launch
+      the registered planner with --self-test --json, capture stdout/stderr/returncode,
+      then audit writes. Nonzero exit or unexpected writes set ok=false; launch errors
+      propagate. plan_coherence_repairs.py:main loads explicit reports or default_reports;
+      defaults select self_test_payload or build_inventory, then canonicalize, audit_grounding,
+      critic_redefinitions, critic_integration, critic_api in order. This registration
+      selects self-test, supplies no reports/output, and passes the aggregate self-test
+      result into canonicalize as inventory; do not substitute self_test_inventory.
+      coherence_common.py:repair_plan traverses reports then findings, carrying append-only
+      actions; every finding appends exactly one action. Owner conflicts/spread select
+      consolidate_concept_owner; integration gaps select repair_integration_surface;
+      absent/thin API selects add_operable_bridge_api; other kinds select record_or_block_gap.
+      It returns repair_required if actions exist, otherwise no_repairs_required.
+      Main optionally writes output, emits JSON and returns zero for either planning
+      status; exceptions propagate to subprocess failure. Helper loops/logs/timing/audits
+      stay here.
+    advance: scripts/mathformer.py:advance_dependencies. Increment index, append child
+      once, preserve ancestry, and set dependencies_ok to previous dependencies_ok
+      AND bool(child.get("ok", false)). Compute done as index == len(depends_on) OR
+      (NOT child.ok AND NOT context.keep_going). For this one-child alias, exhaustion
+      is true after the first visit even with keep_going.
+    finish: scripts/mathformer.py:dependency_command_guard, finish_dependencies, prepare_action,
+      run_action. The alias command is empty, so its command guard is always false.
+      Return action metadata, children, sticky ok, and sequence_completed or sequence_failed;
+      run_action returns this result immediately. Never launch a parent command or
+      execute repairs.
+    carry: 'Transport only: carry rejection and unchanged inert state through the
+      top-level Lunar loop; no native operation or side effect.'
+# REUSE-IgnoreEnd

@@ -1,0 +1,468 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_physics_lean_object_workbench_workflow
+version: 1.0.0
+kind: workflow
+description: Plan library reuse or conservative Lean support candidates from an object
+  packet.
+aliases:
+- physics-lean:object-workbench
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Arguments:
+    schema:
+      type: array
+      items:
+        type: string
+  Options:
+    schema:
+      type: object
+      properties:
+        object_packet:
+          type:
+          - string
+          - 'null'
+        output:
+          type:
+          - string
+          - 'null'
+        self_test:
+          type: boolean
+        json:
+          type: boolean
+      required:
+      - object_packet
+      - output
+      - self_test
+      - json
+      additionalProperties: false
+  Packet:
+    schema:
+      type: object
+      properties:
+        packet_id: {}
+        objects: {}
+      description: Native JSON packet; objects defaults to [], non-dictionary entries
+        are skipped.
+  Plan:
+    schema:
+      type: object
+      properties:
+        style:
+          const: mathformerphysicslib_object_workbench_plan
+        status:
+          enum:
+          - ready
+          - no_objects
+          - library_work_required
+        source_packet_id: {}
+        item_count:
+          type: integer
+          minimum: 0
+        candidate_required_count:
+          type: integer
+          minimum: 0
+        reuse_candidate_count:
+          type: integer
+          minimum: 0
+        reuse_count:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            type: object
+        promotion_gates:
+          type: array
+          items:
+            type: string
+        library_first_invariant:
+          type: string
+      required:
+      - style
+      - status
+      - source_packet_id
+      - item_count
+      - candidate_required_count
+      - reuse_candidate_count
+      - reuse_count
+      - items
+      - promotion_gates
+      - library_first_invariant
+      additionalProperties: false
+  JsonText:
+    schema:
+      type: string
+  ExitCode:
+    schema:
+      type: integer
+      const: 0
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+      description: Local repository mount for real library search; null retains the
+        native repository default.
+inputs:
+  argv:
+    type: Arguments
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  plan:
+    type: Plan
+    value:
+      ref: flow.outputs.plan
+  json_text:
+    type: JsonText
+    value:
+      ref: flow.outputs.json_text
+  exit_code:
+    type: ExitCode
+    value:
+      ref: flow.outputs.exit_code
+  stdout_text:
+    type: JsonText
+    value:
+      ref: flow.outputs.stdout_text
+operations:
+  parse_options:
+    inputs:
+      argv:
+        type: Arguments
+    outputs:
+      options:
+        type: Options
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_object_workbench_parse_options
+        operation: mathformer_object_workbench_parse_options
+  fixture_packet:
+    inputs: {}
+    outputs:
+      packet:
+        type: Packet
+      native_packet_text:
+        type: JsonText
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_object_workbench_fixture_packet
+        operation: mathformer_object_workbench_fixture_packet
+  load_packet:
+    inputs:
+      options:
+        type: Options
+    outputs:
+      packet:
+        type: Packet
+      native_packet_text:
+        type: JsonText
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_object_workbench_load_packet
+        operation: mathformer_object_workbench_load_packet
+  build_plan:
+    inputs:
+      packet:
+        type: Packet
+      repository_root:
+        type: RepositoryRoot
+      native_packet_text:
+        type: JsonText
+    outputs:
+      plan:
+        type: Plan
+      native_json_text:
+        type: JsonText
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_object_workbench_build_plan
+        operation: mathformer_object_workbench_build_plan
+  assert_fixture:
+    inputs:
+      plan:
+        type: Plan
+      native_json_text:
+        type: JsonText
+    outputs:
+      plan:
+        type: Plan
+      native_json_text:
+        type: JsonText
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_object_workbench_assert_fixture
+        operation: mathformer_object_workbench_assert_fixture
+  emit_plan:
+    inputs:
+      options:
+        type: Options
+      plan:
+        type: Plan
+      native_json_text:
+        type: JsonText
+    outputs:
+      json_text:
+        type: JsonText
+      exit_code:
+        type: ExitCode
+      stdout_text:
+        type: JsonText
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_object_workbench_emit_plan
+        operation: mathformer_object_workbench_emit_plan
+flow:
+  kind: sequence
+  steps:
+  - id: parse
+    kind: call
+    operation: parse_options
+    arguments:
+      argv:
+        ref: inputs.argv
+  - id: select_plan
+    kind: switch
+    cases:
+    - id: self_test
+      when:
+        ref: steps.parse.outputs.options.self_test
+      body:
+        kind: sequence
+        steps:
+        - id: fixture
+          kind: call
+          operation: fixture_packet
+          arguments: {}
+        - id: fixture_plan
+          kind: call
+          operation: build_plan
+          arguments:
+            packet:
+              ref: steps.fixture.outputs.packet
+            repository_root:
+              ref: inputs.repository_root
+            native_packet_text:
+              ref: steps.fixture.outputs.native_packet_text
+        - id: assertions
+          kind: call
+          operation: assert_fixture
+          arguments:
+            plan:
+              ref: steps.fixture_plan.outputs.plan
+            native_json_text:
+              ref: steps.fixture_plan.outputs.native_json_text
+        outputs:
+          plan:
+            type: Plan
+            value:
+              ref: steps.assertions.outputs.plan
+          native_json_text:
+            type: JsonText
+            value:
+              ref: steps.assertions.outputs.native_json_text
+    default:
+      kind: sequence
+      steps:
+      - id: load
+        kind: call
+        operation: load_packet
+        arguments:
+          options:
+            ref: steps.parse.outputs.options
+      - id: packet_plan
+        kind: call
+        operation: build_plan
+        arguments:
+          packet:
+            ref: steps.load.outputs.packet
+          repository_root:
+            ref: inputs.repository_root
+          native_packet_text:
+            ref: steps.load.outputs.native_packet_text
+      outputs:
+        plan:
+          type: Plan
+          value:
+            ref: steps.packet_plan.outputs.plan
+        native_json_text:
+          type: JsonText
+          value:
+            ref: steps.packet_plan.outputs.native_json_text
+    outputs:
+      plan:
+        type: Plan
+        value:
+          ref: selected.outputs.plan
+      native_json_text:
+        type: JsonText
+        value:
+          ref: selected.outputs.native_json_text
+  - id: emit
+    kind: call
+    operation: emit_plan
+    arguments:
+      options:
+        ref: steps.parse.outputs.options
+      plan:
+        ref: steps.select_plan.outputs.plan
+      native_json_text:
+        ref: steps.select_plan.outputs.native_json_text
+  outputs:
+    plan:
+      type: Plan
+      value:
+        ref: steps.select_plan.outputs.plan
+    json_text:
+      type: JsonText
+      value:
+        ref: steps.emit.outputs.json_text
+    exit_code:
+      type: ExitCode
+      value:
+        ref: steps.emit.outputs.exit_code
+    stdout_text:
+      type: JsonText
+      value:
+        ref: steps.emit.outputs.stdout_text
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - requested_output_path
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - read_local_library
+    - produce_plan
+    - write_requested_plan
+    forbidden:
+    - execute_promotion_guidance
+    - compile_lean
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Path-based reuse hints and uncompiled scaffolds only; no promotion
+    or proof established.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: skills/mathformerphysicslib/mathformerphysicslib-object-workbench/scripts/build_mathformerphysicslib_object_workbench.py
+    selector: main
+    digest: sha256:023e7c401ade03b69bac669e0d562d2202749e3f8006aacc84dd5e70c8fcc37f
+  - path: scripts/mathformer.py
+    selector: build_registry/action:physics-lean:object-workbench
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/object_workbench_tools.py
+    selector: register_object_workbench_tools
+    digest: sha256:4011f284508d521a991728bc501e81af40b995708c1d3d14ccc0fca0181eed3d
+  - path: scripts/mcp_server.py
+    selector: register_object_workbench_tools(mcp, ...)
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory/physics-lean:object-workbench
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - build_plan helper loops and item branches remain within their owning native operation,
+    not expanded into graph nodes.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: physics-lean:object-workbench
+    owner_skill: skills/mathformerphysicslib/mathformerphysicslib-object-workbench/SKILL.md
+    contract:
+      id: physics-lean:object-workbench
+      family: physics_lean
+      kind: validation
+      safety: writes_artifacts
+      depends_on: []
+      allows_extra_args: true
+      timeout_seconds: null
+      writes:
+      - artifacts/
+  mathformer.native_boundary:
+    execution: Shared native main steps exposed by registered MCP tools; repository_root
+      supplies the local library search mount, null retains CLI defaults.
+    failure_policy: Parsing, JSON, I/O, type and assertion failures terminate; unresolved
+      library work returns 0.
+    budgets: Five modeled calls on self-test, four otherwise; Lunar enforces contract
+      time and operation budgets. The CLI has no global call or time budget and no
+      object-count cap.
+    effects_status: Native --output can name a path outside artifacts; output writes
+      are optional.
+    observability: Native emission is captured in stdout_text to preserve printed
+      JSON without corrupting MCP stdio. CLI argparse exits become terminal MCP errors
+      containing exit code and diagnostics. Lunar supplies required receipts, events
+      and digests. Native serialization is carried as text beside plan values to preserve
+      insertion order across canonical JSON envelopes, then checked for equal plan
+      data before emission. Packet serialization is likewise carried from load/fixture
+      to build_plan, preserving arbitrary nested user data ordering.
+  mathformer.plan_semantics:
+    iteration: build_plan iterates packet.get("objects", []) in order without an object-count
+      cap, builds only dictionaries and carries the ordered items list; no retries
+      or repair.
+    search: Per object, resolved-path seen set and accumulated hits start empty. Foundations.lean
+      then sorted foundation modules precede sorted files under the two LIB_ROOTS;
+      duplicates are skipped. Case-insensitive keyword substrings select matching
+      lines; stop normally at eight hits or file exhaustion. UnicodeDecodeError skips
+      that file; other read failures propagate.
+    branches: Foundation-path hits yield mathformer_reused and may_edit_target_theorem
+      true; other hits yield reuse_candidate; no hits yield candidate_required with
+      a planned module path and conservative Lean scaffold embedded in JSON. Other
+      statuses block target editing with guidance. Foundation acceptance is inferred
+      from paths only.
+    aggregation: Count all three item statuses; no items gives no_objects, any candidate_required
+      or reuse_candidate gives library_work_required, otherwise ready. Include packet_id,
+      ordered items, counts, promotion command strings and the library-first invariant.
+      Commands, blockers and planned module paths are guidance and are never executed.
+# REUSE-IgnoreEnd

@@ -1,0 +1,110 @@
+% SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+% SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+% SPDX-License-Identifier: MIT
+% Neuro-symbolic AI Group
+% File Documentation
+%
+% Motivation:
+%   Protect Mathformer behavior while the framework evolves across Lean, ATP, KB, SymPy, docs, and skills.
+%
+% Intent:
+%   Encode regression checks that catch parser breakage, semantic drift, and missing workflow evidence.
+%
+% Function:
+%   Contains executable tests, fixtures, and manifests used for local and CI validation.
+%
+% Maintenance Notes:
+%   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+% Origin annotation:
+% The theorem statement in this test file is sourced from:
+% https://en.wikipedia.org/wiki/Hille%E2%80%93Yosida_theorem
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{hyperref}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{remark}{Remark}
+
+\title{The Hille--Yosida Theorem}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section*{Origin Annotation}
+This theorem statement was prepared as a test artifact.
+Source origin: Wikipedia, \emph{Hille--Yosida theorem},
+\url{https://en.wikipedia.org/wiki/Hille%E2%80%93Yosida_theorem}.
+
+\section*{General Form}
+
+\begin{theorem}[Hille--Yosida]
+Let $X$ be a Banach space, let $A$ be a linear operator with domain
+$D(A)\subseteq X$, let $\omega\in\mathbb{R}$, and let $M>0$.
+
+Then $A$ generates a strongly continuous semigroup $(T(t))_{t\ge 0}$ satisfying
+\[
+\|T(t)\|\le M e^{\omega t}
+\qquad\text{for all } t\ge 0,
+\]
+if and only if the following conditions hold:
+\begin{enumerate}
+    \item $A$ is closed and $D(A)$ is dense in $X$;
+    \item every real $\lambda>\omega$ belongs to the resolvent set $\rho(A)$ of $A$, and for every such $\lambda$ and every positive integer $n$,
+    \[
+    \|(\lambda I-A)^{-n}\|
+    \le
+    \frac{M}{(\lambda-\omega)^n}.
+    \]
+\end{enumerate}
+\end{theorem}
+
+\section*{Contraction Semigroup Case}
+
+\begin{theorem}[Hille--Yosida for contraction semigroups]
+Let $X$ be a Banach space, and let $A$ be a linear operator with domain
+$D(A)\subseteq X$.
+
+Then $A$ generates a strongly continuous contraction semigroup
+$(T(t))_{t\ge 0}$ if and only if:
+\begin{enumerate}
+    \item $A$ is closed and $D(A)$ is dense in $X$;
+    \item every real $\lambda>0$ belongs to the resolvent set $\rho(A)$ of $A$, and
+    \[
+    \|(\lambda I-A)^{-1}\|\le \frac{1}{\lambda}.
+    \]
+\end{enumerate}
+\end{theorem}
+
+\section*{Remark}
+
+A strongly continuous semigroup is also called a $C_0$-semigroup. The Hille--Yosida theorem characterizes precisely which closed densely defined operators generate such semigroups on Banach spaces.
+
+\section*{References}
+
+\begin{thebibliography}{9}
+
+\bibitem{EngelNagel}
+Klaus-Jochen Engel and Rainer Nagel,
+\textit{One-Parameter Semigroups for Linear Evolution Equations},
+Springer, 2000.
+
+\bibitem{ArendtEtAl}
+Wolfgang Arendt, Charles Batty, Matthias Hieber, and Frank Neubrander,
+\textit{Vector-Valued Laplace Transforms and Cauchy Problems},
+Birkh\"auser, 2001.
+
+\bibitem{WikiHilleYosida}
+\textit{Hille--Yosida theorem},
+Wikipedia,
+\url{https://en.wikipedia.org/wiki/Hille%E2%80%93Yosida_theorem}.
+
+\end{thebibliography}
+
+\end{document}

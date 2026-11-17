@@ -1,0 +1,75 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from artifact_acceptance_loop import (
+    ArtifactAcceptanceCase,
+    ArtifactDisposition,
+    CompatibilityCase,
+    LeanArtifactAcceptanceRequest,
+    NonvacuityReviewCase,
+    ProofReviewCase,
+    ShapeReviewCase,
+    SourceReviewCase,
+)
+import occurrences as steps
+import relations as links
+
+# Prepare a generated Lean artifact for review, recover what it actually says,
+# test independent acceptance criteria, and issue the acceptance disposition
+# that controls reporting and documentation.
+reasoning ReviewLeanArtifact(
+    request: LeanArtifactAcceptanceRequest,
+) -> Generated[ArtifactDisposition]:
+    sequence:
+        # Enforce source-aware comments and minimize imports without changing the
+        # mathematical identity of the artifact under review.
+        [review_artifact: steps.PrepareLeanArtifact(request)]
+        # Maximize verified mathlib reuse and retain any unresolved grounding gaps.
+        [mathlib_grounding: steps.MaximizeMathlibGrounding(review_artifact.value)] by links.GroundAPIs
+        # Review abstraction boundaries, API operability, and library compatibility.
+        [compatibility_check: steps.AuditAbstractionCompatibility(CompatibilityCase(
+            review_artifact = review_artifact.value,
+            mathlib_grounding = mathlib_grounding.value,
+        ))] by links.AssessCompatibility
+        # Reverse the Lean declarations and proof bodies into a conservative
+        # statement-and-proof packet for semantic review.
+        [lean_meaning: steps.InformalizeLeanArtifact(review_artifact.value)] by links.ModelLeanMeaning
+        parallel:
+            # Check whether each Lean signature preserves the advertised logical shape.
+            [shape_check: steps.CheckDeclarationShape(ShapeReviewCase(
+                review_artifact = review_artifact.value,
+                lean_meaning = lean_meaning.value,
+            ))] by links.TestShape
+            # Check internal coherence, proof dependencies, placeholders, and delegation.
+            [proof_check: steps.CheckInformalProof(ProofReviewCase(
+                review_artifact = review_artifact.value,
+                lean_meaning = lean_meaning.value,
+            ))] by links.TestProof
+            # Compare source claims and comments with the reconstructed Lean meaning.
+            [source_check: steps.CheckSourceFidelity(SourceReviewCase(
+                review_artifact = review_artifact.value,
+                lean_meaning = lean_meaning.value,
+            ))] by links.TestFidelity
+            # Detect axioms, false-premise vacuity, target restatement, and trivial wrappers.
+            [nonvacuity_check: steps.CheckNonvacuity(NonvacuityReviewCase(
+                review_artifact = review_artifact.value,
+                lean_meaning = lean_meaning.value,
+            ))] by links.TestNonvacuity
+            # Detect collisions and divergent concept families across touched Lean files.
+            [corpus_check: steps.CheckArtifactCorpus(review_artifact.value)] by links.TestCorpus
+        # Issue the disposition from unified consistency and realness evidence;
+        # the same disposition controls downstream statistics, RFDE, and
+        # accepted-only documentation without treating those effects as warrant.
+        [acceptance_status: steps.IssueAcceptanceDecision(ArtifactAcceptanceCase(
+            review_artifact = review_artifact.value,
+            mathlib_grounding = mathlib_grounding.value,
+            compatibility_check = compatibility_check.value,
+            lean_meaning = lean_meaning.value,
+            shape_check = shape_check.value,
+            proof_check = proof_check.value,
+            source_check = source_check.value,
+            nonvacuity_check = nonvacuity_check.value,
+            corpus_check = corpus_check.value,
+        ))] by links.CalibrateAcceptance
+    return acceptance_status

@@ -1,0 +1,482 @@
+{
+  "schema_version": "workflow-skill/v1",
+  "namespace": "mathformer",
+  "id": "route_benchmark_workflow_workflow",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "description": "Ordered single-action benchmark route, preserving native failure payloads.",
+  "aliases": [
+    "benchmark.workflow"
+  ],
+  "lifecycle": "active",
+  "activation": {
+    "mode": "explicit",
+    "prerequisites": []
+  },
+  "types": {
+    "RunContext": {
+      "schema": "../../hub-interface.schema.json#/$defs/RunContext"
+    },
+    "HubResult": {
+      "schema": "../../hub-interface.schema.json#/$defs/HubResult"
+    },
+    "Registry": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "benchmark:proofnet"
+        ],
+        "additionalProperties": {
+          "type": "object"
+        },
+        "description": "Native action_to_dict projections, keyed by registered action ID; adapters require exact equality with server-owned declarations."
+      }
+    },
+    "SelectedMatch": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "route",
+          "score",
+          "matched_terms"
+        ],
+        "properties": {
+          "route": {
+            "type": "object",
+            "required": [
+              "route_id",
+              "action_ids"
+            ],
+            "properties": {
+              "route_id": {
+                "type": "string",
+                "const": "benchmark.workflow"
+              },
+              "action_ids": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "const": "benchmark:proofnet"
+                  }
+                ],
+                "minItems": 1,
+                "maxItems": 1
+              }
+            },
+            "additionalProperties": true
+          },
+          "score": {
+            "type": "integer"
+          },
+          "matched_terms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "RepositoryRoot": {
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Null uses REPO_ROOT; otherwise the caller's repository mount."
+      }
+    },
+    "RouteState": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "children"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Stop": {
+      "schema": {
+        "type": "boolean"
+      }
+    }
+  },
+  "inputs": {
+    "context": {
+      "type": "RunContext"
+    },
+    "match": {
+      "type": "SelectedMatch"
+    },
+    "registry": {
+      "type": "Registry"
+    },
+    "repository_root": {
+      "type": "RepositoryRoot"
+    }
+  },
+  "outputs": {
+    "result": {
+      "type": "HubResult",
+      "value": {
+        "ref": "flow.outputs.result"
+      }
+    }
+  },
+  "operations": {
+    "initialize": {
+      "inputs": {},
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_benchmark_route_initialize",
+          "operation": "mathformer_benchmark_route_initialize"
+        }
+      }
+    },
+    "run_child": {
+      "inputs": {
+        "registry": {
+          "type": "Registry"
+        },
+        "context": {
+          "type": "RunContext"
+        },
+        "repository_root": {
+          "type": "RepositoryRoot"
+        }
+      },
+      "outputs": {
+        "child": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_benchmark_route_run_child",
+          "operation": "mathformer_benchmark_route_run_child"
+        }
+      }
+    },
+    "advance": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "child": {
+          "type": "HubResult"
+        },
+        "context": {
+          "type": "RunContext"
+        }
+      },
+      "outputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "done": {
+          "type": "Stop"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_benchmark_route_advance",
+          "operation": "mathformer_benchmark_route_advance"
+        }
+      }
+    },
+    "finish": {
+      "inputs": {
+        "state": {
+          "type": "RouteState"
+        },
+        "match": {
+          "type": "SelectedMatch"
+        },
+        "registry": {
+          "type": "Registry"
+        }
+      },
+      "outputs": {
+        "result": {
+          "type": "HubResult"
+        }
+      },
+      "execution": {
+        "mode": "deterministic",
+        "binding": {
+          "adapter": "mcp.tool",
+          "kind": "tool",
+          "target": "mathformer_benchmark_route_finish",
+          "operation": "mathformer_benchmark_route_finish"
+        }
+      }
+    }
+  },
+  "flow": {
+    "kind": "sequence",
+    "steps": [
+      {
+        "id": "initialize",
+        "kind": "call",
+        "operation": "initialize",
+        "arguments": {}
+      },
+      {
+        "id": "traverse",
+        "kind": "loop",
+        "description": "Exact specialization to the one source-owned route member. Completion guard is true after its child, including failure. keep_going cannot add work; no retry or convergence is implied. The exhaustion branch is unreachable under the source guard.",
+        "state_type": "RouteState",
+        "initial": {
+          "ref": "steps.initialize.outputs.state"
+        },
+        "max_iterations": 1,
+        "on_exhausted": "fail",
+        "body": {
+          "kind": "sequence",
+          "steps": [
+            {
+              "id": "child",
+              "kind": "call",
+              "operation": "run_child",
+              "arguments": {
+                "registry": {
+                  "ref": "inputs.registry"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                },
+                "repository_root": {
+                  "ref": "inputs.repository_root"
+                }
+              }
+            },
+            {
+              "id": "advance",
+              "kind": "call",
+              "operation": "advance",
+              "arguments": {
+                "state": {
+                  "ref": "loop.state"
+                },
+                "child": {
+                  "ref": "steps.child.outputs.child"
+                },
+                "context": {
+                  "ref": "inputs.context"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "state": {
+              "type": "RouteState",
+              "value": {
+                "ref": "steps.advance.outputs.state"
+              }
+            },
+            "done": {
+              "type": "Stop",
+              "value": {
+                "ref": "steps.advance.outputs.done"
+              }
+            }
+          }
+        },
+        "next_state": {
+          "ref": "body.outputs.state"
+        },
+        "until": {
+          "ref": "body.outputs.done"
+        },
+        "outputs": {
+          "state": {
+            "type": "RouteState",
+            "value": {
+              "ref": "body.outputs.state"
+            }
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "call",
+        "operation": "finish",
+        "arguments": {
+          "state": {
+            "ref": "steps.traverse.outputs.state"
+          },
+          "match": {
+            "ref": "inputs.match"
+          },
+          "registry": {
+            "ref": "inputs.registry"
+          }
+        }
+      }
+    ],
+    "outputs": {
+      "result": {
+        "type": "HubResult",
+        "value": {
+          "ref": "steps.finish.outputs.result"
+        }
+      }
+    }
+  },
+  "policy": {
+    "effects": {
+      "filesystem": {
+        "read": [
+          "repository",
+          "native_runtime_inputs"
+        ],
+        "write": [
+          "artifacts/benchmarks/",
+          "artifacts/workflow_hub/",
+          "data/"
+        ]
+      },
+      "network": [
+        "native_binding_capabilities_require_qualification"
+      ],
+      "external_write": [
+        "native_binding_capabilities_require_qualification"
+      ]
+    },
+    "authority": {
+      "allowed": [
+        "invoke_registered_native_workflow"
+      ],
+      "forbidden": [
+        "bypass_native_controls",
+        "infer_scientific_truth_from_completion"
+      ]
+    },
+    "limits": {
+      "wall_time_seconds": 3600,
+      "max_operation_calls": 4
+    },
+    "failure": {
+      "default": "fail",
+      "retry": {
+        "max_attempts": 1,
+        "retryable_codes": []
+      }
+    },
+    "resume": {
+      "mode": "none",
+      "require_matching_definition_and_inputs": true
+    },
+    "claim_ceiling": "Transport observations only; no scientific truth or promotion."
+  },
+  "observability": {
+    "receipts": "required",
+    "artifact_digests": "sha256",
+    "provenance": "required",
+    "events": [
+      "intent_run_completed",
+      "intent_run_failed"
+    ]
+  },
+  "provenance": {
+    "coverage": "partial",
+    "sources": [
+      {
+        "path": "scripts/mathformer.py",
+        "selector": "run_intent_match; build_intent_routes benchmark.workflow; initialize_intent_state; advance_intent_state; finish_intent_state; run_action; run_leaf_action",
+        "digest": "sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0"
+      },
+      {
+        "path": "benchmarks/proofnet/proofnet.py",
+        "selector": "parse_args",
+        "digest": "sha256:303ef560e99521acac2b8f436435b2c4def425d5257b232f61e4ae6c6b134dc7"
+      },
+      {
+        "path": "scripts/mcp_server.py",
+        "selector": "register_benchmark_route_tools; mathformer_ask; mathformer_run_workflow",
+        "digest": "sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2"
+      },
+      {
+        "path": "scripts/benchmark_route_tools.py",
+        "selector": "register_benchmark_route_tools; checked_registry; selected_match",
+        "digest": "sha256:97480cdc2c306090e422360cdc645bd95fe075c6e565afa51d2054d4fe24cfcf"
+      },
+      {
+        "path": "skills/control/workflow-contract-validator/scripts/normalize_workflows.py",
+        "selector": "benchmark_route_descriptor; inventory",
+        "digest": "sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418"
+      },
+      {
+        "path": "tests/mcp/run_benchmark_route_workflow_tests.py",
+        "selector": "BenchmarkRouteTests",
+        "digest": "sha256:a3d29d734a5ab3324dc68873380c76c8cc5a4b1130f244bc55246a769f3f3ed7"
+      },
+      {
+        "path": "tests/mcp/fixtures/benchmark_route_original.py.txt",
+        "selector": "frozen original controller and state helpers",
+        "digest": "sha256:c9a01e4695fac345e8fbaf1751f0d2e050c2c000e2e57e39bde6dd5109b0d752"
+      },
+      {
+        "path": "tests/mcp/fixtures/adoption_compiler.py",
+        "selector": "deterministic external compiler test boundary",
+        "digest": "sha256:64ca90cb1ccc2ca6091403ccf6a5e2dd65e6265b17ed1d43990da5c134cbc407"
+      }
+    ],
+    "gaps": [
+      "Leaf helper branches remain inside run_child; the graph does not decompose the subprocess or claim full Python equivalence.",
+      "The 3600-second workflow budget is enforced by Lunar, not by the native run_intent_match controller; its leaf timeout remains 1200 seconds.",
+      "Lunar supplies runtime receipts, digests and provenance; native optional logging remains owned by the original callers.",
+      "Network and external effect labels are retained and unqualified; capability labels grant no permission."
+    ]
+  },
+  "extensions": {
+    "mathformer.source": {
+      "category": "route",
+      "native_id": "benchmark.workflow",
+      "owner_skill": "skills/control/mathformer-workflow-router/SKILL.md"
+    },
+    "mathformer.native_boundary": {
+      "execution": "Lunar compiles this bound graph to PRISM; tools share the original controller state helpers and run_action.",
+      "selection": "Already-selected benchmark.workflow from build_intent_routes and its native registry.",
+      "callers": "main ask --run and MCP mathformer_ask execute the top NL match.",
+      "mcp_dispatch": "Resolves normalized ID, rejects nonempty route extra_args, checks service write roots, then invokes run_intent_match.",
+      "projection": "Registry is an action_to_dict projection checked against server-owned declarations, never executable caller-supplied commands. SelectedMatch route fields are checked against build_intent_routes; native route metadata is retained. Null repository_root selects REPO_ROOT; other strings carry the caller mount through preflight, cwd and audits.",
+      "practical_limitation": "proofnet.py requires download, stats, sample or export-inputs; empty route args cause argparse exit 2 if imports and preflight succeed.",
+      "evaluation": "benchmark:proofnet-evaluate is separate and never selected here."
+    },
+    "mathformer.operation_semantics": {
+      "initialize": "Initialize using initialize_intent_state: ok=true and an empty ordered child list.",
+      "run_child": "Invoke run_action with benchmark:proofnet, the checked native registry, RunContext and repository mount, and no extra arguments. Native admission, preflight, dry-run, 1200-second subprocess timeout and write audit are retained. Returned failure is data; unexpected launch exceptions propagate. Service read-only and write-root checks precede non-dry invocation.",
+      "advance": "Use advance_intent_state with action_count=1. Append the child, retain sticky failure and return the native stop guard.",
+      "finish": "Use finish_intent_state with the checked selected match and registry. A failed native child remains output data, including intent_run_failed and original route metadata."
+    }
+  }
+}

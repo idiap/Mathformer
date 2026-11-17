@@ -1,0 +1,436 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_e2e_all_backends_workflow
+version: 1.0.0
+kind: workflow
+description: 'Selected e2e.all.backends route: one ordered native action, sticky success
+  aggregation, and native route result.'
+aliases:
+- e2e.all.backends
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+    representation: value
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+    representation: value
+  SelectedMatch:
+    schema:
+      type: object
+      properties:
+        route:
+          type: object
+          properties:
+            route_id:
+              const: e2e.all.backends
+            action_ids:
+              const:
+              - e2e:all-backends
+          required:
+          - route_id
+          - action_ids
+          additionalProperties: true
+        score:
+          type: number
+        matched_terms:
+          type: array
+          items:
+            type: string
+      required:
+      - route
+      - score
+      - matched_terms
+      additionalProperties: false
+      description: Projection of the already selected native IntentMatch; retain all
+        native route metadata.
+  Registry:
+    schema:
+      type: object
+      required:
+      - e2e:all-backends
+      additionalProperties:
+        type: object
+      description: Native build_registry mapping projected as data; use the unchanged
+        source e2e registration.
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+  ActionId:
+    schema:
+      type: string
+      const: e2e:all-backends
+  Boolean:
+    schema:
+      type: boolean
+  RouteState:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+            properties:
+              ok:
+                type: boolean
+            required:
+            - ok
+            additionalProperties: true
+      required:
+      - ok
+      - children
+      additionalProperties: false
+  ActionCount:
+    schema:
+      type: integer
+      const: 1
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: SelectedMatch
+  registry:
+    type: Registry
+  repository_root:
+    type: RepositoryRoot
+    required: false
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_e2e_route_initialize
+        operation: mathformer_e2e_route_initialize
+  select:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_e2e_route_select
+        operation: mathformer_e2e_route_select
+  run:
+    inputs:
+      action_id:
+        type: ActionId
+      registry:
+        type: Registry
+      context:
+        type: RunContext
+      repository_root:
+        type: RepositoryRoot
+        required: false
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_e2e_route_run
+        operation: mathformer_e2e_route_run
+  advance:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+      action_count:
+        type: ActionCount
+    outputs:
+      state:
+        type: RouteState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_e2e_route_advance
+        operation: mathformer_e2e_route_advance
+  finish:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp
+        kind: tool
+        target: mathformer_e2e_route_finish
+        operation: mathformer_e2e_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    state_type: RouteState
+    description: Exactly one source action. advance.done is true after that action
+      even on failure, so completion at the bound is normal; exhaustion is unreachable
+      for valid inputs.
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: run
+        kind: call
+        operation: run
+        description: Returned child ok=false is data and still reaches advance; unexpected
+          exceptions terminate execution.
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          registry:
+            ref: inputs.registry
+          context:
+            ref: inputs.context
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.run.outputs.child
+          context:
+            ref: inputs.context
+          action_count:
+            literal: 1
+      outputs:
+        state:
+          type: RouteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RouteState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/e2e/
+      - artifacts/test_program/
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked control-flow specification; completion establishes
+    no scientific truth or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: initialize_intent_state; select_intent_action; advance_intent_state;
+      finish_intent_state; build_registry; build_intent_routes; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: tests/e2e/run_all_backends.py
+    selector: main; prepare_command; run_suite; write_wrapper_and_return
+    digest: sha256:ba058db364afa91d062bbd30dd046601ea180961358ee0eacc36dfad6adbe785
+  - path: tests/test_program/run_comprehensive_tests.py
+    selector: run; prepare_checks; checks_pending; advance_check; run_check; finalize_checks;
+      publish_report
+    digest: sha256:60c9992ddfa80820b0c1e255d51b3e192f23d19efac01002713637c80056157a
+  - path: scripts/e2e_all_backends_route_tools.py
+    selector: selected_match; checked_registry; check_state; register_e2e_all_backends_route_tools
+    digest: sha256:abc3088bd45815ee9e99eb460cf63a897dfc30f44f507d23bb8c8117d33f7883
+  - path: scripts/mcp_server.py
+    selector: register_e2e_all_backends_route_tools; mathformer_ask; mathformer_run_workflow
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/adoption_check_tools.py
+    selector: Context
+    digest: sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac
+  - path: scripts/workflow_write_audit.py
+    selector: snapshot_repository; audit_snapshots
+    digest: sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: e2e_all_backends_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  - path: tests/mcp/run_e2e_all_backends_route_workflow_tests.py
+    selector: E2eRouteTests
+    digest: sha256:6e1682955c4442e6272bbb34f83a15d8ad9e33fb2c280c4ee5fb13e2bf4c1c86
+  - path: tests/mcp/fixtures/e2e_route_boundary.py
+    selector: install_external; serve
+    digest: sha256:40120e272b8912bea0d82545842cb7a8d31a0b5a23d28cadd91186c7bb8ff71a
+  - path: tests/mcp/fixtures/e2e_route_startup/sitecustomize.py
+    selector: test-only compiler/provider boundary installation
+    digest: sha256:7600bcbcdbe83e891c7097185c94fce58f45dcf1ce0512e2e63311faccf98e23
+  - path: tests/mcp/fixtures/e2e_all_backends_route_original.py.txt
+    selector: frozen run_intent_match from source-original.py
+    digest: sha256:9363e2d310c634716625cff560c43ec8840fce829060f898673da48b7e4a4f87
+  gaps:
+  - Leaf and comprehensive-suite internals remain source-owned inside run rather than
+    separate graph nodes; transitive network/external capabilities need qualification.
+  - Lunar enforces the enclosing 3600-second and five-operation ceilings; native run_action
+    retains its 900-second launch timeout. No retries are added.
+  - Lunar supplies graph receipts and provenance; native stdout, stderr, reports and
+    write auditing remain unchanged. The wrapper reports under artifacts/test_program
+    while the action declares artifacts/e2e, so auditing may fail even after passing
+    checks.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: e2e.all.backends
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: e2e.all.backends
+      title: Run all backend end-to-end workflows
+      action_ids:
+      - e2e:all-backends
+      skill_routes:
+      - skill-test-program-orchestrator
+  mathformer.native_boundary:
+    execution: Registered mathformer_e2e_route_* tools call the same native intent-state
+      helpers and run_action as run_intent_match. JSON projections are checked against
+      native route and action declarations.
+    mount: Omitted/null repository_root uses native REPO_ROOT; explicit mounts carry
+      through action execution and write auditing.
+    leaf: Unchanged build_registry binds e2e:all-backends to tests/e2e/run_all_backends.py
+      --json, no dependencies. Admission/preflight failure and dry-run return without
+      launch; otherwise launch once with 900-second timeout. Timeout returns failure;
+      unexpected launch exceptions propagate. Write audit can turn success into failure.
+    suite: Wrapper prepares one comprehensive-test subprocess with Lean, Isabelle,
+      SymPy, physics_sympy, RFDE, docs and mathformerlib; no wrapper subprocess timeout.
+      No explicit ATP, KB or Rocq selection.
+    checks: Child runner carries matrix, selected checks, families, index and results;
+      runs while index<len(selected), advances once per check, and continues through
+      ordinary failures. Declared per-check timeouts default to 120 seconds; unavailable
+      optional dependencies skip under workstation defaults. Empty selections finalize
+      without checks. Validation, aggregation and report publishing stay native.
+    reports: Wrapper writes artifacts/test_program/e2e_all_backends_wrapper.json even
+      on nonzero child exit and returns that exit code. Comprehensive report is artifacts/test_program/e2e_all_backends.json.
+      Action declares artifacts/e2e/; native auditing may reject writes outside allowed
+      roots.
+    qualification_capability_names_are_not_runtime_grants: true
+    service_admission: Non-dry execution checks the configured service read-only policy
+      and mounted action write roots before native execution. Omitted/null repository_root
+      preserves native REPO_ROOT.
+    limits: Lunar enforces the declared graph budgets. The native CLI route has no
+      3600-second enclosing budget.
+  mathformer.composition:
+    ordered_actions:
+    - e2e:all-backends
+    action_workflows:
+    - hub_e2e_all_backends_workflow
+    selection: Already selected singleton route; keep_going cannot add work. Match
+      and registry inputs are projections of native source-owned objects.
+# REUSE-IgnoreEnd

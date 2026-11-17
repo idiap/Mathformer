@@ -1,0 +1,495 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: loop_mathlib_grounding_loop_workflow
+version: 1.0.0
+kind: workflow
+description: Pre-draft local concept mapping with bounded widening and optional Lean
+  candidate checks.
+aliases:
+- mathlib_grounding_loop
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Request:
+    schema:
+      type: object
+      required:
+      - statement
+      additionalProperties: false
+      properties:
+        statement:
+          type: string
+        max_rounds:
+          type: integer
+          const: 3
+        lean_workdir:
+          type: string
+          default: .
+        top_k:
+          type: integer
+          minimum: 1
+          default: 8
+        top_modules:
+          type: integer
+          minimum: 1
+          default: 12
+        verify_checks:
+          type: boolean
+          default: true
+        verify_timeout_sec:
+          type: integer
+          default: 60
+        verify_max_concepts:
+          type: integer
+          default: 6
+        verify_max_candidates:
+          type: integer
+          default: 3
+        target_verified_ratio:
+          type: number
+          default: 1.0
+        reasoning_log_file:
+          type:
+          - string
+          - 'null'
+          default: null
+  State:
+    schema:
+      type: object
+      required:
+      - best_map
+      - best_coverage
+      - rounds
+      - last_error
+      - round_index
+      - current_top_k
+      - current_top_modules
+      - current_verify_max_concepts
+      - current_verify_max_candidates
+      - target_verified_ratio
+      - max_rounds
+      additionalProperties: false
+      properties:
+        best_map:
+          type:
+          - object
+          - 'null'
+        best_coverage:
+          type: object
+        rounds:
+          type: array
+          items:
+            type: object
+        last_error:
+          type:
+          - string
+          - 'null'
+        round_index:
+          type: integer
+          minimum: 1
+        current_top_k:
+          type: integer
+        current_top_modules:
+          type: integer
+        current_verify_max_concepts:
+          type: integer
+        current_verify_max_candidates:
+          type: integer
+        target_verified_ratio:
+          type: number
+          minimum: 0
+          maximum: 1
+        max_rounds:
+          type: integer
+          const: 3
+  RoundStatus:
+    schema:
+      type: object
+      required:
+      - failed
+      - verified_ratio
+      - target_met
+      additionalProperties: false
+      properties:
+        failed:
+          type: boolean
+        verified_ratio:
+          type:
+          - number
+          - 'null'
+        target_met:
+          type: boolean
+  Flag:
+    schema:
+      type: boolean
+  ConceptMap:
+    schema:
+      type:
+      - object
+      - 'null'
+  Coverage:
+    schema:
+      type: object
+  Rounds:
+    schema:
+      type: array
+      items:
+        type: object
+  Error:
+    schema:
+      type:
+      - string
+      - 'null'
+  Context:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        trace_log_file:
+          type:
+          - string
+          - 'null'
+          default: null
+        file_prefix:
+          type: string
+          default: mathlib_grounding
+        dependency_label:
+          type:
+          - string
+          - 'null'
+          default: null
+inputs:
+  request:
+    type: Request
+  context:
+    type: Context
+outputs:
+  best_map:
+    type: ConceptMap
+    value:
+      ref: steps.finish.outputs.best_map
+  coverage:
+    type: Coverage
+    value:
+      ref: steps.finish.outputs.coverage
+  rounds:
+    type: Rounds
+    value:
+      ref: steps.finish.outputs.rounds
+  last_error:
+    type: Error
+    value:
+      ref: steps.finish.outputs.last_error
+operations:
+  initialize:
+    inputs:
+      request:
+        type: Request
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathlib_grounding_initialize
+        operation: mathformer_mathlib_grounding_initialize
+  attempt_round:
+    inputs:
+      request:
+        type: Request
+      state:
+        type: State
+      context:
+        type: Context
+    outputs:
+      state:
+        type: State
+      status:
+        type: RoundStatus
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathlib_grounding_attempt_round
+        operation: mathformer_mathlib_grounding_attempt_round
+  compute_guards:
+    inputs:
+      state:
+        type: State
+      status:
+        type: RoundStatus
+    outputs:
+      early_stop:
+        type: Flag
+      done:
+        type: Flag
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathlib_grounding_compute_guards
+        operation: mathformer_mathlib_grounding_compute_guards
+  pack_transition:
+    inputs:
+      request:
+        type: Request
+      state:
+        type: State
+      widen:
+        type: Flag
+    outputs:
+      state:
+        type: State
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathlib_grounding_pack_transition
+        operation: mathformer_mathlib_grounding_pack_transition
+  finish:
+    inputs:
+      state:
+        type: State
+      request:
+        type: Request
+      context:
+        type: Context
+    outputs:
+      best_map:
+        type: ConceptMap
+      coverage:
+        type: Coverage
+      rounds:
+        type: Rounds
+      last_error:
+        type: Error
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_mathlib_grounding_finish
+        operation: mathformer_mathlib_grounding_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments:
+      request:
+        ref: inputs.request
+      context:
+        ref: inputs.context
+  - id: rounds
+    kind: loop
+    state_type: State
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 3
+    on_exhausted: fail
+    description: The cap guard makes round three a normal exit before structural exhaustion.
+    body:
+      kind: sequence
+      steps:
+      - id: attempt
+        kind: call
+        operation: attempt_round
+        arguments:
+          request:
+            ref: inputs.request
+          state:
+            ref: loop.state
+          context:
+            ref: inputs.context
+      - id: guards
+        kind: call
+        operation: compute_guards
+        arguments:
+          state:
+            ref: steps.attempt.outputs.state
+          status:
+            ref: steps.attempt.outputs.status
+      - id: transition
+        kind: switch
+        cases:
+        - id: break_now
+          when:
+            ref: steps.guards.outputs.early_stop
+          body:
+            kind: call
+            operation: pack_transition
+            arguments:
+              request:
+                ref: inputs.request
+              state:
+                ref: steps.attempt.outputs.state
+              widen:
+                literal: false
+        default:
+          kind: call
+          operation: pack_transition
+          arguments:
+            request:
+              ref: inputs.request
+            state:
+              ref: steps.attempt.outputs.state
+            widen:
+              literal: true
+        outputs:
+          state:
+            type: State
+            value:
+              ref: selected.outputs.state
+      outputs:
+        state:
+          type: State
+          value:
+            ref: steps.transition.outputs.state
+        done:
+          type: Flag
+          value:
+            ref: steps.guards.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: State
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.rounds.outputs.state
+      request:
+        ref: inputs.request
+      context:
+        ref: inputs.context
+  outputs:
+    best_map:
+      type: ConceptMap
+      value:
+        ref: steps.finish.outputs.best_map
+    coverage:
+      type: Coverage
+      value:
+        ref: steps.finish.outputs.coverage
+    rounds:
+      type: Rounds
+      value:
+        ref: steps.finish.outputs.rounds
+    last_error:
+      type: Error
+      value:
+        ref: steps.finish.outputs.last_error
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      write:
+      - lean_verification_scratch
+      - reasoning_log
+      - mathlib_declaration_index
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - inspect_declared_contract
+    - map_concepts
+    - check_candidate_declarations
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 11
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Candidate grounding and declaration checks; coverage does not establish
+    a proof.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: audit_pack_sources internal grounding helper registration
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/autoformalization/autoformalization-agentc/scripts/agentc.py
+    selector: run_mathlib_concept_compatibility_loop; MathlibConceptCompatibilityLoop;
+      map_statement_to_mathlib_concepts; summarize_mathlib_concept_coverage
+    digest: sha256:f905407d76dcf8caaecf50716c9d6f8b0d342c65cda61dafe63254236312767f
+  - path: scripts/mathlib_grounding_workflow_tools.py
+    selector: GroundingSteps; register_grounding_tools
+    digest: sha256:1aa8061c458c18df1336102071fb5b322d61b632cd0097b96da9b22a4ec44cc2
+  - path: scripts/mcp_server.py
+    selector: register_grounding_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: skills/mathlib/informal-proof-mathlib-concepts/scripts/map_mathlib_concepts.py
+    selector: main; verify_checks_with_lean
+    digest: sha256:d6a3b07940a3bc3cf74242080b1a73110ee0c66d820d2122af901d99ec29afef
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: descriptors mathlib_grounding_loop authored projection
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - The published contract specializes the native positive max_rounds argument to
+    three rounds; omission uses the native default.
+  - Concept maps and report details retain native JSON payloads; the source summarizer
+    remains authoritative for coverage semantics.
+  - Native code has no overall wall-clock timeout; 3600s is the inherited descriptor
+    host ceiling.
+extensions:
+  mathformer.source:
+    category: loop
+    native_id: mathlib_grounding_loop
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+  mathformer.membership:
+    required_hooks_are_not_an_execution_schedule: true
+    runtime_accounting: {}
+  mathformer.scope:
+    caller: IterativeSelfRefinementAgentC.run_systematic_workflow
+    boundary: Caller skips mapping if both mapping and alignment are disabled; otherwise
+      selects this loop or a single pass. Loop selection forces verification. Coverage
+      and gaps feed drafting hints; incomplete coverage does not abort drafting. Post-save
+      audit and outer refinement are outside this function.
+  mathformer.runtime:
+    context: Optional source trace callback is materialized through AgentC append_reasoning_log_entry
+      using trace_log_file, file_prefix and dependency_label. Mapper reasoning_log_file
+      remains a separate native request argument.
+    defaults: Native signature defaults are applied at every request binding.
+    steps: Source-owned methods are shared with the original public entrypoint; no
+      persistent server-side loop state.
+# REUSE-IgnoreEnd

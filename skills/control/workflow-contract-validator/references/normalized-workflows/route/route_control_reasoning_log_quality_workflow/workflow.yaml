@@ -1,0 +1,422 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: route_control_reasoning_log_quality_workflow
+version: 1.0.0
+kind: workflow
+description: Execute the selected reasoning-log quality route once through native
+  controls and return its ordered aggregate.
+aliases:
+- control.reasoning.log.quality
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  RunContext:
+    schema: ../../hub-interface.schema.json#/$defs/RunContext
+    representation: value
+  SelectedMatch:
+    schema:
+      type: object
+      properties:
+        route:
+          type: object
+          properties:
+            route_id:
+              const: control.reasoning.log.quality
+            action_ids:
+              type: array
+              items:
+                type: string
+              const:
+              - control:reasoning-log-quality
+          required:
+          - route_id
+          - action_ids
+          additionalProperties: true
+        score:
+          type: integer
+        matched_terms:
+          type: array
+          items:
+            type: string
+      required:
+      - route
+      - score
+      - matched_terms
+      additionalProperties: false
+  RouteState:
+    schema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        children:
+          type: array
+          items:
+            type: object
+          maxItems: 1
+      required:
+      - ok
+      - children
+      additionalProperties: false
+  ActionId:
+    schema:
+      type: string
+      const: control:reasoning-log-quality
+  Boolean:
+    schema:
+      type: boolean
+  HubResult:
+    schema: ../../hub-interface.schema.json#/$defs/HubResult
+    representation: value
+  Registry:
+    schema:
+      type: object
+      additionalProperties:
+        type: object
+  RepositoryRoot:
+    schema:
+      type:
+      - string
+      - 'null'
+inputs:
+  context:
+    type: RunContext
+  match:
+    type: SelectedMatch
+  registry:
+    type: Registry
+  repository_root:
+    type: RepositoryRoot
+outputs:
+  result:
+    type: HubResult
+    value:
+      ref: flow.outputs.result
+operations:
+  initialize:
+    inputs: {}
+    outputs:
+      state:
+        type: RouteState
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_quality_route_initialize
+        operation: mathformer_quality_route_initialize
+  select:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+    outputs:
+      action_id:
+        type: ActionId
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_quality_route_select
+        operation: mathformer_quality_route_select
+  run_action:
+    inputs:
+      action_id:
+        type: ActionId
+      context:
+        type: RunContext
+      registry:
+        type: Registry
+      repository_root:
+        type: RepositoryRoot
+    outputs:
+      child:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_quality_route_run_action
+        operation: mathformer_quality_route_run_action
+  advance:
+    inputs:
+      state:
+        type: RouteState
+      child:
+        type: HubResult
+      context:
+        type: RunContext
+    outputs:
+      state:
+        type: RouteState
+      done:
+        type: Boolean
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_quality_route_advance
+        operation: mathformer_quality_route_advance
+  finish:
+    inputs:
+      state:
+        type: RouteState
+      match:
+        type: SelectedMatch
+      registry:
+        type: Registry
+    outputs:
+      result:
+        type: HubResult
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_quality_route_finish
+        operation: mathformer_quality_route_finish
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize
+    arguments: {}
+  - id: actions
+    kind: loop
+    description: Native ordered action iteration specialized to the one-action selected
+      route; done is true after that child, including failure.
+    state_type: RouteState
+    initial:
+      ref: steps.initialize.outputs.state
+    max_iterations: 1
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select
+        arguments:
+          state:
+            ref: loop.state
+          match:
+            ref: inputs.match
+      - id: run
+        kind: call
+        operation: run_action
+        arguments:
+          action_id:
+            ref: steps.select.outputs.action_id
+          context:
+            ref: inputs.context
+          registry:
+            ref: inputs.registry
+          repository_root:
+            ref: inputs.repository_root
+      - id: advance
+        kind: call
+        operation: advance
+        arguments:
+          state:
+            ref: loop.state
+          child:
+            ref: steps.run.outputs.child
+          context:
+            ref: inputs.context
+      outputs:
+        state:
+          type: RouteState
+          value:
+            ref: steps.advance.outputs.state
+        done:
+          type: Boolean
+          value:
+            ref: steps.advance.outputs.done
+    next_state:
+      ref: body.outputs.state
+    until:
+      ref: body.outputs.done
+    outputs:
+      state:
+        type: RouteState
+        value:
+          ref: body.outputs.state
+  - id: finish
+    kind: call
+    operation: finish
+    arguments:
+      state:
+        ref: steps.actions.outputs.state
+      match:
+        ref: inputs.match
+      registry:
+        ref: inputs.registry
+  outputs:
+    result:
+      type: HubResult
+      value:
+        ref: steps.finish.outputs.result
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/reasoning/self_test/
+    network: []
+    external_write: []
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 5
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Native route status and audit diagnostics only; success does not
+    establish readiness, scientific truth, runtime qualification or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: scripts/mathformer.py
+    selector: run_intent_match
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/mathformer.py
+    selector: build_intent_routes; initialize_intent_state; select_intent_action;
+      advance_intent_state; finish_intent_state; run_action; run_leaf_action
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: skills/control/reasoning-log-schema-guardian/scripts/audit_reasoning_log_quality.py
+    selector: main; prepare_fixtures; audit_selected; verify_bad; emit; audit_logs
+    digest: sha256:22ab6d873c6f6edee0f0011fdd1bb2990ec6c2f22ae2d80da8cce2dc5c528a54
+  - path: scripts/mcp_server.py
+    selector: mathformer_ask; mathformer_run_workflow; _cap_unbounded_timeouts
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/reasoning_log_quality_route_tools.py
+    selector: register_reasoning_log_quality_route_tools; selected_match; checked_registry;
+      check_state
+    digest: sha256:c40be23759dd1f9fc9f6b43ef88058995e478e5625ba647d19ecaa68fca7090f
+  - path: scripts/adoption_check_tools.py
+    selector: Context
+    digest: sha256:da0f2eb9e33f2d5722a697b846fdeb9cf7bed4b9b31e9da0e1f0302b9859f6ac
+  - path: scripts/benchmark_route_tools.py
+    selector: State; Initialized; Invoked; Advanced; Finished
+    digest: sha256:97480cdc2c306090e422360cdc645bd95fe075c6e565afa51d2054d4fe24cfcf
+  - path: scripts/workflow_write_audit.py
+    selector: snapshot_repository; audit_snapshots
+    digest: sha256:1f1e5ca40776f1b5671d89668ca1eee5d6802f633749c6cce7a94d8d25c838a1
+  - path: skills/control/reasoning-log-schema-guardian/scripts/reasoning_log.py
+    selector: append_skill_start; append_skill_complete
+    digest: sha256:375494159f2f38527e8eeb09d3c795996ea4d944ff02ca9aecff25176890f0f6
+  - path: skills/control/reasoning-log-schema-guardian/scripts/validate_reasoning_log.py
+    selector: load_entries; parse_hook_contract; validate_entries
+    digest: sha256:1cf78d2c90b8e0c36eb1a527d3da952b831f8c805dfcf42984f9abed8afd40b6
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: reasoning_log_quality_route_descriptor; inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Action internals and audit accumulation remain inside the native run_action boundary;
+    the route graph models ordered dispatch, state and result packing.
+  - The 3600-second policy is enforced by Lunar, not the native CLI; these MCP step
+    bindings retain the native None action timeout. Legacy mathformer_ask/mathformer_run_workflow
+    apply their configurable 600-second default.
+  - Native optional logging does not guarantee workflow-skill/v1 receipts; Lunar provides
+    required runtime receipts, digests and events.
+extensions:
+  mathformer.source:
+    category: route
+    native_id: control.reasoning.log.quality
+    owner_skill: skills/control/mathformer-workflow-router/SKILL.md
+    contract:
+      route_id: control.reasoning.log.quality
+      title: Audit reasoning-log quality
+      action_ids:
+      - control:reasoning-log-quality
+      skill_routes:
+      - reasoning-log-schema-guardian
+  mathformer.native_boundary:
+    execution: Registered mathformer_quality_route_* MCP tools delegate to the shared
+      scripts/mathformer.py route state functions and run_action. CLI and legacy MCP
+      entrypoints retain their native controller.
+    registry_and_mount: Required registry and nullable repository_root ports carry
+      the caller context. Registry entries must match native declarations; null mount
+      selects hub.REPO_ROOT. Match projections rehydrate the full native route and
+      preserve score/matched_terms.
+    action: control:reasoning-log-quality has no dependencies and launches audit_reasoning_log_quality.py
+      --self-test --json without extra arguments.
+    branch_order: Admission rejection returns a failed child; preflight errors return
+      before launch; successful preflight plus dry_run returns a dry_run child; otherwise
+      snapshot, launch, capture, then audit filesystem changes.
+    audit_order: main parses arguments, prepares deterministic good/bad fixtures,
+      audits good, verifies bad has high-severity findings, emits JSON, and exits
+      0 on report.ok or 3 otherwise. Supplied-log selection is unreachable for this
+      self-test route.
+    audit_accumulation: audit_logs processes every log and event, accumulating findings,
+      event counts, per-log results and dimension scores without early exit on findings;
+      helper loops remain inside run_action.
+    readiness: Requires nonempty logs, events, no high findings and every dimension
+      score >=0.95. Audit report.ok means no high findings; self-test additionally
+      requires bad_has_high_findings, so readiness is separate from process success.
+    advisory_bounds:
+      intent_characters: 180
+      summary_characters: 320
+      payload_bytes: 8192
+    effects_status: Registry says read_only and declares no write roots, but self-test
+      replaces artifacts/reasoning/self_test/{good,bad}.jsonl. Detected undeclared
+      writes set child.ok=false and status=undeclared_writes; this descriptor does
+      not change native admission.
+    failure_policy: Returned child.ok=false is data and still reaches advance and
+      finish. Unexpected launch exceptions propagate and prevent normal result packing;
+      no automatic retry or checkpoint.
+    timing: The bound native action keeps timeout_seconds=None; Lunar enforces the
+      contract wall time. Legacy mathformer_ask/mathformer_run_workflow retain their
+      configurable timeout default of 600 seconds.
+    service_authority: Before a non-dry-run registered action, MCP checks the service
+      write policy and permits the resolved artifacts/reasoning/self_test/ root. This
+      does not change native read_only admission or its undeclared-write result.
+  mathformer.composition:
+    ordered_actions:
+    - control:reasoning-log-quality
+    action_workflows:
+    - hub_control_reasoning_log_quality_workflow
+    selection: Input match is already selected and constrained to this route and its
+      exact one-action list; NL scoring and ambiguity resolution are outside this
+      graph.
+    keep_going_semantics: Failure stays sticky. Native done checks completion or failed
+      child without keep_going; the one-action route completes after one child regardless
+      of keep_going.
+    bound_semantics: max_iterations=1 is the exact route length, not a convergence
+      cap. advance returns done=true at that bound, then finish returns normally even
+      for ok=false; on_exhausted is unreachable for source-conforming blocks.
+# REUSE-IgnoreEnd

@@ -1,0 +1,582 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+"""Run one source-only FormalPhysics SymPy recursive goal case."""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+from typing import Any, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+SYMPY_ROOT = REPO_ROOT / "MathformerPhysicsLib" / "SymPy"
+DEFAULT_OUTPUT_ROOT = REPO_ROOT / "artifacts" / "physics_sympy" / "recursive_goal_runs"
+CASE_RE = re.compile(r"formalphysics_(\d{4})")
+GOAL_PLANNER = Path(__file__).with_name("plan_goal_sample_sympy_autoformalization.py")
+DESIGN_GUARD = (
+    REPO_ROOT
+    / "skills"
+    / "physics-sympy"
+    / "physics-sympy-review-refinement-router"
+    / "scripts"
+    / "plan_physics_sympy_review_refinement.py"
+)
+CARTOGRAPHER = (
+    REPO_ROOT
+    / "skills"
+    / "physics-sympy"
+    / "physics-sympy-repair-expansion-cartographer"
+    / "scripts"
+    / "map_physics_sympy_repair_expansion.py"
+)
+CONTROLLER = (
+    REPO_ROOT
+    / "skills"
+    / "physics-sympy"
+    / "physics-sympy-recursive-repair-loop-controller"
+    / "scripts"
+    / "control_physics_sympy_recursive_repair.py"
+)
+THOROUGHNESS = (
+    REPO_ROOT / "tests" / "physics_sympy" / "run_grounded_sample_thoroughness.py"
+)
+REASONING_LOG_SCRIPTS = (
+    REPO_ROOT / "skills" / "control" / "reasoning-log-schema-guardian" / "scripts"
+)
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+if str(REASONING_LOG_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(REASONING_LOG_SCRIPTS))
+try:
+    from reasoning_log import append_reasoning_log_entry
+except Exception:  # pragma: no cover - logging is optional for callers.
+    append_reasoning_log_entry = None
+
+try:
+    from backends.sympy.MathformerPhysicsSympy.pipeline import (
+        all_case_ids,
+        write_artifact,
+    )
+except Exception:  # pragma: no cover - initial draft generation is optional.
+    all_case_ids = None
+    write_artifact = None
+
+
+def rel(path: Path) -> str:
+    """Return a repository-relative display path when possible."""
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def normalize_case(case: str | None, source_record: Path | None) -> str:
+    """Normalize a case id to formalphysics_####."""
+    for candidate in (case or "", "" if source_record is None else str(source_record)):
+        match = CASE_RE.search(candidate)
+        if match:
+            return f"formalphysics_{match.group(1)}"
+    if case and case.isdigit():
+        return f"formalphysics_{int(case):04d}"
+    return "formalphysics_0000"
+
+
+def case_path(case_id: str) -> Path:
+    """Resolve the SymPy artifact path for a case."""
+    return SYMPY_ROOT / case_id / "MathformerPhysics.py"
+
+
+def load_module(path: Path, case_id: str) -> Any | None:
+    """Import one SymPy artifact when available."""
+    try:
+        spec = importlib.util.spec_from_file_location(f"source_only_{case_id}", path)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
+
+
+def load_or_synthesize_source_record(
+    source_record: Path | None, case_id: str
+) -> dict[str, Any]:
+    """Load a source record or synthesize a source-only packet from the artifact metadata."""
+    if source_record is not None and source_record.exists():
+        parsed = json.loads(source_record.read_text(encoding="utf-8"))
+        return parsed if isinstance(parsed, dict) else {"raw_source_record": parsed}
+
+    artifact = case_path(case_id)
+    module = load_module(artifact, case_id) if artifact.exists() else None
+    claim = getattr(module, "CLAIM", {}) if module is not None else {}
+    return {
+        "case_id": case_id,
+        "source_record_status": "synthesized_from_sympy_artifact_metadata",
+        "source_record_path": None if source_record is None else rel(source_record),
+        "artifact_path": rel(artifact),
+        "statement_nl": claim.get("statement_nl") if isinstance(claim, dict) else None,
+        "statement_latex": (
+            claim.get("statement_latex") if isinstance(claim, dict) else None
+        ),
+        "source_anchors": (
+            claim.get("source_anchors", []) if isinstance(claim, dict) else []
+        ),
+        "commentary_header": (
+            claim.get("commentary_header") if isinstance(claim, dict) else None
+        ),
+        "trust_boundary": "source-only first-pass; dataset formal_answer not read",
+    }
+
+
+def ensure_initial_artifact(
+    case_id: str, artifact: Path, run_dir: Path, *, regenerate: bool = False
+) -> dict[str, Any]:
+    """Generate a registered source-only SymPy artifact when the case is missing."""
+    report_path = run_dir / "initial_draft.json"
+    report: dict[str, Any] = {
+        "style": "physics_sympy_initial_draft_generation",
+        "backend": "sympy",
+        "case_id": case_id,
+        "artifact_path": rel(artifact),
+        "status": (
+            "skipped_existing_artifact"
+            if artifact.exists() and not regenerate
+            else "not_run"
+        ),
+        "generated": False,
+        "regenerate_requested": regenerate,
+        "source_only": True,
+    }
+    if artifact.exists() and not regenerate:
+        report_path.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        return report
+    if all_case_ids is None or write_artifact is None:
+        report.update(
+            {
+                "status": "blocked",
+                "blocker": "backends.sympy.MathformerPhysicsSympy.pipeline artifact writer is unavailable",
+            }
+        )
+    elif case_id not in all_case_ids():
+        report.update(
+            {
+                "status": "blocked",
+                "blocker": "case is not registered in backends.sympy.MathformerPhysicsSympy.pipeline",
+                "registered_case_count": len(all_case_ids()),
+            }
+        )
+    else:
+        try:
+            writer_report = write_artifact(case_id, artifact)
+            report.update(
+                {
+                    "status": (
+                        "regenerated"
+                        if regenerate and artifact.exists()
+                        else "generated"
+                    ),
+                    "generated": True,
+                    "writer_report": writer_report,
+                }
+            )
+        except Exception as exc:
+            report.update({"status": "blocked", "blocker": str(exc)})
+    report_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+    return report
+
+
+def run_json(
+    command: list[str], output_path: Path
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Run one workflow stage and load its JSON output."""
+    completed = subprocess.run(command, cwd=REPO_ROOT, text=True, capture_output=True)
+    metadata = {
+        "command": command,
+        "returncode": completed.returncode,
+        "stdout_bytes": len(completed.stdout.encode("utf-8")),
+        "stderr": completed.stderr.strip(),
+        "output_path": rel(output_path),
+    }
+    if completed.returncode != 0:
+        return {}, metadata
+    if output_path.exists():
+        return json.loads(output_path.read_text(encoding="utf-8")), metadata
+    return json.loads(completed.stdout), metadata
+
+
+def append_runner_event(reasoning_log: Path, report: dict[str, Any]) -> None:
+    """Append the source-only runner summary to the shared reasoning log."""
+    if append_reasoning_log_entry is None:
+        return
+    case_id = str(report.get("case_id", "unspecified"))
+    append_reasoning_log_entry(
+        reasoning_log,
+        step="physics_sympy_source_only_run_complete",
+        payload={
+            "skill": "physics-sympy-goal-sample-autoformalizer",
+            "hook_id": "physics.sympy.source_only.run",
+            "goal_id": f"sympy:{case_id}:recursive_goal",
+            "case_id": case_id,
+            "stage": "physics_sympy_source_only_run_complete",
+            "status": report.get("status"),
+            "evidence": {
+                "source_only": True,
+                "stage_statuses": {
+                    name: stage.get("status")
+                    for name, stage in report.get("workflow_stage_reports", {}).items()
+                },
+                "blocker_count": len(report.get("blockers", [])),
+            },
+            "artifacts": report.get("artifacts", {}),
+            "decision": {"status": report.get("status")},
+            "risks": report.get("blockers", []),
+            "next_action": report.get("next_action", "inspect workflow-stage reports"),
+        },
+    )
+
+
+def render_summary(report: dict[str, Any]) -> str:
+    """Render a concise human-readable recursive run summary."""
+    stages = report.get("workflow_stage_reports", {})
+    lines = [
+        f"# SymPy Recursive Goal Run: {report.get('case_id')}",
+        "",
+        f"Status: `{report.get('status')}`",
+        "",
+        "## Trust Boundary",
+        "",
+        "- Source-only first pass: `true`",
+        "- Formal answer use: `forbidden`",
+        "- String-only audit anchor counts as workflow evidence: `false`",
+        "",
+        "## Semantic Preservation",
+        "",
+        f"- Source preservation: `{report.get('semantic_preservation_metadata', {}).get('source_preservation_status')}`",
+        f"- Statement: `{report.get('semantic_preservation_metadata', {}).get('statement_latex')}`",
+        f"- Source anchors: `{', '.join(report.get('semantic_preservation_metadata', {}).get('source_anchors', []))}`",
+        "",
+        "## Stage Statuses",
+        "",
+    ]
+    for key in [
+        "source_preservation",
+        "executable_trace",
+        "grounding",
+        "critics",
+        "final_reviews",
+        "recursive_frontier",
+        "formal_answer_reflection_boundary",
+    ]:
+        lines.append(f"- {key}: `{report.get('status_summary', {}).get(key)}`")
+    lines.extend(["", "## Workflow Reports", ""])
+    for name, stage in stages.items():
+        lines.append(f"- {name}: `{stage.get('status')}` ({stage.get('report_path')})")
+    if report.get("blockers"):
+        lines.extend(["", "## Blockers", ""])
+        for blocker in report["blockers"]:
+            lines.append(
+                f"- `{blocker.get('stage', 'unknown')}`: {blocker.get('code')}"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def build_run(
+    case_id: str,
+    source_record: Path | None,
+    output_root: Path,
+    *,
+    regenerate_initial_artifact: bool = False,
+) -> dict[str, Any]:
+    """Run all source-only recursive stages for one case."""
+    run_dir = output_root / case_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    reasoning_log = run_dir / "reasoning.jsonl"
+    for stale_log in (reasoning_log, run_dir / "reasoning_log.jsonl"):
+        if stale_log.exists():
+            stale_log.unlink()
+    artifact = case_path(case_id)
+    initial_draft = ensure_initial_artifact(
+        case_id,
+        artifact,
+        run_dir,
+        regenerate=regenerate_initial_artifact,
+    )
+    source_packet = load_or_synthesize_source_record(source_record, case_id)
+    source_packet_path = run_dir / "source_record.rebuilt.json"
+    source_packet_path.write_text(
+        json.dumps(source_packet, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+
+    stage_specs = {
+        "goal_plan": [
+            sys.executable,
+            str(GOAL_PLANNER),
+            "--case",
+            case_id,
+            "--run-gates",
+            "--output",
+            str(run_dir / "current_evidence.json"),
+            "--reasoning-log",
+            str(reasoning_log),
+            "--json",
+        ],
+        "design_guard_review": [
+            sys.executable,
+            str(DESIGN_GUARD),
+            "--mode",
+            "design_guard_review",
+            "--case",
+            case_id,
+            "--output",
+            str(run_dir / "design_guard_review.json"),
+            "--reasoning-log",
+            str(reasoning_log),
+            "--json",
+        ],
+        "repair_expansion_map": [
+            sys.executable,
+            str(CARTOGRAPHER),
+            "--case",
+            case_id,
+            "--review",
+            str(run_dir / "design_guard_review.json"),
+            "--output",
+            str(run_dir / "repair_expansion.json"),
+            "--reasoning-log",
+            str(reasoning_log),
+            "--json",
+        ],
+        "recursive_repair_control": [
+            sys.executable,
+            str(CONTROLLER),
+            "--expansion-map",
+            str(run_dir / "repair_expansion.json"),
+            "--output",
+            str(run_dir / "controller_decision.json"),
+            "--reasoning-log",
+            str(reasoning_log),
+            "--json",
+        ],
+        "grounded_sample_thoroughness": [
+            sys.executable,
+            str(THOROUGHNESS),
+            "--case",
+            case_id,
+            "--output",
+            str(run_dir / "thoroughness.json"),
+            "--reasoning-log",
+            str(reasoning_log),
+            "--json",
+        ],
+    }
+
+    workflow_stage_reports: dict[str, dict[str, Any]] = {}
+    command_metadata: dict[str, dict[str, Any]] = {}
+    blockers: list[dict[str, Any]] = []
+    workflow_stage_reports["initial_draft"] = {
+        "status": initial_draft.get("status"),
+        "report_path": rel(run_dir / "initial_draft.json"),
+        "style": initial_draft.get("style"),
+    }
+    if initial_draft.get("status") == "blocked":
+        blockers.append(
+            {
+                "stage": "initial_draft",
+                "code": "initial_draft_generation_blocked",
+                "severity": "high",
+                "message": initial_draft.get("blocker"),
+            }
+        )
+    for name, command in stage_specs.items():
+        output_index = command.index("--output") + 1
+        stage_output = Path(command[output_index])
+        report, metadata = run_json(command, stage_output)
+        workflow_stage_reports[name] = {
+            "status": report.get("status")
+            or report.get("goal_status")
+            or "command_failed",
+            "report_path": rel(stage_output),
+            "style": report.get("style"),
+        }
+        command_metadata[name] = metadata
+        if metadata["returncode"] != 0:
+            blockers.append(
+                {
+                    "stage": name,
+                    "code": "stage_command_failed",
+                    "returncode": metadata["returncode"],
+                    "stderr": metadata["stderr"],
+                }
+            )
+        for finding in report.get("findings", []):
+            if isinstance(finding, dict) and finding.get("severity") in {
+                "high",
+                "critical",
+                "error",
+            }:
+                blockers.append({"stage": name, **finding})
+
+    thoroughness_status = workflow_stage_reports.get(
+        "grounded_sample_thoroughness", {}
+    ).get("status")
+    _current_evidence = (
+        json.loads((run_dir / "current_evidence.json").read_text(encoding="utf-8"))
+        if (run_dir / "current_evidence.json").exists()
+        else {}
+    )
+    design_guard = (
+        json.loads((run_dir / "design_guard_review.json").read_text(encoding="utf-8"))
+        if (run_dir / "design_guard_review.json").exists()
+        else {}
+    )
+    repair_expansion = (
+        json.loads((run_dir / "repair_expansion.json").read_text(encoding="utf-8"))
+        if (run_dir / "repair_expansion.json").exists()
+        else {}
+    )
+    controller = (
+        json.loads((run_dir / "controller_decision.json").read_text(encoding="utf-8"))
+        if (run_dir / "controller_decision.json").exists()
+        else {}
+    )
+    thoroughness = (
+        json.loads((run_dir / "thoroughness.json").read_text(encoding="utf-8"))
+        if (run_dir / "thoroughness.json").exists()
+        else {}
+    )
+    checks = thoroughness.get("checks", {}) if isinstance(thoroughness, dict) else {}
+    status = (
+        "complete_sympy_physics_derivation"
+        if thoroughness_status == "complete_sympy_physics_derivation" and not blockers
+        else "blocked" if blockers else "derivation_partial"
+    )
+    report = {
+        "style": "physics_sympy_source_only_recursive_goal_run",
+        "backend": "sympy",
+        "case_id": case_id,
+        "status": status,
+        "run_dir": rel(run_dir),
+        "source_only_trust_boundary": {
+            "first_pass_source_only": True,
+            "formal_answer_use": "forbidden; this runner does not read dataset formal_answer",
+            "string_only_audit_anchor_is_not_workflow_evidence": True,
+        },
+        "semantic_preservation_metadata": {
+            "statement_nl": source_packet.get("statement_nl"),
+            "statement_latex": source_packet.get("statement_latex"),
+            "source_anchors": source_packet.get("source_anchors", []),
+            "commentary_header_present": bool(source_packet.get("commentary_header")),
+            "source_preservation_status": (
+                "pass"
+                if checks.get("source_commentary", {}).get("passed")
+                else "unknown"
+            ),
+        },
+        "status_summary": {
+            "source_preservation": (
+                "pass"
+                if checks.get("source_commentary", {}).get("passed")
+                else "blocked"
+            ),
+            "executable_trace": (
+                "pass" if checks.get("trace_realness", {}).get("passed") else "blocked"
+            ),
+            "grounding": (
+                "pass"
+                if checks.get("library_grounding_high", {}).get("passed")
+                else "blocked"
+            ),
+            "critics": (
+                "pass"
+                if design_guard.get("high_severity_finding_count") == 0
+                else "blocked"
+            ),
+            "final_reviews": (
+                "pass" if checks.get("final_reviews", {}).get("passed") else "blocked"
+            ),
+            "recursive_frontier": controller.get(
+                "status", repair_expansion.get("status", "unknown")
+            ),
+            "formal_answer_reflection_boundary": "source_only_not_inspected",
+        },
+        "workflow_stage_reports": workflow_stage_reports,
+        "command_metadata": command_metadata,
+        "blockers": blockers,
+        "artifacts": {
+            "source_record": rel(source_packet_path),
+            "reasoning_log": rel(reasoning_log),
+            "run_dir": rel(run_dir),
+        },
+        "next_action": (
+            "complete"
+            if status == "complete_sympy_physics_derivation"
+            else "repair blockers through local SymPy surfaces"
+        ),
+    }
+    report_path = run_dir / "recursive_goal_run.json"
+    report["artifacts"]["run_report"] = rel(report_path)
+    summary_path = run_dir / "summary.md"
+    report["artifacts"]["summary"] = rel(summary_path)
+    report_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+    summary_path.write_text(render_summary(report), encoding="utf-8")
+    append_runner_event(reasoning_log, report)
+    alias_pairs = [
+        ("current_evidence.json", "goal_plan.json"),
+        ("repair_expansion.json", "repair_expansion_map.json"),
+        ("controller_decision.json", "recursive_repair_control.json"),
+        ("thoroughness.json", "grounded_sample_thoroughness.json"),
+        ("reasoning.jsonl", "reasoning_log.jsonl"),
+    ]
+    for source_name, alias_name in alias_pairs:
+        source_path = run_dir / source_name
+        if source_path.exists():
+            shutil.copyfile(source_path, run_dir / alias_name)
+    return report
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-record", type=Path)
+    parser.add_argument("--case")
+    parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
+    parser.add_argument("--regenerate-initial-artifact", action="store_true")
+    parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the source-only recursive case workflow."""
+    args = parse_args(argv)
+    case_id = normalize_case(args.case, args.source_record)
+    report = build_run(
+        case_id,
+        args.source_record,
+        args.output_root,
+        regenerate_initial_artifact=args.regenerate_initial_artifact,
+    )
+    print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
+    return 0 if report["status"] != "blocked" else 3
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

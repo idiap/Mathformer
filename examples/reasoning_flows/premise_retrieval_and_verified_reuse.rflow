@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# Canonical epistemic projection; not an execution trace.
+erfl 0.3
+@KB kb0 connect(file("MathformerKB"))
+reasoning premise_retrieval_and_verified_reuse {
+  goal "produce a verified reuse candidate or an explicit gap" -> reuse_status
+  steps
+    (
+      s:S[request::Context->query::Model<KnowledgeQuery>]
+      & o:O[
+        kb0,
+        kb_version::Constraint
+        -> kb_snapshot::Bundle<KnowledgeBaseSnapshot>,
+        kb_manifest::Evidence<SnapshotManifest>
+      ]
+    ) -retrieve> ...
+    q:Q[
+      query::Model<KnowledgeQuery>,
+      kb_snapshot::Bundle<KnowledgeBaseSnapshot>,
+      kb_manifest::Evidence<SnapshotManifest>
+      -> candidates::Bundle<RetrievalCandidate>,
+      retrieval_receipt::Evidence<RetrievalReceipt>
+    ] -ground> ...
+    g:G[
+      candidates::Bundle<RetrievalCandidate>,
+      query::Model<KnowledgeQuery>
+      -> alignment::Evidence<GroundingLink>
+    ] -assess> ...
+    r:R[
+      candidates::Bundle<RetrievalCandidate>,
+      alignment::Evidence<GroundingLink>
+      -> assessment::Assessment
+    ] -calibrate> ...
+    e:E[
+      candidates::Bundle<RetrievalCandidate>,
+      assessment::Assessment,
+      kb_manifest::Evidence<SnapshotManifest>,
+      retrieval_receipt::Evidence<RetrievalReceipt>
+      -> reuse_status::Decision
+    ]
+  o <-query- kb0
+  on e.reuse_candidate => accept
+  on e.explicit_gap => stop
+  on e.stale_knowledge_snapshot => stop
+  on e.knowledge_resource_unavailable => stop
+}

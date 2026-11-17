@@ -1,0 +1,426 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from preformalization_readiness_loop import (
+    BindingCheck,
+    CompletenessCheck,
+    DraftingBasis,
+    DraftingDisposition,
+    ExpandedTheory,
+    ExpansionBasis,
+    ExpansionNeeds,
+    ExpansionSupport,
+    LeanDraftingReadinessDisposition,
+    PaperEvidence,
+    PaperFormalizationSourceSelection,
+    PreformalizationReadinessDependencyResolveArtifact,
+    PreformalizationReadinessIntakePaperLayoutExtractArtifact,
+    PreformalizationReadinessIntakePaperTheoryLocalizeArtifact,
+    PreformalizationReadinessIntakeSourceUnitInventoryArtifact,
+    PreformalizationReadinessPreformalizationExpandArtifact,
+    PreformalizationReadinessPreformalizationExpansionDifficultyArtifact,
+    PreformalizationReadinessPreformalizationExpansionSupportArtifact,
+    PreformalizationReadinessPreformalizationExpansionWebSupportArtifact,
+    PreformalizationReadinessPreformalizationLineTranslationPacketArtifact,
+    PreformalizationReadinessPreformalizationPaperTheoryExpandArtifact,
+    PreformalizationReadinessPreformalizationReviewBindingsArtifact,
+    PreformalizationReadinessPreformalizationReviewCompletenessArtifact,
+    PreformalizationReadinessPreformalizationReviewSuiteArtifact,
+    ReadinessCase,
+    SourceAlignmentCase,
+    TheoryMap,
+)
+from material_relations import FormalizesPreformalizationPaperTheoryExpandCertificate
+from material_relations import FormalizesPreformalizationExpansionSupportCertificate
+from material_relations import FormalizesPreformalizationExpansionWebSupportCertificate
+from material_relations import FormalizesPreformalizationExpandCertificate
+from material_relations import TestsPreformalizationReviewSuiteCertificate
+from material_relations import TestsPreformalizationReviewCompletenessCertificate
+from material_relations import TestsPreformalizationReviewBindingsCertificate
+from reasoning import PreparePaperTheoryForLean
+from relations import AlignSourceCertificate
+from relations import CalibrateReadinessCertificate
+from relations import ConstructExpansionCertificate
+from relations import DecomposeTheoryCertificate
+from relations import ExposePrerequisitesCertificate
+from relations import GroundSupportCertificate
+from relations import TestBindingsCertificate
+from relations import TestCompletenessCertificate
+from generated.preformalization_paper_theory_expand_skill import paper_theory_autoformalization_orchestrator_skill as preformalization_paper_theory_expand_skill_binding
+from generated.preformalization_expansion_support_skill import proof_expansion_support_orchestrator_skill as preformalization_expansion_support_skill_binding
+from generated.preformalization_expansion_web_support_skill import proof_expansion_web_researcher_skill as preformalization_expansion_web_support_skill_binding
+from generated.preformalization_expand_skill import latex_prerequisite_expander_skill as preformalization_expand_skill_binding
+from generated.preformalization_review_suite_skill import latex_expansion_review_orchestrator_skill as preformalization_review_suite_skill_binding
+from generated.preformalization_review_completeness_skill import latex_expansion_completeness_reviewer_skill as preformalization_review_completeness_skill_binding
+from generated.preformalization_review_bindings_skill import latex_expansion_binding_reviewer_skill as preformalization_review_bindings_skill_binding
+from generated.reasoning_paper_evidence_1_skill import paper_docling_layout_extractor_skill as paper_evidence_reasoning_skill_1
+from generated.reasoning_theory_map_1_skill import paper_main_theory_localizer_skill as theory_map_reasoning_skill_1
+from generated.reasoning_theory_map_2_skill import source_formalizable_unit_extractor_skill as theory_map_reasoning_skill_2
+from generated.reasoning_expansion_needs_1_skill import paper_theory_autoformalization_orchestrator_skill as expansion_needs_reasoning_skill_1
+from generated.reasoning_expansion_needs_2_skill import proof_expansion_support_orchestrator_skill as expansion_needs_reasoning_skill_2
+from generated.reasoning_expansion_needs_3_skill import proof_expansion_difficulty_estimator_skill as expansion_needs_reasoning_skill_3
+from generated.reasoning_expansion_support_1_skill import proof_expansion_web_researcher_skill as expansion_support_reasoning_skill_1
+from generated.reasoning_expanded_theory_1_skill import latex_prerequisite_expander_skill as expanded_theory_reasoning_skill_1
+from generated.reasoning_expanded_theory_2_skill import autoformalization_workflow_orchestrator_skill as expanded_theory_reasoning_skill_2
+from generated.reasoning_completeness_check_1_skill import latex_expansion_completeness_reviewer_skill as completeness_check_reasoning_skill_1
+from generated.reasoning_binding_check_1_skill import latex_expansion_binding_reviewer_skill as binding_check_reasoning_skill_1
+from generated.reasoning_drafting_basis_1_skill import source_line_translation_packet_builder_skill as drafting_basis_reasoning_skill_1
+from generated.reasoning_drafting_status_1_skill import latex_expansion_review_orchestrator_skill as drafting_status_reasoning_skill_1
+from generated.reasoning_drafting_status_2_skill import result_existence_precheck_orchestrator_skill as drafting_status_reasoning_skill_2
+
+def theory_map_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> DecomposeTheoryCertificate[SourceValue, TargetValue]:
+    return DecomposeTheoryCertificate(source = source, target = target)
+
+def expansion_needs_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ExposePrerequisitesCertificate[SourceValue, TargetValue]:
+    return ExposePrerequisitesCertificate(source = source, target = target)
+
+def expansion_support_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> GroundSupportCertificate[SourceValue, TargetValue]:
+    return GroundSupportCertificate(source = source, target = target)
+
+def expanded_theory_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> ConstructExpansionCertificate[SourceValue, TargetValue]:
+    return ConstructExpansionCertificate(source = source, target = target)
+
+def completeness_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestCompletenessCertificate[SourceValue, TargetValue]:
+    return TestCompletenessCertificate(source = source, target = target)
+
+def binding_check_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> TestBindingsCertificate[SourceValue, TargetValue]:
+    return TestBindingsCertificate(source = source, target = target)
+
+def drafting_basis_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> AlignSourceCertificate[SourceValue, TargetValue]:
+    return AlignSourceCertificate(source = source, target = target)
+
+def drafting_status_reasoning_relation_builder[SourceValue, TargetValue](
+    source: SourceValue,
+    target: TargetValue,
+) -> CalibrateReadinessCertificate[SourceValue, TargetValue]:
+    return CalibrateReadinessCertificate(source = source, target = target)
+
+# Generative interpretation ExtractPaperLayout uses skill context selected from material steps: intake_paper_layout_extract.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: paper-docling-layout-extractor.
+agent paper_evidence_reasoning_agent(
+    task: PaperFormalizationSourceSelection,
+) -> Result[Generated[PaperEvidence], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PaperFormalizationSourceSelection] = [paper_evidence_reasoning_skill_1]
+
+# Generative interpretation LocalizePaperTheory uses skill context selected from material steps: intake_paper_theory_localize, intake_source_unit_inventory.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: paper-main-theory-localizer, source-formalizable-unit-extractor.
+agent theory_map_reasoning_agent(
+    task: PaperEvidence,
+) -> Result[Generated[TheoryMap], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PaperEvidence] = [theory_map_reasoning_skill_1, theory_map_reasoning_skill_2]
+
+# Generative interpretation PlanTheoryExpansion uses skill context selected from material steps: preformalization_paper_theory_expand, preformalization_expansion_support, preformalization_expansion_difficulty.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: paper-theory-autoformalization-orchestrator, proof-expansion-support-orchestrator, proof-expansion-difficulty-estimator.
+agent expansion_needs_reasoning_agent(
+    task: TheoryMap,
+) -> Result[Generated[ExpansionNeeds], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[TheoryMap] = [expansion_needs_reasoning_skill_1, expansion_needs_reasoning_skill_2, expansion_needs_reasoning_skill_3]
+
+# Generative interpretation ResearchProofDependencies uses skill context selected from material steps: preformalization_expansion_web_support.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: proof-expansion-web-researcher.
+agent expansion_support_reasoning_agent(
+    task: ExpansionNeeds,
+) -> Result[Generated[ExpansionSupport], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ExpansionNeeds] = [expansion_support_reasoning_skill_1]
+
+# Generative interpretation ExpandPaperTheory uses skill context selected from material steps: preformalization_expand, dependency_resolve.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: latex-prerequisite-expander, autoformalization-workflow-orchestrator.
+agent expanded_theory_reasoning_agent(
+    task: ExpansionBasis,
+) -> Result[Generated[ExpandedTheory], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ExpansionBasis] = [expanded_theory_reasoning_skill_1, expanded_theory_reasoning_skill_2]
+
+# Generative interpretation ReviewExpansionCompleteness uses skill context selected from material steps: preformalization_review_completeness.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: latex-expansion-completeness-reviewer.
+agent completeness_check_reasoning_agent(
+    task: ExpandedTheory,
+) -> Result[Generated[CompletenessCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ExpandedTheory] = [completeness_check_reasoning_skill_1]
+
+# Generative interpretation ReviewExpansionBindings uses skill context selected from material steps: preformalization_review_bindings.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: latex-expansion-binding-reviewer.
+agent binding_check_reasoning_agent(
+    task: ExpandedTheory,
+) -> Result[Generated[BindingCheck], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ExpandedTheory] = [binding_check_reasoning_skill_1]
+
+# Generative interpretation BuildLeanDraftPacket uses skill context selected from material steps: preformalization_line_translation_packet.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: source-line-translation-packet-builder.
+agent drafting_basis_reasoning_agent(
+    task: SourceAlignmentCase,
+) -> Result[Generated[DraftingBasis], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[SourceAlignmentCase] = [drafting_basis_reasoning_skill_1]
+
+# Generative interpretation DecideReuseOrDraft uses skill context selected from material steps: preformalization_review_suite, preformalization_result_existence_precheck.
+# The detailed material steps execute only through material_main.prism; this agent does not claim their evidence.
+# Reviewed skill composition: latex-expansion-review-orchestrator, result-existence-precheck-orchestrator.
+agent drafting_status_reasoning_agent(
+    task: ReadinessCase,
+) -> Result[Generated[DraftingDisposition], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[ReadinessCase] = [drafting_status_reasoning_skill_1, drafting_status_reasoning_skill_2]
+
+converted_reasoning = PreparePaperTheoryForLean(
+    paper_evidence = paper_evidence_reasoning_agent,
+    theory_map = theory_map_reasoning_agent,
+    theory_map_by = theory_map_reasoning_relation_builder,
+    expansion_needs = expansion_needs_reasoning_agent,
+    expansion_needs_by = expansion_needs_reasoning_relation_builder,
+    expansion_support = expansion_support_reasoning_agent,
+    expansion_support_by = expansion_support_reasoning_relation_builder,
+    expanded_theory = expanded_theory_reasoning_agent,
+    expanded_theory_by = expanded_theory_reasoning_relation_builder,
+    completeness_check = completeness_check_reasoning_agent,
+    completeness_check_by = completeness_check_reasoning_relation_builder,
+    binding_check = binding_check_reasoning_agent,
+    binding_check_by = binding_check_reasoning_relation_builder,
+    drafting_basis = drafting_basis_reasoning_agent,
+    drafting_basis_by = drafting_basis_reasoning_relation_builder,
+    drafting_status = drafting_status_reasoning_agent,
+    drafting_status_by = drafting_status_reasoning_relation_builder,
+)
+
+# Material binding descriptor for `paper-docling-layout-extractor`; this does not execute the linked native resource.
+def intake_paper_layout_extract_material_binding(source: PaperFormalizationSourceSelection) -> Computed[PreformalizationReadinessIntakePaperLayoutExtractArtifact]:
+    artifact = PreformalizationReadinessIntakePaperLayoutExtractArtifact(
+        subject = "typed material binding for intake_paper_layout_extract",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_references = [],
+        selection_basis = "canonical Mathformer hook contract",
+        exclusions = [],
+    )
+    return compute(artifact, procedure = "linked material binding: intake_paper_layout_extract")
+
+# Material binding descriptor for `paper-main-theory-localizer`; this does not execute the linked native resource.
+def intake_paper_theory_localize_material_binding(source: PreformalizationReadinessIntakePaperLayoutExtractArtifact) -> Computed[PreformalizationReadinessIntakePaperTheoryLocalizeArtifact]:
+    artifact = PreformalizationReadinessIntakePaperTheoryLocalizeArtifact(
+        subject = "typed material binding for intake_paper_theory_localize",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation intake_paper_theory_localize",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: intake_paper_theory_localize")
+
+# Material binding descriptor for `source-formalizable-unit-extractor`; this does not execute the linked native resource.
+def intake_source_unit_inventory_material_binding(source: PreformalizationReadinessIntakePaperTheoryLocalizeArtifact) -> Computed[PreformalizationReadinessIntakeSourceUnitInventoryArtifact]:
+    artifact = PreformalizationReadinessIntakeSourceUnitInventoryArtifact(
+        subject = "typed material binding for intake_source_unit_inventory",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation intake_source_unit_inventory",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: intake_source_unit_inventory")
+
+# Epistemic occurrence owned by `paper-theory-autoformalization-orchestrator`; output assurance remains Generated.
+agent preformalization_paper_theory_expand_agent(
+    task: PreformalizationReadinessIntakeSourceUnitInventoryArtifact,
+) -> Result[Generated[PreformalizationReadinessPreformalizationPaperTheoryExpandArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PreformalizationReadinessIntakeSourceUnitInventoryArtifact] = [preformalization_paper_theory_expand_skill_binding]
+
+def preformalization_paper_theory_expand_relation_builder(
+    source: PreformalizationReadinessIntakeSourceUnitInventoryArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationPaperTheoryExpandArtifact],
+) -> FormalizesPreformalizationPaperTheoryExpandCertificate:
+    return FormalizesPreformalizationPaperTheoryExpandCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `proof-expansion-support-orchestrator`; output assurance remains Generated.
+agent preformalization_expansion_support_agent(
+    task: PreformalizationReadinessPreformalizationPaperTheoryExpandArtifact,
+) -> Result[Generated[PreformalizationReadinessPreformalizationExpansionSupportArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PreformalizationReadinessPreformalizationPaperTheoryExpandArtifact] = [preformalization_expansion_support_skill_binding]
+
+def preformalization_expansion_support_relation_builder(
+    source: PreformalizationReadinessPreformalizationPaperTheoryExpandArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationExpansionSupportArtifact],
+) -> FormalizesPreformalizationExpansionSupportCertificate:
+    return FormalizesPreformalizationExpansionSupportCertificate(source = source, target = target)
+
+# Material binding descriptor for `proof-expansion-difficulty-estimator`; this does not execute the linked native resource.
+def preformalization_expansion_difficulty_material_binding(source: PreformalizationReadinessPreformalizationExpansionSupportArtifact) -> Computed[PreformalizationReadinessPreformalizationExpansionDifficultyArtifact]:
+    artifact = PreformalizationReadinessPreformalizationExpansionDifficultyArtifact(
+        subject = "typed material binding for preformalization_expansion_difficulty",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_expansion_difficulty")
+
+# Epistemic occurrence owned by `proof-expansion-web-researcher`; output assurance remains Generated.
+agent preformalization_expansion_web_support_agent(
+    task: PreformalizationReadinessPreformalizationExpansionDifficultyArtifact,
+) -> Result[Generated[PreformalizationReadinessPreformalizationExpansionWebSupportArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PreformalizationReadinessPreformalizationExpansionDifficultyArtifact] = [preformalization_expansion_web_support_skill_binding]
+
+def preformalization_expansion_web_support_relation_builder(
+    source: PreformalizationReadinessPreformalizationExpansionDifficultyArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationExpansionWebSupportArtifact],
+) -> FormalizesPreformalizationExpansionWebSupportCertificate:
+    return FormalizesPreformalizationExpansionWebSupportCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-prerequisite-expander`; output assurance remains Generated.
+agent preformalization_expand_agent(
+    task: PreformalizationReadinessPreformalizationExpansionWebSupportArtifact,
+) -> Result[Generated[PreformalizationReadinessPreformalizationExpandArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PreformalizationReadinessPreformalizationExpansionWebSupportArtifact] = [preformalization_expand_skill_binding]
+
+def preformalization_expand_relation_builder(
+    source: PreformalizationReadinessPreformalizationExpansionWebSupportArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationExpandArtifact],
+) -> FormalizesPreformalizationExpandCertificate:
+    return FormalizesPreformalizationExpandCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-expansion-review-orchestrator`; output assurance remains Generated.
+agent preformalization_review_suite_agent(
+    task: PreformalizationReadinessPreformalizationExpandArtifact,
+) -> Result[Generated[PreformalizationReadinessPreformalizationReviewSuiteArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PreformalizationReadinessPreformalizationExpandArtifact] = [preformalization_review_suite_skill_binding]
+
+def preformalization_review_suite_relation_builder(
+    source: PreformalizationReadinessPreformalizationExpandArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationReviewSuiteArtifact],
+) -> TestsPreformalizationReviewSuiteCertificate:
+    return TestsPreformalizationReviewSuiteCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-expansion-completeness-reviewer`; output assurance remains Generated.
+agent preformalization_review_completeness_agent(
+    task: PreformalizationReadinessPreformalizationReviewSuiteArtifact,
+) -> Result[Generated[PreformalizationReadinessPreformalizationReviewCompletenessArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PreformalizationReadinessPreformalizationReviewSuiteArtifact] = [preformalization_review_completeness_skill_binding]
+
+def preformalization_review_completeness_relation_builder(
+    source: PreformalizationReadinessPreformalizationReviewSuiteArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationReviewCompletenessArtifact],
+) -> TestsPreformalizationReviewCompletenessCertificate:
+    return TestsPreformalizationReviewCompletenessCertificate(source = source, target = target)
+
+# Epistemic occurrence owned by `latex-expansion-binding-reviewer`; output assurance remains Generated.
+agent preformalization_review_bindings_agent(
+    task: PreformalizationReadinessPreformalizationReviewCompletenessArtifact,
+) -> Result[Generated[PreformalizationReadinessPreformalizationReviewBindingsArtifact], ModelFailure]
+    ! {AI.Generate, Context.Disclose}:
+    skills: Skills[PreformalizationReadinessPreformalizationReviewCompletenessArtifact] = [preformalization_review_bindings_skill_binding]
+
+def preformalization_review_bindings_relation_builder(
+    source: PreformalizationReadinessPreformalizationReviewCompletenessArtifact,
+    target: Generated[PreformalizationReadinessPreformalizationReviewBindingsArtifact],
+) -> TestsPreformalizationReviewBindingsCertificate:
+    return TestsPreformalizationReviewBindingsCertificate(source = source, target = target)
+
+# Material binding descriptor for `autoformalization-workflow-orchestrator`; this does not execute the linked native resource.
+def dependency_resolve_material_binding(source: PreformalizationReadinessPreformalizationReviewBindingsArtifact) -> Computed[PreformalizationReadinessDependencyResolveArtifact]:
+    artifact = PreformalizationReadinessDependencyResolveArtifact(
+        subject = "typed material binding for dependency_resolve",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        operation_summary = "linked material operation dependency_resolve",
+        evidence_references = [],
+    )
+    return compute(artifact, procedure = "linked material binding: dependency_resolve")
+
+# Material binding descriptor for `source-line-translation-packet-builder`; this does not execute the linked native resource.
+def preformalization_line_translation_packet_material_binding(source: PreformalizationReadinessDependencyResolveArtifact) -> Computed[PreformalizationReadinessPreformalizationLineTranslationPacketArtifact]:
+    artifact = PreformalizationReadinessPreformalizationLineTranslationPacketArtifact(
+        subject = "typed material binding for preformalization_line_translation_packet",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        candidate_content = "not produced by structural fixture",
+        unresolved_obligations = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_line_translation_packet")
+
+# Material binding descriptor for `result-existence-precheck-orchestrator`; this does not execute the linked native resource.
+def preformalization_result_existence_precheck_material_binding(source: PreformalizationReadinessPreformalizationLineTranslationPacketArtifact) -> Computed[LeanDraftingReadinessDisposition]:
+    artifact = LeanDraftingReadinessDisposition(
+        subject = "typed material binding for preformalization_result_existence_precheck",
+        source_anchors = ["skills/SKILL_HOOKS.yaml"],
+        declared_artifacts = ["see hook-coverage.json"],
+        gate_disposition = "not_executed_by_structural_fixture",
+        limitations = ["native implementation not executed by the structural fixture"],
+        criteria = [],
+        findings = [],
+        recommended_repairs = [],
+    )
+    return compute(artifact, procedure = "linked material binding: preformalization_result_existence_precheck")
+
+# source-unit inventory, expansion support, LaTeX readiness review, and duplicate-result precheck before drafting.
+workflow PreformalizationReadinessLoop(
+    workflow_source: PaperFormalizationSourceSelection,
+) -> Computed[LeanDraftingReadinessDisposition]
+    fails ModelFailure
+    ! {AI.Generate, Context.Disclose}:
+    sequence:
+        [intake_paper_layout_extract: intake_paper_layout_extract_material_binding(workflow_source)]
+        [intake_paper_theory_localize: intake_paper_theory_localize_material_binding(intake_paper_layout_extract.value)]
+        [intake_source_unit_inventory: intake_source_unit_inventory_material_binding(intake_paper_theory_localize.value)]
+        [preformalization_paper_theory_expand: preformalization_paper_theory_expand_agent(intake_source_unit_inventory.value)]
+        [preformalization_expansion_support: preformalization_expansion_support_agent(preformalization_paper_theory_expand.value)]
+        [preformalization_expansion_difficulty: preformalization_expansion_difficulty_material_binding(preformalization_expansion_support.value)]
+        [preformalization_expansion_web_support: preformalization_expansion_web_support_agent(preformalization_expansion_difficulty.value)]
+        [preformalization_expand: preformalization_expand_agent(preformalization_expansion_web_support.value)]
+        [preformalization_review_suite: preformalization_review_suite_agent(preformalization_expand.value)]
+        [preformalization_review_completeness: preformalization_review_completeness_agent(preformalization_review_suite.value)]
+        [preformalization_review_bindings: preformalization_review_bindings_agent(preformalization_review_completeness.value)]
+        [dependency_resolve: dependency_resolve_material_binding(preformalization_review_bindings.value)]
+        [preformalization_line_translation_packet: preformalization_line_translation_packet_material_binding(dependency_resolve.value)]
+        [preformalization_result_existence_precheck: preformalization_result_existence_precheck_material_binding(preformalization_line_translation_packet.value)]
+    return preformalization_result_existence_precheck

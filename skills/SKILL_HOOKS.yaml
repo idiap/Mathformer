@@ -1,0 +1,3687 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# File Documentation
+#
+# Motivation:
+#   Make agent behavior explicit, scoped, and reproducible for specialized Mathformer tasks.
+#
+# Intent:
+#   Tell coding agents what context to load, what invariants to preserve, and how to validate their work.
+#
+# Function:
+#   Contains skill instructions, prompts, references, and scripts used by Codex-style workflows.
+#
+# Maintenance Notes:
+#   Keep this header synchronized with major responsibility changes, and prefer updating tests or examples when behavior changes.
+
+version: 1
+description: >
+  Systematic hook contract for applying the split Mathformer skills. The
+  runtime remains shared, but each workflow phase has one canonical skill owner,
+  expected reasoning-log steps, and gate conditions.
+
+  runtime_contract:
+    orchestrator_skill: autoformalization-workflow-orchestrator
+    reasoning_log_required_payload_fields:
+      - skill
+    skill_application_required_payload_sections:
+      - intent
+      - inputs
+      - artifacts
+      - evidence
+      - decision
+      - risks
+      - next_action
+      - human_summary
+    generic_skill_application_steps:
+      - skill_application_start
+      - skill_application_context_loaded
+      - skill_application_input_normalized
+      - skill_application_action_taken
+      - skill_application_evidence_recorded
+      - skill_application_gate_evaluated
+      - skill_application_complete
+      - skill_application_error
+    recommended_payload_fields:
+      - hook_id
+      - duration_ms
+      - agent_usage
+      - convergence_criteria
+  shared_runtime_scripts:
+      - skills/control/workflow-contract-validator/scripts/validate_skill_hooks.py
+      - skills/control/workflow-contract-validator/scripts/validate_workflow.py
+      - skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+      - scripts/workflow_catalog.py
+      - skills/control/skill-hook-coverage-maximizer/scripts/audit_skill_hook_coverage.py
+      - skills/control/reasoning-log-schema-guardian/scripts/reasoning_log.py
+      - skills/control/reasoning-log-schema-guardian/scripts/validate_reasoning_log.py
+      - skills/control/reasoning-log-schema-guardian/scripts/render_reasoning_log.py
+      - skills/control/reasoning-log-schema-guardian/scripts/render_reasoning_log_html.py
+      - skills/control/reasoning-log-schema-guardian/scripts/run_with_reasoning_log.py
+      - skills/control/reasoning-log-schema-guardian/scripts/audit_skill_reasoning_log_coverage.py
+      - skills/control/reasoning-log-schema-guardian/scripts/audit_reasoning_log_quality.py
+      - skills/control/reasoning-log-schema-guardian/scripts/summarize_reasoning_log.py
+      - skills/control/reasoning-log-schema-guardian/scripts/index_reasoning_logs.py
+      - skills/control/reasoning-log-schema-guardian/scripts/validate_reasoning_log_index.py
+      - skills/control/reasoning-log-schema-guardian/scripts/self_test_reasoning_logs.py
+      - skills/control/gate-policy-controller/scripts/gate_policy.py
+      - skills/control/mathformer-workflow-router/scripts/route_mathformer_workflow.py
+      - skills/control/reasoning-flow-language/scripts/validate_reasoning_flow.py
+      - skills/control/reasoning-flow-language/scripts/render_all_reasoning_flows.py
+    - skills/autoformalization/autoformalization-reflective-refinement-loop/scripts/observe_autoformalization_process.py
+    - skills/control/skill-test-program-orchestrator/scripts/inventory_skills.py
+    - skills/control/skill-test-program-orchestrator/scripts/run_deterministic_skill_tests.py
+    - skills/control/skill-test-program-orchestrator/scripts/run_content_skill_codex_exec_tests.py
+    - skills/control/skill-test-program-orchestrator/scripts/generate_skill_test_todos.py
+    - skills/paper/paper-docling-layout-extractor/scripts/extract_paper_layout.py
+    - skills/paper/paper-main-theory-localizer/scripts/localize_paper_theory.py
+    - skills/paper/paper-theory-autoformalization-orchestrator/scripts/build_paper_theory_plan.py
+    - skills/latex-textbook/latex-archive-theory-extractor/scripts/extract_latex_theory.py
+    - skills/latex-textbook/textbook-theory-tex-organizer/scripts/organize_theory_tex.py
+    - skills/latex-textbook/textbook-chapter-autoformalization-orchestrator/scripts/orchestrate_textbook_chapters.py
+    - skills/latex-textbook/textbook-autoformalization-batch-orchestrator/scripts/build_textbook_autoformalization_batch.py
+    - skills/latex-textbook/textbook-autoformalization-batch-orchestrator/scripts/run_textbook_autoformalization_batch.py
+    - skills/autoformalization/source-formalizable-unit-extractor/scripts/extract_autoformalizable_units.py
+    - skills/autoformalization/source-line-translation-packet-builder/scripts/build_line_translation_packet.py
+    - skills/autoformalization/source-formalization-drift-guard/scripts/validate_source_formalization_alignment.py
+    - skills/lean/lean-line-annotation/scripts/validate_lean_line_comments.py
+    - skills/autoformalization/autoformalization-result-realness-verifier/scripts/verify_artifact_realness.py
+    - skills/autoformalization/autoformalization-agentc/scripts/agentc.py
+    - skills/autoformalization/proof-expansion-difficulty-estimator/scripts/estimate_proof_expansion_difficulty.py
+    - skills/mathlib/informal-proof-mathlib-concepts/scripts/map_mathlib_concepts.py
+    - skills/mathlib/mathlib-hierarchy-navigator/scripts/navigate_mathlib_hierarchy.py
+    - skills/mathlib/mathlib-import-set-builder/scripts/build_import_set.py
+    - skills/lean/lean-import-context-verifier/scripts/verify_import_context.py
+    - skills/mathlib/mathlib-import-minimizer/scripts/minimize_imports.py
+    - skills/mathlib/mathlib-compatibility-auditor/scripts/check_mathlib_compat.py
+    - skills/mathlib/mathlib-concept-ontology-manager/scripts/validate_concept_ontology.py
+    - skills/mathlib/mathlib-index-builder/scripts/build_mathlib_index.py
+    - skills/mathlib/mathlib-term-expansion-annotator/scripts/annotate_mathlib_terms.py
+    - skills/mathlib/mathlib-navigation-state-planner/scripts/plan_mathlib_navigation_state.py
+    - skills/mathlib/mathlib-result-existence-checker/scripts/check_result_existence.py
+    - skills/mathlib/mathlib-web-search-strategist/scripts/plan_mathlib_web_search.py
+    - skills/mathlib/mathlib-web-evidence-validator/scripts/validate_mathlib_web_evidence.py
+    - skills/isabelle/isarmathlib-grounding-navigator/scripts/search_isarmathlib.py
+    - skills/isabelle/isabelle-autoformalization-drafter/scripts/draft_isabelle_wiki_case.py
+    - skills/isabelle/isabelle-execution-runner/scripts/check_isabelle_theory.py
+    - skills/rocq/rocq-autoformalization-drafter/scripts/draft_rocq_wiki_case.py
+    - skills/rocq/rocq-execution-runner/scripts/check_rocq_file.py
+    - skills/physics-isabelle/physics-isabelle-derivation-drafter/scripts/draft_physics_isabelle_derivation.py
+    - skills/physics-isabelle/physics-isabelle-workflow-orchestrator/scripts/build_physics_isabelle_workflow_plan.py
+    - skills/physics-isabelle/physics-isabelle-workflow-orchestrator/scripts/build_physics_isabelle_background_plan.py
+    - skills/physics-isabelle/physics-isabelle-type-system-builder/scripts/build_physics_isabelle_type_system.py
+    - skills/physics-isabelle/physics-isabelle-assumption-context-encoder/scripts/encode_physics_isabelle_assumptions.py
+    - skills/physics-isabelle/physics-isabelle-final-hypothesis-reviewer/scripts/review_physics_isabelle_final_hypotheses.py
+    - skills/isabelle/mathematical-isabelle-final-hypothesis-reviewer/scripts/review_mathematical_isabelle_final_hypotheses.py
+    - skills/physics-isabelle/physics-isabelle-consistency-report-orchestrator/scripts/run_physics_isabelle_consistency_report.py
+    - skills/sympy/sympy-dependency-prober/scripts/probe_sympy_dependencies.py
+    - skills/sympy/sympy-api-docs-indexer/scripts/index_sympy_api.py
+    - skills/sympy/sympy-expression-parser/scripts/parse_sympy_expressions.py
+    - skills/sympy/sympy-assumption-modeler/scripts/model_sympy_assumptions.py
+    - skills/sympy/sympy-concept-grounding-navigator/scripts/ground_sympy_concepts.py
+    - skills/sympy/sympy-autoformalization-drafter/scripts/draft_sympy_case.py
+    - skills/sympy/sympy-autoformalization-drafter/scripts/draft_sympy_wiki_case.py
+    - skills/sympy/sympy-execution-runner/scripts/run_sympy_artifact.py
+    - skills/sympy/sympy-identity-validator/scripts/validate_sympy_identity.py
+    - skills/sympy/sympy-counterexample-searcher/scripts/search_sympy_counterexamples.py
+    - skills/sympy/sympy-transformation-trace-verifier/scripts/verify_sympy_trace.py
+    - skills/sympy/sympy-consistency-report-orchestrator/scripts/run_sympy_consistency_report.py
+    - skills/physics-sympy/physics-sympy-dependency-prober/scripts/probe_physics_sympy_dependencies.py
+    - skills/physics-common/physics-derivation-source-extractor/scripts/extract_physics_derivation_source.py
+    - skills/physics-common/physics-symbol-table-builder/scripts/build_physics_symbol_table.py
+    - skills/physics-common/physics-dimension-modeler/scripts/model_physics_dimensions.py
+    - skills/physics-common/physics-unit-system-grounder/scripts/ground_physics_units.py
+    - skills/physics-common/physics-equation-parser/scripts/parse_physics_equations.py
+    - skills/physics-common/physics-regime-assumption-modeler/scripts/model_physics_regimes.py
+    - skills/physics-common/physics-coordinate-frame-context-builder/scripts/build_physics_frame_context.py
+    - skills/physics-common/physics-implicit-gap-detector/scripts/detect_physics_gaps.py
+    - skills/physics-common/physics-derivation-gap-expander/scripts/expand_physics_gaps.py
+    - skills/physics-common/physics-law-concept-grounding-navigator/scripts/ground_physics_laws.py
+    - skills/physics-common/physics-derivation-plan-builder/scripts/build_physics_derivation_plan.py
+    - skills/physics-sympy/physics-sympy-library-grounding-builder/scripts/build_physics_sympy_library_grounding.py
+    - skills/physics-sympy/physics-sympy-workflow-orchestrator/scripts/build_physics_sympy_workflow_plan.py
+    - skills/physics-sympy/physics-sympy-equation-surface-builder/scripts/build_physics_sympy_equation_surface.py
+    - skills/physics-sympy/physics-sympy-assumption-context-encoder/scripts/encode_physics_sympy_assumptions.py
+    - skills/physics-sympy/physics-sympy-derivation-drafter/scripts/draft_physics_sympy_derivation.py
+    - skills/physics-sympy/physics-sympy-execution-runner/scripts/run_physics_sympy_artifact.py
+    - skills/physics-sympy/physics-sympy-execution-interpreter/scripts/interpret_physics_sympy_execution.py
+    - skills/physics-common/physics-unit-analysis-verifier/scripts/verify_physics_units.py
+    - skills/physics-common/physics-derivation-step-verifier/scripts/verify_physics_steps.py
+    - skills/physics-common/physics-numeric-sanity-sampler/scripts/sample_physics_numeric_sanity.py
+    - skills/physics-sympy/physics-sympy-equational-semantics-critic/scripts/critique_physics_sympy_equational_semantics.py
+    - skills/physics-sympy/physics-sympy-dimension-projection-critic/scripts/critique_physics_sympy_dimensions.py
+    - skills/physics-sympy/physics-sympy-generative-critic-orchestrator/scripts/build_physics_sympy_generative_critic_plan.py
+    - skills/physics-sympy/physics-sympy-final-equation-reviewer/scripts/review_physics_sympy_final_equations.py
+    - skills/sympy/mathematical-sympy-final-equation-reviewer/scripts/review_mathematical_sympy_final_equations.py
+    - skills/physics-sympy/physics-sympy-review-refinement-router/scripts/plan_physics_sympy_review_refinement.py
+    - skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/scripts/plan_goal_sample_sympy_autoformalization.py
+    - skills/physics-sympy/physics-sympy-goal-sample-autoformalizer/scripts/run_recursive_goal_case.py
+    - skills/physics-sympy/physics-sympy-repair-expansion-cartographer/scripts/map_physics_sympy_repair_expansion.py
+    - skills/physics-sympy/physics-sympy-recursive-repair-loop-controller/scripts/control_physics_sympy_recursive_repair.py
+    - skills/physics-common/physics-derivation-consistency-report-orchestrator/scripts/run_physics_derivation_consistency_report.py
+    - skills/physics-sympy/physics-sympy-formal-answer-reflector/scripts/compare_sympy_formal_physics_answers.py
+    - skills/physics-lean/physics-lean-goal-sample-autoformalizer/scripts/plan_goal_sample_autoformalization.py
+    - skills/physics-common/physics-informal-derivation-elicitor/scripts/build_physics_informal_elicitation_packet.py
+    - skills/physics-common/physics-informal-derivation-expander/scripts/expand_informal_physics_derivation.py
+    - skills/physics-common/physics-informal-derivation-readiness-reviewer/scripts/review_physics_informal_derivation_readiness.py
+    - skills/physics-lean/physics-lean-workflow-orchestrator/scripts/build_physics_lean_workflow_plan.py
+    - skills/physics-lean/physics-lean-workflow-orchestrator/scripts/build_physics_lean_background_plan.py
+    - skills/physics-lean/physics-lean-workflow-orchestrator/scripts/compare_math_physics_pipeline.py
+    - skills/physics-lean/physics-lean-type-system-builder/scripts/build_physics_lean_type_system.py
+    - skills/physics-lean/physics-lean-assumption-context-encoder/scripts/encode_physics_lean_assumptions.py
+    - skills/physics-lean/physics-lean-execution-interpreter/scripts/interpret_physics_lean_execution.py
+    - skills/physics-lean/physics-lean-unit-analysis-verifier/scripts/verify_physics_lean_units.py
+    - skills/physics-lean/physics-lean-physical-semantics-critic/scripts/critique_physics_lean_semantics.py
+    - skills/physics-lean/physics-lean-assumption-critic/scripts/critique_physics_lean_assumptions.py
+    - skills/physics-lean/physics-lean-dimension-critic/scripts/critique_physics_lean_dimensions.py
+    - skills/physics-lean/physics-lean-generative-critic-orchestrator/scripts/build_physics_lean_generative_critic_plan.py
+    - skills/physics-lean/physics-lean-drift-pathology-monitor/scripts/monitor_physics_lean_drift_pathologies.py
+    - skills/physics-common/physics-math-object-detector/scripts/detect_physics_math_objects.py
+    - skills/mathformerphysicslib/mathformerphysicslib-object-workbench/scripts/build_mathformerphysicslib_object_workbench.py
+    - skills/physics-common/physics-foundation-object-intake/scripts/intake_physics_foundation_objects.py
+    - skills/mathformerphysicslib/mathformerphysicslib-foundation-surface-designer/scripts/design_foundation_surfaces.py
+    - skills/mathformerphysicslib/mathformerphysicslib-foundation-drafter/scripts/draft_foundation_modules.py
+    - skills/mathformerphysicslib/mathformerphysicslib-foundation-verifier/scripts/verify_foundation_modules.py
+    - skills/physics-lean/physics-lean-notational-collapse-repairer/scripts/repair_notational_collapse.py
+    - skills/physics-lean/physics-lean-abstraction-elevation-repairer/scripts/repair_abstraction_elevation.py
+    - skills/physics-lean/physics-lean-proof-strategy-alignment-repairer/scripts/repair_proof_strategy_alignment.py
+    - skills/physics-lean/physics-lean-implicit-premise-normalizer/scripts/normalize_implicit_premises.py
+    - skills/physics-lean/physics-lean-pathology-repair-orchestrator/scripts/orchestrate_pathology_repair.py
+    - skills/physics-lean/physics-lean-generative-repair-orchestrator/scripts/build_physics_lean_generative_repair_plan.py
+    - skills/physics-lean/physics-lean-repair-expansion-cartographer/scripts/map_repair_expansion.py
+    - skills/physics-lean/physics-lean-recursive-repair-loop-controller/scripts/control_recursive_repair_loop.py
+    - skills/physics-common/physics-final-hypothesis-reviewer/scripts/review_physics_final_hypotheses.py
+    - skills/autoformalization/mathematical-final-hypothesis-reviewer/scripts/review_mathematical_final_hypotheses.py
+    - skills/autoformalization/final-derivation-review-orchestrator/scripts/run_final_derivation_review.py
+    - skills/physics-lean/physics-lean-review-refinement-router/scripts/plan_review_refinement.py
+    - skills/physics-lean/physics-lean-consistency-report-orchestrator/scripts/run_physics_lean_consistency_report.py
+    - skills/physics-common/physics-formal-answer-comparison-reflector/scripts/compare_formal_physics_answers.py
+    - skills/physics-common/formalphysics-comparative-analysis-reporter/scripts/prepare_comparison_inputs.py
+    - skills/physics-common/formalphysics-comparative-analysis-reporter/scripts/build_comparative_report.py
+    - skills/physics-common/formalphysics-judge-synthesis-reporter/scripts/build_synthesis_report.py
+    - skills/physics-common/formalphysics-judge-synthesis-reporter/scripts/run_codex_exec_judges.py
+    - skills/mathformerlib/mathformerlib-registry-manager/scripts/manage_mathformerlib_registry.py
+    - skills/mathformerlib/mathformerlib-promotion-gate/scripts/evaluate_mathformerlib_promotion.py
+    - skills/mathformerlib/mathformer-library-docs-generator/scripts/generate_mathformer_library_docs.py
+    - skills/mathformerlib/mathformer-library-docs-generator/scripts/generate_aligned_html_docs.py
+    - skills/rfde/reference-free-critic-monitor/scripts/monitor_reference_free_critics.py
+    - skills/rfde/reference-free-descriptive-evaluator/scripts/build_rfde_report.py
+    - skills/mathlib/mathlib-grounding-maximizer/scripts/maximize_mathlib_grounding.py
+    - skills/lean/lean-informalization-extractor/scripts/extract_lean_informalization.py
+    - skills/lean/lean-informal-proof-internal-consistency-verifier/scripts/verify_informal_proof_internal_consistency.py
+    - skills/lean/lean-informal-consistency-verifier/scripts/verify_informal_consistency.py
+    - skills/lean/lean-declaration-shape-consistency-checker/scripts/check_declaration_shape_consistency.py
+    - skills/lean/lean-nonvacuity-consistency-checker/scripts/check_lean_nonvacuity_consistency.py
+    - skills/lean/lean-cross-file-concept-consistency-indexer/scripts/index_cross_file_concepts.py
+    - skills/lean/lean-consistency-report-orchestrator/scripts/run_lean_consistency_report.py
+
+hooks:
+  - id: control.workflow_contract
+    phase: control
+    trigger: after hook, skill, routing, shared-runtime, or workflow-contract changes
+    owner_skill: workflow-contract-validator
+    reasoning_log_steps:
+      - workflow_contract_validation_start
+      - workflow_contract_validation_complete
+      - workflow_contract_validation_error
+    gate: strict validation must have no blocking hook, owner, routing, or shared-runtime findings
+    outputs:
+      - hook_contract_report
+
+  - id: control.workflow_router
+    phase: control
+    trigger: when a natural-language, generative, Codex-exec, Claude, or OpenCode entrypoint must reach Mathformer workflows through the hub
+    owner_skill: mathformer-workflow-router
+    reasoning_log_steps:
+      - workflow_router_request_normalized
+      - workflow_router_route_resolved
+      - workflow_router_coverage_audited
+      - workflow_router_hub_safety_preserved
+    gate: every registered workflow family must have at least one natural-language route to a known controlled action
+    outputs:
+      - mathformer_workflow_router_coverage_report
+
+  - id: control.generative_workflow_coordinator
+    phase: control
+    trigger: when Codex must interpret, decompose, order, explain, or invoke one or more Mathformer workflows from a natural-language goal
+    owner_skill: mathformer-generative-workflow-coordinator
+    reasoning_log_steps:
+      - generative_workflow_coordination_start
+      - generative_workflow_intents_decomposed
+      - generative_workflow_routes_validated
+      - generative_workflow_coordination_complete
+      - generative_workflow_coordination_error
+    gate: every generated intent must resolve through the deterministic router to known hub actions, and mutating actions require user authorization
+
+  - id: control.reasoning_flow_language
+    phase: control
+    trigger: when authoring, importing, publishing, explaining, or changing an epistemic reasoning-flow profile or its generated catalogue
+    owner_skill: reasoning-flow-language
+    reasoning_log_steps:
+      - reasoning_flow_profile_loaded
+      - reasoning_flow_relational_coherence_validated
+      - reasoning_flow_resource_plane_validated
+      - reasoning_flow_registry_alignment_validated
+      - reasoning_flow_predicate_map_generated
+      - reasoning_flow_catalog_synchronized
+      - reasoning_flow_validation_complete
+      - reasoning_flow_validation_error
+    gate: strict validation must preserve typed handles, labelled relations, calibrated endpoints, bounded iteration, and registry alignment
+    outputs:
+      - reasoning_flow_validation_report
+      - reasoning_flow_catalog_markdown
+      - reasoning_flow_materializations_markdown
+
+  - id: control.skill_hook_coverage
+    phase: control
+    trigger: after adding skills, editing hooks, editing direct routes, or changing workflow loop structure
+    owner_skill: skill-hook-coverage-maximizer
+    reasoning_log_steps:
+      - skill_hook_coverage_audit_start
+      - skill_hook_coverage_audit_complete
+      - skill_hook_coverage_audit_error
+    gate: every non-wrapper skill must have a hook or direct route, and named loop contracts must include their required hooks and owner skills
+    outputs:
+      - skill_hook_coverage_report
+      - loop_contract_report
+
+  - id: control.reasoning_log_schema
+    phase: control
+    trigger: after a reasoning log is produced or before reasoning-log-derived statistics/gates
+    owner_skill: reasoning-log-schema-guardian
+    reasoning_log_steps:
+      - reasoning_log_schema_validation_start
+      - reasoning_log_schema_validation_complete
+      - reasoning_log_schema_validation_error
+    gate: strict validation must have parseable JSONL, monotone event indexes, payload.skill, and known hook ids
+    outputs:
+      - reasoning_log_schema_report
+
+  - id: control.gate_policy
+    phase: control
+    trigger: whenever validators, critiques, Lean checks, coverage checks, or audits produce a pass/fail gate
+    owner_skill: gate-policy-controller
+    reasoning_log_steps:
+      - gate_policy_decision_start
+      - gate_policy_decision_complete
+      - gate_policy_decision_error
+    gate: unwaived blocking failures produce fail; nonblocking failures produce warn
+    outputs:
+      - gate_decision
+
+  - id: intake.workflow_start
+    phase: intake
+    trigger: every end-to-end workflow run
+    owner_skill: autoformalization-workflow-orchestrator
+    reasoning_log_steps:
+      - workflow_start
+      - artifact_paths_resolved
+    outputs:
+      - normalized_statement
+      - artifact paths
+
+  - id: intake.source_unit_inventory
+    phase: intake
+    trigger: after a source URL, article, paper excerpt, or wiki-style page is provided and before LaTeX expansion, duplicate-result precheck, or first-pass drafting
+    owner_skill: source-formalizable-unit-extractor
+    reasoning_log_steps:
+      - source_unit_inventory_start
+      - source_unit_inventory_complete
+      - source_unit_inventory_error
+    gate: every selected theorem-like drafting target must have a typed source-linked unit, original span, mathlib concept hints, and downstream routes before autoformalization begins
+    outputs:
+      - formalizable_unit_inventory
+      - source_unit_dependency_queue
+      - source_unit_mathlib_concepts
+
+  - id: intake.paper_layout_extract
+    phase: intake
+    trigger: after a PDF URL, paper PDF, or paper text is provided and before paper-level theory localization
+    owner_skill: paper-docling-layout-extractor
+    reasoning_log_steps:
+      - paper_layout_extract_start
+      - paper_layout_extract_complete
+      - paper_layout_extract_error
+    gate: layout extraction must report its engine and preserve sections, blocks, references, warnings, and source provenance before theorem localization
+    outputs:
+      - paper_layout_packet
+      - extraction_engine_report
+      - layout_warnings
+
+  - id: intake.paper_theory_localize
+    phase: intake
+    trigger: after paper layout extraction and before source-unit inventory, LaTeX expansion, duplicate-result precheck, or first-pass drafting
+    owner_skill: paper-main-theory-localizer
+    reasoning_log_steps:
+      - paper_theory_localization_start
+      - paper_theory_localization_complete
+      - paper_theory_localization_error
+    gate: selected paper-level drafting targets must include support units, intermediate expansion queue, reference support, and mathlib concept hints
+    outputs:
+      - paper_theory_localization_packet
+      - main_theory_results
+      - intermediate_expansion_queue
+      - reference_support_packet
+
+  - id: intake.latex_archive_theory_extract
+    phase: intake
+    trigger: after a LaTeX textbook archive or source tree is provided and before thematic TeX organization or batch autoformalization
+    owner_skill: latex-archive-theory-extractor
+    reasoning_log_steps:
+      - latex_archive_theory_extract_start
+      - latex_archive_theory_extract_complete
+      - latex_archive_theory_extract_error
+    gate: extraction must preserve theorem-like environments, proof environments, source file/line provenance, labels, references, citations, and proof-pairing status before any batch job is created
+    outputs:
+      - theory_units_json
+      - theorem_like_unit_inventory
+      - proof_pairing_report
+
+  - id: preformalization.textbook_theory_organize
+    phase: preformalization
+    trigger: after LaTeX archive theory extraction and before per-unit batch autoformalization jobs are emitted
+    owner_skill: textbook-theory-tex-organizer
+    reasoning_log_steps:
+      - textbook_theory_organize_start
+      - textbook_theory_organize_complete
+      - textbook_theory_organize_error
+    gate: organized TeX bundles must preserve original LaTeX blocks and source provenance while grouping units by coherent chapter or section context
+    outputs:
+      - organized_theory_manifest
+      - thematic_tex_bundles
+
+  - id: draft.textbook_batch_autoformalize
+    phase: drafting
+    trigger: after organized textbook theory bundles are available and before individual queued units enter the standard autoformalization workflow
+    owner_skill: textbook-autoformalization-batch-orchestrator
+    reasoning_log_steps:
+      - textbook_autoformalization_batch_start
+      - textbook_autoformalization_job_written
+      - textbook_autoformalization_batch_complete
+      - textbook_autoformalization_batch_error
+    gate: batch jobs must stay queued or support-only until each unit passes duplicate-result, mathlib grounding, Lean execution, realness, and consistency gates through the standard workflow
+    outputs:
+      - textbook_autoformalization_batch_manifest
+      - per_unit_autoformalization_jobs
+      - per_unit_workflow_prompts
+
+  - id: draft.textbook_chapter_autoformalization
+    phase: drafting
+    trigger: after a LaTeX book archive has been extracted and chapter-by-chapter planning is required before object-level execution
+    owner_skill: textbook-chapter-autoformalization-orchestrator
+    reasoning_log_steps:
+      - textbook_chapter_autoformalization_start
+      - textbook_chapter_inventory_complete
+      - textbook_chapter_batch_ready
+      - textbook_chapter_run_complete
+      - textbook_chapter_autoformalization_error
+    gate: each chapter must have its own source-preserving theory_units JSON, organized TeX manifest, batch manifest with proof jobs, and optional object-run manifest before the next chapter is executed
+    outputs:
+      - textbook_chapter_plan
+      - per_chapter_theory_units_json
+      - per_chapter_batch_manifest
+      - per_chapter_object_run_manifest
+
+  - id: draft.textbook_object_autoformalization_run
+    phase: drafting
+    trigger: after a textbook autoformalization batch manifest is available and an executor is asked to process jobs object by object
+    owner_skill: textbook-autoformalization-batch-orchestrator
+    reasoning_log_steps:
+      - textbook_object_autoformalization_run_start
+      - textbook_object_autoformalization_job_start
+      - textbook_object_autoformalization_generation_complete
+      - textbook_object_autoformalization_gates_complete
+      - textbook_object_autoformalization_run_complete
+      - textbook_object_autoformalization_run_error
+    gate: each object run must record provider availability, generated Lean if any, realness and unified consistency reports, and must not mark complete unless all configured gates pass
+    outputs:
+      - textbook_object_run_manifest
+      - per_object_result_json
+      - per_object_generated_lean
+      - per_object_gate_reports
+
+  - id: isabelle.grounding.search
+    phase: isabelle_grounding
+    trigger: before Isabelle/HOL drafting whenever source concepts should be grounded in local Isabelle/HOL sessions or optional IsarMathLib theories
+    owner_skill: isarmathlib-grounding-navigator
+    reasoning_log_steps:
+      - isabelle_grounding_search_start
+      - isabelle_grounding_search_complete
+      - isabelle_grounding_search_error
+    gate: local theory claims must cite existing `.thy` files; missing IsarMathLib is nonblocking only when the artifact imports Isabelle/HOL Main or another installed session
+    outputs:
+      - isabelle_grounding_report
+      - proposed_isabelle_imports
+
+  - id: draft.isabelle_initial
+    phase: drafting
+    trigger: after shared source/LaTeX expansion review and Isabelle grounding, when the selected backend is Isabelle/HOL
+    owner_skill: isabelle-autoformalization-drafter
+    reasoning_log_steps:
+      - isabelle_draft_initial_start
+      - isabelle_draft_initial_complete
+      - isabelle_draft_initial_error
+    gate: generated theory must use one declared Isabelle style, preserve source comments, avoid Lean syntax, and not contain placeholders when reported as complete
+    outputs:
+      - isabelle_theory_file
+      - isabelle_draft_report
+
+  - id: execute.isabelle_initial
+    phase: execution
+    trigger: immediately after an initial Isabelle/HOL theory is written
+    owner_skill: isabelle-execution-runner
+    reasoning_log_steps:
+      - isabelle_execution_initial_start
+      - isabelle_execution_initial_complete
+      - isabelle_execution_initial_error
+    gate: "`isabelle build -D` must pass and the checked theory must be placeholder-free before the Isabelle artifact can be counted as complete"
+    outputs:
+      - isabelle_execution_report
+      - isabelle_build_log
+
+  - id: draft.rocq_initial
+    phase: drafting
+    trigger: after shared source/LaTeX expansion review when the selected backend is Rocq
+    owner_skill: rocq-autoformalization-drafter
+    reasoning_log_steps:
+      - rocq_draft_initial_start
+      - rocq_draft_initial_complete
+      - rocq_draft_initial_error
+    gate: generated `.v` files must preserve source comments, declare a theorem, end proofs with `Qed.`, and avoid placeholders when reported as complete
+    outputs:
+      - rocq_file
+      - rocq_draft_report
+
+  - id: execute.rocq_initial
+    phase: execution
+    trigger: immediately after a Rocq `.v` proof script is written
+    owner_skill: rocq-execution-runner
+    reasoning_log_steps:
+      - rocq_execution_initial_start
+      - rocq_execution_initial_complete
+      - rocq_execution_initial_error
+    gate: structural validation must pass; compiler validation with `rocq compile` or `coqc` is required when the workflow requests a checked Rocq artifact
+    outputs:
+      - rocq_execution_report
+      - rocq_compile_log
+
+  - id: sympy.dependencies.probe
+    phase: sympy_preflight
+    trigger: before any SymPy backend autoformalization run
+    owner_skill: sympy-dependency-prober
+    reasoning_log_steps:
+      - sympy_dependency_probe_start
+      - sympy_dependency_probe_complete
+      - sympy_dependency_probe_error
+    validation: required SymPy backend packages must be installed; optional packages are reported without blocking the basic equational-trace style
+    outputs:
+      - sympy_dependency_report
+
+  - id: sympy.api_docs.index
+    phase: sympy_grounding
+    trigger: before SymPy concept grounding when no fresh local SymPy API index is available
+    owner_skill: sympy-api-docs-indexer
+    reasoning_log_steps:
+      - sympy_api_index_start
+      - sympy_api_index_complete
+      - sympy_api_index_error
+    validation: API index must include installed SymPy version, qualified names, signatures where available, docs summaries, source files, and freshness metadata
+    outputs:
+      - sympy_api_index
+
+  - id: sympy.expression.parse
+    phase: sympy_preformalization
+    trigger: after source inventory for a SymPy backend run and before assumptions or drafting
+    owner_skill: sympy-expression-parser
+    reasoning_log_steps:
+      - sympy_expression_parse_start
+      - sympy_expression_parse_complete
+      - sympy_expression_parse_error
+    validation: every selected source formula is parsed or explicitly marked unresolved with source anchors and uncertainty notes
+    outputs:
+      - sympy_parse_packet
+
+  - id: sympy.assumptions.model
+    phase: sympy_preformalization
+    trigger: after SymPy expression parsing and before API grounding or drafting
+    owner_skill: sympy-assumption-modeler
+    reasoning_log_steps:
+      - sympy_assumption_model_start
+      - sympy_assumption_model_complete
+      - sympy_assumption_model_error
+    validation: source-backed assumptions and generated support assumptions must be separated, with silent-strengthening risks reported
+    outputs:
+      - sympy_assumption_packet
+
+  - id: sympy.grounding.navigate
+    phase: sympy_grounding
+    trigger: after SymPy expression parsing and assumption modeling, before drafting transformation traces
+    owner_skill: sympy-concept-grounding-navigator
+    reasoning_log_steps:
+      - sympy_grounding_start
+      - sympy_grounding_complete
+      - sympy_grounding_error
+    validation: transformation-critical concepts should cite ranked installed SymPy API candidates before being treated as justified
+    outputs:
+      - sympy_api_grounding_packet
+
+  - id: draft.sympy_initial
+    phase: drafting
+    trigger: after SymPy parse, assumption, and grounding packets are available for the selected `sympy_equational_trace` style
+    owner_skill: sympy-autoformalization-drafter
+    reasoning_log_steps:
+      - sympy_draft_initial_start
+      - sympy_draft_initial_complete
+      - sympy_draft_initial_error
+    validation: generated Python must preserve source NL/LaTeX/anchors, expose the standard artifact contract, and avoid mocks or placeholders
+    outputs:
+      - sympy_python_artifact
+      - sympy_draft_report
+
+  - id: execute.sympy_initial
+    phase: execution
+    trigger: immediately after a SymPy artifact is written
+    owner_skill: sympy-execution-runner
+    reasoning_log_steps:
+      - sympy_execution_start
+      - sympy_execution_complete
+      - sympy_execution_error
+    validation: artifact must import, execute symbolic and numeric validation, emit a transformation trace, and remain placeholder-free
+    outputs:
+      - sympy_execution_report
+
+  - id: sympy.identity.validate
+    phase: sympy_validation
+    trigger: after SymPy execution for an equational claim
+    owner_skill: sympy-identity-validator
+    reasoning_log_steps:
+      - sympy_identity_validation_start
+      - sympy_identity_validation_complete
+      - sympy_identity_validation_error
+    validation: claimed equality must normalize to zero using at least one appropriate symbolic method and record method-specific evidence
+    outputs:
+      - sympy_symbolic_validation_report
+
+  - id: sympy.counterexample.search
+    phase: sympy_validation
+    trigger: after SymPy identity validation and assumption modeling provide an admissible bounded domain
+    owner_skill: sympy-counterexample-searcher
+    reasoning_log_steps:
+      - sympy_counterexample_search_start
+      - sympy_counterexample_search_complete
+      - sympy_counterexample_search_error
+    validation: bounded sampling must record sample domain, sample count, and concrete counterexamples if any are found
+    outputs:
+      - sympy_counterexample_report
+
+  - id: sympy.trace.verify
+    phase: sympy_validation
+    trigger: after SymPy execution emits a transformation trace
+    owner_skill: sympy-transformation-trace-verifier
+    reasoning_log_steps:
+      - sympy_trace_verification_start
+      - sympy_trace_verification_complete
+      - sympy_trace_verification_error
+    validation: each trace step must have input, output, justification, and a cited SymPy API or explicit algebraic rule
+    outputs:
+      - sympy_trace_verification_report
+
+  - id: consistency.sympy_report
+    phase: consistency
+    trigger: after SymPy parse, assumptions, grounding, execution, identity validation, counterexample search, and trace verification reports exist
+    owner_skill: sympy-consistency-report-orchestrator
+    reasoning_log_steps:
+      - sympy_consistency_report_start
+      - sympy_consistency_report_complete
+      - sympy_consistency_report_error
+    validation: report must surface backend-specific reference-free metrics and final status as complete, draft, or blocked according to validation criteria
+    outputs:
+      - sympy_consistency_report
+
+  - id: physics.dependencies.probe
+    phase: physics_sympy_preflight
+    trigger: before any physics SymPy derivation run
+    owner_skill: physics-sympy-dependency-prober
+    reasoning_log_steps:
+      - physics_sympy_dependency_probe_start
+      - physics_sympy_dependency_probe_complete
+      - physics_sympy_dependency_probe_error
+    validation: required SymPy physics modules must be available and optional packages must be reported truthfully
+    outputs: [physics_sympy_dependency_report]
+
+  - id: physics.sympy.goal_sample.plan
+    phase: physics_sympy_goal_control
+    trigger: before a one-case FormalPhysics SymPy recursive goal workflow starts or when current case evidence is needed
+    owner_skill: physics-sympy-goal-sample-autoformalizer
+    reasoning_log_steps:
+      - physics_sympy_goal_sample_plan_start
+      - physics_sympy_goal_sample_plan_complete
+      - physics_sympy_goal_sample_plan_error
+    validation: plan must lock exactly one SymPy formalphysics case, preserve the source-only first-pass boundary, inspect artifact surfaces, and return complete, recurse, blocked, or needs_initial_draft
+    outputs: [physics_sympy_goal_sample_autoformalization_plan]
+
+  - id: physics.sympy.source_only.run
+    phase: physics_sympy_goal_control
+    trigger: when a FormalPhysics SymPy source record should be rebuilt one case at a time through the recursive goal workflow
+    owner_skill: physics-sympy-goal-sample-autoformalizer
+    reasoning_log_steps:
+      - physics_sympy_source_only_run_start
+      - physics_sympy_source_only_run_complete
+      - physics_sympy_source_only_run_error
+    validation: run report must preserve the source-only trust boundary, write real workflow-stage reports, expose semantic-preservation metadata, and never treat a string-only audit anchor as stage evidence
+    outputs: [physics_sympy_source_only_recursive_goal_run]
+
+  - id: physics.source.extract
+    phase: physics_sympy_preformalization
+    trigger: after source intake for a physics derivation
+    owner_skill: physics-derivation-source-extractor
+    reasoning_log_steps:
+      - physics_source_extract_start
+      - physics_source_extract_complete
+      - physics_source_extract_error
+    validation: source-backed physics units must preserve anchors, NL/LaTeX, quantity symbols, and uncertainty notes
+    outputs: [physics_source_packet]
+
+  - id: physics.symbols.build
+    phase: physics_sympy_preformalization
+    trigger: after physics source extraction
+    owner_skill: physics-symbol-table-builder
+    reasoning_log_steps:
+      - physics_symbol_table_start
+      - physics_symbol_table_complete
+      - physics_symbol_table_error
+    validation: symbol table must distinguish quantities, generated support symbols, dimensions, units, and ambiguous bindings
+    outputs: [physics_symbol_table]
+
+  - id: physics.dimensions.model
+    phase: physics_sympy_units
+    trigger: after symbol table construction
+    owner_skill: physics-dimension-modeler
+    reasoning_log_steps:
+      - physics_dimension_model_start
+      - physics_dimension_model_complete
+      - physics_dimension_model_error
+    validation: every selected quantity must have a dimension or an explicit unresolved-dimension blocker
+    outputs: [physics_dimension_packet]
+
+  - id: physics.units.ground
+    phase: physics_sympy_units
+    trigger: after dimension modeling
+    owner_skill: physics-unit-system-grounder
+    reasoning_log_steps:
+      - physics_unit_grounding_start
+      - physics_unit_grounding_complete
+      - physics_unit_grounding_error
+    validation: units must be grounded in SymPy/SI concepts or source-specific unit notes
+    outputs: [physics_unit_packet]
+
+  - id: physics.equations.parse
+    phase: physics_sympy_preformalization
+    trigger: after symbol, dimension, and unit context is available
+    owner_skill: physics-equation-parser
+    reasoning_log_steps:
+      - physics_equation_parse_start
+      - physics_equation_parse_complete
+      - physics_equation_parse_error
+    validation: target and support equations must parse or be explicitly blocked
+    outputs: [physics_equation_packet]
+
+  - id: physics.regimes.model
+    phase: physics_sympy_preformalization
+    trigger: after source extraction and before gap expansion
+    owner_skill: physics-regime-assumption-modeler
+    reasoning_log_steps:
+      - physics_regime_model_start
+      - physics_regime_model_complete
+      - physics_regime_model_error
+    validation: assumptions and regimes must not silently strengthen the source
+    outputs: [physics_regime_packet]
+
+  - id: physics.frames.build
+    phase: physics_sympy_preformalization
+    trigger: before vector-to-scalar or sign-sensitive reductions
+    owner_skill: physics-coordinate-frame-context-builder
+    reasoning_log_steps:
+      - physics_frame_context_start
+      - physics_frame_context_complete
+      - physics_frame_context_error
+    validation: coordinate frames and sign conventions must be explicit when used
+    outputs: [physics_frame_packet]
+
+  - id: physics.gaps.detect
+    phase: physics_sympy_gap_closure
+    trigger: after source equations and assumptions are available
+    owner_skill: physics-implicit-gap-detector
+    reasoning_log_steps:
+      - physics_gap_detect_start
+      - physics_gap_detect_complete
+      - physics_gap_detect_error
+    validation: implicit computational gaps must be identified before complete status
+    outputs: [physics_gap_packet]
+
+  - id: physics.gaps.expand
+    phase: physics_sympy_gap_closure
+    trigger: after implicit gap detection
+    owner_skill: physics-derivation-gap-expander
+    reasoning_log_steps:
+      - physics_gap_expand_start
+      - physics_gap_expand_complete
+      - physics_gap_expand_error
+    validation: gaps must expand into computable generated substeps or explicit blockers
+    outputs: [physics_gap_expansion_packet]
+
+  - id: physics.laws.ground
+    phase: physics_sympy_grounding
+    trigger: before derivation planning and drafting
+    owner_skill: physics-law-concept-grounding-navigator
+    reasoning_log_steps:
+      - physics_law_grounding_start
+      - physics_law_grounding_complete
+      - physics_law_grounding_error
+    validation: physical laws and symbolic operations must cite computable templates or SymPy APIs
+    outputs: [physics_law_grounding_packet]
+
+  - id: physics.sympy.library_grounding.build
+    phase: physics_sympy_grounding
+    trigger: after physics law grounding and before SymPy equation-surface construction or drafting
+    owner_skill: physics-sympy-library-grounding-builder
+    reasoning_log_steps:
+      - physics_sympy_library_grounding_start
+      - physics_sympy_library_grounding_complete
+      - physics_sympy_library_grounding_error
+    validation: complete status requires all case-required scalar, calculus, units, vector, mechanics, matrix/operator, and numeric roles to be grounded in installed SymPy or dependency APIs, with scalar-only fallbacks marked draft-only
+    outputs: [physics_sympy_library_grounding_packet]
+
+  - id: physics.sympy.workflow.plan
+    phase: physics_sympy_planning
+    trigger: after physics source, informal, symbol, dimension, unit, equation, regime, frame, gap, and law packets exist and SymPy is the target backend
+    owner_skill: physics-sympy-workflow-orchestrator
+    reasoning_log_steps:
+      - physics_sympy_workflow_plan_start
+      - physics_sympy_workflow_plan_complete
+      - physics_sympy_workflow_plan_error
+    validation: workflow plan must name enriched SymPy equation-surface, assumption-context, critic, reviewer, refinement, and reflection gates while preserving equational scope
+    outputs: [physics_sympy_workflow_plan]
+
+  - id: physics.sympy.equation_surface.build
+    phase: physics_sympy_preformalization
+    trigger: after physics symbol, dimension, unit, equation, frame, and law packets exist and before SymPy drafting
+    owner_skill: physics-sympy-equation-surface-builder
+    reasoning_log_steps:
+      - physics_sympy_equation_surface_start
+      - physics_sympy_equation_surface_complete
+      - physics_sympy_equation_surface_error
+    validation: equation surface must expose quantities, equation graph nodes, law table, projection bridges, and target/source/generated equation roles
+    outputs: [physics_sympy_equation_surface_packet]
+
+  - id: physics.sympy.assumptions.encode
+    phase: physics_sympy_preformalization
+    trigger: after physics regimes, frames, symbols, and equation surface exist and before drafting or final review
+    owner_skill: physics-sympy-assumption-context-encoder
+    reasoning_log_steps:
+      - physics_sympy_assumption_encode_start
+      - physics_sympy_assumption_encode_complete
+      - physics_sympy_assumption_encode_error
+    validation: assumptions and side conditions must be source-backed, generated-support, API-backed, or explicitly blocked; silent strengthening blocks complete status
+    outputs: [physics_sympy_assumption_context_packet]
+
+  - id: physics.informal.elicit
+    phase: physics_informal_preformalization
+    trigger: after physics source extraction and before derivation expansion or backend drafting
+    owner_skill: physics-informal-derivation-elicitor
+    reasoning_log_steps:
+      - physics_informal_elicitation_start
+      - physics_informal_elicitation_complete
+      - physics_informal_elicitation_error
+    validation: missing target shape, quantities, dimensions, units, frames, regimes, assumptions, laws, and derivation transitions must be source-backed, generated-support, user-needed, or blocked
+    outputs: [physics_informal_elicitation_packet]
+
+  - id: physics.informal.expand
+    phase: physics_informal_preformalization
+    trigger: after informal elicitation and before gap detection, law grounding, line translation, or backend drafting
+    owner_skill: physics-informal-derivation-expander
+    reasoning_log_steps:
+      - physics_informal_expansion_start
+      - physics_informal_expansion_complete
+      - physics_informal_expansion_error
+    validation: expanded derivation steps must preserve source anchors, generated-support labels, assumptions, law/rule provenance, and unit/dimension status
+    outputs: [physics_informal_derivation_expansion_packet]
+
+  - id: physics.informal.review
+    phase: physics_informal_preformalization
+    trigger: after informal derivation expansion and before formal backend drafting
+    owner_skill: physics-informal-derivation-readiness-reviewer
+    reasoning_log_steps:
+      - physics_informal_readiness_review_start
+      - physics_informal_readiness_review_complete
+      - physics_informal_readiness_review_error
+    gate: formalization is blocked when the expanded informal derivation has missing anchors, unreviewed generated support, missing law/rule provenance, or unresolved web-support needs
+    outputs: [physics_informal_readiness_report]
+
+  - id: physics.lean.workflow.plan
+    phase: physics_lean_planning
+    trigger: after physics derivation source, quantity, dimension, unit, regime, frame, gap, and law packets exist and Lean is the target backend
+    owner_skill: physics-lean-workflow-orchestrator
+    reasoning_log_steps:
+      - physics_lean_workflow_plan_start
+      - physics_lean_workflow_plan_complete
+      - physics_lean_workflow_plan_error
+    validation: workflow plan must name Lean-specific type, assumption, unit, execution-interpretation, refinement, and consistency gates
+    outputs: [physics_lean_workflow_plan]
+
+  - id: physics.lean.type_system.build
+    phase: physics_lean_preformalization
+    trigger: after physics dimension/unit/frame/law packets and before Lean drafting
+    owner_skill: physics-lean-type-system-builder
+    reasoning_log_steps:
+      - physics_lean_type_system_start
+      - physics_lean_type_system_complete
+      - physics_lean_type_system_error
+    validation: type packet must distinguish dimensions, quantities, vectors, fields, operators, frames, laws, and raw-scalar projection boundaries
+    outputs: [physics_lean_type_system_packet]
+
+  - id: physics.lean.assumptions.encode
+    phase: physics_lean_preformalization
+    trigger: after physics regimes and frames are modeled and before theorem statements are drafted or refined
+    owner_skill: physics-lean-assumption-context-encoder
+    reasoning_log_steps:
+      - physics_lean_assumption_encode_start
+      - physics_lean_assumption_encode_complete
+      - physics_lean_assumption_encode_error
+    validation: contextual assumptions must be source-backed, mathlib-backed, generated-support, or explicitly blocked; silent strengthening blocks complete status
+    outputs: [physics_lean_assumption_packet]
+
+  - id: draft.physics_lean_derivation
+    phase: physics_lean_drafting
+    trigger: after Lean physics workflow, type, assumption, unit, law, mathlib, and import-context packets are available
+    owner_skill: physics-lean-derivation-drafter
+    reasoning_log_steps:
+      - physics_lean_draft_start
+      - physics_lean_draft_complete
+      - physics_lean_draft_error
+    validation: generated Lean must preserve source anchors, physics context, typed quantities or explicit projections, unit obligations, and no hidden target claim
+    outputs: [physics_lean_artifact, physics_lean_draft_report]
+
+  - id: execute.physics_lean_interpret
+    phase: physics_lean_execution
+    trigger: immediately after Lean execution or compile diagnostics for a physics artifact
+    owner_skill: physics-lean-execution-interpreter
+    reasoning_log_steps:
+      - physics_lean_execution_interpret_start
+      - physics_lean_execution_interpret_complete
+      - physics_lean_execution_interpret_error
+    validation: raw Lean diagnostics must be classified into mathlib/import, physics typing, unit/dimension, assumption-context, proof-gap, syntax, or empty-formalism risks before refinement
+    outputs: [physics_lean_execution_interpretation]
+
+  - id: physics.lean.units.verify
+    phase: physics_lean_validation
+    trigger: after each generated or materially refined Lean physics artifact
+    owner_skill: physics-lean-unit-analysis-verifier
+    reasoning_log_steps:
+      - physics_lean_unit_verify_start
+      - physics_lean_unit_verify_complete
+      - physics_lean_unit_verify_error
+    validation: Lean artifact must declare a dimension/unit policy, type or project source quantities, and avoid raw-scalar erasure without local projection lemmas
+    outputs: [physics_lean_unit_report]
+
+  - id: critique.physics_lean_semantics
+    phase: physics_lean_critique
+    trigger: after Lean execution, source-anchor checking, type packets, assumption packets, and unit reports are available
+    owner_skill: physics-lean-physical-semantics-critic
+    reasoning_log_steps:
+      - physics_lean_semantics_critic_start
+      - physics_lean_semantics_critic_complete
+      - physics_lean_semantics_critic_error
+    validation: critic must check whether the Lean artifact preserves quantities, vectors, frames, regimes, laws, source anchors, and non-empty physical meaning
+    outputs: [physics_lean_physical_semantics_critic_report]
+
+  - id: critique.physics_lean_assumptions
+    phase: physics_lean_critique
+    trigger: after Lean execution and assumption-context encoding, and before any final complete-status claim
+    owner_skill: physics-lean-assumption-critic
+    reasoning_log_steps:
+      - physics_lean_assumption_critic_start
+      - physics_lean_assumption_critic_complete
+      - physics_lean_assumption_critic_error
+    validation: critic must detect hidden strengthening, missing side conditions, unlabeled generated assumptions, and frame/regime/gauge drift
+    outputs: [physics_lean_assumption_critic_report]
+
+  - id: critique.physics_lean_dimensions
+    phase: physics_lean_critique
+    trigger: after Lean physics unit verification and before refinement or consistency reporting
+    owner_skill: physics-lean-dimension-critic
+    reasoning_log_steps:
+      - physics_lean_dimension_critic_start
+      - physics_lean_dimension_critic_complete
+      - physics_lean_dimension_critic_error
+    validation: critic must stress unit and dimension discipline, vector/scalar projections, and raw-scalar erasure beyond the deterministic unit report
+    outputs: [physics_lean_dimension_critic_report]
+
+  - id: critique.physics_lean_generative_panel
+    phase: physics_lean_critique
+    trigger: after deterministic Lean physics critics or whenever a near-final artifact remains high-risk or critic disagreement persists
+    owner_skill: physics-lean-generative-critic-orchestrator
+    reasoning_log_steps:
+      - physics_lean_generative_critic_plan_start
+      - physics_lean_generative_critic_codex_exec_start
+      - physics_lean_generative_critic_codex_exec_complete
+      - physics_lean_generative_critic_complete
+      - physics_lean_generative_critic_error
+    validation: generative critics may use codex exec, but findings block completion only when supported by source anchors, Lean diagnostics, unit reports, deterministic critics, or repeated independent probes
+    outputs: [physics_lean_generative_critic_plan, physics_lean_generative_critic_report]
+
+  - id: critique.physics_lean_drift_pathology_monitor
+    phase: physics_lean_critique
+    trigger: after Lean physics drafting, refinement transitions, deterministic critic reports, or before final consistency acceptance
+    owner_skill: physics-lean-drift-pathology-monitor
+    reasoning_log_steps:
+      - physics_lean_drift_pathology_monitor_start
+      - physics_lean_drift_pathology_monitor_complete
+      - physics_lean_drift_pathology_monitor_error
+    gate: critical notational-collapse or abstraction-elevation findings block complete status and route to localized physics Lean review refinement
+    outputs: [physics_lean_drift_pathology_monitor_report]
+
+  - id: goal.physics_lean_single_sample_autoformalization
+    phase: physics_lean_goal_control
+    trigger: when a FormalPhysics Lean sample must be autoformalized, grounded, repaired, or assessed one case at a time
+    owner_skill: physics-lean-goal-sample-autoformalizer
+    reasoning_log_steps:
+      - physics_lean_goal_sample_lock
+      - physics_lean_goal_sample_inventory
+      - physics_lean_goal_sample_recursive_plan
+      - physics_lean_goal_sample_gate_decision
+      - physics_lean_goal_sample_complete
+      - physics_lean_goal_sample_blocked
+      - physics_lean_goal_sample_error
+    gate: exactly one formalphysics_#### sample is active, MathformerPhysicsLib object work precedes target theorem edits, and completion requires complete_autoformalization plus no open markers
+    outputs: [physics_lean_goal_sample_autoformalization_plan]
+
+  - id: repair.physics_math_object_detect
+    phase: physics_lean_pathology_repair
+    trigger: after drift-pathology monitor reports a warning or failure
+    owner_skill: physics-math-object-detector
+    reasoning_log_steps:
+      - physics_math_object_detection_start
+      - physics_math_object_detection_complete
+      - physics_math_object_detection_error
+    gate: every actionable pathology finding must map to at least one object candidate or an explicit no-object blocker
+    outputs: [physics_math_object_detection_packet]
+
+  - id: repair.mathformerphysicslib_object_workbench
+    phase: physics_lean_pathology_repair
+    trigger: after physics object detection and before target theorem repair
+    owner_skill: mathformerphysicslib-object-workbench
+    reasoning_log_steps:
+      - mathformerphysicslib_object_workbench_start
+      - mathformerphysicslib_object_workbench_complete
+      - mathformerphysicslib_object_workbench_error
+    gate: target theorem edits remain blocked until each detected object is reused, candidate-promoted, or explicitly blocked
+    outputs: [mathformerphysicslib_object_workbench_plan]
+
+  - id: foundation.physics_object_intake
+    phase: physics_lean_foundations
+    trigger: after user concepts, benchmark clusters, or detected pathology objects should become reusable MathformerPhysicsLib support
+    owner_skill: physics-foundation-object-intake
+    reasoning_log_steps:
+      - physics_foundation_object_intake_start
+      - physics_foundation_object_intake_complete
+      - physics_foundation_object_intake_error
+    gate: every input concept must become a canonical object or an explicit out_of_scope item
+    outputs: [physics_foundation_object_packet]
+
+  - id: foundation.mathlib_grounding
+    phase: physics_lean_foundations
+    trigger: after foundation object intake and before surface design
+    owner_skill: mathformerphysicslib-foundation-surface-designer
+    reasoning_log_steps:
+      - physics_foundation_mathlib_grounding_start
+      - physics_foundation_mathlib_grounding_complete
+      - physics_foundation_mathlib_grounding_error
+    gate: every object records Mathlib targets, existing MathformerPhysicsLib reuse, or an explicit blocker
+    outputs: [physics_foundation_mathlib_grounding_packet]
+
+  - id: foundation.surface_design
+    phase: physics_lean_foundations
+    trigger: after Mathlib grounding and before Lean drafting
+    owner_skill: mathformerphysicslib-foundation-surface-designer
+    reasoning_log_steps:
+      - physics_foundation_surface_design_start
+      - physics_foundation_surface_design_complete
+      - physics_foundation_surface_design_error
+    gate: local level-0 bridges must be Mathlib-preserving, and every richer API obligation must be emitted as a recursive promotion frontier item
+    outputs: [physics_foundation_surface_plan]
+
+  - id: foundation.lean_draft
+    phase: physics_lean_foundations
+    trigger: after surface design accepts candidate bridge modules
+    owner_skill: mathformerphysicslib-foundation-drafter
+    reasoning_log_steps:
+      - physics_foundation_lean_draft_start
+      - physics_foundation_lean_draft_complete
+      - physics_foundation_lean_draft_error
+    gate: draft output may not contain sorry, admit, axioms, or Prop := True final support
+    outputs: [physics_foundation_generation_report]
+
+  - id: foundation.verify
+    phase: physics_lean_foundations
+    trigger: after foundation Lean drafting and before registry/promotion claims
+    owner_skill: mathformerphysicslib-foundation-verifier
+    reasoning_log_steps:
+      - physics_foundation_verification_start
+      - physics_foundation_verification_complete
+      - physics_foundation_verification_error
+    gate: structural verification and Mathlib grounding comments must pass before promotion
+    outputs: [physics_foundation_verification_report]
+
+  - id: foundation.recursive_expansion
+    phase: physics_lean_foundations
+    trigger: after verifier passes and before a foundation surface can be treated as exhaustive theory support
+    owner_skill: physics-lean-recursive-repair-loop-controller
+    reasoning_log_steps:
+      - physics_foundation_recursive_expansion_start
+      - physics_foundation_recursive_expansion_complete
+      - physics_foundation_recursive_expansion_error
+    gate: recursive frontier items must either shrink under another verified pass or carry explicit blockers with rerun gates
+    outputs: [physics_foundation_recursive_expansion_plan]
+
+  - id: foundation.promote
+    phase: physics_lean_foundations
+    trigger: after verifier passes and before downstream repair can import foundation support as accepted
+    owner_skill: mathformerlib-promotion-gate
+    reasoning_log_steps:
+      - physics_foundation_promotion_start
+      - physics_foundation_promotion_complete
+      - physics_foundation_promotion_error
+    gate: promoted foundations must be registry-visible and object-workbench reusable
+    outputs: [physics_foundation_promotion_report]
+
+  - id: foundation.downstream_regression
+    phase: physics_lean_foundations
+    trigger: after foundation promotion or explicit blocker recording
+    owner_skill: physics-lean-recursive-repair-loop-controller
+    reasoning_log_steps:
+      - physics_foundation_downstream_regression_start
+      - physics_foundation_downstream_regression_complete
+      - physics_foundation_downstream_regression_error
+    gate: downstream object frontier must shrink or carry explicit blockers
+    outputs: [physics_foundation_downstream_regression_report]
+
+  - id: library.physics.coherence.inventory
+    phase: mathformerphysicslib_coherence
+    trigger: before any MathformerPhysicsLib coherence, grounding, repair, or generative critic run
+    owner_skill: mathformerphysicslib-coherence-inventory-builder
+    reasoning_log_steps:
+      - mathformerphysicslib_coherence_inventory_start
+      - mathformerphysicslib_coherence_inventory_complete
+      - mathformerphysicslib_coherence_inventory_error
+    gate: inventory must expose modules, declarations, imports, concept occurrences, placeholder markers, and foundations metadata
+    outputs: [mathformerphysicslib_inventory]
+
+  - id: library.physics.coherence.canonicalize
+    phase: mathformerphysicslib_coherence
+    trigger: after inventory and before grounding, redefinition, integration, or API critics
+    owner_skill: mathformerphysicslib-concept-canonicalizer
+    reasoning_log_steps:
+      - mathformerphysicslib_concept_canonicalization_start
+      - mathformerphysicslib_concept_canonicalization_complete
+      - mathformerphysicslib_concept_canonicalization_error
+    gate: recurring physics concepts must have one owner module or an explicit ambiguous-owner blocker
+    outputs: [mathformerphysicslib_concept_graph]
+
+  - id: library.physics.coherence.mathlib_grounding
+    phase: mathformerphysicslib_coherence
+    trigger: after canonicalization and before local physics support is accepted
+    owner_skill: mathformerphysicslib-mathlib-grounding-auditor
+    reasoning_log_steps:
+      - mathformerphysicslib_mathlib_grounding_audit_start
+      - mathformerphysicslib_mathlib_grounding_audit_complete
+      - mathformerphysicslib_mathlib_grounding_audit_error
+    gate: each concept must prefer Mathlib-native targets or record an explicit local-support blocker
+    outputs: [mathformerphysicslib_mathlib_grounding_report]
+
+  - id: library.physics.coherence.redefinition_critic
+    phase: mathformerphysicslib_coherence
+    trigger: after canonicalization and grounding when spread, duplicate, or silent replacement risks must be found
+    owner_skill: mathformerphysicslib-redefinition-critic
+    reasoning_log_steps:
+      - mathformerphysicslib_redefinition_critic_start
+      - mathformerphysicslib_redefinition_critic_complete
+      - mathformerphysicslib_redefinition_critic_error
+    gate: duplicate local wrappers and concept spread must become controlled repair actions or explicit blockers
+    outputs: [mathformerphysicslib_redefinition_report]
+
+  - id: library.physics.coherence.integration_critic
+    phase: mathformerphysicslib_coherence
+    trigger: after canonical owners are known and before accepted support is considered discoverable
+    owner_skill: mathformerphysicslib-integration-critic
+    reasoning_log_steps:
+      - mathformerphysicslib_integration_critic_start
+      - mathformerphysicslib_integration_critic_complete
+      - mathformerphysicslib_integration_critic_error
+    gate: accepted foundation support must be reachable through index imports, manifest metadata, docs, hub actions, and tests
+    outputs: [mathformerphysicslib_integration_report]
+
+  - id: library.physics.coherence.api_critic
+    phase: mathformerphysicslib_coherence
+    trigger: after integration checks and before downstream theorem repair may depend on foundation objects
+    owner_skill: mathformerphysicslib-api-operability-critic
+    reasoning_log_steps:
+      - mathformerphysicslib_api_operability_critic_start
+      - mathformerphysicslib_api_operability_critic_complete
+      - mathformerphysicslib_api_operability_critic_error
+    gate: foundations must expose theorem-usable public projections, bridge lemmas, or explicit missing-API blockers
+    outputs: [mathformerphysicslib_api_operability_report]
+
+  - id: library.physics.coherence.generative_critic
+    phase: mathformerphysicslib_coherence
+    trigger: after deterministic coherence critics when hidden incoherence or overreach should be stress-tested
+    owner_skill: mathformerphysicslib-generative-coherence-critic
+    reasoning_log_steps:
+      - mathformerphysicslib_generative_coherence_critic_plan_start
+      - mathformerphysicslib_generative_coherence_codex_exec_start
+      - mathformerphysicslib_generative_coherence_codex_exec_complete
+      - mathformerphysicslib_generative_coherence_critic_complete
+      - mathformerphysicslib_generative_coherence_critic_error
+    gate: generative findings are advisory and may block only when bound to deterministic evidence, source reports, and named rerun gates
+    outputs: [mathformerphysicslib_generative_coherence_critic_plan, mathformerphysicslib_generative_probe_report]
+
+  - id: library.physics.coherence.repair_plan
+    phase: mathformerphysicslib_coherence
+    trigger: after deterministic and generative coherence findings are available
+    owner_skill: mathformerphysicslib-coherence-repair-planner
+    reasoning_log_steps:
+      - mathformerphysicslib_coherence_repair_plan_start
+      - mathformerphysicslib_coherence_repair_plan_complete
+      - mathformerphysicslib_coherence_repair_plan_error
+    gate: repairs must be monotonic, library-first, and mapped to the finding that justified them
+    outputs: [mathformerphysicslib_coherence_repair_plan]
+
+  - id: library.physics.coherence.gate
+    phase: mathformerphysicslib_coherence
+    trigger: after repair planning and before declaring MathformerPhysicsLib coherence complete
+    owner_skill: mathformerphysicslib-coherence-gate
+    reasoning_log_steps:
+      - mathformerphysicslib_coherence_gate_start
+      - mathformerphysicslib_coherence_gate_complete
+      - mathformerphysicslib_coherence_gate_error
+    gate: completion requires no high-severity ownership, grounding, redefinition, integration, API, or evidence-completeness blockers
+    outputs: [mathformerphysicslib_coherence_gate, mathformerphysicslib_coherence_report]
+
+  - id: library.physics.coherence.loop
+    phase: mathformerphysicslib_coherence
+    trigger: when the whole coherence workflow should emit report artifacts over the current MathformerPhysicsLib tree
+    owner_skill: mathformerphysicslib-coherence-gate
+    reasoning_log_steps:
+      - mathformerphysicslib_coherence_loop_start
+      - mathformerphysicslib_coherence_loop_report_written
+      - mathformerphysicslib_coherence_loop_complete
+      - mathformerphysicslib_coherence_loop_error
+    gate: the loop must run deterministic critics, generative probe planning, repair planning, and gate aggregation before writing the Markdown report
+    outputs: [mathformerphysicslib_coherence_loop_report, mathformerphysicslib_coherence_report]
+
+  - id: repair.physics_lean_notational_collapse
+    phase: physics_lean_pathology_repair
+    trigger: notational-collapse finding after object workbench evidence exists
+    owner_skill: physics-lean-notational-collapse-repairer
+    reasoning_log_steps:
+      - physics_lean_notational_collapse_repair_start
+      - physics_lean_notational_collapse_repair_complete
+      - physics_lean_notational_collapse_repair_error
+    gate: raw-scalar target edits are forbidden until the missing quantum, vector, operator, dimension, or projection object is library-backed
+    outputs: [physics_lean_notational_collapse_repair_plan]
+
+  - id: repair.physics_lean_abstraction_elevation
+    phase: physics_lean_pathology_repair
+    trigger: abstraction-elevation finding after object workbench evidence exists
+    owner_skill: physics-lean-abstraction-elevation-repairer
+    reasoning_log_steps:
+      - physics_lean_abstraction_elevation_repair_start
+      - physics_lean_abstraction_elevation_repair_complete
+      - physics_lean_abstraction_elevation_repair_error
+    gate: target-shaped calculation hypotheses must be replaced by source-backed support lemmas or explicit blockers
+    outputs: [physics_lean_abstraction_elevation_repair_plan]
+
+  - id: repair.physics_lean_proof_strategy_alignment
+    phase: physics_lean_pathology_repair
+    trigger: proof-strategy-substitution finding after object workbench evidence exists
+    owner_skill: physics-lean-proof-strategy-alignment-repairer
+    reasoning_log_steps:
+      - physics_lean_proof_strategy_alignment_repair_start
+      - physics_lean_proof_strategy_alignment_repair_complete
+      - physics_lean_proof_strategy_alignment_repair_error
+    gate: alternate strategies are allowed only when source objects, law obligations, target semantics, and library support are preserved
+    outputs: [physics_lean_proof_strategy_alignment_repair_plan]
+
+  - id: repair.physics_lean_implicit_premise_normalize
+    phase: physics_lean_pathology_repair
+    trigger: implicit-premise-selection finding after object workbench evidence exists
+    owner_skill: physics-lean-implicit-premise-normalizer
+    reasoning_log_steps:
+      - physics_lean_implicit_premise_normalization_start
+      - physics_lean_implicit_premise_normalization_complete
+      - physics_lean_implicit_premise_normalization_error
+    gate: every exposed side condition must be source-backed, mathlib-backed, generated-support, or explicitly blocked
+    outputs: [physics_lean_implicit_premise_normalization_plan]
+
+  - id: repair.physics_lean_pathology_loop
+    phase: physics_lean_pathology_repair
+    trigger: after object workbench and pathology-specific repair plans are available
+    owner_skill: physics-lean-pathology-repair-orchestrator
+    reasoning_log_steps:
+      - physics_lean_pathology_repair_loop_start
+      - physics_lean_pathology_repair_loop_complete
+      - physics_lean_pathology_repair_loop_error
+    gate: target theorem refinement may start only when the loop plan says may_edit_target_theorem is true
+    outputs: [physics_lean_pathology_repair_loop_plan]
+
+  - id: repair.physics_lean_generative_repair
+    phase: physics_lean_pathology_repair
+    trigger: after deterministic pathology repair loop planning, especially when library blockers remain or target theorem refinement is high-risk
+    owner_skill: physics-lean-generative-repair-orchestrator
+    reasoning_log_steps:
+      - physics_lean_generative_repair_plan_start
+      - physics_lean_generative_repair_codex_exec_start
+      - physics_lean_generative_repair_codex_exec_complete
+      - physics_lean_generative_repair_complete
+      - physics_lean_generative_repair_error
+    gate: generative repair proposals are advisory and must preserve library-first object work, source anchors, theorem conclusion, non-vacuity, and deterministic rerun gates
+    outputs: [physics_lean_generative_repair_plan, physics_lean_generative_repair_report]
+
+  - id: repair.physics_lean_repair_expansion_cartography
+    phase: physics_lean_pathology_repair
+    trigger: after deterministic and generative repair planning, before recursive iteration or target refinement
+    owner_skill: physics-lean-repair-expansion-cartographer
+    reasoning_log_steps:
+      - physics_lean_repair_expansion_map_start
+      - physics_lean_repair_expansion_map_complete
+      - physics_lean_repair_expansion_map_error
+    gate: every active pathology, detected object, workbench item, repair plan, generative proposal, and rerun gate must be represented in the expansion map
+    outputs: [physics_lean_repair_expansion_map]
+
+  - id: repair.physics_lean_recursive_repair_control
+    phase: physics_lean_pathology_repair
+    trigger: after repair expansion cartography and before another pathology repair iteration or final acceptance
+    owner_skill: physics-lean-recursive-repair-loop-controller
+    reasoning_log_steps:
+      - physics_lean_recursive_repair_control_start
+      - physics_lean_recursive_repair_control_decision
+      - physics_lean_recursive_repair_control_complete
+      - physics_lean_recursive_repair_control_error
+    gate: recurse only when the expansion is exhaustive, outstanding nodes remain, iteration limits are respected, and the iteration signature has not repeated
+    outputs: [physics_lean_recursive_repair_control_plan]
+
+  - id: refine.physics_lean
+    phase: physics_lean_refinement
+    trigger: physics Lean diagnostics, unit analysis, assumption-context checks, source-drift checks, or reverse-informalization checks find repairable blockers
+    owner_skill: physics-lean-refinement-loop
+    reasoning_log_steps:
+      - physics_lean_refinement_start
+      - physics_lean_refinement_iteration
+      - physics_lean_refinement_complete
+      - physics_lean_refinement_blocked
+      - physics_lean_refinement_error
+    validation: refinement must preserve protected dimensions including source anchors, realness, non-vacuity, Lean executability, unit discipline, and explicit assumptions
+    outputs: [physics_lean_refinement_report]
+
+  - id: review.physics_final_hypotheses
+    phase: physics_lean_final_review
+    trigger: after Lean physics execution, unit analysis, physics critics, source anchors, realness, reverse informalization, non-vacuity, and declaration-shape checks are available
+    owner_skill: physics-final-hypothesis-reviewer
+    reasoning_log_steps:
+      - physics_final_hypothesis_review_start
+      - physics_final_hypothesis_review_complete
+      - physics_final_hypothesis_review_error
+    validation: final physics hypotheses must preserve quantities, units, dimensions, frames, regimes, laws, contextual assumptions, projections, and target non-vacuity
+    outputs: [physics_final_hypothesis_review]
+
+  - id: review.mathematical_final_hypotheses
+    phase: physics_lean_final_review
+    trigger: after Lean execution, declaration-shape, source-anchor, realness, non-vacuity, and physics-specific critics are available
+    owner_skill: mathematical-final-hypothesis-reviewer
+    reasoning_log_steps:
+      - mathematical_final_hypothesis_review_start
+      - mathematical_final_hypothesis_review_complete
+      - mathematical_final_hypothesis_review_error
+    validation: final mathematical hypotheses must preserve binders, domains, quantifiers, side conditions, conclusion shape, support dependencies, proof realness, and non-vacuity
+    outputs: [mathematical_final_hypothesis_review]
+
+  - id: review.physics_lean_derivation_completeness
+    phase: physics_lean_final_review
+    trigger: after Lean compilation and MathformerPhysicsLib grounding checks, before a physics Lean artifact is accepted as complete
+    owner_skill: physics-lean-derivation-completeness-checker
+    reasoning_log_steps:
+      - physics_lean_derivation_completeness_start
+      - physics_lean_derivation_completeness_complete
+      - physics_lean_derivation_completeness_error
+    validation: complete autoformalization requires no target-restating hypotheses, no target-shaped PhysicalLawWitness or GeneratedSupportAssumption wrappers, no proof that exactly unwraps the final target, no unresolved source-step obligation ledger entries, and no open recursive frontier
+    outputs:
+      - physics_lean_derivation_completeness_report
+      - derivation_obligation_ledger
+      - derivation_repair_frontier
+      - derivation_completeness_generative_probes
+
+  - id: review.final_derivation_hypotheses
+    phase: physics_lean_final_review
+    trigger: after physics and mathematical final hypothesis reviewer reports exist and before final consistency status is accepted
+    owner_skill: final-derivation-review-orchestrator
+    reasoning_log_steps:
+      - final_derivation_review_start
+      - final_derivation_review_complete
+      - final_derivation_review_error
+    validation: final review passes only when physics and mathematical reviewers pass or route blocking findings to localized monotonic refinement; semantic-preservation design-guard warnings must remain visible as review follow-up even when they are migration warnings rather than blockers
+    outputs: [final_derivation_hypothesis_review]
+
+  - id: refine.physics_lean_review
+    phase: physics_lean_review_refinement
+    trigger: when final physics or mathematical hypothesis review fails, or when semantic-preservation design-guard warnings require a localized follow-up plan before final consistency reporting
+    owner_skill: physics-lean-review-refinement-router
+    reasoning_log_steps:
+      - physics_lean_review_refinement_plan_start
+      - physics_lean_review_refinement_plan_complete
+      - physics_lean_review_refinement_plan_error
+    validation: review-driven refinement must be monotonic, localized to reviewer findings or design-guard warnings, and preserve passing source anchors, semantic-preservation contract fields, theorem shapes, unit coverage, assumption labels, realness, non-vacuity, mathlib grounding, and execution evidence while replacing vacuous context or reflexive unit evidence only with stronger source-backed evidence
+    outputs: [physics_lean_review_refinement_plan]
+
+  - id: consistency.physics_lean_report
+    phase: physics_lean_consistency
+    trigger: after Lean execution, unit analysis, source-anchor guard, realness, reverse informalization, non-vacuity, declaration-shape, mathlib grounding, and final hypothesis review reports exist
+    owner_skill: physics-lean-consistency-report-orchestrator
+    reasoning_log_steps:
+      - physics_lean_consistency_report_start
+      - physics_lean_consistency_report_complete
+      - physics_lean_consistency_report_error
+    validation: complete status requires Lean execution, realness, source anchors, unit consistency, assumption-context labeling, mathlib grounding, reverse informalization, non-vacuity, and passing final physics/mathematical hypothesis reviews
+    outputs: [physics_lean_consistency_report]
+
+  - id: reflection.physics_lean_process
+    phase: reflection
+    trigger: after a Lean physics run completes, blocks, or enters a costly plateau
+    owner_skill: physics-lean-refinement-loop
+    reasoning_log_steps:
+      - physics_lean_process_reflection_start
+      - physics_lean_process_reflection_complete
+      - physics_lean_process_reflection_error
+    validation: process reflection may propose skill, prompt, or test changes only when they preserve prior successful gates or are explicitly marked experimental
+    outputs: [physics_lean_process_reflection]
+
+  - id: reflection.physics_formal_answer_compare
+    phase: posthoc_reflection
+    trigger: after an informal-first FormalPhysics Lean candidate, draft blocker report, or final consistency report exists and the withheld dataset formal_answer may be inspected
+    owner_skill: physics-formal-answer-comparison-reflector
+    reasoning_log_steps:
+      - physics_formal_answer_comparison_start
+      - physics_formal_answer_comparison_compile_dataset
+      - physics_formal_answer_comparison_complete
+      - physics_formal_answer_comparison_error
+    validation: report must mark the dataset formal answer as inspiration-only, never a benchmark label or ground truth, and proposed changes must route through localized monotonic review refinement
+    outputs: [physics_formal_answer_comparison_reflection]
+
+  - id: report.formalphysics_comparative_analysis
+    phase: posthoc_comparison
+    trigger: after current FormalPhysics Mathformer artifacts and an external selected-example comparison JSON are available
+    owner_skill: formalphysics-comparative-analysis-reporter
+    reasoning_log_steps:
+      - formalphysics_comparison_input_prepared
+      - formalphysics_comparison_deterministic_judges_complete
+      - formalphysics_comparison_codex_exec_prompts_ready
+      - formalphysics_comparison_html_rendered
+      - formalphysics_comparison_complete
+      - formalphysics_comparison_error
+    validation: report must remove obsolete self-output from external JSON by default, mark reference answers as non-gold evidence, include MathformerPhysicsLib Foundations dependency inventory, and render JSON plus self-contained HTML with side-by-side Lean views
+    outputs:
+      - formalphysics_comparative_analysis_report
+      - formalphysics_comparative_analysis_html
+      - formalphysics_codex_exec_judge_prompts
+
+  - id: report.formalphysics_judge_synthesis
+    phase: posthoc_comparison_synthesis
+    trigger: after a FormalPhysics comparative report with deterministic judges, Codex-exec judge prompts/results, and role reviews exists
+    owner_skill: formalphysics-judge-synthesis-reporter
+    reasoning_log_steps:
+      - formalphysics_judge_synthesis_input_loaded
+      - formalphysics_judge_synthesis_aspects_scored
+      - formalphysics_judge_synthesis_strengths_weaknesses_complete
+      - formalphysics_judge_synthesis_todos_generated
+      - formalphysics_judge_synthesis_html_rendered
+      - formalphysics_judge_synthesis_error
+    validation: synthesis must preserve the non-gold reference-answer policy, aggregate all cases and compared approaches, interpret deterministic and role-review evidence by explicit aspect criteria, keep Codex-exec prompt readiness separate from completed-result disagreement patterns, classify action-register items by status/actionability, and emit JSON, Markdown, HTML, and TODO artifacts
+    outputs:
+      - formalphysics_judge_synthesis_report
+      - formalphysics_judge_synthesis_html
+      - formalphysics_judge_synthesis_todos
+
+  - id: report.formalphysics_codex_exec_judges
+    phase: posthoc_comparison_generative_judging
+    trigger: when completed Codex-exec judge JSON is desired for a FormalPhysics comparative report and the user explicitly asks to prepare or execute judge prompts
+    owner_skill: formalphysics-judge-synthesis-reporter
+    reasoning_log_steps:
+      - formalphysics_codex_exec_judges_prompts_selected
+      - formalphysics_codex_exec_judges_dry_run_written
+      - formalphysics_codex_exec_judges_execution_started
+      - formalphysics_codex_exec_judges_results_written
+      - formalphysics_codex_exec_judges_error
+    validation: runner must be dry-run by default, preserve prompt identities `(case_id, candidate_id, judge_id)`, write selected prompts plus result JSON, and require explicit `--execute` before invoking Codex-exec
+    outputs:
+      - formalphysics_codex_exec_selected_prompts
+      - formalphysics_codex_exec_judge_results
+      - formalphysics_codex_exec_judge_run_manifest
+
+  - id: physics.isabelle.workflow.plan
+    phase: physics_isabelle_planning
+    trigger: after physics derivation source, quantity, dimension, unit, regime, frame, gap, and law packets exist and Isabelle/HOL is the target backend
+    owner_skill: physics-isabelle-workflow-orchestrator
+    reasoning_log_steps:
+      - physics_isabelle_workflow_plan_start
+      - physics_isabelle_workflow_plan_complete
+      - physics_isabelle_workflow_plan_error
+    validation: workflow plan must reuse shared physics preformalization while explicitly isolating all Lean hooks and Lean artifact paths
+    outputs: [physics_isabelle_workflow_plan]
+
+  - id: physics.isabelle.type_system.build
+    phase: physics_isabelle_preformalization
+    trigger: after physics dimension/unit/frame/law packets and before Isabelle/HOL drafting
+    owner_skill: physics-isabelle-type-system-builder
+    reasoning_log_steps:
+      - physics_isabelle_type_system_start
+      - physics_isabelle_type_system_complete
+      - physics_isabelle_type_system_error
+    validation: type packet must distinguish dimensions, quantities, vectors, fields, operators, frames, laws, and raw-scalar projection boundaries using maximal Isabelle/HOL-native surfaces before local fallback scaffolds
+    outputs: [physics_isabelle_type_system_packet]
+
+  - id: physics.isabelle.background.plan
+    phase: physics_isabelle_preformalization
+    trigger: after Isabelle physics type packets and informal expansion expose intermediate definitions, physical laws, calculus support facts, unit/dimension bridges, or algebraic cores
+    owner_skill: physics-isabelle-workflow-orchestrator
+    reasoning_log_steps:
+      - physics_isabelle_background_plan_start
+      - physics_isabelle_background_plan_complete
+      - physics_isabelle_background_plan_error
+    validation: background plan must order required support declarations, require local Isabelle/HOL or IsarMathLib reuse attempts before local definitions, and block complete status while required support remains open
+    outputs: [physics_isabelle_background_dependency_plan]
+
+  - id: physics.isabelle.assumptions.encode
+    phase: physics_isabelle_preformalization
+    trigger: after physics regimes and frames are modeled and before Isabelle/HOL theorem statements are drafted or refined
+    owner_skill: physics-isabelle-assumption-context-encoder
+    reasoning_log_steps:
+      - physics_isabelle_assumption_encode_start
+      - physics_isabelle_assumption_encode_complete
+      - physics_isabelle_assumption_encode_error
+    validation: contextual assumptions must be source-backed, generated-support, or explicitly blocked; silent strengthening blocks complete status
+    outputs: [physics_isabelle_assumption_packet]
+
+  - id: draft.physics_isabelle_derivation
+    phase: physics_isabelle_drafting
+    trigger: after Isabelle physics workflow, type, assumption, unit, law, grounding, and source-alignment packets are available
+    owner_skill: physics-isabelle-derivation-drafter
+    reasoning_log_steps:
+      - physics_isabelle_draft_start
+      - physics_isabelle_draft_complete
+      - physics_isabelle_draft_error
+    validation: generated Isabelle/HOL theory must preserve source anchors, physics context, typed quantities or explicit projections, unit obligations, and no hidden target claim
+    outputs: [physics_isabelle_theory_file, physics_isabelle_draft_report]
+
+  - id: execute.physics_isabelle_derivation
+    phase: physics_isabelle_execution
+    trigger: immediately after an Isabelle/HOL physics theory is written
+    owner_skill: isabelle-execution-runner
+    reasoning_log_steps:
+      - physics_isabelle_execution_start
+      - physics_isabelle_execution_complete
+      - physics_isabelle_execution_error
+    validation: "`isabelle build -D` should pass when Isabelle is installed, and placeholder-free theory text is required for complete status"
+    outputs: [physics_isabelle_execution_report, physics_isabelle_build_log]
+
+  - id: review.physics_isabelle_final_hypotheses
+    phase: physics_isabelle_final_review
+    trigger: after Isabelle execution, type packets, assumption packets, source anchors, realness, and placeholder checks are available
+    owner_skill: physics-isabelle-final-hypothesis-reviewer
+    reasoning_log_steps:
+      - physics_isabelle_final_hypothesis_review_start
+      - physics_isabelle_final_hypothesis_review_complete
+      - physics_isabelle_final_hypothesis_review_error
+    validation: final Isabelle physics hypotheses must preserve quantities, units, dimensions, frames, regimes, laws, contextual assumptions, projections, source commentary, high Isabelle/HOL library grounding, and closed background support obligations
+    outputs: [physics_isabelle_final_hypothesis_review]
+
+  - id: review.mathematical_isabelle_final_hypotheses
+    phase: physics_isabelle_final_review
+    trigger: after Isabelle execution and before final Isabelle physics consistency status is accepted
+    owner_skill: mathematical-isabelle-final-hypothesis-reviewer
+    reasoning_log_steps:
+      - mathematical_isabelle_final_hypothesis_review_start
+      - mathematical_isabelle_final_hypothesis_review_complete
+      - mathematical_isabelle_final_hypothesis_review_error
+    validation: final Isabelle mathematical hypotheses must preserve theorem shape, binders, domains, side conditions, support dependencies, proof realness, and non-vacuity
+    outputs: [mathematical_isabelle_final_hypothesis_review]
+
+  - id: consistency.physics_isabelle_report
+    phase: physics_isabelle_consistency
+    trigger: after Isabelle execution, type, assumption, realness, source-anchor, and final hypothesis review reports exist
+    owner_skill: physics-isabelle-consistency-report-orchestrator
+    reasoning_log_steps:
+      - physics_isabelle_consistency_report_start
+      - physics_isabelle_consistency_report_complete
+      - physics_isabelle_consistency_report_error
+    validation: complete status requires Isabelle execution evidence, placeholder-free theory, realness, source anchors, type and assumption packets, high Isabelle/HOL library grounding, closed background obligations, and passing Isabelle physics/mathematical final reviews
+    outputs: [physics_isabelle_consistency_report]
+
+  - id: reflection.physics_isabelle_process
+    phase: reflection
+    trigger: after an Isabelle physics run completes, blocks, or enters a costly plateau
+    owner_skill: physics-isabelle-workflow-orchestrator
+    reasoning_log_steps:
+      - physics_isabelle_process_reflection_start
+      - physics_isabelle_process_reflection_complete
+      - physics_isabelle_process_reflection_error
+    validation: process reflection may propose Isabelle skill or prompt changes only when they preserve prior successful Lean and Isabelle gates or are explicitly marked experimental
+    outputs: [physics_isabelle_process_reflection]
+
+  - id: draft.physics_sympy_derivation
+    phase: drafting
+    trigger: after physics derivation plan is available
+    owner_skill: physics-sympy-derivation-drafter
+    reasoning_log_steps:
+      - physics_sympy_draft_start
+      - physics_sympy_draft_complete
+      - physics_sympy_draft_error
+    validation: generated artifact must expose the physics SymPy contract and compute the target through executable steps
+    outputs: [physics_sympy_python_artifact, physics_sympy_draft_report]
+
+  - id: execute.physics_sympy_derivation
+    phase: execution
+    trigger: immediately after physics SymPy artifact generation
+    owner_skill: physics-sympy-execution-runner
+    reasoning_log_steps:
+      - physics_sympy_execution_start
+      - physics_sympy_execution_complete
+      - physics_sympy_execution_error
+    validation: artifact must import, execute, and emit unit, step, numeric, and trace reports
+    outputs: [physics_sympy_execution_report]
+
+  - id: execute.physics_sympy_interpret
+    phase: physics_sympy_execution
+    trigger: immediately after physics SymPy execution diagnostics are available
+    owner_skill: physics-sympy-execution-interpreter
+    reasoning_log_steps:
+      - physics_sympy_execution_interpret_start
+      - physics_sympy_execution_interpret_complete
+      - physics_sympy_execution_interpret_error
+    validation: raw Python/SymPy diagnostics must be classified into dependency, parse, symbol, assumption, unit, residual, numeric, projection, law, target-leakage, or empty-equation repair classes before refinement
+    outputs: [physics_sympy_execution_interpretation]
+
+  - id: physics.units.verify
+    phase: physics_sympy_validation
+    trigger: after artifact execution or directly from a derivation case
+    owner_skill: physics-unit-analysis-verifier
+    reasoning_log_steps:
+      - physics_unit_verify_start
+      - physics_unit_verify_complete
+      - physics_unit_verify_error
+    validation: every equation and generated step must be dimensionally consistent
+    outputs: [physics_unit_analysis_report]
+
+  - id: physics.steps.verify
+    phase: physics_sympy_validation
+    trigger: after artifact execution
+    owner_skill: physics-derivation-step-verifier
+    reasoning_log_steps:
+      - physics_step_verify_start
+      - physics_step_verify_complete
+      - physics_step_verify_error
+    validation: target expression must have zero symbolic residual against the computed derivation chain
+    outputs: [physics_step_verification_report]
+
+  - id: physics.numeric.sample
+    phase: physics_sympy_validation
+    trigger: after symbolic and unit checks
+    owner_skill: physics-numeric-sanity-sampler
+    reasoning_log_steps:
+      - physics_numeric_sample_start
+      - physics_numeric_sample_complete
+      - physics_numeric_sample_error
+    validation: numeric samples must obey physical domains and report concrete counterexamples
+    outputs: [physics_numeric_sanity_report]
+
+  - id: critique.physics_sympy_semantics
+    phase: physics_sympy_critique
+    trigger: after SymPy execution interpretation, equation surface, assumption context, unit report, step report, and numeric report exist
+    owner_skill: physics-sympy-equational-semantics-critic
+    reasoning_log_steps:
+      - physics_sympy_semantics_critic_start
+      - physics_sympy_semantics_critic_complete
+      - physics_sympy_semantics_critic_error
+    validation: critic must detect target leakage, missing law grounding, scalar erasure, source drift, missing projection bridges, and unsupported generated bridge equations
+    outputs: [physics_sympy_equational_semantics_critic_report]
+
+  - id: critique.physics_sympy_dimensions
+    phase: physics_sympy_critique
+    trigger: after unit analysis and equation-surface construction and before final equation review
+    owner_skill: physics-sympy-dimension-projection-critic
+    reasoning_log_steps:
+      - physics_sympy_dimension_critic_start
+      - physics_sympy_dimension_critic_complete
+      - physics_sympy_dimension_critic_error
+    validation: critic must stress unit, dimension, dimensionless-operation, vector/field projection, coordinate, and sign-convention discipline
+    outputs: [physics_sympy_dimension_projection_critic_report]
+
+  - id: critique.physics_sympy_generative_panel
+    phase: physics_sympy_critique
+    trigger: after deterministic SymPy physics critics or whenever a near-final artifact remains high-risk or critic disagreement persists
+    owner_skill: physics-sympy-generative-critic-orchestrator
+    reasoning_log_steps:
+      - physics_sympy_generative_critic_plan_start
+      - physics_sympy_generative_critic_codex_exec_start
+      - physics_sympy_generative_critic_codex_exec_complete
+      - physics_sympy_generative_critic_complete
+      - physics_sympy_generative_critic_error
+    validation: generative findings may block only when backed by source anchors, deterministic critics, execution diagnostics, unit reports, or repeated independent probes
+    outputs: [physics_sympy_generative_critic_plan, physics_sympy_generative_critic_report]
+
+  - id: review.physics_sympy_final_equations
+    phase: physics_sympy_final_review
+    trigger: after SymPy execution, equation surface, assumption context, unit analysis, step verification, numeric sampling, and deterministic critics are available
+    owner_skill: physics-sympy-final-equation-reviewer
+    reasoning_log_steps:
+      - physics_sympy_final_equation_review_start
+      - physics_sympy_final_equation_review_complete
+      - physics_sympy_final_equation_review_error
+    validation: final physics equation graph must preserve quantities, units, dimensions, frames, regimes, assumptions, law grounding, projection bridges, target derivation, numeric domains, and target non-leakage
+    outputs: [physics_sympy_final_equation_review]
+
+  - id: review.mathematical_sympy_final_equations
+    phase: physics_sympy_final_review
+    trigger: after SymPy execution, symbolic verification, counterexample search, trace verification, assumption context, and physics-specific critics are available
+    owner_skill: mathematical-sympy-final-equation-reviewer
+    reasoning_log_steps:
+      - mathematical_sympy_final_equation_review_start
+      - mathematical_sympy_final_equation_review_complete
+      - mathematical_sympy_final_equation_review_error
+    validation: final mathematical equation trace must preserve parse shape, equality direction, equivalence, residual checks, branch and denominator side conditions, matrix shapes, domains, counterexample search, executability, and non-vacuity
+    outputs: [mathematical_sympy_final_equation_review]
+
+  - id: refine.physics_sympy_review
+    phase: physics_sympy_review_refinement
+    trigger: when final physics or mathematical SymPy equation review fails and a localized monotonic repair plan is needed
+    owner_skill: physics-sympy-review-refinement-router
+    reasoning_log_steps:
+      - physics_sympy_review_refinement_plan_start
+      - physics_sympy_review_refinement_plan_complete
+      - physics_sympy_review_refinement_plan_error
+    validation: review-driven refinement must be localized to reviewer findings and preserve passing source anchors, equation nodes, transformation certificates, unit coverage, assumptions, projections, numeric domains, and target shape
+    outputs: [physics_sympy_review_refinement_plan]
+
+  - id: physics.sympy.design_guard.review
+    phase: physics_sympy_review_refinement
+    trigger: when broader semantic-preservation debts must be checked beyond a single failed final equation review
+    owner_skill: physics-sympy-review-refinement-router
+    reasoning_log_steps:
+      - physics_sympy_design_guard_review_start
+      - physics_sympy_design_guard_review_complete
+      - physics_sympy_design_guard_review_error
+    validation: design guard must flag missing or stale source commentary, SymPy alignment, target nonleakage, assumption provenance, projection bridges, generated-support labels, installed-library grounding, and consumer-ready reasoning-log evidence while routing each finding to a local repair surface
+    outputs: [physics_sympy_design_guard_review]
+
+  - id: physics.sympy.repair_expansion.map
+    phase: physics_sympy_recursive_repair
+    trigger: after a SymPy goal-sample plan, execution report, final review, or design-guard finding identifies open repair surfaces
+    owner_skill: physics-sympy-repair-expansion-cartographer
+    reasoning_log_steps:
+      - physics_sympy_repair_expansion_map_start
+      - physics_sympy_repair_expansion_map_complete
+      - physics_sympy_repair_expansion_map_error
+    validation: expansion map must classify each open source, quantity, unit, dimension, frame, regime, equation, law, SymPy API, projection, transformation, numeric, target-nonleakage, trace-realness, or reasoning-log surface before another repair iteration
+    outputs: [physics_sympy_repair_expansion_map]
+
+  - id: physics.sympy.recursive_repair.control
+    phase: physics_sympy_recursive_repair
+    trigger: after a SymPy repair expansion map exists and before another repair iteration is allowed
+    owner_skill: physics-sympy-recursive-repair-loop-controller
+    reasoning_log_steps:
+      - physics_sympy_recursive_repair_control_start
+      - physics_sympy_recursive_repair_control_complete
+      - physics_sympy_recursive_repair_control_error
+    validation: controller must decide complete, recurse, or blocked from an exhaustive SymPy expansion map, repeated signatures, and iteration limits
+    outputs: [physics_sympy_recursive_repair_control_plan]
+
+  - id: physics.sympy.grounded_sample.thoroughness
+    phase: physics_sympy_final_review
+    trigger: after a one-case SymPy artifact has executable gates, design-guard review, and recursive control evidence
+    owner_skill: physics-sympy-goal-sample-autoformalizer
+    reasoning_log_steps:
+      - physics_sympy_grounded_sample_thoroughness_start
+      - physics_sympy_grounded_sample_thoroughness_complete
+      - physics_sympy_grounded_sample_thoroughness_error
+    validation: gate one formalphysics case for source commentary, equation-surface depth, high library grounding, unit/dimension checks, numeric sanity, final reviews, target nonleakage, trace realness, and no high design-guard findings
+    outputs: [physics_sympy_grounded_sample_thoroughness]
+
+  - id: consistency.physics_derivation_report
+    phase: consistency
+    trigger: after all physics SymPy reports exist
+    owner_skill: physics-derivation-consistency-report-orchestrator
+    reasoning_log_steps:
+      - physics_consistency_report_start
+      - physics_consistency_report_complete
+      - physics_consistency_report_error
+    validation: complete status requires source coverage, gap closure, unit consistency, executable steps, target success, and no critical blockers
+    outputs: [physics_derivation_consistency_report]
+
+  - id: reflection.physics_sympy_formal_answer_compare
+    phase: posthoc_reflection
+    trigger: after an informal-first FormalPhysics SymPy candidate, draft blocker report, or final consistency report exists and the withheld dataset formal_answer may be inspected
+    owner_skill: physics-sympy-formal-answer-reflector
+    reasoning_log_steps:
+      - physics_sympy_formal_answer_comparison_start
+      - physics_sympy_formal_answer_comparison_complete
+      - physics_sympy_formal_answer_comparison_error
+    validation: report must mark the dataset formal_answer as inspiration-only, never a benchmark label or ground truth, and accepted changes must route through localized monotonic review refinement
+    outputs: [physics_sympy_formal_answer_reflection]
+
+  - id: dependency.resolve
+    phase: dependency
+    trigger: dependency_statements is non-empty
+    owner_skill: autoformalization-workflow-orchestrator
+    reasoning_log_steps:
+      - dependency_inputs_resolved
+      - dependency_processing_start
+      - dependency_recursive_call
+      - dependency_recursive_result
+      - dependency_resolution_complete
+    gate: recursive dependencies use the same hook contract as parent statements
+
+  - id: preformalization.expansion_support
+    phase: preformalization
+    trigger: proof text is available before LaTeX prerequisite expansion
+    owner_skill: proof-expansion-support-orchestrator
+    reasoning_log_steps:
+      - proof_expansion_support_start
+      - proof_expansion_support_complete
+      - proof_expansion_support_skipped
+    gate: hard or research-level proof segments must either have web support or explicit unresolved status
+    outputs:
+      - expansion_support_packet
+
+  - id: preformalization.paper_theory_expand
+    phase: preformalization
+    trigger: after paper theory localization and before drafting the selected main result queue
+    owner_skill: paper-theory-autoformalization-orchestrator
+    reasoning_log_steps:
+      - paper_theory_expansion_plan_start
+      - paper_theory_intermediate_queue_ready
+      - paper_theory_reference_support_ready
+      - paper_theory_expansion_plan_complete
+      - paper_theory_expansion_plan_error
+    gate: main paper results cannot be drafted until definitions, assumptions, intermediate lemmas, proof blocks, notation, equations, and cited references are expanded or explicitly marked unresolved
+    outputs:
+      - expanded_intermediate_queue
+      - main_result_drafting_queue
+      - blocked_or_unresolved_dependencies
+
+  - id: preformalization.expansion_difficulty
+    phase: preformalization
+    trigger: proof expansion support is enabled or requested
+    owner_skill: proof-expansion-difficulty-estimator
+    reasoning_log_steps:
+      - proof_expansion_difficulty_start
+      - proof_expansion_difficulty_complete
+      - proof_expansion_difficulty_error
+    outputs:
+      - difficulty_report
+      - web_search_recommended segments
+      - suggested_queries
+
+  - id: preformalization.expansion_web_support
+    phase: preformalization
+    trigger: difficulty estimator flags hard/research segments or web_search_recommended is true
+    owner_skill: proof-expansion-web-researcher
+    reasoning_log_steps:
+      - proof_expansion_web_search_start
+      - proof_expansion_web_search_result
+      - proof_expansion_web_search_complete
+      - proof_expansion_web_search_skipped
+    gate: source-backed claims must cite URLs and preserve uncertainty when support is incomplete
+    outputs:
+      - web_research_packets
+      - verified statements
+      - unresolved uncertainties
+
+  - id: preformalization.expand
+    phase: preformalization
+    trigger: enable_latex_expansion is true and a LatexExpansionAgent is configured
+    owner_skill: latex-prerequisite-expander
+    reasoning_log_steps:
+      - latex_expansion_start
+      - latex_expansion_complete
+      - latex_expansion_error
+      - latex_expansion_skipped
+    outputs:
+      - expanded_statement
+      - effective_statement
+
+  - id: preformalization.review.suite
+    phase: preformalization
+    trigger: after latex_expansion_complete or when expansion review is explicitly requested
+    owner_skill: latex-expansion-review-orchestrator
+    reasoning_log_steps:
+      - latex_expansion_review_suite_start
+      - latex_expansion_review_suite_complete
+      - latex_expansion_review_suite_skipped
+    gate: suite passes only when all configured expansion reviewers return Judgement True
+    outputs:
+      - latex_expansion_reviews
+      - latex_expansion_review_passed
+
+  - id: preformalization.review.completeness
+    phase: preformalization
+    trigger: expanded_statement is available and a completeness reviewer is configured
+    owner_skill: latex-expansion-completeness-reviewer
+    reasoning_log_steps:
+      - latex_expansion_completeness_review_start
+      - latex_expansion_completeness_review_complete
+      - latex_expansion_completeness_review_error
+      - latex_expansion_completeness_review_skipped
+    gate: missing assumptions, prerequisites, side conditions, or changed conclusion should block trusting the expansion
+    outputs:
+      - judgement
+      - explanation
+
+  - id: preformalization.review.bindings
+    phase: preformalization
+    trigger: expanded_statement is available and a binding reviewer is configured
+    owner_skill: latex-expansion-binding-reviewer
+    reasoning_log_steps:
+      - latex_expansion_binding_review_start
+      - latex_expansion_binding_review_complete
+      - latex_expansion_binding_review_error
+      - latex_expansion_binding_review_skipped
+    gate: dangling identifiers, free variables, ambiguous domains, or quantifier drift should block trusting the expansion
+    outputs:
+      - judgement
+      - explanation
+
+  - id: preformalization.line_translation_packet
+    phase: preformalization
+    trigger: after source-unit inventory and expansion review, before duplicate-result precheck or first Lean drafting
+    owner_skill: source-line-translation-packet-builder
+    reasoning_log_steps:
+      - source_line_translation_packet_start
+      - source_line_translation_packet_complete
+      - source_line_translation_packet_error
+    gate: every source-backed drafting target must expose stable literal source line ids, exact NL/LaTeX spans, Lean-facing candidate surfaces, and prompt-ready source anchors before the drafter is trusted
+    outputs:
+      - line_translation_packet
+      - literal_source_anchor_index
+      - lean_drafting_alignment_prompt
+
+  - id: preformalization.result_existence_precheck
+    phase: preformalization
+    trigger: before initial autoformalization of a theorem-like result unless a reviewed waiver or seed formalization is provided
+    owner_skill: result-existence-precheck-orchestrator
+    reasoning_log_steps:
+      - result_existence_precheck_start
+      - result_existence_precheck_local_search_ready
+      - result_existence_precheck_web_search_ready
+      - result_existence_precheck_complete
+      - result_existence_precheck_skipped
+      - result_existence_precheck_error
+    gate: initial drafting is blocked until existing mathlib/MathformerLib candidates are ruled out and required official-source web search is complete
+    outputs:
+      - result_existence_report
+      - reuse_packet
+      - proceed_to_autoformalization
+
+  - id: mathlib.discovery
+    phase: mathlib_alignment
+    trigger: enable_concept_mapping or enforce_mathlib_alignment
+    owner_skill: mathlib-concept-candidate-mapper
+    reasoning_log_steps:
+      - concept_mapping_start
+      - concept_mapping_cli_start
+      - concept_mapping_concepts_extracted
+      - concept_mapping_concepts_provided
+      - concept_mapping_index_loaded
+      - concept_mapping_concept_ranked
+      - concept_mapping_success
+      - concept_mapping_input_error
+      - concept_mapping_output_emitted
+      - concept_mapping_error
+    outputs:
+      - relevant_modules
+      - ranked candidates
+      - source references
+
+  - id: mathlib.result_existence_search
+    phase: mathlib_alignment
+    trigger: result-existence precheck needs local mathlib, MathformerLib, and official-source web-search-plan evidence
+    owner_skill: mathlib-result-existence-checker
+    reasoning_log_steps:
+      - result_existence_search_start
+      - result_existence_mathlib_search_complete
+      - result_existence_mathformerlib_search_complete
+      - result_existence_web_plan_complete
+      - result_existence_search_complete
+      - result_existence_search_error
+    gate: likely existing or overlapping candidates block first-pass drafting; local absence requires official-source web confirmation before proceeding
+    outputs:
+      - result_existence_report
+      - duplicate_candidates
+      - web_search_plan
+
+  - id: mathlib.ontology.validate
+    phase: mathlib_alignment
+    trigger: after concept ontology profile edits or before ontology-backed concept expansion is trusted
+    owner_skill: mathlib-concept-ontology-manager
+    reasoning_log_steps:
+      - mathlib_ontology_validation_start
+      - mathlib_ontology_validation_complete
+      - mathlib_ontology_validation_error
+    gate: ontology profile must parse and have no duplicate or empty reviewed concepts
+    outputs:
+      - ontology_validation_report
+
+  - id: mathlib.index.build
+    phase: mathlib_alignment
+    trigger: before source-backed mathlib navigation or when mathlib revision evidence is stale
+    owner_skill: mathlib-index-builder
+    reasoning_log_steps:
+      - mathlib_index_build_start
+      - mathlib_index_build_complete
+      - mathlib_index_build_error
+      - mathlib_index_stamp_validated
+    gate: index evidence must include Lean version, mathlib git revision, declaration count, theorem-shape summaries, import metadata, and declaration-graph metadata before downstream ranking is trusted
+    outputs:
+      - mathlib_index
+      - version_stamp
+      - declaration_graph
+
+  - id: mathlib.term.annotate
+    phase: mathlib_alignment
+    trigger: before declaration search for informal physics or mathematics terms
+    owner_skill: mathlib-term-expansion-annotator
+    reasoning_log_steps:
+      - mathlib_term_annotation_start
+      - mathlib_term_annotation_complete
+      - mathlib_term_annotation_error
+      - mathlib_term_ambiguity_recorded
+    gate: overloaded or weakly supported terms must remain ambiguous or enter the gap ledger until profile evidence supports a single domain-specific concept
+    outputs:
+      - probable_annotations
+      - proof_role_annotations
+      - ambiguity_evidence
+      - term_gap_ledger
+
+  - id: mathlib.navigation.state
+    phase: mathlib_alignment
+    trigger: after term annotations when a workflow needs bounded, replayable mathlib exploration
+    owner_skill: mathlib-navigation-state-planner
+    reasoning_log_steps:
+      - mathlib_navigation_state_start
+      - mathlib_navigation_state_frontier_ranked
+      - mathlib_navigation_state_complete
+      - mathlib_navigation_state_error
+      - mathlib_navigation_gap_recorded
+    gate: navigation must expose allowed next operation, depth and breadth budgets, declaration-neighborhood evidence, import cost, stop reason, and gap-ledger entries before candidates are promoted
+    outputs:
+      - navigation_state
+      - candidate_declarations
+      - intended_import_set
+      - navigation_gap_ledger
+
+  - id: mathlib.hierarchy.navigate
+    phase: mathlib_alignment
+    trigger: user asks to navigate mathlib hierarchy or a workflow needs module-tree context
+    owner_skill: mathlib-hierarchy-navigator
+    reasoning_log_steps:
+      - mathlib_hierarchy_navigation_start
+      - mathlib_hierarchy_navigation_complete
+    outputs:
+      - focus
+      - ancestors
+      - children
+      - siblings
+
+  - id: mathlib.hierarchy.module_tree
+    phase: mathlib_alignment
+    trigger: module-prefix navigation is requested
+    owner_skill: mathlib-module-tree-cartographer
+    reasoning_log_steps:
+      - mathlib_module_tree_scanned
+    outputs:
+      - child prefixes
+      - leaf counts
+      - sibling modules
+
+  - id: mathlib.hierarchy.declaration_neighborhood
+    phase: mathlib_alignment
+    trigger: a concrete module or declaration-name filter is requested
+    owner_skill: mathlib-declaration-neighborhood-navigator
+    reasoning_log_steps:
+      - mathlib_declaration_neighborhood_ready
+    outputs:
+      - imports
+      - declarations
+      - source references
+
+  - id: mathlib.verify
+    phase: mathlib_alignment
+    trigger: concept_map_verify_checks is true or enable_mathlib_concept_compatibility_loop is true
+    owner_skill: mathlib-candidate-verifier
+    reasoning_log_steps:
+      - concept_mapping_verify_result
+    gate: verified candidates should include check_ok and check_errors fields
+    outputs:
+      - check_ok
+      - check_errors
+
+  - id: mathlib.compatibility_loop
+    phase: mathlib_alignment
+    trigger: enable_mathlib_concept_compatibility_loop is true
+    owner_skill: mathlib-compatibility-loop-orchestrator
+    reasoning_log_steps:
+      - mathlib_concept_compatibility_loop_start
+      - mathlib_concept_compatibility_loop_iteration_start
+      - mathlib_concept_compatibility_loop_iteration_error
+      - mathlib_concept_compatibility_loop_complete
+    gate: loop stops when every extracted concept has verified mathlib coverage or the configured round cap is reached
+    outputs:
+      - mathlib_concept_compatibility_rounds
+      - mathlib_concept_coverage
+
+  - id: mathlib.coverage
+    phase: mathlib_alignment
+    trigger: after concept mapping or each compatibility-loop iteration
+    owner_skill: mathlib-concept-coverage-reviewer
+    reasoning_log_steps:
+      - mathlib_concept_coverage_review_complete
+    gate: all concepts should have at least one check_ok declaration or an explicit gap
+    outputs:
+      - coverage_score
+      - all_concepts_verified
+      - gaps
+
+  - id: mathlib.web_strategy
+    phase: mathlib_alignment
+    trigger: after concept coverage reports unresolved or ambiguous mathlib candidates and web grounding is enabled
+    owner_skill: mathlib-web-search-strategist
+    reasoning_log_steps:
+      - mathlib_web_strategy_start
+      - mathlib_web_strategy_complete
+      - mathlib_web_strategy_error
+    gate: planned searches must prefer official mathlib docs/source and include local Lean verification handoffs
+    outputs:
+      - mathlib_web_search_plan
+      - official_source_queries
+      - local_verification_handoffs
+
+  - id: mathlib.web_evidence
+    phase: mathlib_alignment
+    trigger: after web search produces mathlib grounding claims
+    owner_skill: mathlib-web-evidence-validator
+    reasoning_log_steps:
+      - mathlib_web_evidence_validation_start
+      - mathlib_web_evidence_validation_complete
+      - mathlib_web_evidence_validation_error
+    gate: API claims require official mathlib docs/source evidence and local Lean verification before being treated as grounded
+    outputs:
+      - mathlib_web_evidence_report
+      - grounded_claims
+      - candidate_only_claims
+      - blocked_web_claims
+
+  - id: mathlib.web_grounding_loop
+    phase: mathlib_alignment
+    trigger: local concept mapping, hierarchy navigation, or verification leaves gaps that need web-assisted grounding
+    owner_skill: mathlib-web-grounding-orchestrator
+    reasoning_log_steps:
+      - mathlib_web_grounding_loop_start
+      - mathlib_web_grounding_local_evidence_ready
+      - mathlib_web_grounding_search_plan_ready
+      - mathlib_web_grounding_evidence_validated
+      - mathlib_web_grounding_local_verification_handoff
+      - mathlib_web_grounding_loop_complete
+      - mathlib_web_grounding_loop_error
+    gate: web-assisted claims must return to local verification before prompt injection, import planning, or accepted library accumulation
+    outputs:
+      - mathlib_web_grounding_packet
+      - grounded_api_claims
+      - unresolved_mathlib_gaps
+
+  - id: mathlib.grounding_maximize
+    phase: mathlib_alignment
+    trigger: after concept coverage, web grounding, import planning, saved Lean generation, or whenever artifact-set mathlib grounding is below target
+    owner_skill: mathlib-grounding-maximizer
+    reasoning_log_steps:
+      - mathlib_grounding_maximization_start
+      - mathlib_grounding_maximization_round_start
+      - mathlib_grounding_measurement_complete
+      - mathlib_grounding_fix_plan_ready
+      - mathlib_grounding_monotonic_gate_complete
+      - mathlib_grounding_maximization_complete
+      - mathlib_grounding_maximization_error
+    gate: artifact sets should have no broad Mathlib imports, no realness blockers, compatibility scores at target, and nondecreasing reference-free grounding unless explicitly marked draft or blocked
+    outputs:
+      - mathlib_grounding_report
+      - grounding_loop_todos
+      - monotonicity_comparison
+
+  - id: mathlib.api_plan
+    phase: mathlib_alignment
+    trigger: after concept coverage review and before initial drafting
+    owner_skill: mathlib-api-compatibility-planner
+    reasoning_log_steps:
+      - alignment_hints_prepared
+    gate: drafting prompts should prefer verified declarations and isolate unresolved gaps
+    outputs:
+      - mathlib_alignment_hints
+
+  - id: mathlib.import.plan
+    phase: mathlib_alignment
+    trigger: after concept coverage, hierarchy navigation, or fixture expected-import metadata is available
+    owner_skill: mathlib-import-set-builder
+    reasoning_log_steps:
+      - mathlib_import_plan_start
+      - mathlib_import_plan_complete
+    gate: final import plans should prefer explicit Mathlib modules and flag broad `import Mathlib`
+    outputs:
+      - planned_imports
+      - import_block
+      - import_plan_findings
+
+  - id: mathlib.import.context
+    phase: mathlib_alignment
+    trigger: after an import plan is built and before drafting, refinement, or final artifact acceptance relies on declarations
+    owner_skill: lean-import-context-verifier
+    reasoning_log_steps:
+      - lean_import_context_verification_start
+      - lean_import_context_verification_complete
+    gate: expected declarations and generated Lean must pass under the intended imports, not only under broad `import Mathlib`
+    outputs:
+      - import_context_report
+      - broad_only_declarations
+      - missing_expected_imports
+
+  - id: mathformerlib.accumulate
+    phase: library
+    trigger: a generated or curated formalization should be accumulated into the parallel Mathformerlib library
+    owner_skill: mathformerlib-accumulation-orchestrator
+    reasoning_log_steps:
+      - mathformerlib_accumulation_start
+      - mathformerlib_accumulation_candidate_selected
+      - mathformerlib_accumulation_complete
+      - mathformerlib_accumulation_error
+    gate: accepted Mathformerlib entries must pass promotion gate, compile checks, and registry update
+    outputs:
+      - accumulation_plan
+      - target_module
+      - promotion_report
+
+  - id: mathformerlib.registry
+    phase: library
+    trigger: after Mathformerlib files change or before reporting accumulated formalization counts
+    owner_skill: mathformerlib-registry-manager
+    reasoning_log_steps:
+      - mathformerlib_registry_build_start
+      - mathformerlib_registry_build_complete
+      - mathformerlib_registry_build_error
+    gate: registry must have no accepted modules with placeholder/scaffold markers
+    outputs:
+      - mathformerlib_registry
+      - formalization_status_counts
+
+  - id: mathformerlib.promotion_gate
+    phase: library
+    trigger: before moving a candidate formalization into accepted Mathformerlib status
+    owner_skill: mathformerlib-promotion-gate
+    reasoning_log_steps:
+      - mathformerlib_promotion_gate_start
+      - mathformerlib_promotion_gate_complete
+      - mathformerlib_promotion_gate_error
+    gate: realness and requested compile checks must pass before accepted promotion
+    outputs:
+      - promotion_status
+      - promotion_findings
+
+  - id: library.documentation
+    phase: library
+    trigger: after final Lean artifacts, realness reports, consistency reports, statistics, and Mathformerlib registry updates are complete
+    owner_skill: mathformer-library-docs-generator
+    reasoning_log_steps:
+      - mathformer_library_docs_start
+      - mathformer_library_docs_complete
+      - mathformer_library_docs_error
+    gate: every documented Lean module must have a repository Markdown page, rendered Lean and LaTeX/source sections where present, and an updated browsable index
+    outputs:
+      - mathformer_library_docs_index
+      - mathformer_library_module_pages
+      - mathformer_library_docs_manifest
+
+  - id: library.aligned_html_documentation
+    phase: library
+    trigger: after final Lean artifacts have source-aware comments and the Markdown documentation pass is complete
+    owner_skill: mathformer-library-docs-generator
+    reasoning_log_steps:
+      - mathformer_aligned_html_docs_start
+      - mathformer_aligned_html_docs_complete
+      - mathformer_aligned_html_docs_error
+    gate: every included Lean module must have one aligned HTML page with original text, rendered LaTeX, syntax-highlightable Lean code, source-order declaration anchors, and an updated aligned index
+    outputs:
+      - mathformer_aligned_html_docs_index
+      - mathformer_aligned_html_module_pages
+      - mathformer_aligned_html_docs_manifest
+
+  - id: draft.initial
+    phase: drafting
+    trigger: no seed_formalization is provided
+    owner_skill: lean-autoformalization-drafter
+    reasoning_log_steps:
+      - autoformalizer_initial_start
+      - autoformalizer_initial_output
+    inputs:
+      - dependency context
+      - mathlib alignment hints
+      - core statement annotations
+      - line translation packet source anchors
+
+  - id: draft.seed
+    phase: drafting
+    trigger: seed_formalization is provided
+    owner_skill: autoformalization-workflow-orchestrator
+    reasoning_log_steps:
+      - seed_formalization_used
+
+  - id: execute.initial
+    phase: execution
+    trigger: immediately after autoformalizer_initial_output or seed_formalization_used
+    owner_skill: lean-execution-runner
+    reasoning_log_steps:
+      - lean_execution_initial_start
+      - lean_execution_initial_output
+    gate: execution diagnostics must be available before refinement decisions
+    outputs:
+      - correctness
+      - hard_feedback
+      - lean_error_log_file
+      - lean_error_log
+
+  - id: check.compile
+    phase: verification
+    trigger: after each generated or saved Lean artifact
+    owner_skill: lean-compile-checker
+    reasoning_log_steps:
+      - hard_critique_initial_start
+      - hard_critique_initial_output
+      - hard_critique_start
+      - hard_critique_output
+      - hard_critique_final_start
+      - hard_critique_final_output
+      - saved_output_hard_check_start
+      - saved_output_hard_check
+      - compatibility_audit_lake_check_start
+      - compatibility_audit_lake_check_complete
+    gate: failed compile checks trigger formal refinement or fail the final gate
+
+  - id: postformalization.source_anchor_drift_guard
+    phase: verification
+    trigger: after initial Lean generation, seed replay, refinement, or denoising when a line translation packet exists
+    owner_skill: source-formalization-drift-guard
+    reasoning_log_steps:
+      - source_anchor_drift_guard_start
+      - source_anchor_drift_guard_complete
+      - source_anchor_drift_guard_error
+    gate: Lean declaration comments must cite valid Source anchors with configured coverage, no orphan anchors, and no source-aware declaration comments missing anchors
+    outputs:
+      - source_anchor_drift_report
+      - covered_source_anchor_set
+      - uncovered_source_anchor_set
+
+  - id: refine.formal
+    phase: refinement
+    trigger: hard critique or compile check fails
+    owner_skill: lean-formal-refinement
+    reasoning_log_steps:
+      - iterative_refinement_triggered
+      - formal_refiner_start
+      - formal_refiner_output
+      - iterative.formal_refiner_start
+      - iterative.formal_refiner_output
+
+  - id: critique.semantic
+    phase: critique
+    trigger: soft critique or final LLM judge suite is enabled
+    owner_skill: lean-critique-and-judging
+    reasoning_log_steps:
+      - soft_critique_start
+      - soft_critique_output
+      - iterative.soft_critique_start
+      - iterative.soft_critique_output
+      - llm_judges_start
+      - llm_judges_complete
+
+  - id: critique.syntax
+    phase: critique
+    trigger: user asks for a Lean syntax, elaboration, or typecheck critique
+    owner_skill: lean-syntactic-correctness-critic
+    reasoning_log_steps:
+      - hard_critique_initial_start
+      - hard_critique_initial_output
+      - hard_critique_start
+      - hard_critique_output
+      - hard_critique_final_start
+      - hard_critique_final_output
+      - compatibility_audit_lake_check_start
+      - compatibility_audit_lake_check_complete
+    gate: syntax failures block final critique-suite approval
+
+  - id: critique.semantic_preservation
+    phase: critique
+    trigger: user asks whether Lean preserves the informal statement/proof
+    owner_skill: lean-semantic-preservation-critic
+    reasoning_log_steps:
+      - soft_critique_start
+      - soft_critique_output
+      - llm_judges_start
+      - llm_judges_complete
+    gate: semantic preservation failures route to semantic realignment
+
+  - id: critique.logical_soundness
+    phase: critique
+    trigger: user asks for a logical pass, non-vacuity review, or soundness critique
+    owner_skill: lean-logical-soundness-critic
+    reasoning_log_steps:
+      - soft_critique_start
+      - soft_critique_output
+      - compatibility_audit_finding_detected
+    gate: logical soundness failures block approval even if Lean compiles
+
+  - id: critique.mathlib_alignment
+    phase: critique
+    trigger: user asks whether Lean is aligned with mathlib-native APIs
+    owner_skill: lean-mathlib-alignment-critic
+    reasoning_log_steps:
+      - concept_mapping_success
+      - concept_mapping_verify_result
+      - compatibility_audit_finding_detected
+    gate: release workflows may require these warnings to be resolved
+
+  - id: critique.suite
+    phase: critique
+    trigger: user asks for a full critique suite, review gate, or systematic critique
+    owner_skill: lean-critique-suite-orchestrator
+    reasoning_log_steps:
+      - critique_suite_start
+      - hard_critique_initial_output
+      - soft_critique_output
+      - llm_judges_complete
+      - compatibility_audit_complete
+      - critique_suite_complete
+      - critique_suite_error
+    gate: suite judgement is pass only when all blocking passes succeed or are waived
+
+  - id: critique.reference_free_monitor
+    phase: critique
+    trigger: after Lean execution, critique-suite output, or saved-artifact checks when benchmark-free correctness evidence must be trended
+    owner_skill: reference-free-critic-monitor
+    reasoning_log_steps:
+      - reference_free_critic_monitor_start
+      - reference_free_critic_measurement_complete
+      - reference_free_critic_monotonicity_complete
+      - reference_free_critic_monitor_complete
+      - reference_free_critic_monitor_error
+    gate: accepted refinements must not decrease reference-free critic scores, increase hard risk counts, or shrink theorem/source-anchor surfaces without explicit semantic-preservation justification
+    outputs:
+      - reference_free_critic_packet
+      - reference_free_snapshot
+      - reference_free_improvement_todos
+
+  - id: postformalization.informalize
+    phase: postformalization
+    trigger: after a final Lean artifact compiles and before consistency review, artifact acceptance, or human-facing proof explanation
+    owner_skill: lean-informalization-extractor
+    reasoning_log_steps:
+      - lean_informalization_extraction_start
+      - lean_informalization_extraction_complete
+      - lean_informalization_extraction_error
+    gate: every theorem-like final declaration should have a conservative informal statement and proof summary derived from the Lean artifact, with source/generation comments preserved separately
+    outputs:
+      - lean_informalization_packet
+      - reverse_statement_packets
+      - reverse_proof_summaries
+
+  - id: postformalization.informal_internal_consistency
+    phase: postformalization
+    trigger: after reverse informalization and before source/Lean informal-consistency review
+    owner_skill: lean-informal-proof-internal-consistency-verifier
+    reasoning_log_steps:
+      - lean_informal_internal_consistency_start
+      - lean_informal_internal_consistency_complete
+      - lean_informal_internal_consistency_error
+    gate: informalized proof packets must have no missing statements, missing proof summaries, placeholder traces, axioms-as-proofs, exact circular dependencies, or severe proof-shape contradictions before they are used as consistency evidence
+    outputs:
+      - informal_proof_internal_consistency_report
+      - internal_proof_consistency_findings
+      - internal_proof_consistency_score
+
+  - id: consistency.declaration_shape
+    phase: consistency
+    trigger: after reverse informalization and before source/Lean informal-consistency review, non-vacuity review, or final acceptance
+    owner_skill: lean-declaration-shape-consistency-checker
+    reasoning_log_steps:
+      - lean_declaration_shape_consistency_start
+      - lean_declaration_shape_consistency_complete
+      - lean_declaration_shape_consistency_error
+    gate: theorem-like declarations must preserve source-advertised logical shape, including iff, existence, uniqueness, and conditional structure, unless an explicit representation-boundary note explains the encoding
+    outputs:
+      - declaration_shape_report
+      - declaration_shape_findings
+      - declaration_shape_score
+
+  - id: postformalization.informal_consistency
+    phase: postformalization
+    trigger: after reverse informalization and before final artifact acceptance or MathformerLib promotion
+    owner_skill: lean-informal-consistency-verifier
+    reasoning_log_steps:
+      - lean_informal_consistency_start
+      - lean_informal_consistency_complete
+      - lean_informal_consistency_error
+    gate: final artifacts must have no reverse-informalization blockers, no realness blockers, no optional Lean-check failures, and no source/comment claim shape inconsistent with the Lean theorem signature
+    outputs:
+      - informal_consistency_report
+      - reverse_consistency_findings
+      - proof_consistency_score
+
+  - id: consistency.nonvacuity
+    phase: consistency
+    trigger: after compilation, informalization, and declaration-shape review before final acceptance or MathformerLib promotion
+    owner_skill: lean-nonvacuity-consistency-checker
+    reasoning_log_steps:
+      - lean_nonvacuity_consistency_start
+      - lean_nonvacuity_consistency_complete
+      - lean_nonvacuity_consistency_error
+    gate: accepted theorem-like declarations must have no axioms, false-hypothesis vacuity, target-restating hypotheses, or undocumented exact-hypothesis proof wrappers
+    outputs:
+      - nonvacuity_report
+      - nonvacuity_findings
+      - nonvacuity_score
+
+  - id: consistency.cross_file_concepts
+    phase: consistency
+    trigger: after one or more Lean artifacts are saved and before corpus-level acceptance or MathformerLib promotion
+    owner_skill: lean-cross-file-concept-consistency-indexer
+    reasoning_log_steps:
+      - lean_cross_file_concept_index_start
+      - lean_cross_file_concept_index_complete
+      - lean_cross_file_concept_index_error
+    gate: same-file full declaration-name collisions block acceptance; cross-file divergent concept families become review or MathformerLib-promotion todos
+    outputs:
+      - cross_file_concept_index
+      - cross_file_consistency_report
+      - mathformerlib_promotion_candidates
+
+  - id: consistency.unified_report
+    phase: consistency
+    trigger: after saved Lean artifact generation, before final acceptance, and after any consistency, grounding, or realness critic changes
+    owner_skill: lean-consistency-report-orchestrator
+    reasoning_log_steps:
+      - lean_consistency_report_start
+      - lean_consistency_report_layer_complete
+      - lean_consistency_report_complete
+      - lean_consistency_report_error
+    gate: final artifacts pass only when all required consistency layers pass, including compile context when enabled, comment hygiene, realness, informalization, declaration shape, internal proof consistency, reverse informal consistency, non-vacuity, cross-file concepts, mathlib grounding, and reference-free monitoring
+    outputs:
+      - lean_consistency_report
+      - blocking_consistency_layers
+      - monotonic_consistency_todos
+
+  - id: refine.semantic
+    phase: refinement
+    trigger: semantic or aspect critique fails after hard critique succeeds
+    owner_skill: lean-formal-refinement
+    reasoning_log_steps:
+      - informal_refinement_start
+      - informal_refinement_output
+      - iterative.informal_refiner_start
+      - iterative.informal_refiner_output
+
+  - id: transition.taxonomy
+    phase: logging
+    trigger: every recorded code transition
+    owner_skill: lean-refinement-taxonomy
+    reasoning_log_steps:
+      - refinement_taxonomy_start
+      - refinement_transition_analysis
+      - iterative.refinement_taxonomy_start
+      - iterative.refinement_transition_analysis
+    gate: transition rows must include trigger_family and trigger_reason
+
+  - id: output.denoise
+    phase: cleanup
+    trigger: raw model output includes prose, repeated candidates, or unfenced code
+    owner_skill: lean-output-denoiser
+    reasoning_log_steps:
+      - denoising_start
+      - denoising_complete
+
+  - id: mathlib.import.minimize
+    phase: cleanup
+    trigger: after denoising, refinement, or saved Lean artifact generation when the import block should be tightened
+    owner_skill: mathlib-import-minimizer
+    reasoning_log_steps:
+      - mathlib_import_minimization_start
+      - mathlib_import_minimization_complete
+    gate: final artifacts should have deduplicated imports and no broad `import Mathlib` unless explicitly waived
+    outputs:
+      - minimized_imports
+      - suggested_import_block
+      - import_minimization_findings
+
+  - id: audit.compatibility
+    phase: audit
+    trigger: enable_compatibility_audit is true after saved output
+    owner_skill: mathlib-abstraction-auditor
+    reasoning_log_steps:
+      - compatibility_audit_start
+      - compatibility_audit_cli_start
+      - compatibility_audit_file_loaded
+      - compatibility_audit_structure_scanned
+      - compatibility_audit_finding_detected
+      - compatibility_audit_complete
+      - compatibility_audit_report_written
+      - compatibility_audit_output_emitted
+      - compatibility_audit_error
+    gate: compatibility_target_met controls score-gated outer cycles
+
+  - id: artifact.realness_gate
+    phase: artifacts
+    trigger: after each saved Lean artifact or report, and before final statistics/report publication
+    owner_skill: autoformalization-result-realness-verifier
+    reasoning_log_steps:
+      - result_realness_verification_complete
+    gate: final artifacts must have no mock/stub/planned/unexecuted markers, no `sorry`/`admit`/target `axiom`, no missing generated-line `NL/LaTeX:` comments, and no interface scaffold claimed as complete
+    outputs:
+      - result_realness_report
+      - blocking_realness_findings
+
+  - id: artifact.statistics
+    phase: artifacts
+    trigger: workflow completion
+    owner_skill: autoformalization-workflow-orchestrator
+    reasoning_log_steps:
+      - save_refinement_history
+      - save_autoformalization_statistics
+      - save_systematic_report
+      - workflow_complete
+    outputs:
+      - .lean
+      - .history.json
+      - .report.json
+      - reasoning-log.jsonl
+      - .stats.json
+      - .stats.tex
+
+  - id: evaluation.rfde_report
+    phase: evaluation
+    trigger: after unified consistency report, reference-free critic monitoring, source-anchor drift report, realness gate, and artifact statistics are available
+    owner_skill: reference-free-descriptive-evaluator
+    reasoning_log_steps:
+      - rfde_report_start
+      - rfde_surface_measurement_complete
+      - rfde_trajectory_analysis_complete
+      - rfde_report_complete
+      - rfde_report_error
+    gate: RFDE reporting must expose hard gates, metric profiles, claim and obligation ledgers, diagnostics, cost trace, phase-transition observability, and rendered dashboard without hiding weak evidence surfaces
+    outputs:
+      - rfde_report_json
+      - rfde_report_markdown
+      - rfde_dashboard_html
+      - rfde_trajectory_timeline_html
+      - rfde_metrics_timeseries
+      - rfde_trajectory_model
+
+  - id: reflection.process_refinement
+    phase: reflection
+    trigger: after workflow reports and reasoning logs are produced, or when prompt/skill improvement opportunities are requested
+    owner_skill: autoformalization-reflective-refinement-loop
+    reasoning_log_steps:
+      - reflective_refinement_loop_start
+      - reflective_refinement_observation_complete
+      - reflective_refinement_opportunity_identified
+      - reflective_refinement_monotonicity_gate_complete
+      - reflective_refinement_loop_complete
+      - reflective_refinement_loop_error
+    gate: proposed prompt or skill refinements must preserve all previously successful baseline cases and pass strict suite, hook, and reasoning-log checks
+    outputs:
+      - refinement_packet
+      - monotonicity_contract
+      - improvement_todos
+
+  - id: test.skill_program
+    phase: testing
+    trigger: after skill, prompt, hook, runtime, or suite changes; before accepting prompt/skill refinements
+    owner_skill: skill-test-program-orchestrator
+    reasoning_log_steps:
+      - skill_test_inventory_complete
+      - skill_test_deterministic_start
+      - skill_test_deterministic_check_complete
+      - skill_test_deterministic_complete
+      - skill_test_content_codex_exec_start
+      - skill_test_content_codex_exec_result
+      - skill_test_content_codex_exec_complete
+      - skill_test_todos_generated
+      - skill_test_program_error
+    gate: deterministic checks must have no blocking failures, and generative/hybrid skills must have Codex-exec probes or explicit TODOs
+    outputs:
+      - skill_inventory
+      - deterministic_test_report
+      - content_codex_exec_report
+      - skill_testing_todos
+
+  - id: annotate.optional
+    phase: annotation
+    trigger: user asks for line-level Lean explanation
+    owner_skill: lean-line-annotation
+    reasoning_log_steps:
+      - lean_line_annotation_start
+      - lean_line_annotation_complete
+
+  - id: annotate.line_comment_guard
+    phase: annotation
+    trigger: after initial drafting, denoising, or refinement produces generated Lean code and before the artifact is accepted or saved
+    owner_skill: lean-line-annotation
+    reasoning_log_steps:
+      - lean_line_comment_guard_start
+      - lean_line_comment_guard_complete
+      - lean_line_comment_guard_error
+    gate: generated Lean must preserve source-aware semantic declaration comments and avoid legacy per-line `NL/LaTeX:` noise or syntax-only comments
+    outputs:
+      - line_comment_contract_report
+
+  - id: benchmark.proofnet
+    phase: benchmark
+    trigger: user asks for ProofNet download, export, or evaluation
+    owner_skill: proofnet-benchmark-runner
+    reasoning_log_steps:
+      - proofnet_benchmark_start
+      - proofnet_benchmark_complete
+      - proofnet_benchmark_error
+
+loop_contracts:
+  - id: control_validation_loop
+    description: core contract, coverage, reasoning-log, and gate normalization checks
+    required_hooks:
+      - control.workflow_contract
+      - control.workflow_router
+      - control.reasoning_flow_language
+      - control.skill_hook_coverage
+      - control.reasoning_log_schema
+      - control.gate_policy
+    required_owner_skills:
+      - workflow-contract-validator
+      - mathformer-workflow-router
+      - reasoning-flow-language
+      - skill-hook-coverage-maximizer
+      - reasoning-log-schema-guardian
+      - gate-policy-controller
+
+  - id: preformalization_readiness_loop
+    description: source-unit inventory, expansion support, LaTeX readiness review, and duplicate-result precheck before drafting
+    required_hooks:
+      - intake.paper_layout_extract
+      - intake.paper_theory_localize
+      - intake.source_unit_inventory
+      - preformalization.paper_theory_expand
+      - preformalization.expansion_support
+      - preformalization.expansion_difficulty
+      - preformalization.expansion_web_support
+      - preformalization.expand
+      - preformalization.review.suite
+      - preformalization.review.completeness
+      - preformalization.review.bindings
+      - dependency.resolve
+      - preformalization.line_translation_packet
+      - preformalization.result_existence_precheck
+    required_owner_skills:
+      - paper-docling-layout-extractor
+      - paper-main-theory-localizer
+      - source-formalizable-unit-extractor
+      - paper-theory-autoformalization-orchestrator
+      - proof-expansion-support-orchestrator
+      - proof-expansion-difficulty-estimator
+      - proof-expansion-web-researcher
+      - latex-prerequisite-expander
+      - latex-expansion-review-orchestrator
+      - latex-expansion-completeness-reviewer
+      - latex-expansion-binding-reviewer
+      - autoformalization-workflow-orchestrator
+      - source-line-translation-packet-builder
+      - result-existence-precheck-orchestrator
+
+  - id: textbook_theory_autoformalization_loop
+    description: LaTeX textbook archive extraction, thematic TeX organization, truthful per-unit job queuing, and standard Lean workflow gates for each target unit
+    required_hooks:
+      - intake.latex_archive_theory_extract
+      - preformalization.textbook_theory_organize
+      - draft.textbook_chapter_autoformalization
+      - draft.textbook_batch_autoformalize
+      - draft.textbook_object_autoformalization_run
+      - preformalization.result_existence_precheck
+      - preformalization.line_translation_packet
+      - mathlib.grounding_maximize
+      - execute.initial
+      - check.compile
+      - postformalization.source_anchor_drift_guard
+      - artifact.realness_gate
+      - consistency.unified_report
+    required_owner_skills:
+      - latex-archive-theory-extractor
+      - textbook-theory-tex-organizer
+      - textbook-chapter-autoformalization-orchestrator
+      - textbook-autoformalization-batch-orchestrator
+      - result-existence-precheck-orchestrator
+      - source-line-translation-packet-builder
+      - mathlib-grounding-maximizer
+      - lean-execution-runner
+      - lean-compile-checker
+      - source-formalization-drift-guard
+      - autoformalization-result-realness-verifier
+      - lean-consistency-report-orchestrator
+
+  - id: mathlib_grounding_loop
+    description: local mathlib, MathformerLib, web grounding, import, and compatibility controls before prompts rely on APIs
+    required_hooks:
+      - mathlib.result_existence_search
+      - mathlib.discovery
+      - mathlib.ontology.validate
+      - mathlib.index.build
+      - mathlib.term.annotate
+      - mathlib.navigation.state
+      - mathlib.hierarchy.navigate
+      - mathlib.hierarchy.module_tree
+      - mathlib.hierarchy.declaration_neighborhood
+      - mathlib.verify
+      - mathlib.compatibility_loop
+      - mathlib.coverage
+      - mathlib.web_strategy
+      - mathlib.web_evidence
+      - mathlib.web_grounding_loop
+      - mathlib.grounding_maximize
+      - mathlib.api_plan
+      - mathlib.import.plan
+      - mathlib.import.context
+    required_owner_skills:
+      - mathlib-result-existence-checker
+      - mathlib-concept-candidate-mapper
+      - mathlib-concept-ontology-manager
+      - mathlib-index-builder
+      - mathlib-term-expansion-annotator
+      - mathlib-navigation-state-planner
+      - mathlib-hierarchy-navigator
+      - mathlib-module-tree-cartographer
+      - mathlib-declaration-neighborhood-navigator
+      - mathlib-candidate-verifier
+      - mathlib-compatibility-loop-orchestrator
+      - mathlib-concept-coverage-reviewer
+      - mathlib-web-search-strategist
+      - mathlib-web-evidence-validator
+      - mathlib-web-grounding-orchestrator
+      - mathlib-grounding-maximizer
+      - mathlib-api-compatibility-planner
+      - mathlib-import-set-builder
+      - lean-import-context-verifier
+
+  - id: draft_execute_refine_loop
+    description: initial draft, seed replay, Lean execution, critique, refinement, denoising, and transition logging
+    required_hooks:
+      - draft.initial
+      - draft.seed
+      - execute.initial
+      - check.compile
+      - postformalization.source_anchor_drift_guard
+      - critique.semantic
+      - critique.syntax
+      - critique.semantic_preservation
+      - critique.logical_soundness
+      - critique.mathlib_alignment
+      - critique.suite
+      - critique.reference_free_monitor
+      - refine.formal
+      - refine.semantic
+      - output.denoise
+      - annotate.line_comment_guard
+      - transition.taxonomy
+    required_owner_skills:
+      - lean-autoformalization-drafter
+      - autoformalization-workflow-orchestrator
+      - lean-execution-runner
+      - lean-compile-checker
+      - source-formalization-drift-guard
+      - lean-critique-and-judging
+      - lean-syntactic-correctness-critic
+      - lean-semantic-preservation-critic
+      - lean-logical-soundness-critic
+      - lean-mathlib-alignment-critic
+      - lean-critique-suite-orchestrator
+      - reference-free-critic-monitor
+      - lean-formal-refinement
+      - lean-output-denoiser
+      - lean-line-annotation
+      - lean-refinement-taxonomy
+
+  - id: artifact_acceptance_loop
+    description: post-generation import minimization, compatibility audit, reverse informalization consistency, declaration-shape/non-vacuity/cross-file consistency, line-comment guard, realness gate, unified consistency report, and statistics
+    required_hooks:
+      - annotate.line_comment_guard
+      - mathlib.import.minimize
+      - mathlib.grounding_maximize
+      - audit.compatibility
+      - postformalization.informalize
+      - consistency.declaration_shape
+      - postformalization.informal_internal_consistency
+      - postformalization.informal_consistency
+      - consistency.nonvacuity
+      - consistency.cross_file_concepts
+      - consistency.unified_report
+      - artifact.realness_gate
+      - artifact.statistics
+      - evaluation.rfde_report
+      - library.documentation
+      - library.aligned_html_documentation
+    required_owner_skills:
+      - lean-line-annotation
+      - mathlib-import-minimizer
+      - mathlib-grounding-maximizer
+      - mathlib-abstraction-auditor
+      - lean-informalization-extractor
+      - lean-declaration-shape-consistency-checker
+      - lean-informal-proof-internal-consistency-verifier
+      - lean-informal-consistency-verifier
+      - lean-nonvacuity-consistency-checker
+      - lean-cross-file-concept-consistency-indexer
+      - lean-consistency-report-orchestrator
+      - autoformalization-result-realness-verifier
+      - autoformalization-workflow-orchestrator
+      - reference-free-descriptive-evaluator
+      - mathformer-library-docs-generator
+
+  - id: lean_consistency_testing_loop
+    description: reference-free consistency testing over compiled Lean artifacts using local semantic comments, reverse informalization, non-vacuity, cross-file concept indexing, mathlib grounding, and monotone critic monitoring
+    required_hooks:
+      - check.compile
+      - annotate.line_comment_guard
+      - postformalization.source_anchor_drift_guard
+      - artifact.realness_gate
+      - postformalization.informalize
+      - consistency.declaration_shape
+      - postformalization.informal_internal_consistency
+      - postformalization.informal_consistency
+      - consistency.nonvacuity
+      - consistency.cross_file_concepts
+      - mathlib.grounding_maximize
+      - critique.reference_free_monitor
+      - consistency.unified_report
+      - evaluation.rfde_report
+    required_owner_skills:
+      - lean-compile-checker
+      - lean-line-annotation
+      - source-formalization-drift-guard
+      - autoformalization-result-realness-verifier
+      - lean-informalization-extractor
+      - lean-declaration-shape-consistency-checker
+      - lean-informal-proof-internal-consistency-verifier
+      - lean-informal-consistency-verifier
+      - lean-nonvacuity-consistency-checker
+      - lean-cross-file-concept-consistency-indexer
+      - mathlib-grounding-maximizer
+      - reference-free-critic-monitor
+      - lean-consistency-report-orchestrator
+      - reference-free-descriptive-evaluator
+
+  - id: sympy_equational_trace_loop
+    description: executable symbolic algebra autoformalization over SymPy using source parsing, assumption modeling, local API grounding, symbolic validation, bounded counterexample search, trace verification, and reference-free consistency metrics
+    required_hooks:
+      - sympy.dependencies.probe
+      - sympy.api_docs.index
+      - sympy.expression.parse
+      - sympy.assumptions.model
+      - sympy.grounding.navigate
+      - draft.sympy_initial
+      - execute.sympy_initial
+      - sympy.identity.validate
+      - sympy.counterexample.search
+      - sympy.trace.verify
+      - consistency.sympy_report
+    required_owner_skills:
+      - sympy-dependency-prober
+      - sympy-api-docs-indexer
+      - sympy-expression-parser
+      - sympy-assumption-modeler
+      - sympy-concept-grounding-navigator
+      - sympy-autoformalization-drafter
+      - sympy-execution-runner
+      - sympy-identity-validator
+      - sympy-counterexample-searcher
+      - sympy-transformation-trace-verifier
+      - sympy-consistency-report-orchestrator
+
+  - id: sympy_physics_derivation_trace_loop
+    description: executable physics derivation autoformalization over SymPy using anchored source extraction, informal expansion, quantity binding, equation surfaces, contextual assumptions, dimensional and unit modeling, implicit gap closure, physical law grounding, artifact execution, execution interpretation, equational semantics critics, final equation reviewers, localized monotonic refinement, numeric sanity sampling, and reference-free consistency metrics
+    required_hooks:
+      - physics.sympy.goal_sample.plan
+      - physics.sympy.source_only.run
+      - physics.dependencies.probe
+      - physics.source.extract
+      - physics.informal.elicit
+      - physics.informal.expand
+      - physics.informal.review
+      - physics.symbols.build
+      - physics.dimensions.model
+      - physics.units.ground
+      - physics.equations.parse
+      - physics.regimes.model
+      - physics.frames.build
+      - physics.gaps.detect
+      - physics.gaps.expand
+      - physics.laws.ground
+      - physics.sympy.library_grounding.build
+      - physics.sympy.workflow.plan
+      - physics.sympy.equation_surface.build
+      - physics.sympy.assumptions.encode
+      - draft.physics_sympy_derivation
+      - execute.physics_sympy_derivation
+      - execute.physics_sympy_interpret
+      - physics.units.verify
+      - physics.steps.verify
+      - physics.numeric.sample
+      - critique.physics_sympy_semantics
+      - critique.physics_sympy_dimensions
+      - review.physics_sympy_final_equations
+      - review.mathematical_sympy_final_equations
+      - physics.sympy.design_guard.review
+      - refine.physics_sympy_review
+      - physics.sympy.repair_expansion.map
+      - physics.sympy.recursive_repair.control
+      - physics.sympy.grounded_sample.thoroughness
+      - consistency.physics_derivation_report
+    recommended_hooks:
+      - critique.physics_sympy_generative_panel
+      - reflection.physics_sympy_formal_answer_compare
+      - critique.reference_free_monitor
+      - evaluation.rfde_report
+    runtime_accounting:
+      required_payload_fields:
+        - duration_ms
+        - agent_usage
+      cost_trace_policy: every loop phase should preserve duration and agent-usage fields for RFDE trajectory reporting
+    required_owner_skills:
+      - physics-sympy-dependency-prober
+      - physics-derivation-source-extractor
+      - physics-informal-derivation-elicitor
+      - physics-informal-derivation-expander
+      - physics-informal-derivation-readiness-reviewer
+      - physics-symbol-table-builder
+      - physics-dimension-modeler
+      - physics-unit-system-grounder
+      - physics-equation-parser
+      - physics-regime-assumption-modeler
+      - physics-coordinate-frame-context-builder
+      - physics-implicit-gap-detector
+      - physics-derivation-gap-expander
+      - physics-law-concept-grounding-navigator
+      - physics-sympy-library-grounding-builder
+      - physics-sympy-workflow-orchestrator
+      - physics-sympy-equation-surface-builder
+      - physics-sympy-assumption-context-encoder
+      - physics-sympy-derivation-drafter
+      - physics-sympy-execution-runner
+      - physics-sympy-execution-interpreter
+      - physics-unit-analysis-verifier
+      - physics-derivation-step-verifier
+      - physics-numeric-sanity-sampler
+      - physics-sympy-equational-semantics-critic
+      - physics-sympy-dimension-projection-critic
+      - physics-sympy-final-equation-reviewer
+      - mathematical-sympy-final-equation-reviewer
+      - physics-sympy-review-refinement-router
+      - physics-sympy-goal-sample-autoformalizer
+      - physics-sympy-repair-expansion-cartographer
+      - physics-sympy-recursive-repair-loop-controller
+      - physics-derivation-consistency-report-orchestrator
+
+  - id: mathformerphysicslib_coherence_grounding_loop
+    description: MathformerPhysicsLib coherence and grounding loop over canonical ownership, Mathlib-first grounding, redefinition spread, integration/discoverability, API operability, guarded generative interpretation, monotonic repair planning, and final report gates
+    required_hooks:
+      - library.physics.coherence.inventory
+      - library.physics.coherence.canonicalize
+      - library.physics.coherence.mathlib_grounding
+      - library.physics.coherence.redefinition_critic
+      - library.physics.coherence.integration_critic
+      - library.physics.coherence.api_critic
+      - library.physics.coherence.generative_critic
+      - library.physics.coherence.repair_plan
+      - library.physics.coherence.gate
+      - library.physics.coherence.loop
+    required_owner_skills:
+      - mathformerphysicslib-coherence-inventory-builder
+      - mathformerphysicslib-concept-canonicalizer
+      - mathformerphysicslib-mathlib-grounding-auditor
+      - mathformerphysicslib-redefinition-critic
+      - mathformerphysicslib-integration-critic
+      - mathformerphysicslib-api-operability-critic
+      - mathformerphysicslib-generative-coherence-critic
+      - mathformerphysicslib-coherence-repair-planner
+      - mathformerphysicslib-coherence-gate
+
+  - id: lean_physics_derivation_trace_loop
+    description: controlled physics derivation autoformalization over Lean using maximal mathematical preformalization reuse, dependency resolution for intermediate definitions/background lemmas, proof-expansion web support, anchored source extraction, physical quantity typing, contextual assumption encoding, unit and dimension obligations, mathlib web grounding, Lean execution interpretation, refinement loops, reverse informalization, and reference-free consistency metrics
+    required_hooks:
+      - intake.source_unit_inventory
+      - preformalization.expansion_support
+      - preformalization.expansion_difficulty
+      - preformalization.expansion_web_support
+      - preformalization.expand
+      - preformalization.review.suite
+      - preformalization.review.completeness
+      - preformalization.review.bindings
+      - dependency.resolve
+      - physics.source.extract
+      - physics.informal.elicit
+      - physics.informal.expand
+      - physics.informal.review
+      - physics.symbols.build
+      - physics.dimensions.model
+      - physics.units.ground
+      - physics.equations.parse
+      - physics.regimes.model
+      - physics.frames.build
+      - physics.gaps.detect
+      - physics.gaps.expand
+      - physics.laws.ground
+      - physics.lean.workflow.plan
+      - physics.lean.type_system.build
+      - physics.lean.assumptions.encode
+      - preformalization.line_translation_packet
+      - preformalization.result_existence_precheck
+      - mathlib.result_existence_search
+      - mathlib.discovery
+      - mathlib.ontology.validate
+      - mathlib.hierarchy.navigate
+      - mathlib.hierarchy.module_tree
+      - mathlib.hierarchy.declaration_neighborhood
+      - mathlib.verify
+      - mathlib.compatibility_loop
+      - mathlib.coverage
+      - mathlib.web_strategy
+      - mathlib.web_evidence
+      - mathlib.web_grounding_loop
+      - mathlib.grounding_maximize
+      - mathlib.api_plan
+      - mathlib.import.plan
+      - mathlib.import.context
+      - draft.physics_lean_derivation
+      - execute.initial
+      - execute.physics_lean_interpret
+      - check.compile
+      - critique.semantic
+      - critique.syntax
+      - critique.semantic_preservation
+      - critique.logical_soundness
+      - critique.mathlib_alignment
+      - critique.suite
+      - critique.reference_free_monitor
+      - physics.lean.units.verify
+      - critique.physics_lean_semantics
+      - critique.physics_lean_assumptions
+      - critique.physics_lean_dimensions
+      - critique.physics_lean_generative_panel
+      - critique.physics_lean_drift_pathology_monitor
+      - goal.physics_lean_single_sample_autoformalization
+      - repair.physics_math_object_detect
+      - repair.mathformerphysicslib_object_workbench
+      - foundation.physics_object_intake
+      - foundation.mathlib_grounding
+      - foundation.surface_design
+      - foundation.lean_draft
+      - foundation.verify
+      - foundation.promote
+      - foundation.downstream_regression
+      - repair.physics_lean_notational_collapse
+      - repair.physics_lean_abstraction_elevation
+      - repair.physics_lean_proof_strategy_alignment
+      - repair.physics_lean_implicit_premise_normalize
+      - repair.physics_lean_pathology_loop
+      - repair.physics_lean_generative_repair
+      - repair.physics_lean_repair_expansion_cartography
+      - repair.physics_lean_recursive_repair_control
+      - refine.formal
+      - refine.semantic
+      - refine.physics_lean
+      - output.denoise
+      - annotate.line_comment_guard
+      - transition.taxonomy
+      - postformalization.source_anchor_drift_guard
+      - artifact.realness_gate
+      - mathlib.import.minimize
+      - audit.compatibility
+      - postformalization.informalize
+      - consistency.declaration_shape
+      - postformalization.informal_internal_consistency
+      - postformalization.informal_consistency
+      - consistency.nonvacuity
+      - consistency.cross_file_concepts
+      - consistency.unified_report
+      - review.physics_final_hypotheses
+      - review.mathematical_final_hypotheses
+      - review.final_derivation_hypotheses
+      - refine.physics_lean_review
+      - consistency.physics_lean_report
+      - artifact.statistics
+      - evaluation.rfde_report
+      - reflection.physics_lean_process
+    recommended_hooks:
+      - reflection.physics_formal_answer_compare
+    required_owner_skills:
+      - physics-derivation-source-extractor
+      - physics-symbol-table-builder
+      - physics-dimension-modeler
+      - physics-unit-system-grounder
+      - physics-equation-parser
+      - physics-regime-assumption-modeler
+      - physics-coordinate-frame-context-builder
+      - physics-implicit-gap-detector
+      - physics-derivation-gap-expander
+      - physics-law-concept-grounding-navigator
+      - physics-lean-workflow-orchestrator
+      - autoformalization-workflow-orchestrator
+      - physics-lean-type-system-builder
+      - physics-lean-assumption-context-encoder
+      - physics-informal-derivation-elicitor
+      - physics-informal-derivation-expander
+      - physics-informal-derivation-readiness-reviewer
+      - source-formalizable-unit-extractor
+      - proof-expansion-support-orchestrator
+      - proof-expansion-difficulty-estimator
+      - proof-expansion-web-researcher
+      - latex-prerequisite-expander
+      - latex-expansion-review-orchestrator
+      - latex-expansion-completeness-reviewer
+      - latex-expansion-binding-reviewer
+      - source-line-translation-packet-builder
+      - result-existence-precheck-orchestrator
+      - mathlib-result-existence-checker
+      - mathlib-concept-candidate-mapper
+      - mathlib-concept-ontology-manager
+      - mathlib-hierarchy-navigator
+      - mathlib-module-tree-cartographer
+      - mathlib-declaration-neighborhood-navigator
+      - mathlib-candidate-verifier
+      - mathlib-compatibility-loop-orchestrator
+      - mathlib-concept-coverage-reviewer
+      - mathlib-web-search-strategist
+      - mathlib-web-evidence-validator
+      - mathlib-web-grounding-orchestrator
+      - mathlib-grounding-maximizer
+      - mathlib-api-compatibility-planner
+      - mathlib-import-set-builder
+      - lean-import-context-verifier
+      - physics-lean-derivation-drafter
+      - lean-execution-runner
+      - physics-lean-execution-interpreter
+      - lean-compile-checker
+      - lean-critique-and-judging
+      - lean-syntactic-correctness-critic
+      - lean-semantic-preservation-critic
+      - lean-logical-soundness-critic
+      - lean-mathlib-alignment-critic
+      - lean-critique-suite-orchestrator
+      - reference-free-critic-monitor
+      - physics-lean-unit-analysis-verifier
+      - physics-lean-physical-semantics-critic
+      - physics-lean-assumption-critic
+      - physics-lean-dimension-critic
+      - physics-lean-generative-critic-orchestrator
+      - physics-lean-goal-sample-autoformalizer
+      - physics-lean-drift-pathology-monitor
+      - physics-math-object-detector
+      - mathformerphysicslib-object-workbench
+      - physics-foundation-object-intake
+      - mathformerphysicslib-foundation-surface-designer
+      - mathformerphysicslib-foundation-drafter
+      - mathformerphysicslib-foundation-verifier
+      - mathformerlib-promotion-gate
+      - physics-lean-notational-collapse-repairer
+      - physics-lean-abstraction-elevation-repairer
+      - physics-lean-proof-strategy-alignment-repairer
+      - physics-lean-implicit-premise-normalizer
+      - physics-lean-pathology-repair-orchestrator
+      - physics-lean-generative-repair-orchestrator
+      - physics-lean-repair-expansion-cartographer
+      - physics-lean-recursive-repair-loop-controller
+      - lean-formal-refinement
+      - physics-lean-refinement-loop
+      - lean-output-denoiser
+      - lean-line-annotation
+      - lean-refinement-taxonomy
+      - source-formalization-drift-guard
+      - autoformalization-result-realness-verifier
+      - mathlib-import-minimizer
+      - mathlib-abstraction-auditor
+      - lean-informalization-extractor
+      - lean-declaration-shape-consistency-checker
+      - lean-informal-proof-internal-consistency-verifier
+      - lean-informal-consistency-verifier
+      - lean-nonvacuity-consistency-checker
+      - lean-cross-file-concept-consistency-indexer
+      - lean-consistency-report-orchestrator
+      - physics-final-hypothesis-reviewer
+      - mathematical-final-hypothesis-reviewer
+      - final-derivation-review-orchestrator
+      - physics-lean-review-refinement-router
+      - physics-lean-consistency-report-orchestrator
+      - autoformalization-workflow-orchestrator
+      - reference-free-descriptive-evaluator
+
+  - id: isabelle_physics_derivation_trace_loop
+    description: controlled physics derivation autoformalization over Isabelle/HOL using shared physics preformalization and Isabelle-specific grounding, drafting, execution, final review, and consistency gates without modifying the Lean physics loop
+    required_hooks:
+      - intake.source_unit_inventory
+      - preformalization.expansion_support
+      - preformalization.expansion_difficulty
+      - preformalization.expansion_web_support
+      - preformalization.expand
+      - preformalization.review.suite
+      - preformalization.review.completeness
+      - preformalization.review.bindings
+      - preformalization.line_translation_packet
+      - preformalization.result_existence_precheck
+      - physics.source.extract
+      - physics.informal.elicit
+      - physics.informal.expand
+      - physics.informal.review
+      - physics.symbols.build
+      - physics.dimensions.model
+      - physics.units.ground
+      - physics.equations.parse
+      - physics.regimes.model
+      - physics.frames.build
+      - physics.gaps.detect
+      - physics.gaps.expand
+      - physics.laws.ground
+      - isabelle.grounding.search
+      - physics.isabelle.workflow.plan
+      - physics.isabelle.type_system.build
+      - physics.isabelle.background.plan
+      - physics.isabelle.assumptions.encode
+      - draft.physics_isabelle_derivation
+      - execute.physics_isabelle_derivation
+      - artifact.realness_gate
+      - review.physics_isabelle_final_hypotheses
+      - review.mathematical_isabelle_final_hypotheses
+      - consistency.physics_isabelle_report
+      - reflection.physics_isabelle_process
+    required_owner_skills:
+      - source-formalizable-unit-extractor
+      - proof-expansion-support-orchestrator
+      - proof-expansion-difficulty-estimator
+      - proof-expansion-web-researcher
+      - latex-prerequisite-expander
+      - latex-expansion-review-orchestrator
+      - latex-expansion-completeness-reviewer
+      - latex-expansion-binding-reviewer
+      - source-line-translation-packet-builder
+      - result-existence-precheck-orchestrator
+      - physics-derivation-source-extractor
+      - physics-informal-derivation-elicitor
+      - physics-informal-derivation-expander
+      - physics-informal-derivation-readiness-reviewer
+      - physics-symbol-table-builder
+      - physics-dimension-modeler
+      - physics-unit-system-grounder
+      - physics-equation-parser
+      - physics-regime-assumption-modeler
+      - physics-coordinate-frame-context-builder
+      - physics-implicit-gap-detector
+      - physics-derivation-gap-expander
+      - physics-law-concept-grounding-navigator
+      - isarmathlib-grounding-navigator
+      - physics-isabelle-workflow-orchestrator
+      - physics-isabelle-type-system-builder
+      - physics-isabelle-assumption-context-encoder
+      - physics-isabelle-derivation-drafter
+      - isabelle-execution-runner
+      - autoformalization-result-realness-verifier
+      - physics-isabelle-final-hypothesis-reviewer
+      - mathematical-isabelle-final-hypothesis-reviewer
+      - physics-isabelle-consistency-report-orchestrator
+    recommended_hooks:
+      - control.workflow_contract
+      - control.skill_hook_coverage
+
+  - id: mathformerlib_accumulation_loop
+    description: controlled accumulation into the parallel MathformerLib library
+    required_hooks:
+      - mathformerlib.accumulate
+      - mathformerlib.registry
+      - mathformerlib.promotion_gate
+      - artifact.realness_gate
+      - library.documentation
+      - library.aligned_html_documentation
+    required_owner_skills:
+      - mathformerlib-accumulation-orchestrator
+      - mathformerlib-registry-manager
+      - mathformerlib-promotion-gate
+      - autoformalization-result-realness-verifier
+      - mathformer-library-docs-generator
+
+  - id: reflection_testing_loop
+    description: monotonic process improvement with deterministic and content-skill regression checks
+    required_hooks:
+      - critique.reference_free_monitor
+      - evaluation.rfde_report
+      - reflection.process_refinement
+      - test.skill_program
+      - control.workflow_contract
+      - control.skill_hook_coverage
+    required_owner_skills:
+      - reference-free-critic-monitor
+      - reference-free-descriptive-evaluator
+      - autoformalization-reflective-refinement-loop
+      - skill-test-program-orchestrator
+      - workflow-contract-validator
+      - skill-hook-coverage-maximizer
+    recommended_hooks:
+      - benchmark.proofnet
+
+direct_request_routing:
+  coordinate Mathformer workflows from natural language: mathformer-generative-workflow-coordinator
+  choose and run multiple Mathformer workflows: mathformer-generative-workflow-coordinator
+  generative Codex workflow coordinator: mathformer-generative-workflow-coordinator
+  organize Mathformer backend and library components: mathformer-generative-workflow-coordinator
+  aggregate Isabelle ATP KB Lean Rocq and SymPy folders: mathformer-generative-workflow-coordinator
+  route workflows from natural language: mathformer-workflow-router
+  audit natural-language workflow router: mathformer-workflow-router
+  check workflow router entrypoint: mathformer-workflow-router
+  codex exec workflow router: mathformer-workflow-router
+  generative workflow router: mathformer-workflow-router
+  author epistemic reasoning flow: reasoning-flow-language
+  validate epistemic reasoning flow: reasoning-flow-language
+  migrate ERFL reasoning flow: reasoning-flow-language
+  express workflow as typed reasoning flow: reasoning-flow-language
+  generate all reasoning flows catalog: reasoning-flow-language
+  explain all repository reasoning flows: reasoning-flow-language
+  validate skill hook workflow contract: workflow-contract-validator
+  audit skill hook and loop coverage: skill-hook-coverage-maximizer
+  validate reasoning log schema: reasoning-log-schema-guardian
+  render reasoning log as html: reasoning-log-schema-guardian
+  make sure skills have reasoning logs: reasoning-log-schema-guardian
+  audit reasoning log quality: reasoning-log-schema-guardian
+  summarize reasoning log for a consumer application: reasoning-log-schema-guardian
+  build reasoning log index: reasoning-log-schema-guardian
+  expose reasoning logs through mcp: reasoning-log-schema-guardian
+  normalize workflow gate decision: gate-policy-controller
+  observe autoformalization process for monotonic improvements: autoformalization-reflective-refinement-loop
+  monitor reference-free critic measures: reference-free-critic-monitor
+  evaluate autoformalization without benchmark: reference-free-critic-monitor
+  build RFDE report: reference-free-descriptive-evaluator
+  evaluate agentic run reference-free: reference-free-descriptive-evaluator
+  generate reference-free descriptive dashboard: reference-free-descriptive-evaluator
+  run aggressive skill testing program: skill-test-program-orchestrator
+  extract paper layout with docling: paper-docling-layout-extractor
+  localize main theory in a paper: paper-main-theory-localizer
+  autoformalize main theory of a paper: paper-theory-autoformalization-orchestrator
+  extract theorem-like units from a LaTeX archive: latex-archive-theory-extractor
+  extract textbook theory from LaTeX archive: latex-archive-theory-extractor
+  organize textbook theory into TeX bundles: textbook-theory-tex-organizer
+  plan textbook autoformalization chapter by chapter: textbook-chapter-autoformalization-orchestrator
+  autoformalize textbook chapter by chapter: textbook-chapter-autoformalization-orchestrator
+  extract book and build chapter autoformalization plan: textbook-chapter-autoformalization-orchestrator
+  build textbook autoformalization batch: textbook-autoformalization-batch-orchestrator
+  run textbook autoformalization batch object by object: textbook-autoformalization-batch-orchestrator
+  autoformalize textbook theory units: textbook-autoformalization-batch-orchestrator
+  identify formalizable units in a source: source-formalizable-unit-extractor
+  decompose a math source before autoformalization: source-formalizable-unit-extractor
+  verify autoformalization results are real: autoformalization-result-realness-verifier
+  run legacy AgentC autoformalization: autoformalization-agentc
+  run Vampire ATP proof search: vampire-atp-orchestrator
+  autoformalize and prove with Vampire: vampire-atp-orchestrator
+  informalize Vampire proof: vampire-proof-informalizer
+  explain Vampire TSTP proof: vampire-proof-informalizer
+  generate premise KB theorem seeds: premise-kb-theorem-seed-generator
+  build famous theorem axiom corpus: premise-kb-theorem-seed-generator
+  index premise KB: premise-kb-indexer
+  search premise KB: premise-kb-indexer
+  estimate proof expansion difficulty: proof-expansion-difficulty-estimator
+  web research proof expansion support: proof-expansion-web-researcher
+  run proof expansion support loop: proof-expansion-support-orchestrator
+  expand prerequisite definitions before formalization: latex-prerequisite-expander
+  run LaTeX expansion review suite: latex-expansion-review-orchestrator
+  review LaTeX expansion completeness: latex-expansion-completeness-reviewer
+  review LaTeX expansion bindings: latex-expansion-binding-reviewer
+  draft first-pass Lean or Isabelle code: lean-autoformalization-drafter
+  draft first-pass Isabelle code: isabelle-autoformalization-drafter
+  autoformalize with Isabelle: isabelle-autoformalization-drafter
+  search IsarMathLib grounding: isarmathlib-grounding-navigator
+  navigate IsarMathLib: isarmathlib-grounding-navigator
+  execute generated Isabelle code: isabelle-execution-runner
+  run Isabelle theory checks: isabelle-execution-runner
+  draft Rocq autoformalization: rocq-autoformalization-drafter
+  autoformalize with Rocq: rocq-autoformalization-drafter
+  execute generated Rocq code: rocq-execution-runner
+  run Rocq proof checks: rocq-execution-runner
+  probe SymPy backend dependencies: sympy-dependency-prober
+  index SymPy API docs: sympy-api-docs-indexer
+  parse expressions for SymPy: sympy-expression-parser
+  model SymPy assumptions: sympy-assumption-modeler
+  ground concepts in SymPy APIs: sympy-concept-grounding-navigator
+  draft SymPy autoformalization: sympy-autoformalization-drafter
+  autoformalize with SymPy: sympy-autoformalization-drafter
+  execute generated SymPy code: sympy-execution-runner
+  validate SymPy identity: sympy-identity-validator
+  search SymPy counterexamples: sympy-counterexample-searcher
+  verify SymPy transformation trace: sympy-transformation-trace-verifier
+  run SymPy consistency report: sympy-consistency-report-orchestrator
+  run SymPy equational trace loop: sympy-consistency-report-orchestrator
+  probe physics SymPy backend dependencies: physics-sympy-dependency-prober
+  extract physics derivation source: physics-derivation-source-extractor
+  elicit informal physics derivation context: physics-informal-derivation-elicitor
+  elicit physics assumptions before formalization: physics-informal-derivation-elicitor
+  expand informal physics derivation: physics-informal-derivation-expander
+  expand physics derivation before formalization: physics-informal-derivation-expander
+  review informal physics derivation readiness: physics-informal-derivation-readiness-reviewer
+  validate expanded physics derivation before formalization: physics-informal-derivation-readiness-reviewer
+  build physics symbol table: physics-symbol-table-builder
+  model physics dimensions: physics-dimension-modeler
+  ground physics units in SymPy: physics-unit-system-grounder
+  parse physics equations for SymPy: physics-equation-parser
+  model physics regimes and assumptions: physics-regime-assumption-modeler
+  build physics coordinate frame context: physics-coordinate-frame-context-builder
+  detect implicit physics derivation gaps: physics-implicit-gap-detector
+  close implicit physics derivation gaps: physics-derivation-gap-expander
+  ground physics laws in SymPy APIs: physics-law-concept-grounding-navigator
+  plan physics SymPy derivation: physics-derivation-plan-builder
+  plan enriched physics SymPy workflow: physics-sympy-workflow-orchestrator
+  plan Lean-inspired SymPy physics workflow: physics-sympy-workflow-orchestrator
+  plan one-sample physics SymPy autoformalization: physics-sympy-goal-sample-autoformalizer
+  recursively inspect one FormalPhysics SymPy case: physics-sympy-goal-sample-autoformalizer
+  same for SymPy formalphysics_0000: physics-sympy-goal-sample-autoformalizer
+  recursive goal oriented physics SymPy example 0000: physics-sympy-goal-sample-autoformalizer
+  run source-only recursive SymPy case: physics-sympy-goal-sample-autoformalizer
+  run grounded SymPy physics sample thoroughness: physics-sympy-goal-sample-autoformalizer
+  build SymPy Lean cross-backend semantic packet: physics-sympy-goal-sample-autoformalizer
+  compare Lean and SymPy physics as alignment evidence: physics-sympy-goal-sample-autoformalizer
+  run SymPy physics dependency failure policy: physics-sympy-dependency-prober
+  test missing SymPy dependency blocker: physics-sympy-dependency-prober
+  run SymPy physics adversarial design guard: physics-sympy-review-refinement-router
+  test SymPy physics design guard fixtures: physics-sympy-review-refinement-router
+  map SymPy physics recursive repair expansion: physics-sympy-repair-expansion-cartographer
+  ensure SymPy physics repair expansion is exhaustive: physics-sympy-repair-expansion-cartographer
+  control recursive SymPy physics repair loop: physics-sympy-recursive-repair-loop-controller
+  decide SymPy physics repair recursion: physics-sympy-recursive-repair-loop-controller
+  build SymPy physics equation surface: physics-sympy-equation-surface-builder
+  build physics SymPy quantity surface: physics-sympy-equation-surface-builder
+  encode SymPy physics assumptions: physics-sympy-assumption-context-encoder
+  model contextual assumptions behind physics in SymPy: physics-sympy-assumption-context-encoder
+  draft physics SymPy derivation: physics-sympy-derivation-drafter
+  autoformalize physics derivation with SymPy: physics-sympy-derivation-drafter
+  derive physics result in SymPy: physics-sympy-derivation-drafter
+  execute generated physics SymPy code: physics-sympy-execution-runner
+  interpret SymPy physics diagnostics: physics-sympy-execution-interpreter
+  run physics unit analysis: physics-unit-analysis-verifier
+  verify physics derivation trace: physics-derivation-step-verifier
+  run physics numeric sanity samples: physics-numeric-sanity-sampler
+  build physics RFDE trajectory report: reference-free-descriptive-evaluator
+  monitor physics reference-free trajectory: reference-free-critic-monitor
+  critique SymPy physics semantics: physics-sympy-equational-semantics-critic
+  critique SymPy physics dimensions: physics-sympy-dimension-projection-critic
+  run generative SymPy physics critics: physics-sympy-generative-critic-orchestrator
+  run Codex-exec SymPy physics critics: physics-sympy-generative-critic-orchestrator
+  review final SymPy physics equations: physics-sympy-final-equation-reviewer
+  review final mathematical SymPy equations: mathematical-sympy-final-equation-reviewer
+  plan SymPy physics review refinement: physics-sympy-review-refinement-router
+  refine SymPy physics from final review: physics-sympy-review-refinement-router
+  review SymPy physics design guard: physics-sympy-review-refinement-router
+  review the SymPy physics derivation workflow for one case: physics-sympy-review-refinement-router
+  run physics SymPy consistency report: physics-derivation-consistency-report-orchestrator
+  run SymPy physics derivation trace loop: physics-derivation-consistency-report-orchestrator
+  compare SymPy physics with FormalPhysics formal answer: physics-sympy-formal-answer-reflector
+  reflect on FormalPhysics formal answer for SymPy: physics-sympy-formal-answer-reflector
+  plan Lean physics formalization workflow: physics-lean-workflow-orchestrator
+  autoformalize physics derivation with Lean: physics-lean-workflow-orchestrator
+  run Lean physics derivation trace loop: physics-lean-workflow-orchestrator
+  compare Lean physics and mathematical pipelines: physics-lean-workflow-orchestrator
+  check Lean physics pipeline parity: physics-lean-workflow-orchestrator
+  plan Isabelle physics formalization workflow: physics-isabelle-workflow-orchestrator
+  autoformalize physics derivation with Isabelle: physics-isabelle-workflow-orchestrator
+  run Isabelle physics derivation trace loop: physics-isabelle-workflow-orchestrator
+  plan Isabelle physics background dependencies: physics-isabelle-workflow-orchestrator
+  build Lean physics type system: physics-lean-type-system-builder
+  type physics quantities for Lean: physics-lean-type-system-builder
+  encode Lean physics assumptions: physics-lean-assumption-context-encoder
+  model contextual assumptions behind physics in Lean: physics-lean-assumption-context-encoder
+  draft typed Lean physics derivation: physics-lean-derivation-drafter
+  interpret Lean physics diagnostics: physics-lean-execution-interpreter
+  verify Lean physics units: physics-lean-unit-analysis-verifier
+  run Lean physics unit analysis: physics-lean-unit-analysis-verifier
+  critique Lean physics semantics: physics-lean-physical-semantics-critic
+  critique Lean physics assumptions: physics-lean-assumption-critic
+  critique Lean physics dimensions: physics-lean-dimension-critic
+  run generative Lean physics critics: physics-lean-generative-critic-orchestrator
+  run Codex-exec Lean physics critics: physics-lean-generative-critic-orchestrator
+  autoformalize one FormalPhysics Lean sample: physics-lean-goal-sample-autoformalizer
+  recursively ground one FormalPhysics Lean case: physics-lean-goal-sample-autoformalizer
+  plan one-sample physics Lean autoformalization: physics-lean-goal-sample-autoformalizer
+  monitor Lean physics drift pathologies: physics-lean-drift-pathology-monitor
+  classify FormalScience physics drift taxonomy: physics-lean-drift-pathology-monitor
+  detect notational collapse while autoformalizing physics: physics-lean-drift-pathology-monitor
+  detect abstraction elevation while autoformalizing physics: physics-lean-drift-pathology-monitor
+  detect physics mathematical objects for pathology repair: physics-math-object-detector
+  work over physics object in MathformerPhysicsLib: mathformerphysicslib-object-workbench
+  normalize physics foundation objects: physics-foundation-object-intake
+  design MathformerPhysicsLib foundation surfaces: mathformerphysicslib-foundation-surface-designer
+  draft MathformerPhysicsLib foundation modules: mathformerphysicslib-foundation-drafter
+  verify MathformerPhysicsLib foundation modules: mathformerphysicslib-foundation-verifier
+  inventory MathformerPhysicsLib coherence: mathformerphysicslib-coherence-inventory-builder
+  canonicalize MathformerPhysicsLib concepts: mathformerphysicslib-concept-canonicalizer
+  audit MathformerPhysicsLib Mathlib grounding: mathformerphysicslib-mathlib-grounding-auditor
+  critique MathformerPhysicsLib redefinitions: mathformerphysicslib-redefinition-critic
+  critique MathformerPhysicsLib integration: mathformerphysicslib-integration-critic
+  critique MathformerPhysicsLib API operability: mathformerphysicslib-api-operability-critic
+  run generative MathformerPhysicsLib coherence critics: mathformerphysicslib-generative-coherence-critic
+  plan MathformerPhysicsLib coherence repairs: mathformerphysicslib-coherence-repair-planner
+  gate MathformerPhysicsLib coherence: mathformerphysicslib-coherence-gate
+  run MathformerPhysicsLib coherence grounding loop: mathformerphysicslib-coherence-gate
+  repair Lean physics notational collapse: physics-lean-notational-collapse-repairer
+  repair Lean physics abstraction elevation: physics-lean-abstraction-elevation-repairer
+  align Lean physics proof strategy with source: physics-lean-proof-strategy-alignment-repairer
+  normalize Lean physics implicit premises: physics-lean-implicit-premise-normalizer
+  orchestrate Lean physics pathology repair loop: physics-lean-pathology-repair-orchestrator
+  run generative Lean physics pathology repair: physics-lean-generative-repair-orchestrator
+  plan Codex-exec Lean physics repair proposals: physics-lean-generative-repair-orchestrator
+  map Lean physics recursive repair expansion: physics-lean-repair-expansion-cartographer
+  ensure Lean physics repair expansion is exhaustive: physics-lean-repair-expansion-cartographer
+  control recursive Lean physics repair loop: physics-lean-recursive-repair-loop-controller
+  decide Lean physics repair recursion: physics-lean-recursive-repair-loop-controller
+  review final physics hypotheses: physics-final-hypothesis-reviewer
+  review final mathematical hypotheses: mathematical-final-hypothesis-reviewer
+  run final derivation review: final-derivation-review-orchestrator
+  plan Lean physics review refinement: physics-lean-review-refinement-router
+  refine Lean physics from final review: physics-lean-review-refinement-router
+  refine Lean physics formalization: physics-lean-refinement-loop
+  run Lean physics consistency report: physics-lean-consistency-report-orchestrator
+  plan Isabelle physics formalization workflow: physics-isabelle-workflow-orchestrator
+  autoformalize physics derivation with Isabelle: physics-isabelle-workflow-orchestrator
+  run Isabelle physics derivation trace loop: physics-isabelle-workflow-orchestrator
+  adapt Lean physics pipeline to Isabelle safely: physics-isabelle-workflow-orchestrator
+  build Isabelle physics type system: physics-isabelle-type-system-builder
+  type physics quantities for Isabelle: physics-isabelle-type-system-builder
+  encode Isabelle physics assumptions: physics-isabelle-assumption-context-encoder
+  model contextual assumptions behind physics in Isabelle: physics-isabelle-assumption-context-encoder
+  draft Isabelle physics derivation: physics-isabelle-derivation-drafter
+  draft typed Isabelle physics derivation: physics-isabelle-derivation-drafter
+  review final Isabelle physics hypotheses: physics-isabelle-final-hypothesis-reviewer
+  review final mathematical Isabelle hypotheses: mathematical-isabelle-final-hypothesis-reviewer
+  run Isabelle physics consistency report: physics-isabelle-consistency-report-orchestrator
+  execute generated Lean code: lean-execution-runner
+  repair Lean from errors or semantic critique: lean-formal-refinement
+  judge semantic or formal quality: lean-critique-and-judging
+  critique Lean syntactic correctness: lean-syntactic-correctness-critic
+  critique semantic preservation: lean-semantic-preservation-critic
+  critique logical soundness: lean-logical-soundness-critic
+  critique mathlib alignment: lean-mathlib-alignment-critic
+  run Lean critique suite: lean-critique-suite-orchestrator
+  informalize final Lean files: lean-informalization-extractor
+  extract informal proof packets from Lean: lean-informalization-extractor
+  evaluate internal consistency of informalized proofs: lean-informal-proof-internal-consistency-verifier
+  check informalized proof internal consistency: lean-informal-proof-internal-consistency-verifier
+  verify informalized Lean proof consistency: lean-informal-consistency-verifier
+  run reverse informalization consistency gate: lean-informal-consistency-verifier
+  check Lean declaration shape consistency: lean-declaration-shape-consistency-checker
+  verify Lean nonvacuity consistency: lean-nonvacuity-consistency-checker
+  check Lean theorem non-vacuity: lean-nonvacuity-consistency-checker
+  check Lean physics derivation completeness: physics-lean-derivation-completeness-checker
+  check whether Lean physics artifact is a complete autoformalization: physics-lean-derivation-completeness-checker
+  index cross-file Lean concepts: lean-cross-file-concept-consistency-indexer
+  map repeated Lean concepts across files: lean-cross-file-concept-consistency-indexer
+  run unified Lean consistency report: lean-consistency-report-orchestrator
+  test Lean files for consistency: lean-consistency-report-orchestrator
+  run reference-free Lean consistency loop: lean-consistency-report-orchestrator
+  clean noisy formal code output: lean-output-denoiser
+  classify a refinement transition: lean-refinement-taxonomy
+  annotate Lean source line by line: lean-line-annotation
+  validate generated Lean line comments: lean-line-annotation
+  map concepts to mathlib declarations: mathlib-concept-candidate-mapper
+  map informal proof concepts to mathlib: informal-proof-mathlib-concepts
+  navigate mathlib hierarchy: mathlib-hierarchy-navigator
+  map mathlib module tree: mathlib-module-tree-cartographer
+  inspect mathlib declaration neighborhood: mathlib-declaration-neighborhood-navigator
+  verify mathlib candidates with Lean: mathlib-candidate-verifier
+  review mathlib concept coverage: mathlib-concept-coverage-reviewer
+  check whether result already exists before autoformalization: result-existence-precheck-orchestrator
+  search mathlib and MathformerLib for existing result: mathlib-result-existence-checker
+  plan mathlib web grounding searches: mathlib-web-search-strategist
+  validate mathlib web grounding evidence: mathlib-web-evidence-validator
+  run mathlib web grounding loop: mathlib-web-grounding-orchestrator
+  maximize mathlib grounding across Lean artifacts: mathlib-grounding-maximizer
+  push Lean artifacts toward maximal mathlib compatibility: mathlib-grounding-maximizer
+  plan mathlib-compatible API usage: mathlib-api-compatibility-planner
+  build mathlib import set: mathlib-import-set-builder
+  verify Lean import context: lean-import-context-verifier
+  minimize mathlib imports: mathlib-import-minimizer
+  validate mathlib concept ontology: mathlib-concept-ontology-manager
+  accumulate formalizations into Mathformerlib: mathformerlib-accumulation-orchestrator
+  build Mathformerlib registry: mathformerlib-registry-manager
+  promote formalization into Mathformerlib: mathformerlib-promotion-gate
+  document Mathformer Library: mathformer-library-docs-generator
+  generate Mathformer Library Markdown docs: mathformer-library-docs-generator
+  generate aligned Mathformer Library HTML docs: mathformer-library-docs-generator
+  align textual mentions with Lean formalizations: mathformer-library-docs-generator
+  build line-by-line NL/LaTeX to Lean packet: source-line-translation-packet-builder
+  preserve literal source anchors during drafting: source-line-translation-packet-builder
+  validate source anchors against Lean: source-formalization-drift-guard
+  guard against source-to-Lean drift: source-formalization-drift-guard
+  update Mathformer Library documentation index: mathformer-library-docs-generator
+  run mathlib compatibility loop: mathlib-compatibility-loop-orchestrator
+  audit mathlib compatibility: mathlib-compatibility-auditor
+  run Lean compile/typecheck diagnostics: lean-compile-checker
+  audit mathlib abstraction and compatibility: mathlib-abstraction-auditor
+  run full workflow: autoformalization-workflow-orchestrator
+  run ProofNet utilities: proofnet-benchmark-runner

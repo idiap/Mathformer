@@ -1,0 +1,161 @@
+{
+  "case_id": "rc_discharge",
+  "ok": true,
+  "expectations": {
+    "case_id": "rc_discharge",
+    "source_fixture": "tests/physics_sympy/controlled_latex/rc_discharge.tex",
+    "expected_quantity_symbols": [
+      "C",
+      "R",
+      "V",
+      "V0",
+      "t"
+    ],
+    "expected_quantity_dimensions": {
+      "V": "voltage",
+      "V0": "voltage",
+      "R": "resistance",
+      "C": "capacitance",
+      "t": "time"
+    },
+    "expected_unit_names": {
+      "V": "volt",
+      "V0": "volt",
+      "R": "ohm",
+      "C": "farad",
+      "t": "second"
+    },
+    "expected_assumptions": [
+      "ideal resistor",
+      "ideal capacitor",
+      "R > 0",
+      "C > 0",
+      "t >= 0"
+    ],
+    "expected_frame": {
+      "dimension": "0D circuit",
+      "axis": "time",
+      "positive_direction": "forward time"
+    },
+    "expected_target_expression": "V0*exp(-t/(C*R))",
+    "expected_gap_categories": [
+      "missing_initial_condition_application",
+      "missing_ode_solution",
+      "missing_unit_conversion"
+    ],
+    "expected_omitted_assumption_blockers": [
+      "missing_condition_or_context",
+      "critical_physics_blocker"
+    ]
+  },
+  "checks": [
+    {
+      "id": "source_fixture_exists",
+      "ok": true,
+      "detail": "tests/physics_sympy/controlled_latex/rc_discharge.tex"
+    },
+    {
+      "id": "quantity_symbols_match",
+      "ok": true,
+      "expected": [
+        "C",
+        "R",
+        "V",
+        "V0",
+        "t"
+      ],
+      "observed": [
+        "C",
+        "R",
+        "V",
+        "V0",
+        "t"
+      ]
+    },
+    {
+      "id": "quantity_dimensions_match",
+      "ok": true,
+      "expected": {
+        "V": "voltage",
+        "V0": "voltage",
+        "R": "resistance",
+        "C": "capacitance",
+        "t": "time"
+      },
+      "observed": {
+        "V": "voltage",
+        "V0": "voltage",
+        "R": "resistance",
+        "C": "capacitance",
+        "t": "time"
+      }
+    },
+    {
+      "id": "unit_dimensions_are_consistent",
+      "ok": true,
+      "unresolved_dimensions": [],
+      "conflicting_dimensions": []
+    },
+    {
+      "id": "assumptions_preserved",
+      "ok": true,
+      "expected": [
+        "C > 0",
+        "R > 0",
+        "ideal capacitor",
+        "ideal resistor",
+        "t >= 0"
+      ],
+      "observed": [
+        "C > 0",
+        "R > 0",
+        "ideal capacitor",
+        "ideal resistor",
+        "t >= 0"
+      ]
+    },
+    {
+      "id": "target_expression_symbolically_matches",
+      "ok": true,
+      "expected": "V0*exp(-t/(C*R))",
+      "observed": "V0*exp(-t/(C*R))",
+      "residual": "0"
+    },
+    {
+      "id": "gap_categories_match",
+      "ok": true,
+      "expected": [
+        "missing_initial_condition_application",
+        "missing_ode_solution",
+        "missing_unit_conversion"
+      ],
+      "observed": [
+        "missing_initial_condition_application",
+        "missing_ode_solution",
+        "missing_unit_conversion"
+      ]
+    },
+    {
+      "id": "omitted_assumptions_raise_expected_blockers",
+      "ok": true,
+      "expected": [
+        "critical_physics_blocker",
+        "missing_condition_or_context"
+      ],
+      "observed": [
+        "critical_physics_blocker",
+        "missing_condition_or_context"
+      ]
+    },
+    {
+      "id": "consistency_status_complete",
+      "ok": true,
+      "status": "complete"
+    }
+  ],
+  "failed_checks": [],
+  "omitted_assumption_blockers": [
+    "critical_physics_blocker",
+    "missing_condition_or_context"
+  ]
+}

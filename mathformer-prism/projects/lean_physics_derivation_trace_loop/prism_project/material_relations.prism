@@ -1,0 +1,311 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+from lean_physics_derivation_trace_loop import (
+    AcceptanceCase,
+    FormalizationBasis,
+    GroundingBasis,
+    LeanAssessment,
+    LeanDerivation,
+    LeanPhysicsDerivationTraceAnnotateLineCommentGuardArtifact,
+    LeanPhysicsDerivationTraceArtifactRealnessGateArtifact,
+    LeanPhysicsDerivationTraceArtifactStatisticsArtifact,
+    LeanPhysicsDerivationTraceAuditCompatibilityArtifact,
+    LeanPhysicsDerivationTraceCheckCompileArtifact,
+    LeanPhysicsDerivationTraceConsistencyCrossFileConceptsArtifact,
+    LeanPhysicsDerivationTraceConsistencyDeclarationShapeArtifact,
+    LeanPhysicsDerivationTraceConsistencyNonvacuityArtifact,
+    LeanPhysicsDerivationTraceConsistencyPhysicsLeanReportArtifact,
+    LeanPhysicsDerivationTraceConsistencyUnifiedReportArtifact,
+    LeanPhysicsDerivationTraceCritiqueLogicalSoundnessArtifact,
+    LeanPhysicsDerivationTraceCritiqueMathlibAlignmentArtifact,
+    LeanPhysicsDerivationTraceCritiquePhysicsLeanAssumptionsArtifact,
+    LeanPhysicsDerivationTraceCritiquePhysicsLeanDimensionsArtifact,
+    LeanPhysicsDerivationTraceCritiquePhysicsLeanDriftPathologyMonitorArtifact,
+    LeanPhysicsDerivationTraceCritiquePhysicsLeanGenerativePanelArtifact,
+    LeanPhysicsDerivationTraceCritiquePhysicsLeanSemanticsArtifact,
+    LeanPhysicsDerivationTraceCritiqueReferenceFreeMonitorArtifact,
+    LeanPhysicsDerivationTraceCritiqueSemanticArtifact,
+    LeanPhysicsDerivationTraceCritiqueSemanticPreservationArtifact,
+    LeanPhysicsDerivationTraceCritiqueSuiteArtifact,
+    LeanPhysicsDerivationTraceCritiqueSyntaxArtifact,
+    LeanPhysicsDerivationTraceDependencyResolveArtifact,
+    LeanPhysicsDerivationTraceDraftPhysicsLeanDerivationArtifact,
+    LeanPhysicsDerivationTraceEvaluationRfdeReportArtifact,
+    LeanPhysicsDerivationTraceExecuteInitialArtifact,
+    LeanPhysicsDerivationTraceExecutePhysicsLeanInterpretArtifact,
+    LeanPhysicsDerivationTraceFoundationDownstreamRegressionArtifact,
+    LeanPhysicsDerivationTraceFoundationLeanDraftArtifact,
+    LeanPhysicsDerivationTraceFoundationMathlibGroundingArtifact,
+    LeanPhysicsDerivationTraceFoundationPhysicsObjectIntakeArtifact,
+    LeanPhysicsDerivationTraceFoundationPromoteArtifact,
+    LeanPhysicsDerivationTraceFoundationSurfaceDesignArtifact,
+    LeanPhysicsDerivationTraceFoundationVerifyArtifact,
+    LeanPhysicsDerivationTraceGoalPhysicsLeanSingleSampleAutoformalizationArtifact,
+    LeanPhysicsDerivationTraceIntakeSourceUnitInventoryArtifact,
+    LeanPhysicsDerivationTraceMathlibApiPlanArtifact,
+    LeanPhysicsDerivationTraceMathlibCompatibilityLoopArtifact,
+    LeanPhysicsDerivationTraceMathlibCoverageArtifact,
+    LeanPhysicsDerivationTraceMathlibDiscoveryArtifact,
+    LeanPhysicsDerivationTraceMathlibGroundingMaximizeArtifact,
+    LeanPhysicsDerivationTraceMathlibHierarchyDeclarationNeighborhoodArtifact,
+    LeanPhysicsDerivationTraceMathlibHierarchyModuleTreeArtifact,
+    LeanPhysicsDerivationTraceMathlibHierarchyNavigateArtifact,
+    LeanPhysicsDerivationTraceMathlibImportContextArtifact,
+    LeanPhysicsDerivationTraceMathlibImportMinimizeArtifact,
+    LeanPhysicsDerivationTraceMathlibImportPlanArtifact,
+    LeanPhysicsDerivationTraceMathlibOntologyValidateArtifact,
+    LeanPhysicsDerivationTraceMathlibResultExistenceSearchArtifact,
+    LeanPhysicsDerivationTraceMathlibVerifyArtifact,
+    LeanPhysicsDerivationTraceMathlibWebEvidenceArtifact,
+    LeanPhysicsDerivationTraceMathlibWebGroundingLoopArtifact,
+    LeanPhysicsDerivationTraceMathlibWebStrategyArtifact,
+    LeanPhysicsDerivationTraceOutputDenoiseArtifact,
+    LeanPhysicsDerivationTracePhysicsDimensionsModelArtifact,
+    LeanPhysicsDerivationTracePhysicsEquationsParseArtifact,
+    LeanPhysicsDerivationTracePhysicsFramesBuildArtifact,
+    LeanPhysicsDerivationTracePhysicsGapsDetectArtifact,
+    LeanPhysicsDerivationTracePhysicsGapsExpandArtifact,
+    LeanPhysicsDerivationTracePhysicsInformalElicitArtifact,
+    LeanPhysicsDerivationTracePhysicsInformalExpandArtifact,
+    LeanPhysicsDerivationTracePhysicsInformalReviewArtifact,
+    LeanPhysicsDerivationTracePhysicsLawsGroundArtifact,
+    LeanPhysicsDerivationTracePhysicsLeanAssumptionsEncodeArtifact,
+    LeanPhysicsDerivationTracePhysicsLeanTypeSystemBuildArtifact,
+    LeanPhysicsDerivationTracePhysicsLeanUnitsVerifyArtifact,
+    LeanPhysicsDerivationTracePhysicsLeanWorkflowPlanArtifact,
+    LeanPhysicsDerivationTracePhysicsRegimesModelArtifact,
+    LeanPhysicsDerivationTracePhysicsSourceExtractArtifact,
+    LeanPhysicsDerivationTracePhysicsSymbolsBuildArtifact,
+    LeanPhysicsDerivationTracePhysicsUnitsGroundArtifact,
+    LeanPhysicsDerivationTracePostformalizationInformalConsistencyArtifact,
+    LeanPhysicsDerivationTracePostformalizationInformalInternalConsistencyArtifact,
+    LeanPhysicsDerivationTracePostformalizationInformalizeArtifact,
+    LeanPhysicsDerivationTracePostformalizationSourceAnchorDriftGuardArtifact,
+    LeanPhysicsDerivationTracePreformalizationExpandArtifact,
+    LeanPhysicsDerivationTracePreformalizationExpansionDifficultyArtifact,
+    LeanPhysicsDerivationTracePreformalizationExpansionSupportArtifact,
+    LeanPhysicsDerivationTracePreformalizationExpansionWebSupportArtifact,
+    LeanPhysicsDerivationTracePreformalizationLineTranslationPacketArtifact,
+    LeanPhysicsDerivationTracePreformalizationResultExistencePrecheckArtifact,
+    LeanPhysicsDerivationTracePreformalizationReviewBindingsArtifact,
+    LeanPhysicsDerivationTracePreformalizationReviewCompletenessArtifact,
+    LeanPhysicsDerivationTracePreformalizationReviewSuiteArtifact,
+    LeanPhysicsDerivationTraceRefineFormalArtifact,
+    LeanPhysicsDerivationTraceRefinePhysicsLeanArtifact,
+    LeanPhysicsDerivationTraceRefinePhysicsLeanReviewArtifact,
+    LeanPhysicsDerivationTraceRefineSemanticArtifact,
+    LeanPhysicsDerivationTraceRepairMathformerphysicslibObjectWorkbenchArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanAbstractionElevationArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanGenerativeRepairArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanImplicitPremiseNormalizeArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanNotationalCollapseArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanPathologyLoopArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanProofStrategyAlignmentArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanRecursiveRepairControlArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsLeanRepairExpansionCartographyArtifact,
+    LeanPhysicsDerivationTraceRepairPhysicsMathObjectDetectArtifact,
+    LeanPhysicsDerivationTraceReviewFinalDerivationHypothesesArtifact,
+    LeanPhysicsDerivationTraceReviewMathematicalFinalHypothesesArtifact,
+    LeanPhysicsDerivationTraceReviewPhysicsFinalHypothesesArtifact,
+    LeanPhysicsDerivationTraceTransitionTaxonomyArtifact,
+    LeanValidityCase,
+    MathlibGrounding,
+    PhysicalAssessment,
+    PhysicalFidelityCase,
+    PhysicsDisposition,
+    PhysicsInterpretation,
+    PhysicsLeanConsistencyAssessment,
+    PhysicsLeanDerivationRequest,
+    ProofObligations,
+)
+
+type FormalizesPreformalizationExpansionSupportCertificate:
+    source: LeanPhysicsDerivationTraceIntakeSourceUnitInventoryArtifact
+    target: Generated[LeanPhysicsDerivationTracePreformalizationExpansionSupportArtifact]
+
+relation FormalizesPreformalizationExpansionSupport(
+    source: LeanPhysicsDerivationTraceIntakeSourceUnitInventoryArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationExpansionSupportArtifact],
+) -> FormalizesPreformalizationExpansionSupportCertificate
+
+type FormalizesPreformalizationExpansionWebSupportCertificate:
+    source: LeanPhysicsDerivationTracePreformalizationExpansionDifficultyArtifact
+    target: Generated[LeanPhysicsDerivationTracePreformalizationExpansionWebSupportArtifact]
+
+relation FormalizesPreformalizationExpansionWebSupport(
+    source: LeanPhysicsDerivationTracePreformalizationExpansionDifficultyArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationExpansionWebSupportArtifact],
+) -> FormalizesPreformalizationExpansionWebSupportCertificate
+
+type FormalizesPreformalizationExpandCertificate:
+    source: LeanPhysicsDerivationTracePreformalizationExpansionWebSupportArtifact
+    target: Generated[LeanPhysicsDerivationTracePreformalizationExpandArtifact]
+
+relation FormalizesPreformalizationExpand(
+    source: LeanPhysicsDerivationTracePreformalizationExpansionWebSupportArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationExpandArtifact],
+) -> FormalizesPreformalizationExpandCertificate
+
+type TestsPreformalizationReviewSuiteCertificate:
+    source: LeanPhysicsDerivationTracePreformalizationExpandArtifact
+    target: Generated[LeanPhysicsDerivationTracePreformalizationReviewSuiteArtifact]
+
+relation TestsPreformalizationReviewSuite(
+    source: LeanPhysicsDerivationTracePreformalizationExpandArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationReviewSuiteArtifact],
+) -> TestsPreformalizationReviewSuiteCertificate
+
+type TestsPreformalizationReviewCompletenessCertificate:
+    source: LeanPhysicsDerivationTracePreformalizationReviewSuiteArtifact
+    target: Generated[LeanPhysicsDerivationTracePreformalizationReviewCompletenessArtifact]
+
+relation TestsPreformalizationReviewCompleteness(
+    source: LeanPhysicsDerivationTracePreformalizationReviewSuiteArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationReviewCompletenessArtifact],
+) -> TestsPreformalizationReviewCompletenessCertificate
+
+type TestsPreformalizationReviewBindingsCertificate:
+    source: LeanPhysicsDerivationTracePreformalizationReviewCompletenessArtifact
+    target: Generated[LeanPhysicsDerivationTracePreformalizationReviewBindingsArtifact]
+
+relation TestsPreformalizationReviewBindings(
+    source: LeanPhysicsDerivationTracePreformalizationReviewCompletenessArtifact,
+    target: Generated[LeanPhysicsDerivationTracePreformalizationReviewBindingsArtifact],
+) -> TestsPreformalizationReviewBindingsCertificate
+
+type SynthesizesMathlibCompatibilityLoopCertificate:
+    source: LeanPhysicsDerivationTraceMathlibVerifyArtifact
+    target: Generated[LeanPhysicsDerivationTraceMathlibCompatibilityLoopArtifact]
+
+relation SynthesizesMathlibCompatibilityLoop(
+    source: LeanPhysicsDerivationTraceMathlibVerifyArtifact,
+    target: Generated[LeanPhysicsDerivationTraceMathlibCompatibilityLoopArtifact],
+) -> SynthesizesMathlibCompatibilityLoopCertificate
+
+type GroundsMathlibWebGroundingLoopCertificate:
+    source: LeanPhysicsDerivationTraceMathlibWebEvidenceArtifact
+    target: Generated[LeanPhysicsDerivationTraceMathlibWebGroundingLoopArtifact]
+
+relation GroundsMathlibWebGroundingLoop(
+    source: LeanPhysicsDerivationTraceMathlibWebEvidenceArtifact,
+    target: Generated[LeanPhysicsDerivationTraceMathlibWebGroundingLoopArtifact],
+) -> GroundsMathlibWebGroundingLoopCertificate
+
+type RecommendsMathlibApiPlanCertificate:
+    source: LeanPhysicsDerivationTraceMathlibGroundingMaximizeArtifact
+    target: Generated[LeanPhysicsDerivationTraceMathlibApiPlanArtifact]
+
+relation RecommendsMathlibApiPlan(
+    source: LeanPhysicsDerivationTraceMathlibGroundingMaximizeArtifact,
+    target: Generated[LeanPhysicsDerivationTraceMathlibApiPlanArtifact],
+) -> RecommendsMathlibApiPlanCertificate
+
+type TestsCritiqueSemanticCertificate:
+    source: LeanPhysicsDerivationTraceCheckCompileArtifact
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSemanticArtifact]
+
+relation TestsCritiqueSemantic(
+    source: LeanPhysicsDerivationTraceCheckCompileArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSemanticArtifact],
+) -> TestsCritiqueSemanticCertificate
+
+type TestsCritiqueSyntaxCertificate:
+    source: LeanPhysicsDerivationTraceCritiqueSemanticArtifact
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSyntaxArtifact]
+
+relation TestsCritiqueSyntax(
+    source: LeanPhysicsDerivationTraceCritiqueSemanticArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSyntaxArtifact],
+) -> TestsCritiqueSyntaxCertificate
+
+type TestsCritiqueSemanticPreservationCertificate:
+    source: LeanPhysicsDerivationTraceCritiqueSyntaxArtifact
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSemanticPreservationArtifact]
+
+relation TestsCritiqueSemanticPreservation(
+    source: LeanPhysicsDerivationTraceCritiqueSyntaxArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSemanticPreservationArtifact],
+) -> TestsCritiqueSemanticPreservationCertificate
+
+type TestsCritiqueLogicalSoundnessCertificate:
+    source: LeanPhysicsDerivationTraceCritiqueSemanticPreservationArtifact
+    target: Generated[LeanPhysicsDerivationTraceCritiqueLogicalSoundnessArtifact]
+
+relation TestsCritiqueLogicalSoundness(
+    source: LeanPhysicsDerivationTraceCritiqueSemanticPreservationArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueLogicalSoundnessArtifact],
+) -> TestsCritiqueLogicalSoundnessCertificate
+
+type TestsCritiqueMathlibAlignmentCertificate:
+    source: LeanPhysicsDerivationTraceCritiqueLogicalSoundnessArtifact
+    target: Generated[LeanPhysicsDerivationTraceCritiqueMathlibAlignmentArtifact]
+
+relation TestsCritiqueMathlibAlignment(
+    source: LeanPhysicsDerivationTraceCritiqueLogicalSoundnessArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueMathlibAlignmentArtifact],
+) -> TestsCritiqueMathlibAlignmentCertificate
+
+type TestsCritiqueSuiteCertificate:
+    source: LeanPhysicsDerivationTraceCritiqueMathlibAlignmentArtifact
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSuiteArtifact]
+
+relation TestsCritiqueSuite(
+    source: LeanPhysicsDerivationTraceCritiqueMathlibAlignmentArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiqueSuiteArtifact],
+) -> TestsCritiqueSuiteCertificate
+
+type TestsCritiquePhysicsLeanSemanticsCertificate:
+    source: LeanPhysicsDerivationTracePhysicsLeanUnitsVerifyArtifact
+    target: Generated[LeanPhysicsDerivationTraceCritiquePhysicsLeanSemanticsArtifact]
+
+relation TestsCritiquePhysicsLeanSemantics(
+    source: LeanPhysicsDerivationTracePhysicsLeanUnitsVerifyArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiquePhysicsLeanSemanticsArtifact],
+) -> TestsCritiquePhysicsLeanSemanticsCertificate
+
+type TestsCritiquePhysicsLeanGenerativePanelCertificate:
+    source: LeanPhysicsDerivationTraceCritiquePhysicsLeanDimensionsArtifact
+    target: Generated[LeanPhysicsDerivationTraceCritiquePhysicsLeanGenerativePanelArtifact]
+
+relation TestsCritiquePhysicsLeanGenerativePanel(
+    source: LeanPhysicsDerivationTraceCritiquePhysicsLeanDimensionsArtifact,
+    target: Generated[LeanPhysicsDerivationTraceCritiquePhysicsLeanGenerativePanelArtifact],
+) -> TestsCritiquePhysicsLeanGenerativePanelCertificate
+
+type FormalizesRefineFormalCertificate:
+    source: LeanPhysicsDerivationTraceRepairPhysicsLeanRecursiveRepairControlArtifact
+    target: Generated[LeanPhysicsDerivationTraceRefineFormalArtifact]
+
+relation FormalizesRefineFormal(
+    source: LeanPhysicsDerivationTraceRepairPhysicsLeanRecursiveRepairControlArtifact,
+    target: Generated[LeanPhysicsDerivationTraceRefineFormalArtifact],
+) -> FormalizesRefineFormalCertificate
+
+type FormalizesRefineSemanticCertificate:
+    source: LeanPhysicsDerivationTraceRefineFormalArtifact
+    target: Generated[LeanPhysicsDerivationTraceRefineSemanticArtifact]
+
+relation FormalizesRefineSemantic(
+    source: LeanPhysicsDerivationTraceRefineFormalArtifact,
+    target: Generated[LeanPhysicsDerivationTraceRefineSemanticArtifact],
+) -> FormalizesRefineSemanticCertificate
+
+type FormalizesOutputDenoiseCertificate:
+    source: LeanPhysicsDerivationTraceRefinePhysicsLeanArtifact
+    target: Generated[LeanPhysicsDerivationTraceOutputDenoiseArtifact]
+
+relation FormalizesOutputDenoise(
+    source: LeanPhysicsDerivationTraceRefinePhysicsLeanArtifact,
+    target: Generated[LeanPhysicsDerivationTraceOutputDenoiseArtifact],
+) -> FormalizesOutputDenoiseCertificate
+
+type TestsRefinePhysicsLeanReviewCertificate:
+    source: LeanPhysicsDerivationTraceReviewFinalDerivationHypothesesArtifact
+    target: Generated[LeanPhysicsDerivationTraceRefinePhysicsLeanReviewArtifact]
+
+relation TestsRefinePhysicsLeanReview(
+    source: LeanPhysicsDerivationTraceReviewFinalDerivationHypothesesArtifact,
+    target: Generated[LeanPhysicsDerivationTraceRefinePhysicsLeanReviewArtifact],
+) -> TestsRefinePhysicsLeanReviewCertificate

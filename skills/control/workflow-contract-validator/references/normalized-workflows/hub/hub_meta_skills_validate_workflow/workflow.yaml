@@ -1,0 +1,396 @@
+# SPDX-FileCopyrightText: Copyright © 2026 Idiap Research Institute <contact@idiap.ch>
+# SPDX-FileContributor: Andre Freitas <andre.freitas@idiap.ch>
+# SPDX-License-Identifier: MIT
+# Neuro-symbolic AI Group
+# REUSE-IgnoreStart
+schema_version: workflow-skill/v1
+namespace: mathformer
+id: hub_meta_skills_validate_workflow
+version: 1.0.0
+kind: workflow
+description: Run run_suite's ten fixed checks sequentially, then aggregate, persist
+  and return their report.
+aliases:
+- meta-skills:validate
+lifecycle: active
+activation:
+  mode: explicit
+  prerequisites: []
+types:
+  Command:
+    schema:
+      type: array
+      items:
+        type: string
+      minItems: 1
+  Check:
+    schema:
+      type: object
+      required:
+      - command
+      - returncode
+      - duration_seconds
+      - ok
+      - stdout
+      - stderr
+      - payload
+      properties:
+        command:
+          type: array
+          items:
+            type: string
+        returncode:
+          type: integer
+        duration_seconds:
+          type: number
+        ok:
+          type: boolean
+        stdout:
+          type: string
+          maxLength: 4000
+        stderr:
+          type: string
+          maxLength: 4000
+        payload: {}
+  Results:
+    schema:
+      type: array
+      maxItems: 10
+      items:
+        type: object
+  Done:
+    schema:
+      type: boolean
+  Report:
+    schema:
+      type: object
+      required:
+      - schema_version
+      - style
+      - ok
+      - check_count
+      - summary
+      - results
+      properties:
+        schema_version:
+          const: 1
+        style:
+          const: mathformer_meta_skill_suite
+        ok:
+          type: boolean
+        check_count:
+          const: 10
+        summary:
+          type: object
+          required:
+          - pass
+          - fail
+          properties:
+            pass:
+              type: integer
+              minimum: 0
+              maximum: 10
+            fail:
+              type: integer
+              minimum: 0
+              maximum: 10
+        results:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items:
+            type: object
+  Path:
+    schema:
+      type: string
+      minLength: 1
+inputs:
+  repo_root:
+    type: Path
+  output_path:
+    type: Path
+outputs:
+  report:
+    type: Report
+    value:
+      ref: flow.outputs.report
+operations:
+  initialize_results:
+    inputs: {}
+    outputs:
+      results:
+        type: Results
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_meta_suite_initialize
+        operation: mathformer_meta_suite_initialize
+  select_command:
+    inputs:
+      results:
+        type: Results
+    outputs:
+      command:
+        type: Command
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_meta_suite_select
+        operation: mathformer_meta_suite_select
+  run_command:
+    inputs:
+      command:
+        type: Command
+      repo_root:
+        type: Path
+    outputs:
+      check:
+        type: Check
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_meta_suite_run
+        operation: mathformer_meta_suite_run
+  append_and_test:
+    inputs:
+      results:
+        type: Results
+      check:
+        type: Check
+    outputs:
+      results:
+        type: Results
+      done:
+        type: Done
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_meta_suite_append
+        operation: mathformer_meta_suite_append
+  aggregate_write_return:
+    inputs:
+      results:
+        type: Results
+      output_path:
+        type: Path
+    outputs:
+      report:
+        type: Report
+    execution:
+      mode: deterministic
+      binding:
+        adapter: mcp.tool
+        kind: tool
+        target: mathformer_meta_suite_finalize
+        operation: mathformer_meta_suite_finalize
+flow:
+  kind: sequence
+  steps:
+  - id: initialize
+    kind: call
+    operation: initialize_results
+    arguments: {}
+  - id: checks
+    kind: loop
+    description: Exactly the source's ten COMMANDS in order. A completed tenth result
+      makes done true, so reaching the bound returns normally. Exhaustion failure
+      is unreachable for this fixed source list.
+    state_type: Results
+    initial:
+      ref: steps.initialize.outputs.results
+    max_iterations: 10
+    on_exhausted: fail
+    body:
+      kind: sequence
+      steps:
+      - id: select
+        kind: call
+        operation: select_command
+        arguments:
+          results:
+            ref: loop.state
+      - id: execute
+        kind: call
+        operation: run_command
+        arguments:
+          command:
+            ref: steps.select.outputs.command
+          repo_root:
+            ref: inputs.repo_root
+      - id: append
+        kind: call
+        operation: append_and_test
+        arguments:
+          results:
+            ref: loop.state
+          check:
+            ref: steps.execute.outputs.check
+      outputs:
+        results:
+          type: Results
+          value:
+            ref: steps.append.outputs.results
+        done:
+          type: Done
+          value:
+            ref: steps.append.outputs.done
+    next_state:
+      ref: body.outputs.results
+    until:
+      ref: body.outputs.done
+    outputs:
+      results:
+        type: Results
+        value:
+          ref: body.outputs.results
+  - id: finalize
+    kind: call
+    operation: aggregate_write_return
+    arguments:
+      results:
+        ref: steps.checks.outputs.results
+      output_path:
+        ref: inputs.output_path
+  outputs:
+    report:
+      type: Report
+      value:
+        ref: steps.finalize.outputs.report
+policy:
+  effects:
+    filesystem:
+      read:
+      - repository
+      - native_runtime_inputs
+      write:
+      - artifacts/meta_skills/
+      - artifacts/mcp/meta_skill_service_self_test.json
+      - artifacts/workflow_hub/
+    network:
+    - native_binding_capabilities_require_qualification
+    external_write:
+    - native_binding_capabilities_require_qualification
+  authority:
+    allowed:
+    - invoke_registered_native_workflow
+    forbidden:
+    - bypass_native_controls
+    - infer_scientific_truth_from_completion
+  limits:
+    wall_time_seconds: 3600
+    max_operation_calls: 32
+  failure:
+    default: fail
+    retry:
+      max_attempts: 1
+      retryable_codes: []
+  resume:
+    mode: none
+    require_matching_definition_and_inputs: true
+  claim_ceiling: Source-linked description only; no scientific result, runtime qualification
+    or promotion.
+observability:
+  receipts: required
+  artifact_digests: sha256
+  provenance: required
+  events:
+  - workflow_started
+  - step_started
+  - step_completed
+  - step_failed
+  - workflow_completed
+provenance:
+  coverage: partial
+  sources:
+  - path: tests/meta_skills/run_meta_skill_suite.py
+    selector: run_suite
+    digest: sha256:06c35f2abb57248a44871776621cfe6612c81e24ad802517780d88a29a8e9fab
+  - path: tests/meta_skills/run_meta_skill_suite.py
+    selector: COMMANDS; run_command; main
+    digest: sha256:06c35f2abb57248a44871776621cfe6612c81e24ad802517780d88a29a8e9fab
+  - path: scripts/mathformer.py
+    selector: build_registry/action:meta-skills:validate; run_action; run_leaf_action;
+      preflight
+    digest: sha256:9aeea40cc2fa10223d2315409f055e95e4e368ca0358bfe5173b644d008356a0
+  - path: scripts/meta_suite_tools.py
+    selector: register_meta_suite_tools
+    digest: sha256:94ec5c420807d59daefa04d3eb97ced99d0d222fae5300d755e522f0e9a95855
+  - path: scripts/mcp_server.py
+    selector: register_meta_suite_tools
+    digest: sha256:e8d99ef05300267dc16e41f072baedd8cf4bebafb19a82ecf8fdd2ac051c2ba2
+  - path: scripts/mathformer_mcp_service.py
+    selector: mcp_tools
+    digest: sha256:ff2a57a3dc268e73d31e34605d80a65a5bdc6e16e28ad41af5752ad8bae60164
+  - path: skills/control/workflow-contract-validator/scripts/normalize_workflows.py
+    selector: inventory
+    digest: sha256:eaa651dbf2f2e1633a0637e4978f92863b83dbf768e6a16c77f25e6c071fd418
+  gaps:
+  - Child check internals and hub wrapper controls remain opaque at their native boundaries.
+  - Native subprocesses retain their 180-second timeout and no suite deadline; Lunar
+    enforces the advertised workflow wall-time and call budgets.
+extensions:
+  mathformer.source:
+    category: hub
+    native_id: meta-skills:validate
+    owner_skill: skills/control/workflow-contract-validator/SKILL.md
+    contract:
+      id: meta-skills:validate
+      summary: Run the compact meta-skill validation suite.
+      family: meta_skills
+      kind: validation
+      safety: writes_artifacts
+      command:
+      - '{python}'
+      - tests/meta_skills/run_meta_skill_suite.py
+      - --json
+      depends_on: []
+      required_paths:
+      - tests/meta_skills/run_meta_skill_suite.py
+      - meta_skills/
+      required_tools: []
+      optional_tools: []
+      writes:
+      - artifacts/meta_skills/
+      - artifacts/mcp/meta_skill_service_self_test.json
+      allows_extra_args: false
+      timeout_seconds: null
+      notes: ''
+  mathformer.native_boundary:
+    execution: main calls run_suite; hub dispatches the dependency-free action as
+      a leaf.
+    routing: scripts/mathformer.py registers meta-skills:validate with --json; meta.skills.help
+      selects it.
+    controls: Hub preflight errors block execution; dry-run returns without running;
+      writes are audited afterward.
+    failure_policy: Check failures accumulate; uncaught exceptions abort before final
+      report writing; no retries.
+    main_output: main prints JSON or PASS/FAIL and exits 0 when report.ok, otherwise
+      1.
+    context_fields:
+    - dry_run
+    - json_output
+    - keep_going
+    - allow_mutating
+    - write_report
+    - repo_root
+    - output_path
+    effects_status: partial_native_declarations
+    qualification_capability_names_are_not_runtime_grants: true
+    execution_context: Explicit repository working directory and report destination;
+      native entrypoint defaults are unchanged.
+  mathformer.composition:
+    ordered_dependencies: []
+    dependency_workflows: []
+    command_after_dependencies: false
+    keep_going_semantics: Hub keep_going does not affect the internal COMMANDS iteration.
+    modeling: Only run_suite is expanded; wrapper controls and child check internals
+      stay at their owning boundaries.
+# REUSE-IgnoreEnd
